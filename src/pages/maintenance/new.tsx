@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function NewMaintenancePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -47,8 +48,8 @@ export default function NewMaintenancePage() {
       try {
         setLoading(true);
         // Load equipment
-        const equipmentData = await equipmentService.getAllEquipment();
-        setEquipmentList(equipmentData);
+        const equipmentData = await equipmentService.getAll();
+        setEquipment(equipmentData);
 
         // Load checklist templates
         const templatesData = await checklistService.getActiveTemplates();
