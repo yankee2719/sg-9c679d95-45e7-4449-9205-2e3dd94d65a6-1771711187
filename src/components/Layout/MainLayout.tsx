@@ -1,185 +1,155 @@
-import { ReactNode, useEffect, useState } from "react";
-import Link from "next/link";
+import { ReactNode } from "react";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  LayoutDashboard,
-  Settings,
-  Wrench,
-  ClipboardCheck,
-  FileText,
-  Users,
-  LogOut,
-  Menu,
-  X,
-  Bell,
-  Home,
+import { 
+  LayoutDashboard, 
+  QrCode, 
+  Wrench, 
   ClipboardList,
-  Package
+  Bell,
+  Moon,
+  Sun,
+  LogOut,
+  Settings
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { authService } from "@/services/authService";
+import { useTheme } from "@/contexts/ThemeProvider";
 
 interface MainLayoutProps {
   children: ReactNode;
   userRole?: "admin" | "supervisor" | "technician";
 }
 
-export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
+export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, []);
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+    try {
+      await authService.logout();
+      router.push("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
-  const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: Home, roles: ["admin", "supervisor", "technician"] },
-    { href: "/equipment", label: "Macchine", icon: Package, roles: ["admin", "supervisor", "technician"] },
-    { href: "/maintenance", label: "Manutenzioni", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
-    { href: "/checklists", label: "Checklist", icon: ClipboardList, roles: ["admin", "supervisor"] },
-    { href: "/admin/users", label: "Utenti", icon: Users, roles: ["admin"] }
+  const navigation = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, active: router.pathname === "/dashboard" },
+    { name: "Scanner QR", href: "/scanner", icon: QrCode, active: router.pathname === "/scanner" },
+    { name: "Equipaggiamenti", href: "/equipment", icon: Wrench, active: router.pathname.startsWith("/equipment") },
+    { name: "Attività", href: "/maintenance", icon: ClipboardList, active: router.pathname.startsWith("/maintenance") },
   ];
 
-  const currentNav = navItems.filter((item) => item.roles.includes(userRole));
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-lg dark:bg-slate-900/80 dark:border-slate-800">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          {/* Logo and Mobile Menu Toggle */}
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
-                <Wrench className="h-6 w-6" />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Industrial Maintenance
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {userRole === "admin" ? "Amministratore" : userRole === "supervisor" ? "Supervisore" : "Tecnico"}
-                </p>
-              </div>
-            </Link>
-          </div>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-1">
-            {currentNav.map((item) => {
-              const Icon = item.icon;
-              const isActive = router.pathname === item.href;
-              return (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant={isActive ? "default" : "ghost"}
-                    className={isActive ? "bg-gradient-to-r from-blue-600 to-indigo-600" : ""}
-                  >
-                    <Icon className="h-4 w-4 mr-2" />
-                    {item.label}
-                  </Button>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Right Side Actions */}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
-            </Button>
-            <ThemeSwitch />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar>
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                      {user?.email?.[0]?.toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">{user?.email}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push("/profile")}>
-                  Profilo
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/settings")}>
-                  Impostazioni
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Esci
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <aside className="w-80 bg-muted/30 border-r border-border flex flex-col">
+        {/* Brand */}
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center">
+              <Wrench className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-foreground">Maint Ops</h1>
+              <p className="text-xs text-muted-foreground">Sistema Manutenzione</p>
+            </div>
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden border-t dark:border-slate-800 bg-white dark:bg-slate-900">
-            <nav className="container mx-auto py-4 px-4 flex flex-col gap-2">
-              {currentNav.map((item) => {
-                const Icon = item.icon;
-                const isActive = router.pathname === item.href;
-                return (
-                  <Link key={item.href} href={item.href}>
-                    <Button
-                      variant={isActive ? "default" : "ghost"}
-                      className={`w-full justify-start ${isActive ? "bg-gradient-to-r from-blue-600 to-indigo-600" : ""}`}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Icon className="h-4 w-4 mr-2" />
-                      {item.label}
-                    </Button>
-                  </Link>
-                );
-              })}
-            </nav>
+        {/* User Info */}
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Avatar className="w-12 h-12 bg-primary/10">
+              <AvatarFallback className="text-primary font-semibold">MR</AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-semibold text-foreground">Marco Rossi</p>
+              <p className="text-sm text-muted-foreground capitalize">{userRole}</p>
+            </div>
           </div>
-        )}
-      </header>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.name}
+                onClick={() => router.push(item.href)}
+                className={`sidebar-item w-full ${item.active ? "sidebar-item-active" : ""}`}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{item.name}</span>
+                {item.active && (
+                  <div className="ml-auto w-2 h-2 rounded-full bg-primary animate-pulse" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-border space-y-2">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3"
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? (
+              <>
+                <Sun className="h-5 w-5" />
+                <span>Tema Chiaro</span>
+              </>
+            ) : (
+              <>
+                <Moon className="h-5 w-5" />
+                <span>Tema Scuro</span>
+              </>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-error hover:text-error hover:bg-error/10"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-5 w-5" />
+            <span>Esci</span>
+          </Button>
+        </div>
+      </aside>
 
       {/* Main Content */}
-      <main className="container mx-auto py-6 px-4">
-        {children}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg border-b border-border">
+            <div className="flex items-center justify-between p-6">
+              <h2 className="text-2xl font-bold text-foreground">
+                {navigation.find(n => n.active)?.name || "Dashboard"}
+              </h2>
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-5 w-5" />
+                  <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-error text-white text-xs">
+                    3
+                  </Badge>
+                </Button>
+                <Button variant="ghost" size="icon">
+                  <Settings className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </header>
+
+          {/* Page Content */}
+          <div className="p-6">
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   );
