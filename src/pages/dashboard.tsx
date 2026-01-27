@@ -1,268 +1,337 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
+import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
-import { maintenanceService } from "@/services/maintenanceService";
 import { equipmentService } from "@/services/equipmentService";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { maintenanceService } from "@/services/maintenanceService";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Activity, 
-  AlertTriangle, 
-  Calendar, 
-  CheckCircle, 
-  Clock, 
-  Users, 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Wrench,
-  QrCode,
-  FileText
+  Calendar,
+  AlertCircle,
+  CheckCircle,
+  TrendingUp,
+  Package,
+  Users,
+  Clock,
+  Plus
 } from "lucide-react";
-import Link from "next/link";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [stats, setStats] = useState({
-    activeEquipment: 0,
-    pendingMaintenance: 0,
-    overdueMaintenance: 0,
-    completedToday: 0
-  });
-  const [upcoming, setUpcoming] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  const [stats, setStats] = useState({
+    totalEquipment: 0,
+    activeEquipment: 0,
+    underMaintenance: 0,
+    upcomingMaintenance: 0,
+    overdueMaintenance: 0,
+    completedThisMonth: 0
+  });
+  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
+  const [overdueTasks, setOverdueTasks] = useState<any[]>([]);
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const currentUser = await userService.getCurrentUser();
-        if (!currentUser) {
-          router.push("/login");
-          return;
-        }
-        setUser(currentUser);
+    checkAuth();
+  }, []);
 
-        // Load stats based on role
-        const [equipment, overdue, upcomingList] = await Promise.all([
-          equipmentService.getAll(),
-          maintenanceService.getOverdueMaintenance(),
-          maintenanceService.getUpcomingMaintenance()
-        ]);
-
-        setStats({
-          activeEquipment: equipment.length,
-          pendingMaintenance: upcomingList.length,
-          overdueMaintenance: overdue.length,
-          completedToday: 0 // To be implemented with logs
-        });
-        
-        setUpcoming(upcomingList);
-      } catch (error) {
-        console.error("Dashboard error:", error);
-      } finally {
-        setLoading(false);
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await authService.getSession();
+      if (!session) {
+        router.push("/login");
+        return;
       }
-    };
 
-    init();
-  }, [router]);
+      const role = await userService.getUserRole(session.user.id);
+      if (role) {
+        setUserRole(role as any);
+        await loadDashboardData(session.user.id, role as any);
+      }
+    } catch (error) {
+      console.error("Error checking auth:", error);
+      router.push("/login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDashboardData = async (userId: string, role: string) => {
+    try {
+      const [equipment, upcoming, overdue] = await Promise.all([
+        equipmentService.getAll(),
+        maintenanceService.getUpcomingMaintenance(),
+        maintenanceService.getOverdueMaintenance()
+      ]);
+
+      setStats({
+        totalEquipment: equipment.length,
+        activeEquipment: equipment.filter(e => e.status === "active").length,
+        underMaintenance: equipment.filter(e => e.status === "under_maintenance").length,
+        upcomingMaintenance: upcoming.length,
+        overdueMaintenance: overdue.length,
+        completedThisMonth: 0 // TODO: implement
+      });
+
+      setUpcomingTasks(upcoming.slice(0, 5));
+      setOverdueTasks(overdue.slice(0, 5));
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <MainLayout userRole={userRole}>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </MainLayout>
     );
   }
 
-  const role = user?.role || "technician";
-
   return (
-    <MainLayout userRole={role}>
+    <MainLayout userRole={userRole}>
       <SEO title="Dashboard - Industrial Maintenance" />
       
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground">
-              Benvenuto, {user?.full_name || user?.email}
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Panoramica sistema di manutenzione industriale
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/qr-scanner">
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600">
-                <QrCode className="mr-2 h-4 w-4" />
-                Scan QR Code
+          {userRole === "admin" && (
+            <div className="flex gap-2">
+              <Button asChild variant="outline">
+                <Link href="/equipment/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuova Macchina
+                </Link>
               </Button>
-            </Link>
-          </div>
+              <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600">
+                <Link href="/maintenance/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuova Manutenzione
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* KPI Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Manutenzioni Scadute
-              </CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <CardTitle className="text-sm font-medium">Totale Macchine</CardTitle>
+              <Package className="h-5 w-5 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{stats.overdueMaintenance}</div>
-              <p className="text-xs text-muted-foreground">
-                Interventi urgenti richiesti
+              <div className="text-3xl font-bold">{stats.totalEquipment}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.activeEquipment} attive
               </p>
             </CardContent>
           </Card>
-          <Card>
+
+          <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                In Scadenza (7gg)
-              </CardTitle>
-              <Clock className="h-4 w-4 text-orange-500" />
+              <CardTitle className="text-sm font-medium">In Manutenzione</CardTitle>
+              <Wrench className="h-5 w-5 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingMaintenance}</div>
-              <p className="text-xs text-muted-foreground">
-                Programmate per la settimana
+              <div className="text-3xl font-bold">{stats.underMaintenance}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Richiede attenzione
               </p>
             </CardContent>
           </Card>
-          <Card>
+
+          <Card className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Macchine Attive
-              </CardTitle>
-              <Wrench className="h-4 w-4 text-blue-500" />
+              <CardTitle className="text-sm font-medium">Prossime 7 Giorni</CardTitle>
+              <Clock className="h-5 w-5 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.activeEquipment}</div>
-              <p className="text-xs text-muted-foreground">
-                Totale parco macchine
+              <div className="text-3xl font-bold">{stats.upcomingMaintenance}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Manutenzioni programmate
               </p>
             </CardContent>
           </Card>
-          <Card>
+
+          <Card className="hover:shadow-lg transition-shadow border-red-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Completate Oggi
-              </CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-sm font-medium">In Ritardo</CardTitle>
+              <AlertCircle className="h-5 w-5 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.completedToday}</div>
-              <p className="text-xs text-muted-foreground">
-                Interventi chiusi
+              <div className="text-3xl font-bold text-red-600">{stats.overdueMaintenance}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Urgente
               </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content Area */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-          {/* Upcoming Maintenance List */}
-          <Card className="col-span-4">
+        {/* Overdue Tasks - Priority */}
+        {overdueTasks.length > 0 && (
+          <Card className="border-red-200">
             <CardHeader>
-              <CardTitle>Prossime Manutenzioni</CardTitle>
-              <CardDescription>
-                Interventi programmati per i prossimi 7 giorni
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <CardTitle className="text-red-600">Manutenzioni in Ritardo</CardTitle>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/maintenance">Vedi Tutte</Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {upcoming.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">
-                    Nessuna manutenzione programmata
-                  </div>
-                ) : (
-                  upcoming.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
-                      <div className="space-y-1">
-                        <div className="font-semibold flex items-center gap-2">
-                          {item.title}
-                          {item.priority === 'high' && (
-                            <Badge variant="destructive" className="text-xs">Urgente</Badge>
-                          )}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Macchina</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Scadenza</TableHead>
+                    <TableHead>Assegnato a</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {overdueTasks.map((task) => (
+                    <TableRow key={task.id}>
+                      <TableCell className="font-medium">
+                        {task.equipment?.name || "N/A"}
+                        <div className="text-xs text-muted-foreground">
+                          {task.equipment?.code}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {item.equipment?.name} ({item.equipment?.code})
+                      </TableCell>
+                      <TableCell>{task.maintenance_type}</TableCell>
+                      <TableCell className="text-red-600">
+                        {new Date(task.next_maintenance_date).toLocaleDateString("it-IT")}
+                      </TableCell>
+                      <TableCell>
+                        {task.assigned_to?.full_name || "Non assegnato"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Upcoming Tasks */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                <CardTitle>Prossime Manutenzioni</CardTitle>
+              </div>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/maintenance">Vedi Tutte</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {upcomingTasks.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nessuna manutenzione programmata nei prossimi 7 giorni
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Macchina</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Assegnato a</TableHead>
+                    <TableHead>Durata Stimata</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {upcomingTasks.map((task) => (
+                    <TableRow key={task.id}>
+                      <TableCell className="font-medium">
+                        {task.equipment?.name || "N/A"}
+                        <div className="text-xs text-muted-foreground">
+                          {task.equipment?.code}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right text-sm">
-                          <div className="font-medium">
-                            {new Date(item.next_maintenance_date).toLocaleDateString()}
-                          </div>
-                          <div className="text-muted-foreground text-xs">
-                            {item.assigned_to?.full_name || 'Non assegnato'}
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/maintenance/${item.id}`}>Dettagli</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{task.maintenance_type}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(task.next_maintenance_date).toLocaleDateString("it-IT")}
+                      </TableCell>
+                      <TableCell>
+                        {task.assigned_to?.full_name || "Non assegnato"}
+                      </TableCell>
+                      <TableCell>
+                        {task.estimated_duration_minutes 
+                          ? `${task.estimated_duration_minutes} min`
+                          : "N/A"
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/equipment")}>
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Package className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Anagrafica Macchine</h3>
+                <p className="text-sm text-muted-foreground">Gestisci le tue attrezzature</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Quick Actions / Role Specific */}
-          <Card className="col-span-3">
-            <CardHeader>
-              <CardTitle>Azioni Rapide</CardTitle>
-              <CardDescription>
-                Funzionalità frequenti per {role}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4">
-                {role === 'admin' && (
-                  <>
-                    <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                      <Link href="/users/new">
-                        <Users className="mr-4 h-5 w-5 text-blue-500" />
-                        <div className="text-left">
-                          <div className="font-semibold">Nuovo Utente</div>
-                          <div className="text-xs text-muted-foreground">Crea account tecnico/supervisor</div>
-                        </div>
-                      </Link>
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                      <Link href="/equipment/new">
-                        <Wrench className="mr-4 h-5 w-5 text-indigo-500" />
-                        <div className="text-left">
-                          <div className="font-semibold">Nuova Macchina</div>
-                          <div className="text-xs text-muted-foreground">Aggiungi attrezzatura all'anagrafica</div>
-                        </div>
-                      </Link>
-                    </Button>
-                  </>
-                )}
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/maintenance")}>
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 bg-green-100 rounded-lg">
+                <Calendar className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Manutenzioni</h3>
+                <p className="text-sm text-muted-foreground">Pianifica interventi</p>
+              </div>
+            </CardContent>
+          </Card>
 
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                  <Link href="/maintenance/new">
-                    <Calendar className="mr-4 h-5 w-5 text-orange-500" />
-                    <div className="text-left">
-                      <div className="font-semibold">Pianifica Manutenzione</div>
-                      <div className="text-xs text-muted-foreground">Crea nuovo intervento</div>
-                    </div>
-                  </Link>
-                </Button>
-
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                  <Link href="/reports">
-                    <FileText className="mr-4 h-5 w-5 text-green-500" />
-                    <div className="text-left">
-                      <div className="font-semibold">Report Mensile</div>
-                      <div className="text-xs text-muted-foreground">Visualizza statistiche complete</div>
-                    </div>
-                  </Link>
-                </Button>
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/checklists")}>
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Checklist</h3>
+                <p className="text-sm text-muted-foreground">Template controlli</p>
               </div>
             </CardContent>
           </Card>
