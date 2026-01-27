@@ -48,9 +48,32 @@ export default function NewEquipmentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setError("");
 
     try {
+      setLoading(true);
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Utente non autenticato");
+      }
+
+      // Prepare equipment data
+      const equipmentData = {
+        code: formData.code,
+        name: formData.name,
+        category_id: formData.categoryId || null,
+        manufacturer: formData.manufacturer || null,
+        model: formData.model || null,
+        serial_number: formData.serial || null,
+        installation_date: formData.yearOfProduction ? `${formData.yearOfProduction}-01-01` : null,
+        status: formData.status,
+        notes: formData.notes || null,
+        technical_specs: formData.technicalSpecs ? JSON.parse(JSON.stringify({ specs: formData.technicalSpecs })) : null,
+        created_by: user.id,
+      };
+
       // Generate QR code content (simple URL for now)
       const qrCode = `EQUIP:${formData.code}`;
       
