@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -121,35 +121,85 @@ export type Database = {
           },
         ]
       }
-      checklist_templates: {
+      checklist_tasks: {
         Row: {
           created_at: string | null
-          created_by: string | null
           description: string | null
-          equipment_category_id: string | null
           id: string
-          is_active: boolean | null
-          name: string
-          updated_at: string | null
+          required: boolean
+          task_order: number
+          template_id: string
+          title: string
         }
         Insert: {
           created_at?: string | null
-          created_by?: string | null
           description?: string | null
-          equipment_category_id?: string | null
           id?: string
-          is_active?: boolean | null
-          name: string
-          updated_at?: string | null
+          required?: boolean
+          task_order: number
+          template_id: string
+          title: string
         }
         Update: {
           created_at?: string | null
+          description?: string | null
+          id?: string
+          required?: boolean
+          task_order?: number
+          template_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_tasks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_templates: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          equipment: string | null
+          equipment_category_id: string | null
+          estimated_time: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
+          equipment?: string | null
           equipment_category_id?: string | null
+          estimated_time?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          equipment?: string | null
+          equipment_category_id?: string | null
+          estimated_time?: number | null
           id?: string
           is_active?: boolean | null
           name?: string
+          status?: string | null
           updated_at?: string | null
         }
         Relationships: [
