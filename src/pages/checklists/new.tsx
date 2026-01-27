@@ -46,9 +46,8 @@ export default function NewChecklistPage() {
         if (item.title.trim()) {
           await checklistService.createItem({
             template_id: template.id,
-            title: item.title,
-            description: item.description || null,
-            is_required: item.is_required,
+            description: item.title + (item.description ? `\n${item.description}` : ""),
+            item_type: item.is_required ? "required" : "optional",
             order_index: item.order_index
           });
         }

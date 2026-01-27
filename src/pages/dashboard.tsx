@@ -51,7 +51,7 @@ export default function DashboardPage() {
 
   const checkAuth = async () => {
     try {
-      const { data: { session } } = await authService.getCurrentSession();
+      const session = await authService.getCurrentSession();
       if (!session) {
         router.push("/login");
         return;
