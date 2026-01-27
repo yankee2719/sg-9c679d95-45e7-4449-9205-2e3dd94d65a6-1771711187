@@ -22,9 +22,12 @@ export const userService = {
       .from("profiles")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error getting user by ID:", error);
+      throw error;
+    }
     return data;
   },
 
@@ -55,10 +58,13 @@ export const userService = {
       .from("profiles")
       .select("role")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
-    if (error) return null;
-    return data?.role;
+    if (error) {
+      console.error("Error getting user role:", error);
+      return null;
+    }
+    return data?.role || null;
   },
 
   // Update user role (admin only)

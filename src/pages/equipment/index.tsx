@@ -56,21 +56,19 @@ export default function EquipmentListPage() {
       <SEO title="Macchine e Attrezzature - Industrial Maintenance" />
       
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Anagrafica Macchine</h1>
-            <p className="text-muted-foreground">
-              Gestione del parco macchine e attrezzature
+            <h1 className="text-3xl font-bold">Anagrafica Macchine</h1>
+            <p className="text-muted-foreground mt-1">
+              Gestisci il parco macchine
             </p>
           </div>
-          {isAdmin && (
-            <Link href="/equipment/new">
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600">
-                <Plus className="mr-2 h-4 w-4" />
-                Nuova Macchina
-              </Button>
-            </Link>
-          )}
+          <Link href="/equipment/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuova Macchina
+            </Button>
+          </Link>
         </div>
 
         <Card>
