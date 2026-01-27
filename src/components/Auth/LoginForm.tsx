@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import { twoFactorService } from "@/services/twoFactorService";
 import { Button } from "@/components/ui/button";
@@ -202,6 +203,15 @@ export function LoginForm() {
               )}
             </Button>
           </form>
+
+          <div className="text-center pt-4 border-t mt-4">
+            <Link 
+              href="/register" 
+              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Non hai un account? <span className="font-semibold">Registrati</span>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
