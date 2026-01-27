@@ -22,6 +22,7 @@ export default function Document() {
         className={cn(
           "min-h-screen w-full scroll-smooth bg-background text-foreground antialiased"
         )}
+        suppressHydrationWarning
       >
         <Main />
         <NextScript />
