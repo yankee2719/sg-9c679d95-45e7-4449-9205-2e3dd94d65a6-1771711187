@@ -177,5 +177,50 @@ export const authService = {
   // Listen to auth state changes
   onAuthStateChange(callback: (event: string, session: Session | null) => void) {
     return supabase.auth.onAuthStateChange(callback);
+  },
+
+  // Ensure user profile exists (create if missing)
+  async ensureProfile(userId: string, email: string): Promise<{ error: AuthError | null }> {
+    try {
+      // Check if profile exists
+      const { data: existingProfile, error: checkError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error("Error checking profile:", checkError);
+        return { error: { message: checkError.message } };
+      }
+
+      // If profile already exists, we're good
+      if (existingProfile) {
+        return { error: null };
+      }
+
+      // Profile doesn't exist, create it
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          email: email,
+          full_name: email.split("@")[0], // Use email prefix as initial name
+          role: "technician", // Default role
+          two_factor_enabled: false
+        });
+
+      if (insertError) {
+        console.error("Error creating profile:", insertError);
+        return { error: { message: insertError.message } };
+      }
+
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in ensureProfile:", error);
+      return { 
+        error: { message: "An unexpected error occurred while ensuring profile exists" } 
+      };
+    }
   }
 };

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
+import { authService } from "@/services/authService";
 import { twoFactorService } from "@/services/twoFactorService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,9 @@ export function LoginForm() {
       if (signInError) throw signInError;
 
       if (data.user) {
+        // Ensure user profile exists (create if missing)
+        await authService.ensureProfile(data.user.id, data.user.email || "");
+        
         // Check if user has 2FA enabled
         const twoFASettings = await twoFactorService.get2FASettings(data.user.id);
         
