@@ -4,7 +4,7 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { maintenanceService } from "@/services/maintenanceService";
 import { equipmentService } from "@/services/equipmentService";
-import { checklistService } from "@/services/checklistService";
+import { checklistService, ChecklistTemplateWithTasks } from "@/services/checklistService";
 import { userService } from "@/services/userService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function NewMaintenancePage() {
   const router = useRouter();
@@ -42,24 +43,29 @@ export default function NewMaintenancePage() {
   });
 
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        // Load equipment
+        const equipmentData = await equipmentService.getAllEquipment();
+        setEquipmentList(equipmentData);
+
+        // Load checklist templates
+        const templatesData = await checklistService.getActiveTemplates();
+        setTemplates(templatesData);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast({
+          variant: "destructive",
+          title: "Errore durante il caricamento dei dati",
+          description: "Si è verificato un errore durante il caricamento dei dati. Riprova più tardi."
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
     loadData();
   }, []);
-
-  const loadData = async () => {
-    try {
-      const [equipmentData, templatesData, techniciansData] = await Promise.all([
-        equipmentService.getAll(),
-        checklistService.getTemplates(),
-        userService.getUsersByRole("technician")
-      ]);
-      
-      setEquipment(equipmentData);
-      setTemplates(templatesData);
-      setTechnicians(techniciansData);
-    } catch (error) {
-      console.error("Error loading data:", error);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
