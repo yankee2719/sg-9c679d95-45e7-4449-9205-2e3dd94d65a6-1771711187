@@ -52,7 +52,7 @@ export const maintenanceService = {
           description
         )
       `)
-      .order("next_maintenance_date", { ascending: true });
+      .order("scheduled_date", { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -77,7 +77,7 @@ export const maintenanceService = {
         )
       `)
       .eq("assigned_to", technicianId)
-      .order("next_maintenance_date", { ascending: true });
+      .order("scheduled_date", { ascending: true });
 
     if (error) throw error;
     return data || [];
@@ -159,7 +159,6 @@ export const maintenanceService = {
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 7);
 
-    // Cast to any to avoid "Type instantiation is excessively deep" error with complex joins
     const { data, error } = await (supabase
       .from("maintenance_schedules")
       .select(`
@@ -175,10 +174,10 @@ export const maintenanceService = {
           email
         )
       `) as any)
-      .gte("next_maintenance_date", today.toISOString())
-      .lte("next_maintenance_date", nextWeek.toISOString())
-      .eq("is_active", true)
-      .order("next_maintenance_date", { ascending: true });
+      .gte("scheduled_date", today.toISOString())
+      .lte("scheduled_date", nextWeek.toISOString())
+      .eq("status", "scheduled")
+      .order("scheduled_date", { ascending: true });
 
     if (error) throw error;
     return (data as unknown) as MaintenanceScheduleWithDetails[];
@@ -188,7 +187,6 @@ export const maintenanceService = {
   async getOverdueMaintenance() {
     const today = new Date().toISOString();
 
-    // Cast to any to avoid "Type instantiation is excessively deep" error with complex joins
     const { data, error } = await (supabase
       .from("maintenance_schedules")
       .select(`
@@ -204,9 +202,9 @@ export const maintenanceService = {
           email
         )
       `) as any)
-      .lt("next_maintenance_date", today)
-      .eq("is_active", true)
-      .order("next_maintenance_date", { ascending: true });
+      .lt("due_date", today)
+      .in("status", ["scheduled", "in_progress"])
+      .order("due_date", { ascending: true });
 
     if (error) throw error;
     return (data as unknown) as MaintenanceScheduleWithDetails[];

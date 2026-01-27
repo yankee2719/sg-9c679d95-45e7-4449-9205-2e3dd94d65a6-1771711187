@@ -68,7 +68,8 @@ export default function MaintenancePage() {
 
   const filteredSchedules = schedules.filter(schedule =>
     schedule.equipment?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    schedule.maintenance_type?.toLowerCase().includes(searchTerm.toLowerCase())
+    schedule.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    schedule.equipment?.code?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -152,9 +153,8 @@ export default function MaintenancePage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Macchina</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Prossima Scadenza</TableHead>
-                    <TableHead>Frequenza</TableHead>
+                    <TableHead>Titolo</TableHead>
+                    <TableHead>Data Pianificata</TableHead>
                     <TableHead>Priorità</TableHead>
                     <TableHead>Assegnato a</TableHead>
                     <TableHead>Stato</TableHead>
@@ -169,18 +169,17 @@ export default function MaintenancePage() {
                           {schedule.equipment?.code}
                         </div>
                       </TableCell>
-                      <TableCell>{schedule.maintenance_type || "N/A"}</TableCell>
+                      <TableCell>{schedule.title || "N/A"}</TableCell>
                       <TableCell>
-                        {schedule.next_maintenance_date 
-                          ? new Date(schedule.next_maintenance_date).toLocaleDateString("it-IT")
+                        {schedule.scheduled_date 
+                          ? new Date(schedule.scheduled_date).toLocaleDateString("it-IT")
                           : "Non pianificata"
                         }
-                      </TableCell>
-                      <TableCell>
-                        {schedule.frequency_days 
-                          ? `Ogni ${schedule.frequency_days} giorni`
-                          : "Una tantum"
-                        }
+                        {schedule.due_date && (
+                          <div className="text-xs text-muted-foreground">
+                            Scadenza: {new Date(schedule.due_date).toLocaleDateString("it-IT")}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={getPriorityColor(schedule.priority)}>
@@ -192,7 +191,12 @@ export default function MaintenancePage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={getStatusColor(schedule.status)}>
-                          {schedule.is_active ? "Attiva" : "Inattiva"}
+                          {schedule.status === "scheduled" ? "Pianificata" :
+                           schedule.status === "in_progress" ? "In corso" :
+                           schedule.status === "completed" ? "Completata" :
+                           schedule.status === "overdue" ? "In ritardo" :
+                           schedule.status === "cancelled" ? "Annullata" :
+                           "N/A"}
                         </Badge>
                       </TableCell>
                     </TableRow>
