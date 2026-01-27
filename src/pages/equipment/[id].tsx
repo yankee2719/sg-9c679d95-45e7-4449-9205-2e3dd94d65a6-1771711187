@@ -59,12 +59,13 @@ export default function EquipmentDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [equipment, setEquipment] = useState<any>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]); // New state for categories
   
-  // Initialize with proper typing
+  // Initialize with proper typing - renamed category to category_id
   const [formData, setFormData] = useState<{
     name: string;
     code: string;
-    category: string;
+    category_id: string; // Renamed from category to match DB
     manufacturer: string;
     model: string;
     serial_number: string;
@@ -75,7 +76,7 @@ export default function EquipmentDetailPage() {
   }>({
     name: "",
     code: "",
-    category: "",
+    category_id: "", // Renamed
     manufacturer: "",
     model: "",
     serial_number: "",
@@ -87,19 +88,21 @@ export default function EquipmentDetailPage() {
 
   useEffect(() => {
     if (id && typeof id === "string") {
-      loadEquipment(id);
+      loadData(id); // Renamed to loadData to reflect multiple fetches
     }
   }, [id]);
 
-  const loadEquipment = async (equipmentId: string) => {
+  const loadData = async (equipmentId: string) => {
     try {
       setLoading(true);
-      // We need to fetch maintenance history manually since it's not on equipmentService yet
-      // But we can add a method to maintenanceService for this
-      const [equipmentData, maintenanceData] = await Promise.all([
+      
+      const [equipmentData, maintenanceData, categoriesData] = await Promise.all([
         equipmentService.getById(equipmentId),
-        maintenanceService.getByEquipmentId(equipmentId)
+        maintenanceService.getByEquipmentId(equipmentId),
+        equipmentService.getCategories() // Fetch categories
       ]);
+
+      setCategories(categoriesData || []);
 
       if (!equipmentData) {
         router.push("/equipment");
@@ -109,13 +112,12 @@ export default function EquipmentDetailPage() {
       setEquipment(equipmentData);
       setMaintenanceHistory(maintenanceData || []);
       
-      // Map DB status to form status, handling potential mismatches safely
       const dbStatus = equipmentData.status as EquipmentStatus;
       
       setFormData({
         name: equipmentData.name || "",
         code: equipmentData.code || "",
-        category: equipmentData.category || "",
+        category_id: equipmentData.category_id || "", // Use category_id
         manufacturer: equipmentData.manufacturer || "",
         model: equipmentData.model || "",
         serial_number: equipmentData.serial_number || "",
@@ -125,7 +127,7 @@ export default function EquipmentDetailPage() {
         notes: equipmentData.notes || ""
       });
     } catch (error) {
-      console.error("Error loading equipment:", error);
+      console.error("Error loading data:", error);
       alert("Errore nel caricamento dei dati");
     } finally {
       setLoading(false);
@@ -137,8 +139,8 @@ export default function EquipmentDetailPage() {
 
     try {
       setSaving(true);
-      await equipmentService.update(id, formData);
-      await loadEquipment(id);
+      await equipmentService.update(id, formData); // formData now has category_id which matches DB
+      await loadData(id);
       setEditMode(false);
     } catch (error) {
       console.error("Error updating equipment:", error);
@@ -249,7 +251,7 @@ export default function EquipmentDetailPage() {
                   setFormData({
                     name: equipment.name || "",
                     code: equipment.code || "",
-                    category: equipment.category || "",
+                    category_id: equipment.category_id || "", // Use category_id
                     manufacturer: equipment.manufacturer || "",
                     model: equipment.model || "",
                     serial_number: equipment.serial_number || "",
@@ -344,23 +346,29 @@ export default function EquipmentDetailPage() {
                     <Label htmlFor="category">Categoria</Label>
                     {editMode ? (
                       <Select
-                        value={formData.category}
-                        onValueChange={(value) => handleChange("category", value)}
+                        value={formData.category_id}
+                        onValueChange={(value) => handleChange("category_id", value)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Seleziona categoria" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cnc">CNC</SelectItem>
-                          <SelectItem value="press">Pressa</SelectItem>
-                          <SelectItem value="welding">Saldatura</SelectItem>
-                          <SelectItem value="assembly">Assemblaggio</SelectItem>
-                          <SelectItem value="packaging">Confezionamento</SelectItem>
-                          <SelectItem value="other">Altro</SelectItem>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                          {categories.length === 0 && (
+                            <SelectItem value="no-categories" disabled>
+                              Nessuna categoria disponibile
+                            </SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     ) : (
-                      <p className="text-sm font-medium">{equipment.category || "-"}</p>
+                      <p className="text-sm font-medium">
+                        {equipment.equipment_categories?.name || "-"}
+                      </p>
                     )}
                   </div>
 
