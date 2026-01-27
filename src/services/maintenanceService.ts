@@ -159,7 +159,8 @@ export const maintenanceService = {
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 7);
 
-    const { data, error } = await supabase
+    // Cast to any to avoid "Type instantiation is excessively deep" error with complex joins
+    const { data, error } = await (supabase
       .from("maintenance_schedules")
       .select(`
         *,
@@ -173,7 +174,7 @@ export const maintenanceService = {
           full_name,
           email
         )
-      `)
+      `) as any)
       .gte("next_maintenance_date", today.toISOString())
       .lte("next_maintenance_date", nextWeek.toISOString())
       .eq("is_active", true)
@@ -187,7 +188,8 @@ export const maintenanceService = {
   async getOverdueMaintenance() {
     const today = new Date().toISOString();
 
-    const { data, error } = await supabase
+    // Cast to any to avoid "Type instantiation is excessively deep" error with complex joins
+    const { data, error } = await (supabase
       .from("maintenance_schedules")
       .select(`
         *,
@@ -201,7 +203,7 @@ export const maintenanceService = {
           full_name,
           email
         )
-      `)
+      `) as any)
       .lt("next_maintenance_date", today)
       .eq("is_active", true)
       .order("next_maintenance_date", { ascending: true });

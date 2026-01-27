@@ -56,6 +56,7 @@ export default function NewEquipmentPage() {
       
       await equipmentService.create({
         ...formData,
+        status: formData.status as "active" | "under_maintenance" | "inactive" | "decommissioned",
         qr_code: qrCode,
         installation_date: new Date().toISOString().split('T')[0]
       });
