@@ -40,6 +40,7 @@ export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
     { name: "Scanner QR", href: "/scanner", icon: QrCode, active: router.pathname === "/scanner" },
     { name: "Equipaggiamenti", href: "/equipment", icon: Wrench, active: router.pathname.startsWith("/equipment") },
     { name: "Attività", href: "/maintenance", icon: ClipboardList, active: router.pathname.startsWith("/maintenance") },
+    { name: "Checklist", href: "/checklists", icon: ClipboardList, active: router.pathname.startsWith("/checklist") },
   ];
 
   return (
