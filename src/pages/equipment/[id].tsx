@@ -46,6 +46,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
+import { DocumentList } from "@/components/Equipment/DocumentList";
+import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
+import { documentService } from "@/services/documentService";
 
 // Define strict type for status to match DB enum
 type EquipmentStatus = "active" | "under_maintenance" | "inactive" | "decommissioned";
@@ -59,6 +62,7 @@ export default function EquipmentDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [equipment, setEquipment] = useState<any>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]); // New state for categories
   
   // Initialize with proper typing - renamed category to category_id
@@ -96,9 +100,10 @@ export default function EquipmentDetailPage() {
     try {
       setLoading(true);
       
-      const [equipmentData, maintenanceData, categoriesData] = await Promise.all([
+      const [equipmentData, maintenanceData, documentsData, categoriesData] = await Promise.all([
         equipmentService.getById(equipmentId),
         maintenanceService.getByEquipmentId(equipmentId),
+        documentService.getByEquipmentId(equipmentId),
         equipmentService.getCategories() // Fetch categories
       ]);
 
@@ -111,6 +116,7 @@ export default function EquipmentDetailPage() {
 
       setEquipment(equipmentData);
       setMaintenanceHistory(maintenanceData || []);
+      setDocuments(documentsData || []);
       
       const dbStatus = equipmentData.status as EquipmentStatus;
       
@@ -161,11 +167,27 @@ export default function EquipmentDetailPage() {
     if (!id || typeof id !== "string") return;
 
     try {
+      // Documents are deleted automatically via cascade, but files in storage need manual cleanup if not using triggers
+      // For now we rely on DB cascade for records
       await equipmentService.delete(id);
       router.push("/equipment");
     } catch (error) {
       console.error("Error deleting equipment:", error);
       alert("Errore durante l'eliminazione");
+    }
+  };
+
+  const handleDocumentDelete = async (docId: string, filePath?: string) => {
+    try {
+      await documentService.delete(docId, filePath);
+      // Reload documents
+      if (id && typeof id === "string") {
+        const docs = await documentService.getByEquipmentId(id);
+        setDocuments(docs || []);
+      }
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      alert("Errore durante l'eliminazione del documento");
     }
   };
 
@@ -561,15 +583,18 @@ export default function EquipmentDetailPage() {
           {/* Documents Tab */}
           <TabsContent value="documents">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Documentazione Tecnica</CardTitle>
+                <DocumentUpload 
+                  equipmentId={equipment.id} 
+                  onUploadComplete={() => loadData(equipment.id)} 
+                />
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>Funzionalità di upload documenti in arrivo</p>
-                  <p className="text-sm">Potrai caricare manuali, schede tecniche e certificati</p>
-                </div>
+                <DocumentList 
+                  documents={documents} 
+                  onDelete={handleDocumentDelete} 
+                />
               </CardContent>
             </Card>
           </TabsContent>

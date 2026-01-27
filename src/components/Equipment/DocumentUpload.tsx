@@ -111,7 +111,7 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
       const { supabase } = await import("@/integrations/supabase/client");
 
       // Upload file to storage
-      const fileUrl = await documentService.uploadFile(selectedFile, equipmentId);
+      const { path: filePath } = await documentService.uploadFile(selectedFile, equipmentId);
 
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -122,7 +122,8 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
         title: fileFormData.title,
         description: fileFormData.description || null,
         category: fileFormData.category as any,
-        file_url: fileUrl,
+        document_type: "file",
+        file_path: filePath,
         file_name: selectedFile.name,
         file_size: selectedFile.size,
         file_type: selectedFile.type,
@@ -173,6 +174,7 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
         title: linkFormData.title,
         description: linkFormData.description || null,
         category: linkFormData.category as any,
+        document_type: "link",
         external_url: linkFormData.external_url,
         uploaded_by: user?.id || null
       });

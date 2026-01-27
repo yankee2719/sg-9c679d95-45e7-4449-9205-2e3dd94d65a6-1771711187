@@ -39,7 +39,7 @@ export const documentService = {
   },
 
   // Upload file to Supabase Storage
-  async uploadFile(file: File, equipmentId: string): Promise<string> {
+  async uploadFile(file: File, equipmentId: string): Promise<{ path: string; publicUrl: string }> {
     const fileExt = file.name.split(".").pop();
     const fileName = `${equipmentId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `equipment-documents/${fileName}`;
@@ -58,7 +58,7 @@ export const documentService = {
       .from("equipment-documents")
       .getPublicUrl(filePath);
 
-    return publicUrl;
+    return { path: filePath, publicUrl };
   },
 
   // Create document record
