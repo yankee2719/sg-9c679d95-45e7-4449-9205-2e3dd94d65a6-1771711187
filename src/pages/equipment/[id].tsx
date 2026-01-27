@@ -47,6 +47,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 
+// Define strict type for status to match DB enum
+type EquipmentStatus = "active" | "under_maintenance" | "inactive" | "decommissioned";
+
 export default function EquipmentDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -56,7 +59,20 @@ export default function EquipmentDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [equipment, setEquipment] = useState<any>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
+  
+  // Initialize with proper typing
+  const [formData, setFormData] = useState<{
+    name: string;
+    code: string;
+    category: string;
+    manufacturer: string;
+    model: string;
+    serial_number: string;
+    installation_date: string;
+    location: string;
+    status: EquipmentStatus;
+    notes: string;
+  }>({
     name: "",
     code: "",
     category: "",
@@ -78,6 +94,8 @@ export default function EquipmentDetailPage() {
   const loadEquipment = async (equipmentId: string) => {
     try {
       setLoading(true);
+      // We need to fetch maintenance history manually since it's not on equipmentService yet
+      // But we can add a method to maintenanceService for this
       const [equipmentData, maintenanceData] = await Promise.all([
         equipmentService.getById(equipmentId),
         maintenanceService.getByEquipmentId(equipmentId)
@@ -90,6 +108,10 @@ export default function EquipmentDetailPage() {
 
       setEquipment(equipmentData);
       setMaintenanceHistory(maintenanceData || []);
+      
+      // Map DB status to form status, handling potential mismatches safely
+      const dbStatus = equipmentData.status as EquipmentStatus;
+      
       setFormData({
         name: equipmentData.name || "",
         code: equipmentData.code || "",
@@ -99,7 +121,7 @@ export default function EquipmentDetailPage() {
         serial_number: equipmentData.serial_number || "",
         installation_date: equipmentData.installation_date || "",
         location: equipmentData.location || "",
-        status: equipmentData.status || "active",
+        status: dbStatus || "active",
         notes: equipmentData.notes || ""
       });
     } catch (error) {
@@ -145,10 +167,13 @@ export default function EquipmentDetailPage() {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline", label: string }> = {
       active: { variant: "default", label: "Attiva" },
-      maintenance: { variant: "secondary", label: "In Manutenzione" },
+      under_maintenance: { variant: "secondary", label: "In Manutenzione" },
       inactive: { variant: "outline", label: "Inattiva" },
       decommissioned: { variant: "destructive", label: "Dismessa" }
     };
+    // Handle legacy "maintenance" value just in case
+    if (status === "maintenance") status = "under_maintenance";
+    
     const config = variants[status] || variants.active;
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
@@ -351,7 +376,7 @@ export default function EquipmentDetailPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="active">Attiva</SelectItem>
-                          <SelectItem value="maintenance">In Manutenzione</SelectItem>
+                          <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
                           <SelectItem value="inactive">Inattiva</SelectItem>
                           <SelectItem value="decommissioned">Dismessa</SelectItem>
                         </SelectContent>

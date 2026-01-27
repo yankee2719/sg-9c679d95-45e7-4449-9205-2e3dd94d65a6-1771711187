@@ -208,5 +208,29 @@ export const maintenanceService = {
 
     if (error) throw error;
     return (data as unknown) as MaintenanceScheduleWithDetails[];
+  },
+
+  // Get maintenance history by equipment ID
+  async getByEquipmentId(equipmentId: string) {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .select(`
+        *,
+        equipment (
+          id,
+          name,
+          code
+        ),
+        assigned_to:profiles!maintenance_schedules_assigned_to_fkey (
+          id,
+          full_name,
+          email
+        )
+      `)
+      .eq("equipment_id", equipmentId)
+      .order("scheduled_date", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   }
 };
