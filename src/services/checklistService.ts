@@ -2,139 +2,234 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 type ChecklistTemplate = Database["public"]["Tables"]["checklist_templates"]["Row"];
-type ChecklistTemplateInsert = Database["public"]["Tables"]["checklist_templates"]["Insert"];
-type ChecklistItem = Database["public"]["Tables"]["checklist_items"]["Row"];
-type ChecklistExecution = Database["public"]["Tables"]["checklist_executions"]["Row"];
+type ChecklistTask = Database["public"]["Tables"]["checklist_tasks"]["Row"];
+
+export interface ChecklistTemplateWithTasks extends ChecklistTemplate {
+  checklist_tasks: ChecklistTask[];
+}
+
+export interface CreateChecklistTemplateData {
+  name: string;
+  description?: string;
+  category: string;
+  estimated_time: number;
+  equipment?: string;
+  status: "draft" | "active" | "archived";
+  tasks: {
+    title: string;
+    description?: string;
+    required: boolean;
+    task_order: number;
+  }[];
+}
 
 export const checklistService = {
-  // Get all templates
-  async getTemplates() {
-    const { data, error } = await supabase
-      .from("checklist_templates")
-      .select(`
-        *,
-        checklist_items (
-          id,
-          description,
-          item_type,
-          order_index
-        )
-      `)
-      .order("created_at", { ascending: false });
+  /**
+   * Crea un nuovo template checklist con i suoi task
+   */
+  async createTemplate(data: CreateChecklistTemplateData): Promise<ChecklistTemplateWithTasks | null> {
+    try {
+      const session = await supabase.auth.getSession();
+      if (!session.data.session) {
+        throw new Error("Non autenticato");
+      }
 
-    if (error) throw error;
-    return data || [];
+      // 1. Crea il template
+      const { data: template, error: templateError } = await supabase
+        .from("checklist_templates")
+        .insert({
+          name: data.name,
+          description: data.description,
+          category: data.category,
+          estimated_time: data.estimated_time,
+          equipment: data.equipment,
+          status: data.status,
+          created_by: session.data.session.user.id,
+        })
+        .select()
+        .single();
+
+      if (templateError || !template) {
+        console.error("Errore creazione template:", templateError);
+        throw templateError;
+      }
+
+      // 2. Crea i task associati
+      const tasksToInsert = data.tasks.map((task) => ({
+        template_id: template.id,
+        title: task.title,
+        description: task.description,
+        required: task.required,
+        task_order: task.task_order,
+      }));
+
+      const { data: tasks, error: tasksError } = await supabase
+        .from("checklist_tasks")
+        .insert(tasksToInsert)
+        .select();
+
+      if (tasksError) {
+        console.error("Errore creazione task:", tasksError);
+        // Rollback: elimina il template se i task falliscono
+        await supabase.from("checklist_templates").delete().eq("id", template.id);
+        throw tasksError;
+      }
+
+      return {
+        ...template,
+        checklist_tasks: tasks || [],
+      };
+    } catch (error) {
+      console.error("Errore createTemplate:", error);
+      return null;
+    }
   },
 
-  // Get template by ID with items
-  async getTemplateById(id: string) {
-    const { data, error } = await supabase
-      .from("checklist_templates")
-      .select(`
-        *,
-        checklist_items (
-          id,
-          description,
-          item_type,
-          order_index
-        )
-      `)
-      .eq("id", id)
-      .order("checklist_items(order_index)", { ascending: true })
-      .single();
+  /**
+   * Recupera tutti i template checklist con i loro task
+   */
+  async getAllTemplates(): Promise<ChecklistTemplateWithTasks[]> {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_templates")
+        .select(`
+          *,
+          checklist_tasks (*)
+        `)
+        .order("created_at", { ascending: false });
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error("Errore getAllTemplates:", error);
+        return [];
+      }
+
+      return (data || []) as ChecklistTemplateWithTasks[];
+    } catch (error) {
+      console.error("Errore getAllTemplates:", error);
+      return [];
+    }
   },
 
-  // Create template
-  async createTemplate(template: ChecklistTemplateInsert) {
-    const { data, error } = await supabase
-      .from("checklist_templates")
-      .insert(template)
-      .select()
-      .single();
+  /**
+   * Recupera un template specifico con i suoi task
+   */
+  async getTemplateById(id: string): Promise<ChecklistTemplateWithTasks | null> {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_templates")
+        .select(`
+          *,
+          checklist_tasks (*)
+        `)
+        .eq("id", id)
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error("Errore getTemplateById:", error);
+        return null;
+      }
+
+      return data as ChecklistTemplateWithTasks;
+    } catch (error) {
+      console.error("Errore getTemplateById:", error);
+      return null;
+    }
   },
 
-  // Update template
-  async updateTemplate(id: string, template: Partial<ChecklistTemplateInsert>) {
-    const { data, error } = await supabase
-      .from("checklist_templates")
-      .update(template)
-      .eq("id", id)
-      .select()
-      .single();
+  /**
+   * Aggiorna lo status di un template
+   */
+  async updateTemplateStatus(id: string, status: "draft" | "active" | "archived"): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from("checklist_templates")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error("Errore updateTemplateStatus:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Errore updateTemplateStatus:", error);
+      return false;
+    }
   },
 
-  // Add item to template
-  async createItem(item: Database["public"]["Tables"]["checklist_items"]["Insert"]) {
-    const { data, error } = await supabase
-      .from("checklist_items")
-      .insert(item)
-      .select()
-      .single();
+  /**
+   * Elimina un template checklist (e i suoi task grazie a ON DELETE CASCADE)
+   */
+  async deleteTemplate(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from("checklist_templates")
+        .delete()
+        .eq("id", id);
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error("Errore deleteTemplate:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Errore deleteTemplate:", error);
+      return false;
+    }
   },
 
-  // Update item
-  async updateItem(id: string, item: Partial<Database["public"]["Tables"]["checklist_items"]["Insert"]>) {
-    const { data, error } = await supabase
-      .from("checklist_items")
-      .update(item)
-      .eq("id", id)
-      .select()
-      .single();
+  /**
+   * Recupera template per categoria
+   */
+  async getTemplatesByCategory(category: string): Promise<ChecklistTemplateWithTasks[]> {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_templates")
+        .select(`
+          *,
+          checklist_tasks (*)
+        `)
+        .eq("category", category)
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error("Errore getTemplatesByCategory:", error);
+        return [];
+      }
+
+      return (data || []) as ChecklistTemplateWithTasks[];
+    } catch (error) {
+      console.error("Errore getTemplatesByCategory:", error);
+      return [];
+    }
   },
 
-  // Delete item
-  async deleteItem(id: string) {
-    const { error } = await supabase
-      .from("checklist_items")
-      .delete()
-      .eq("id", id);
+  /**
+   * Recupera template per status
+   */
+  async getTemplatesByStatus(status: "draft" | "active" | "archived"): Promise<ChecklistTemplateWithTasks[]> {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_templates")
+        .select(`
+          *,
+          checklist_tasks (*)
+        `)
+        .eq("status", status)
+        .order("created_at", { ascending: false });
 
-    if (error) throw error;
+      if (error) {
+        console.error("Errore getTemplatesByStatus:", error);
+        return [];
+      }
+
+      return (data || []) as ChecklistTemplateWithTasks[];
+    } catch (error) {
+      console.error("Errore getTemplatesByStatus:", error);
+      return [];
+    }
   },
-
-  // Execute checklist
-  async executeChecklist(execution: Database["public"]["Tables"]["checklist_executions"]["Insert"]) {
-    const { data, error } = await supabase
-      .from("checklist_executions")
-      .insert(execution)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  // Get executions by maintenance log
-  async getExecutionsByLog(logId: string) {
-    const { data, error } = await supabase
-      .from("checklist_executions")
-      .select(`
-        *,
-        checklist_item:checklist_items (
-          id,
-          description,
-          item_type
-        )
-      `)
-      .eq("maintenance_log_id", logId)
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  }
 };
