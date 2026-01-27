@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { equipmentService } from "@/services/equipmentService";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,13 +16,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+interface FormData {
+  name: string;
+  code: string;
+  category_id: string;
+  manufacturer: string;
+  model: string;
+  serial_number: string;
+  location: string;
+  notes: string;
+  status: string;
+  yearOfProduction: string;
+  technicalSpecs: string;
+}
 
 export default function NewEquipmentPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [categories, setCategories] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     code: "",
     category_id: "",
@@ -30,7 +47,9 @@ export default function NewEquipmentPage() {
     serial_number: "",
     location: "",
     notes: "",
-    status: "active"
+    status: "active",
+    yearOfProduction: "",
+    technicalSpecs: ""
   });
 
   useEffect(() => {
@@ -43,6 +62,7 @@ export default function NewEquipmentPage() {
       setCategories(data);
     } catch (error) {
       console.error("Error loading categories:", error);
+      setError("Errore nel caricamento delle categorie");
     }
   };
 
@@ -59,41 +79,38 @@ export default function NewEquipmentPage() {
         throw new Error("Utente non autenticato");
       }
 
-      // Prepare equipment data
-      const equipmentData = {
-        code: formData.code,
-        name: formData.name,
-        category_id: formData.categoryId || null,
-        manufacturer: formData.manufacturer || null,
-        model: formData.model || null,
-        serial_number: formData.serial || null,
-        installation_date: formData.yearOfProduction ? `${formData.yearOfProduction}-01-01` : null,
-        status: formData.status,
-        notes: formData.notes || null,
-        technical_specs: formData.technicalSpecs ? JSON.parse(JSON.stringify({ specs: formData.technicalSpecs })) : null,
-        created_by: user.id,
-      };
-
       // Generate QR code content (simple URL for now)
       const qrCode = `EQUIP:${formData.code}`;
       
-      await equipmentService.create({
-        ...formData,
+      // Prepare equipment data mapping form state to DB schema
+      const equipmentData = {
+        code: formData.code,
+        name: formData.name,
+        category_id: formData.category_id || null,
+        manufacturer: formData.manufacturer || null,
+        model: formData.model || null,
+        serial_number: formData.serial_number || null,
+        location: formData.location || null,
+        installation_date: formData.yearOfProduction ? `${formData.yearOfProduction}-01-01` : null,
         status: formData.status as "active" | "under_maintenance" | "inactive" | "decommissioned",
+        notes: formData.notes || null,
+        technical_specs: formData.technicalSpecs ? { specs: formData.technicalSpecs } : null, // Store as JSON
         qr_code: qrCode,
-        installation_date: new Date().toISOString().split('T')[0]
-      });
+        created_by: user.id,
+      };
+
+      await equipmentService.create(equipmentData);
 
       router.push("/equipment");
-    } catch (error) {
-      console.error("Error creating equipment:", error);
-      alert("Errore durante la creazione della macchina");
+    } catch (err: any) {
+      console.error("Error creating equipment:", err);
+      setError(err.message || "Errore durante la creazione della macchina");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (field: string, value: string) => {
+  const handleChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -109,6 +126,14 @@ export default function NewEquipmentPage() {
           </Button>
           <h1 className="text-2xl font-bold">Nuova Macchina</h1>
         </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Errore</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader>
@@ -194,11 +219,24 @@ export default function NewEquipmentPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial">Numero di Serie</Label>
+                  <Label htmlFor="serial_number">Numero di Serie</Label>
                   <Input
-                    id="serial"
+                    id="serial_number"
                     value={formData.serial_number}
-                    onChange={(e) => handleChange("serial", e.target.value)}
+                    onChange={(e) => handleChange("serial_number", e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="yearOfProduction">Anno di Produzione</Label>
+                  <Input
+                    id="yearOfProduction"
+                    type="number"
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    value={formData.yearOfProduction}
+                    onChange={(e) => handleChange("yearOfProduction", e.target.value)}
+                    placeholder="Es. 2023"
                   />
                 </div>
 
@@ -214,12 +252,23 @@ export default function NewEquipmentPage() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="technicalSpecs">Specifiche Tecniche</Label>
+                <Textarea
+                  id="technicalSpecs"
+                  value={formData.technicalSpecs}
+                  onChange={(e) => handleChange("technicalSpecs", e.target.value)}
+                  placeholder="Dettagli tecnici aggiuntivi..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="notes">Note Aggiuntive</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => handleChange("notes", e.target.value)}
-                  rows={4}
+                  rows={3}
                 />
               </div>
 
