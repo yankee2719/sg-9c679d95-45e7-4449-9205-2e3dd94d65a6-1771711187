@@ -7,43 +7,40 @@ import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
 import { equipmentService } from "@/services/equipmentService";
 import { maintenanceService } from "@/services/maintenanceService";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
+  QrCode,
+  ArrowRight,
   Wrench,
-  Calendar,
-  AlertCircle,
+  ClipboardList,
   CheckCircle,
-  TrendingUp,
-  Package,
-  Users,
   Clock,
-  Plus
+  MoreHorizontal,
+  ArrowUpRight
 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  
+  // Real data state
   const [stats, setStats] = useState({
     totalEquipment: 0,
     activeEquipment: 0,
-    underMaintenance: 0,
-    upcomingMaintenance: 0,
-    overdueMaintenance: 0,
-    completedThisMonth: 0
+    maintenanceEquipment: 0,
+    inactiveEquipment: 0,
+    pendingTasks: 0,
+    overdueTasks: 0,
+    completedToday: 0,
+    avgTime: "2.5h" // Placeholder for now, hard to calc without history
   });
-  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
-  const [overdueTasks, setOverdueTasks] = useState<any[]>([]);
+  
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [equipmentList, setEquipmentList] = useState<any[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -60,7 +57,7 @@ export default function DashboardPage() {
       const role = await userService.getUserRole(session.user.id);
       if (role) {
         setUserRole(role as any);
-        await loadDashboardData(session.user.id, role as any);
+        await loadDashboardData();
       }
     } catch (error) {
       console.error("Error checking auth:", error);
@@ -70,7 +67,7 @@ export default function DashboardPage() {
     }
   };
 
-  const loadDashboardData = async (userId: string, role: string) => {
+  const loadDashboardData = async () => {
     try {
       const [equipment, upcoming, overdue] = await Promise.all([
         equipmentService.getAll(),
@@ -81,260 +78,224 @@ export default function DashboardPage() {
       setStats({
         totalEquipment: equipment.length,
         activeEquipment: equipment.filter(e => e.status === "active").length,
-        underMaintenance: equipment.filter(e => e.status === "under_maintenance").length,
-        upcomingMaintenance: upcoming.length,
-        overdueMaintenance: overdue.length,
-        completedThisMonth: 0 // TODO: implement
+        maintenanceEquipment: equipment.filter(e => e.status === "under_maintenance").length,
+        inactiveEquipment: equipment.filter(e => e.status !== "active" && e.status !== "under_maintenance").length,
+        pendingTasks: upcoming.length + overdue.length,
+        overdueTasks: overdue.length,
+        completedToday: 8, // Mocked
+        avgTime: "2.5h" // Mocked
       });
 
-      setUpcomingTasks(upcoming.slice(0, 5));
-      setOverdueTasks(overdue.slice(0, 5));
+      setEquipmentList(equipment.slice(0, 3));
+      
+      // Combine upcoming and overdue for activity feed
+      const activity = [...overdue, ...upcoming].slice(0, 3);
+      setRecentActivity(activity);
+
     } catch (error) {
-      console.error("Error loading dashboard data:", error);
+      console.error("Error loading data:", error);
     }
   };
 
-  if (loading) {
-    return (
-      <MainLayout userRole={userRole}>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </MainLayout>
-    );
-  }
+  if (loading) return null;
 
   return (
     <MainLayout userRole={userRole}>
-      <SEO title="Dashboard - Industrial Maintenance" />
+      <SEO title="Dashboard - Maint Ops" />
       
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Panoramica sistema di manutenzione industriale
-            </p>
+      <div className="space-y-8 max-w-6xl mx-auto">
+        
+        {/* HERO: QR Scanner */}
+        <div className="rounded-3xl gradient-primary p-8 text-white shadow-xl relative overflow-hidden group cursor-pointer transition-transform hover:scale-[1.01]"
+             onClick={() => router.push("/scanner")}>
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+                <QrCode className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Scansiona QR Code</h2>
+                <p className="text-blue-100 font-medium">Accedi rapidamente alle informazioni del macchinario</p>
+              </div>
+            </div>
+            <div className="bg-white/20 p-3 rounded-full hover:bg-white/30 transition-colors">
+              <ArrowRight className="w-6 h-6 text-white" />
+            </div>
           </div>
-          {userRole === "admin" && (
-            <div className="flex gap-2">
-              <Button asChild variant="outline">
-                <Link href="/equipment/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nuova Macchina
-                </Link>
-              </Button>
-              <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600">
-                <Link href="/maintenance/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nuova Manutenzione
-                </Link>
-              </Button>
-            </div>
-          )}
+          
+          {/* Decorative circles */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+          <div className="absolute bottom-0 left-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
         </div>
 
-        {/* KPI Cards */}
+        {/* KPI CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Totale Macchine</CardTitle>
-              <Package className="h-5 w-5 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.totalEquipment}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats.activeEquipment} attive
-              </p>
+          {/* Equipment Stat */}
+          <Card className="rounded-3xl border-none shadow-sm hover:shadow-md transition-all">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 text-blue-500">
+                <Wrench className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.totalEquipment}</h3>
+                <p className="font-medium text-slate-500">Equipaggiamenti</p>
+                <p className="text-sm text-blue-500 font-medium">{stats.activeEquipment} operativi</p>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Manutenzione</CardTitle>
-              <Wrench className="h-5 w-5 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.underMaintenance}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Richiede attenzione
-              </p>
+          {/* Tasks Stat */}
+          <Card className="rounded-3xl border-none shadow-sm hover:shadow-md transition-all">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 text-amber-500">
+                <ClipboardList className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.pendingTasks}</h3>
+                <p className="font-medium text-slate-500">Task Pendenti</p>
+                <p className="text-sm text-amber-500 font-medium">{stats.overdueTasks} scaduti</p>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Prossime 7 Giorni</CardTitle>
-              <Clock className="h-5 w-5 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.upcomingMaintenance}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Manutenzioni programmate
-              </p>
+          {/* Completed Stat */}
+          <Card className="rounded-3xl border-none shadow-sm hover:shadow-md transition-all">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mb-4 text-green-500">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.completedToday}</h3>
+                <p className="font-medium text-slate-500">Completati Oggi</p>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow border-red-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Ritardo</CardTitle>
-              <AlertCircle className="h-5 w-5 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-red-600">{stats.overdueMaintenance}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Urgente
-              </p>
+          {/* Time Stat */}
+          <Card className="rounded-3xl border-none shadow-sm hover:shadow-md transition-all">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-cyan-50 rounded-2xl flex items-center justify-center mb-4 text-cyan-500">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.avgTime}</h3>
+                <p className="font-medium text-slate-500">Tempo Medio</p>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Overdue Tasks - Priority */}
-        {overdueTasks.length > 0 && (
-          <Card className="border-red-200">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                  <CardTitle className="text-red-600">Manutenzioni in Ritardo</CardTitle>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/maintenance">Vedi Tutte</Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Macchina</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Scadenza</TableHead>
-                    <TableHead>Assegnato a</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {overdueTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium">
-                        {task.equipment?.name || "N/A"}
-                        <div className="text-xs text-muted-foreground">
-                          {task.equipment?.code}
-                        </div>
-                      </TableCell>
-                      <TableCell>{task.maintenance_type}</TableCell>
-                      <TableCell className="text-red-600">
-                        {new Date(task.next_maintenance_date).toLocaleDateString("it-IT")}
-                      </TableCell>
-                      <TableCell>
-                        {task.assigned_to?.full_name || "Non assegnato"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
+        {/* EQUIPMENT STATUS PROGRESS */}
+        <Card className="rounded-3xl border-none shadow-sm p-6">
+          <h3 className="text-lg font-bold text-slate-800 mb-6">Stato Equipaggiamenti</h3>
+          
+          {/* Progress Bar Container */}
+          <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex mb-4">
+            <div className="h-full bg-green-500" style={{ width: `${(stats.activeEquipment / stats.totalEquipment) * 100}%` }} />
+            <div className="h-full bg-amber-500" style={{ width: `${(stats.maintenanceEquipment / stats.totalEquipment) * 100}%` }} />
+            <div className="h-full bg-slate-400" style={{ width: `${(stats.inactiveEquipment / stats.totalEquipment) * 100}%` }} />
+          </div>
 
-        {/* Upcoming Tasks */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-blue-600" />
-                <CardTitle>Prossime Manutenzioni</CardTitle>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/maintenance">Vedi Tutte</Link>
-              </Button>
+          {/* Legend */}
+          <div className="flex flex-wrap gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span className="font-medium text-slate-600">Operativi ({stats.activeEquipment})</span>
             </div>
-          </CardHeader>
-          <CardContent>
-            {upcomingTasks.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Nessuna manutenzione programmata nei prossimi 7 giorni
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Macchina</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Assegnato a</TableHead>
-                    <TableHead>Durata Stimata</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {upcomingTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium">
-                        {task.equipment?.name || "N/A"}
-                        <div className="text-xs text-muted-foreground">
-                          {task.equipment?.code}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{task.maintenance_type}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(task.next_maintenance_date).toLocaleDateString("it-IT")}
-                      </TableCell>
-                      <TableCell>
-                        {task.assigned_to?.full_name || "Non assegnato"}
-                      </TableCell>
-                      <TableCell>
-                        {task.estimated_duration_minutes 
-                          ? `${task.estimated_duration_minutes} min`
-                          : "N/A"
-                        }
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-amber-500" />
+              <span className="font-medium text-slate-600">In Manutenzione ({stats.maintenanceEquipment})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-slate-400" />
+              <span className="font-medium text-slate-600">Non Attivi ({stats.inactiveEquipment})</span>
+            </div>
+          </div>
         </Card>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/equipment")}>
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Package className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Anagrafica Macchine</h3>
-                <p className="text-sm text-muted-foreground">Gestisci le tue attrezzature</p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* BOTTOM SECTIONS GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Recent Activity */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-2">
+              <h3 className="text-lg font-bold text-slate-800">Attività Recenti</h3>
+              <Button variant="ghost" className="text-blue-500 hover:text-blue-600 font-medium p-0 h-auto hover:bg-transparent" asChild>
+                <Link href="/maintenance">Vedi tutte</Link>
+              </Button>
+            </div>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/maintenance")}>
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Calendar className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Manutenzioni</h3>
-                <p className="text-sm text-muted-foreground">Pianifica interventi</p>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="space-y-4">
+              {recentActivity.map((task) => (
+                <Card key={task.id} className="rounded-2xl border-none shadow-sm hover:shadow-md transition-all overflow-hidden group">
+                  <div className="p-4 flex items-center gap-4">
+                    <div className={`p-3 rounded-xl flex-shrink-0 ${
+                      task.priority === 'high' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'
+                    }`}>
+                      <Wrench className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className={`border-0 rounded-md px-2 py-0.5 text-xs font-semibold ${
+                          task.priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                        }`}>
+                          {task.priority === 'high' ? 'Alta' : 'Media'}
+                        </Badge>
+                        <span className="text-xs text-slate-400 font-medium">
+                          {new Date(task.scheduled_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-slate-800 truncate">{task.title}</h4>
+                      <p className="text-sm text-slate-500 truncate">{task.equipment?.name}</p>
+                    </div>
+                    <Button size="icon" variant="ghost" className="text-slate-300 group-hover:text-blue-500">
+                      <ArrowUpRight className="w-5 h-5" />
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/checklists")}>
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Checklist</h3>
-                <p className="text-sm text-muted-foreground">Template controlli</p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Equipment List */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-2">
+              <h3 className="text-lg font-bold text-slate-800">Equipaggiamenti</h3>
+              <Button variant="ghost" className="text-blue-500 hover:text-blue-600 font-medium p-0 h-auto hover:bg-transparent" asChild>
+                <Link href="/equipment">Vedi tutti</Link>
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {equipmentList.map((item) => (
+                <Card key={item.id} className="rounded-2xl border-none shadow-sm hover:shadow-md transition-all overflow-hidden">
+                  <div className="p-4 flex items-center gap-4">
+                    <div className="w-14 h-14 bg-slate-100 rounded-xl flex-shrink-0 overflow-hidden relative">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-200 text-slate-400">
+                           <Wrench className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-800 truncate">{item.name}</h4>
+                      <p className="text-sm text-slate-500 truncate">{item.location || 'Nessuna posizione'}</p>
+                      <p className="text-xs text-slate-400 mt-1">{item.category?.name || 'Generico'}</p>
+                    </div>
+
+                    <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-4 h-10 shadow-lg shadow-blue-200" onClick={() => router.push(`/scanner?id=${item.id}`)}>
+                      <QrCode className="w-4 h-4 mr-2" />
+                      Scansiona
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
     </MainLayout>

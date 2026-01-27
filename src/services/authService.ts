@@ -127,6 +127,11 @@ export const authService = {
     }
   },
 
+  // Alias for signOut
+  async logout(): Promise<{ error: AuthError | null }> {
+    return this.signOut();
+  },
+
   // Reset password
   async resetPassword(email: string): Promise<{ error: AuthError | null }> {
     try {
