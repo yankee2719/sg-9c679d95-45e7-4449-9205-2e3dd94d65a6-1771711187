@@ -23,7 +23,10 @@ import {
   LogOut,
   Menu,
   X,
-  Bell
+  Bell,
+  Home,
+  ClipboardList,
+  Package
 } from "lucide-react";
 
 interface MainLayoutProps {
@@ -49,30 +52,15 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     router.push("/login");
   };
 
-  const navigation = {
-    admin: [
-      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Utenti", href: "/users", icon: Users },
-      { name: "Macchine", href: "/equipment", icon: Wrench },
-      { name: "Manutenzioni", href: "/maintenance", icon: Settings },
-      { name: "Checklist", href: "/checklists", icon: ClipboardCheck },
-      { name: "Documentazione", href: "/documents", icon: FileText },
-    ],
-    supervisor: [
-      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Manutenzioni", href: "/maintenance", icon: Settings },
-      { name: "Checklist", href: "/checklists", icon: ClipboardCheck },
-      { name: "Report", href: "/reports", icon: FileText },
-    ],
-    technician: [
-      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Mie Manutenzioni", href: "/my-maintenance", icon: Settings },
-      { name: "Scanner QR", href: "/qr-scanner", icon: ClipboardCheck },
-      { name: "Storico", href: "/history", icon: FileText },
-    ]
-  };
+  const navItems = [
+    { href: "/dashboard", label: "Dashboard", icon: Home, roles: ["admin", "supervisor", "technician"] },
+    { href: "/equipment", label: "Macchine", icon: Package, roles: ["admin", "supervisor", "technician"] },
+    { href: "/maintenance", label: "Manutenzioni", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
+    { href: "/checklists", label: "Checklist", icon: ClipboardList, roles: ["admin", "supervisor"] },
+    { href: "/admin/users", label: "Utenti", icon: Users, roles: ["admin"] }
+  ];
 
-  const currentNav = navigation[userRole];
+  const currentNav = navItems.filter((item) => item.roles.includes(userRole));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -116,7 +104,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     className={isActive ? "bg-gradient-to-r from-blue-600 to-indigo-600" : ""}
                   >
                     <Icon className="h-4 w-4 mr-2" />
-                    {item.name}
+                    {item.label}
                   </Button>
                 </Link>
               );
@@ -179,7 +167,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <Icon className="h-4 w-4 mr-2" />
-                      {item.name}
+                      {item.label}
                     </Button>
                   </Link>
                 );
