@@ -62,7 +62,7 @@ export default function NewMaintenancePage() {
     setLoading(true);
 
     try {
-      await maintenanceService.createSchedule({
+      const scheduleData = {
         equipment_id: formData.equipment_id,
         maintenance_type: formData.maintenance_type,
         description: formData.description || null,
@@ -72,7 +72,9 @@ export default function NewMaintenancePage() {
         checklist_template_id: formData.checklist_template_id || null,
         estimated_duration_minutes: formData.estimated_duration_minutes ? parseInt(formData.estimated_duration_minutes) : null,
         is_active: true
-      });
+      };
+
+      await maintenanceService.createSchedule(scheduleData as any);
 
       router.push("/maintenance");
     } catch (error) {

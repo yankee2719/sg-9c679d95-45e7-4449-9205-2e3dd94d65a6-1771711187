@@ -73,7 +73,7 @@ export const checklistService = {
   },
 
   // Add item to template
-  async addItem(item: Database["public"]["Tables"]["checklist_items"]["Insert"]) {
+  async createItem(item: Database["public"]["Tables"]["checklist_items"]["Insert"]) {
     const { data, error } = await supabase
       .from("checklist_items")
       .insert(item)

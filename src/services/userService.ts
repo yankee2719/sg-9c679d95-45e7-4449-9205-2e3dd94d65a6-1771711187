@@ -49,6 +49,18 @@ export const userService = {
     return data;
   },
 
+  // Get user role
+  async getUserRole(userId: string) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (error) return null;
+    return data?.role;
+  },
+
   // Update user role (admin only)
   async updateUserRole(userId: string, role: UserRole) {
     const { data, error } = await supabase
