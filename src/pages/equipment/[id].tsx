@@ -139,7 +139,14 @@ export default function EquipmentDetailPage() {
 
     try {
       setSaving(true);
-      await equipmentService.update(id, formData); // formData now has category_id which matches DB
+      
+      // Clean up UUID fields: convert empty strings to null
+      const cleanedData = {
+        ...formData,
+        category_id: formData.category_id || null,
+      };
+      
+      await equipmentService.update(id, cleanedData);
       await loadData(id);
       setEditMode(false);
     } catch (error) {
