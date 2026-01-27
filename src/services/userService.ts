@@ -53,18 +53,35 @@ export const userService = {
   },
 
   // Get user role
-  async getUserRole(userId: string) {
+  async getUserRole(userId: string): Promise<string | null> {
     const { data, error } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", userId)
-      .maybeSingle();
+      .single();
 
     if (error) {
-      console.error("Error getting user role:", error);
+      console.error("Error fetching user role:", error);
       return null;
     }
+
     return data?.role || null;
+  },
+
+  // Get user profile
+  async getUserProfile(userId: string) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user profile:", error);
+      throw error;
+    }
+
+    return data;
   },
 
   // Update user role (admin only)

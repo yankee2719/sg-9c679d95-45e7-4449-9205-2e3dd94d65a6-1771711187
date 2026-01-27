@@ -43,49 +43,52 @@ export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
   ];
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-80 bg-muted/30 border-r border-border flex flex-col">
+      <aside className="w-80 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800 flex flex-col">
         {/* Brand */}
-        <div className="p-6 border-b border-border">
+        <div className="p-6 border-b border-slate-800/50">
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center">
-              <Wrench className="h-7 w-7 text-white" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Wrench className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground">Maint Ops</h1>
-              <p className="text-xs text-muted-foreground">Sistema Manutenzione</p>
+              <h1 className="text-lg font-bold text-white tracking-tight">Maint Ops</h1>
+              <p className="text-xs text-slate-400 font-medium">Sistema Manutenzione</p>
             </div>
           </div>
         </div>
 
         {/* User Info */}
-        <div className="p-6 border-b border-border">
+        <div className="p-4 mx-4 mt-4 mb-2 rounded-2xl bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-3">
-            <Avatar className="w-12 h-12 bg-primary/10">
-              <AvatarFallback className="text-primary font-semibold">MR</AvatarFallback>
+            <Avatar className="w-10 h-10 border-2 border-slate-700">
+              <AvatarFallback className="bg-slate-700 text-blue-400 font-bold text-sm">MR</AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-semibold text-foreground">Marco Rossi</p>
-              <p className="text-sm text-muted-foreground capitalize">{userRole}</p>
+              <p className="font-semibold text-sm text-white">Marco Rossi</p>
+              <p className="text-xs text-blue-400 font-medium capitalize">{userRole}</p>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
           {navigation.map((item) => {
             const Icon = item.icon;
             return (
               <button
                 key={item.name}
                 onClick={() => router.push(item.href)}
-                className={`sidebar-item w-full ${item.active ? "sidebar-item-active" : ""}`}
+                className={`sidebar-item w-full group relative ${item.active ? "bg-blue-500/10 text-blue-400" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`}
               >
-                <Icon className="h-5 w-5" />
-                <span>{item.name}</span>
                 {item.active && (
-                  <div className="ml-auto w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
+                )}
+                <Icon className={`h-5 w-5 ${item.active ? "text-blue-400" : "text-slate-500 group-hover:text-slate-300"}`} />
+                <span className="font-medium">{item.name}</span>
+                {item.active && (
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
                 )}
               </button>
             );
@@ -93,10 +96,10 @@ export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
         </nav>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-border space-y-2">
+        <div className="p-4 border-t border-slate-800/50 space-y-2 bg-slate-900/30">
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3"
+            className="w-full justify-start gap-3 text-slate-400 hover:text-white hover:bg-slate-800/50"
             onClick={toggleTheme}
           >
             {theme === "dark" ? (
@@ -113,7 +116,7 @@ export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
           </Button>
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3 text-error hover:text-error hover:bg-error/10"
+            className="w-full justify-start gap-3 text-red-400/80 hover:text-red-400 hover:bg-red-500/10"
             onClick={handleLogout}
           >
             <LogOut className="h-5 w-5" />
@@ -123,30 +126,25 @@ export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 overflow-y-auto bg-background">
+        <div className="max-w-7xl mx-auto min-h-screen">
           {/* Header */}
-          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg border-b border-border">
-            <div className="flex items-center justify-between p-6">
-              <h2 className="text-2xl font-bold text-foreground">
+          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg border-b border-border/50">
+            <div className="flex items-center justify-between px-8 py-5">
+              <h2 className="text-2xl font-bold text-foreground tracking-tight">
                 {navigation.find(n => n.active)?.name || "Dashboard"}
               </h2>
               <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" className="relative">
+                <Button variant="ghost" size="icon" className="relative hover:bg-slate-800/50 text-slate-400 hover:text-white">
                   <Bell className="h-5 w-5" />
-                  <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-error text-white text-xs">
-                    3
-                  </Badge>
-                </Button>
-                <Button variant="ghost" size="icon">
-                  <Settings className="h-5 w-5" />
+                  <Badge className="absolute top-2 right-2 w-2 h-2 p-0 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse" />
                 </Button>
               </div>
             </div>
           </header>
 
           {/* Page Content */}
-          <div className="p-6">
+          <div className="p-8">
             {children}
           </div>
         </div>
