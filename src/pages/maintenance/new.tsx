@@ -29,12 +29,16 @@ export default function NewMaintenancePage() {
   const [formData, setFormData] = useState({
     equipment_id: "",
     maintenance_type: "",
+    title: "",
     description: "",
     frequency_days: "",
-    next_maintenance_date: "",
+    scheduled_date: "",
+    due_date: "",
     assigned_to: "",
     checklist_template_id: "",
-    estimated_duration_minutes: ""
+    estimated_duration_minutes: "",
+    priority: "medium",
+    recurrence_pattern: ""
   });
 
   useEffect(() => {
@@ -65,13 +69,18 @@ export default function NewMaintenancePage() {
       const scheduleData = {
         equipment_id: formData.equipment_id,
         maintenance_type: formData.maintenance_type,
+        title: formData.title,
         description: formData.description || null,
         frequency_days: formData.frequency_days ? parseInt(formData.frequency_days) : null,
-        next_maintenance_date: formData.next_maintenance_date,
+        scheduled_date: formData.scheduled_date,
+        due_date: formData.due_date || formData.scheduled_date,
         assigned_to: formData.assigned_to || null,
         checklist_template_id: formData.checklist_template_id || null,
         estimated_duration_minutes: formData.estimated_duration_minutes ? parseInt(formData.estimated_duration_minutes) : null,
-        is_active: true
+        priority: formData.priority,
+        recurrence_pattern: formData.recurrence_pattern || null,
+        is_active: true,
+        status: "scheduled"
       };
 
       await maintenanceService.createSchedule(scheduleData as any);
@@ -140,22 +149,75 @@ export default function NewMaintenancePage() {
                       <SelectValue placeholder="Seleziona tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="preventiva">Preventiva</SelectItem>
-                      <SelectItem value="predittiva">Predittiva</SelectItem>
-                      <SelectItem value="correttiva">Correttiva</SelectItem>
-                      <SelectItem value="straordinaria">Straordinaria</SelectItem>
+                      <SelectItem value="preventive">Preventiva</SelectItem>
+                      <SelectItem value="predictive">Predittiva</SelectItem>
+                      <SelectItem value="corrective">Correttiva</SelectItem>
+                      <SelectItem value="extraordinary">Straordinaria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="title">Titolo *</Label>
+                  <Input
+                    id="title"
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => handleChange("title", e.target.value)}
+                    placeholder="Es. Manutenzione Preventiva Mensile"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="scheduled_date">Data Pianificata *</Label>
+                  <Input
+                    id="scheduled_date"
+                    type="date"
+                    value={formData.scheduled_date}
+                    onChange={(e) => handleChange("scheduled_date", e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="due_date">Data Scadenza</Label>
+                  <Input
+                    id="due_date"
+                    type="date"
+                    value={formData.due_date}
+                    onChange={(e) => handleChange("due_date", e.target.value)}
+                    placeholder="Opzionale"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priorità *</Label>
+                  <Select
+                    value={formData.priority}
+                    onValueChange={(value) => handleChange("priority", value)}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleziona priorità" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Bassa</SelectItem>
+                      <SelectItem value="medium">Media</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                      <SelectItem value="critical">Critica</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="date">Data Prossima Manutenzione *</Label>
+                  <Label htmlFor="duration">Durata Stimata (minuti)</Label>
                   <Input
-                    id="date"
-                    type="date"
-                    value={formData.next_maintenance_date}
-                    onChange={(e) => handleChange("next_maintenance_date", e.target.value)}
-                    required
+                    id="duration"
+                    type="number"
+                    value={formData.estimated_duration_minutes}
+                    onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)}
+                    placeholder="Es. 60"
                   />
                 </div>
 
@@ -168,6 +230,24 @@ export default function NewMaintenancePage() {
                     onChange={(e) => handleChange("frequency_days", e.target.value)}
                     placeholder="Es. 30 per mensile"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="recurrence">Pattern Ricorrenza</Label>
+                  <Select
+                    value={formData.recurrence_pattern}
+                    onValueChange={(value) => handleChange("recurrence_pattern", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Nessuna ricorrenza" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Giornaliera</SelectItem>
+                      <SelectItem value="weekly">Settimanale</SelectItem>
+                      <SelectItem value="monthly">Mensile</SelectItem>
+                      <SelectItem value="yearly">Annuale</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -187,17 +267,6 @@ export default function NewMaintenancePage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="duration">Durata Stimata (minuti)</Label>
-                  <Input
-                    id="duration"
-                    type="number"
-                    value={formData.estimated_duration_minutes}
-                    onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)}
-                    placeholder="Es. 60"
-                  />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
@@ -245,7 +314,7 @@ export default function NewMaintenancePage() {
                   ) : (
                     <>
                       <Save className="mr-2 h-4 w-4" />
-                      Salva Manutenzione
+                      Crea Manutenzione
                     </>
                   )}
                 </Button>

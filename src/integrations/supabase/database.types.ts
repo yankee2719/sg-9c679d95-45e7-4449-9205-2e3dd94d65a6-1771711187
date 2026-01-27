@@ -407,7 +407,11 @@ export type Database = {
           description: string | null
           due_date: string | null
           equipment_id: string
+          estimated_duration_minutes: number | null
+          frequency_days: number | null
           id: string
+          is_active: boolean
+          maintenance_type: Database["public"]["Enums"]["maintenance_type_enum"]
           priority: Database["public"]["Enums"]["maintenance_priority"] | null
           recurrence_pattern: string | null
           scheduled_date: string
@@ -423,7 +427,11 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           equipment_id: string
+          estimated_duration_minutes?: number | null
+          frequency_days?: number | null
           id?: string
+          is_active?: boolean
+          maintenance_type?: Database["public"]["Enums"]["maintenance_type_enum"]
           priority?: Database["public"]["Enums"]["maintenance_priority"] | null
           recurrence_pattern?: string | null
           scheduled_date: string
@@ -439,7 +447,11 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           equipment_id?: string
+          estimated_duration_minutes?: number | null
+          frequency_days?: number | null
           id?: string
+          is_active?: boolean
+          maintenance_type?: Database["public"]["Enums"]["maintenance_type_enum"]
           priority?: Database["public"]["Enums"]["maintenance_priority"] | null
           recurrence_pattern?: string | null
           scheduled_date?: string
@@ -695,6 +707,11 @@ export type Database = {
         | "completed"
         | "overdue"
         | "cancelled"
+      maintenance_type_enum:
+        | "preventive"
+        | "corrective"
+        | "predictive"
+        | "extraordinary"
       user_role: "admin" | "supervisor" | "technician"
     }
     CompositeTypes: {
@@ -837,6 +854,12 @@ export const Constants = {
         "completed",
         "overdue",
         "cancelled",
+      ],
+      maintenance_type_enum: [
+        "preventive",
+        "corrective",
+        "predictive",
+        "extraordinary",
       ],
       user_role: ["admin", "supervisor", "technician"],
     },
