@@ -14,7 +14,7 @@ import { ArrowLeft, Loader2, Save, Plus, Trash2 } from "lucide-react";
 interface ChecklistItem {
   title: string;
   description: string;
-  is_required: boolean;
+  item_type: "required" | "optional";
   order_index: number;
 }
 
@@ -27,7 +27,7 @@ export default function NewChecklistPage() {
     is_active: true
   });
   const [items, setItems] = useState<ChecklistItem[]>([
-    { title: "", description: "", is_required: true, order_index: 0 }
+    { title: "", description: "", item_type: "required", order_index: 0 }
   ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +47,7 @@ export default function NewChecklistPage() {
           await checklistService.createItem({
             template_id: template.id,
             description: item.title + (item.description ? `\n${item.description}` : ""),
-            item_type: item.is_required ? "required" : "optional",
+            item_type: item.item_type,
             order_index: item.order_index
           });
         }
@@ -65,7 +65,7 @@ export default function NewChecklistPage() {
   const addItem = () => {
     setItems([
       ...items,
-      { title: "", description: "", is_required: true, order_index: items.length }
+      { title: "", description: "", item_type: "required", order_index: items.length }
     ]);
   };
 
@@ -183,9 +183,9 @@ export default function NewChecklistPage() {
 
                   <div className="flex items-center gap-2">
                     <Checkbox
-                      checked={item.is_required}
+                      checked={item.item_type === "required"}
                       onCheckedChange={(checked) => 
-                        updateItem(index, "is_required", checked as boolean)
+                        updateItem(index, "item_type", checked ? "required" : "optional")
                       }
                     />
                     <Label className="cursor-pointer">

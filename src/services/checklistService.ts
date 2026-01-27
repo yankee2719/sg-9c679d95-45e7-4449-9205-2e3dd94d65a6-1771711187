@@ -16,7 +16,7 @@ export const checklistService = {
         checklist_items (
           id,
           description,
-          is_required,
+          item_type,
           order_index
         )
       `)
@@ -35,7 +35,7 @@ export const checklistService = {
         checklist_items (
           id,
           description,
-          is_required,
+          item_type,
           order_index
         )
       `)
@@ -128,7 +128,7 @@ export const checklistService = {
         checklist_item:checklist_items (
           id,
           description,
-          is_required
+          item_type
         )
       `)
       .eq("maintenance_log_id", logId)
