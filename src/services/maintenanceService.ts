@@ -177,11 +177,10 @@ export const maintenanceService = {
       .gte("next_maintenance_date", today.toISOString())
       .lte("next_maintenance_date", nextWeek.toISOString())
       .eq("is_active", true)
-      .order("next_maintenance_date", { ascending: true })
-      .returns<MaintenanceScheduleWithDetails[]>();
+      .order("next_maintenance_date", { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return (data as unknown) as MaintenanceScheduleWithDetails[];
   },
 
   // Get overdue maintenance
@@ -205,10 +204,9 @@ export const maintenanceService = {
       `)
       .lt("next_maintenance_date", today)
       .eq("is_active", true)
-      .order("next_maintenance_date", { ascending: true })
-      .returns<MaintenanceScheduleWithDetails[]>();
+      .order("next_maintenance_date", { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return (data as unknown) as MaintenanceScheduleWithDetails[];
   }
 };
