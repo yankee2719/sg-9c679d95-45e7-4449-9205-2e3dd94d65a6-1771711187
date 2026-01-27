@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
+import { checklistService, ChecklistTemplateWithTasks } from "@/services/checklistService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,20 +17,9 @@ import {
   Clock,
   AlertCircle,
   ChevronRight,
-  Filter
+  Filter,
+  Loader2
 } from "lucide-react";
-
-interface ChecklistTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  itemCount: number;
-  estimatedTime: string;
-  status: "active" | "draft" | "archived";
-  requiredItems: number;
-  optionalItems: number;
-}
 
 export default function ChecklistsPage() {
   const router = useRouter();
@@ -38,98 +27,35 @@ export default function ChecklistsPage() {
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-
-  // Mock data - Replace with real API call
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([
-    {
-      id: "1",
-      name: "Manutenzione Preventiva Standard",
-      description: "Checklist completa per manutenzione preventiva ordinaria su macchinari industriali",
-      category: "Preventiva",
-      itemCount: 12,
-      estimatedTime: "45min",
-      status: "active",
-      requiredItems: 8,
-      optionalItems: 4
-    },
-    {
-      id: "2",
-      name: "Controllo Sicurezza Macchine",
-      description: "Verifica sistemi di sicurezza e conformità normativa",
-      category: "Sicurezza",
-      itemCount: 8,
-      estimatedTime: "30min",
-      status: "active",
-      requiredItems: 8,
-      optionalItems: 0
-    },
-    {
-      id: "3",
-      name: "Ispezione Impianto Elettrico",
-      description: "Controllo quadri elettrici, collegamenti e messa a terra",
-      category: "Elettrica",
-      itemCount: 15,
-      estimatedTime: "60min",
-      status: "active",
-      requiredItems: 12,
-      optionalItems: 3
-    },
-    {
-      id: "4",
-      name: "Manutenzione CNC",
-      description: "Checklist specifica per centri di lavoro CNC e torni automatici",
-      category: "CNC",
-      itemCount: 18,
-      estimatedTime: "90min",
-      status: "active",
-      requiredItems: 14,
-      optionalItems: 4
-    },
-    {
-      id: "5",
-      name: "Controllo Robotica",
-      description: "Verifica funzionamento robot industriali e sistemi automatizzati",
-      category: "Robotica",
-      itemCount: 10,
-      estimatedTime: "45min",
-      status: "active",
-      requiredItems: 7,
-      optionalItems: 3
-    },
-    {
-      id: "6",
-      name: "Ispezione Idraulica",
-      description: "Controllo impianti idraulici, pressioni e perdite",
-      category: "Idraulica",
-      itemCount: 14,
-      estimatedTime: "50min",
-      status: "draft",
-      requiredItems: 10,
-      optionalItems: 4
-    }
-  ]);
+  const [templates, setTemplates] = useState<ChecklistTemplateWithTasks[]>([]);
 
   const categories = ["all", "Preventiva", "Sicurezza", "Elettrica", "CNC", "Robotica", "Idraulica"];
 
   useEffect(() => {
-    checkAuth();
+    checkAuthAndLoadData();
   }, []);
 
-  const checkAuth = async () => {
+  const checkAuthAndLoadData = async () => {
     try {
+      setLoading(true);
       const session = await authService.getCurrentSession();
       if (!session) {
         router.push("/login");
         return;
       }
 
+      // Check role
       const role = await userService.getUserRole(session.user.id);
       if (role) {
         setUserRole(role as any);
       }
+
+      // Load templates
+      const data = await checklistService.getAllTemplates();
+      setTemplates(data);
+
     } catch (error) {
-      console.error("Error checking auth:", error);
-      router.push("/login");
+      console.error("Error loading checklists page:", error);
     } finally {
       setLoading(false);
     }
@@ -137,9 +63,13 @@ export default function ChecklistsPage() {
 
   const filteredTemplates = templates.filter(template => {
     const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         template.description.toLowerCase().includes(searchQuery.toLowerCase());
+                         (template.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === "all" || template.category === selectedCategory;
-    return matchesSearch && matchesCategory && template.status === "active";
+    
+    // Technicians see only active templates
+    const isVisible = userRole === "technician" ? template.status === "active" : true;
+    
+    return matchesSearch && matchesCategory && isVisible;
   });
 
   const getStatusConfig = (status: string) => {
@@ -163,7 +93,22 @@ export default function ChecklistsPage() {
     return colors[category] || "bg-slate-500/10 text-slate-400";
   };
 
-  if (loading) return null;
+  // Stats calculation
+  const stats = {
+    active: templates.filter(t => t.status === "active").length,
+    totalTasks: templates.reduce((acc, t) => acc + (t.checklist_tasks?.length || 0), 0),
+    avgTime: templates.length > 0 
+      ? Math.round(templates.reduce((acc, t) => acc + (t.estimated_time || 0), 0) / templates.length) 
+      : 0
+  };
+
+  if (loading) {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-slate-900">
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        </div>
+    );
+  }
 
   return (
     <MainLayout userRole={userRole}>
@@ -196,9 +141,7 @@ export default function ChecklistsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Template Attivi</p>
-                  <p className="text-3xl font-bold text-white">
-                    {templates.filter(t => t.status === "active").length}
-                  </p>
+                  <p className="text-3xl font-bold text-white">{stats.active}</p>
                 </div>
                 <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
                   <ClipboardList className="w-6 h-6 text-blue-400" />
@@ -211,8 +154,8 @@ export default function ChecklistsPage() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400 mb-1">Completati Oggi</p>
-                  <p className="text-3xl font-bold text-white">24</p>
+                  <p className="text-sm text-slate-400 mb-1">Esecuzioni Oggi</p>
+                  <p className="text-3xl font-bold text-white">-</p>
                 </div>
                 <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
                   <CheckCircle2 className="w-6 h-6 text-green-400" />
@@ -225,8 +168,8 @@ export default function ChecklistsPage() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400 mb-1">In Corso</p>
-                  <p className="text-3xl font-bold text-white">5</p>
+                  <p className="text-sm text-slate-400 mb-1">Task Totali</p>
+                  <p className="text-3xl font-bold text-white">{stats.totalTasks}</p>
                 </div>
                 <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center">
                   <Clock className="w-6 h-6 text-amber-400" />
@@ -240,7 +183,7 @@ export default function ChecklistsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-400 mb-1">Tempo Medio</p>
-                  <p className="text-3xl font-bold text-white">52min</p>
+                  <p className="text-3xl font-bold text-white">{stats.avgTime}m</p>
                 </div>
                 <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center">
                   <AlertCircle className="w-6 h-6 text-cyan-400" />
@@ -286,7 +229,10 @@ export default function ChecklistsPage() {
         {/* Templates Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTemplates.map((template) => {
-            const status = getStatusConfig(template.status);
+            const status = getStatusConfig(template.status || "active");
+            const tasks = template.checklist_tasks || [];
+            const requiredItems = tasks.filter(t => t.required).length;
+            const optionalItems = tasks.length - requiredItems;
             
             return (
               <Card
@@ -314,7 +260,7 @@ export default function ChecklistsPage() {
 
                   {/* Description */}
                   <p className="text-sm text-slate-400 mb-4 line-clamp-2 min-h-[40px]">
-                    {template.description}
+                    {template.description || "Nessuna descrizione"}
                   </p>
 
                   {/* Stats */}
@@ -322,13 +268,13 @@ export default function ChecklistsPage() {
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-green-400" />
                       <span className="text-sm text-slate-300">
-                        <span className="font-semibold text-white">{template.itemCount}</span> task
+                        <span className="font-semibold text-white">{tasks.length}</span> task
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-blue-400" />
                       <span className="text-sm text-slate-300">
-                        <span className="font-semibold text-white">{template.estimatedTime}</span>
+                        <span className="font-semibold text-white">{template.estimated_time}</span> min
                       </span>
                     </div>
                   </div>
@@ -336,9 +282,9 @@ export default function ChecklistsPage() {
                   {/* Footer */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span>{template.requiredItems} richiesti</span>
+                      <span>{requiredItems} richiesti</span>
                       <span>•</span>
-                      <span>{template.optionalItems} opzionali</span>
+                      <span>{optionalItems} opzionali</span>
                     </div>
                     <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
                       {status.label}
@@ -352,7 +298,7 @@ export default function ChecklistsPage() {
 
         {/* Empty State */}
         {filteredTemplates.length === 0 && (
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center">
+          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center col-span-full">
             <ClipboardList className="w-16 h-16 text-slate-600 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-white mb-2">Nessun template trovato</h3>
             <p className="text-slate-400 mb-6">

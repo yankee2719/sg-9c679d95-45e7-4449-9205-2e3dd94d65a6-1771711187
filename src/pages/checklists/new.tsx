@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { checklistService } from "@/services/checklistService";
 import {
   Select,
   SelectContent,
@@ -25,6 +27,7 @@ import {
   AlertCircle,
   Clock,
   GripVertical,
+  Loader2,
 } from "lucide-react";
 
 interface ChecklistTask {
@@ -37,6 +40,8 @@ interface ChecklistTask {
 
 export default function NewChecklistPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
   const [templateName, setTemplateName] = useState("");
@@ -100,56 +105,60 @@ export default function NewChecklistPage() {
   };
 
   // Save handlers
-  const handleSaveDraft = () => {
+  const handleSave = async (status: "draft" | "active") => {
     if (!isValid()) {
-      alert("Per favore compila tutti i campi obbligatori");
+      toast({
+        variant: "destructive",
+        title: "Errore",
+        description: "Compila tutti i campi obbligatori",
+      });
       return;
     }
-    console.log("Saving draft:", {
-      templateName,
-      description,
-      category,
-      estimatedTime,
-      equipment,
-      tasks,
-      status: "draft",
-    });
-    alert("Template salvato come bozza!");
-    router.push("/checklists");
-  };
 
-  const handleSaveActive = () => {
-    if (!isValid()) {
-      alert("Per favore compila tutti i campi obbligatori");
-      return;
+    setIsSubmitting(true);
+
+    try {
+      const result = await checklistService.createTemplate({
+        name: templateName,
+        description,
+        category,
+        estimated_time: parseInt(estimatedTime),
+        equipment,
+        status,
+        tasks: tasks.map((t, index) => ({
+            title: t.title,
+            description: t.description,
+            required: t.required,
+            task_order: index + 1 // Re-index to ensure correct order
+        }))
+      });
+
+      if (result) {
+        toast({
+            title: "Successo",
+            description: `Template ${status === "active" ? "attivato" : "salvato come bozza"} correttamente!`,
+        });
+        router.push("/checklists");
+      } else {
+        throw new Error("Errore durante il salvataggio");
+      }
+    } catch (error) {
+        console.error(error);
+        toast({
+            variant: "destructive",
+            title: "Errore",
+            description: "Si è verificato un errore durante il salvataggio del template.",
+        });
+    } finally {
+        setIsSubmitting(false);
     }
-    console.log("Saving active:", {
-      templateName,
-      description,
-      category,
-      estimatedTime,
-      equipment,
-      tasks,
-      status: "active",
-    });
-    alert("Template creato e attivato!");
-    router.push("/checklists");
   };
 
   const handlePreview = () => {
-    if (!isValid()) {
-      alert("Per favore compila tutti i campi obbligatori");
-      return;
-    }
-    console.log("Preview template:", {
-      templateName,
-      description,
-      category,
-      estimatedTime,
-      equipment,
-      tasks,
+    toast({
+        title: "Anteprima",
+        description: "Funzionalità in arrivo...",
     });
-    alert("Anteprima non ancora implementata");
   };
 
   return (
@@ -179,8 +188,8 @@ export default function NewChecklistPage() {
               <Button
                 variant="outline"
                 onClick={handlePreview}
-                disabled={!isValid()}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                disabled={!isValid() || isSubmitting}
+                className="hidden sm:flex border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
               >
                 <Eye className="h-4 w-4 mr-2" />
                 Anteprima
@@ -188,20 +197,20 @@ export default function NewChecklistPage() {
               
               <Button
                 variant="outline"
-                onClick={handleSaveDraft}
-                disabled={!isValid()}
+                onClick={() => handleSave("draft")}
+                disabled={!isValid() || isSubmitting}
                 className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
               >
-                <Save className="h-4 w-4 mr-2" />
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                 Salva Bozza
               </Button>
               
               <Button
-                onClick={handleSaveActive}
-                disabled={!isValid()}
+                onClick={() => handleSave("active")}
+                disabled={!isValid() || isSubmitting}
                 className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg shadow-green-500/20"
               >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
+                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Salva e Attiva
               </Button>
             </div>
@@ -259,13 +268,13 @@ export default function NewChecklistPage() {
                     <SelectTrigger className="h-12 bg-slate-700 border-slate-600 text-white rounded-xl">
                       <SelectValue placeholder="Seleziona categoria" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="preventiva">Preventiva</SelectItem>
-                      <SelectItem value="sicurezza">Sicurezza</SelectItem>
-                      <SelectItem value="elettrica">Elettrica</SelectItem>
-                      <SelectItem value="cnc">CNC</SelectItem>
-                      <SelectItem value="robotica">Robotica</SelectItem>
-                      <SelectItem value="idraulica">Idraulica</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                      <SelectItem value="Preventiva">Preventiva</SelectItem>
+                      <SelectItem value="Sicurezza">Sicurezza</SelectItem>
+                      <SelectItem value="Elettrica">Elettrica</SelectItem>
+                      <SelectItem value="CNC">CNC</SelectItem>
+                      <SelectItem value="Robotica">Robotica</SelectItem>
+                      <SelectItem value="Idraulica">Idraulica</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -454,21 +463,21 @@ export default function NewChecklistPage() {
           {/* Bottom Actions (Mobile) */}
           <div className="md:hidden flex flex-col gap-3">
             <Button
-              onClick={handleSaveActive}
-              disabled={!isValid()}
+              onClick={() => handleSave("active")}
+              disabled={!isValid() || isSubmitting}
               className="w-full h-14 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg shadow-green-500/20"
             >
-              <CheckCircle2 className="h-5 w-5 mr-2" />
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
               Salva e Attiva
             </Button>
             
             <Button
               variant="outline"
-              onClick={handleSaveDraft}
-              disabled={!isValid()}
+              onClick={() => handleSave("draft")}
+              disabled={!isValid() || isSubmitting}
               className="w-full h-14 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
             >
-              <Save className="h-5 w-5 mr-2" />
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-5 w-5 mr-2" />}
               Salva come Bozza
             </Button>
           </div>
