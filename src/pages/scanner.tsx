@@ -153,7 +153,10 @@ export default function ScannerPage() {
                 <div className="space-y-6">
                   {/* Scanner Component */}
                   <div className="bg-slate-900 rounded-2xl overflow-hidden">
-                    <QRCodeScanner onScan={handleScan} />
+                    <QRCodeScanner 
+                      onScan={handleScan} 
+                      onClose={() => router.push("/dashboard")}
+                    />
                   </div>
                   
                   {/* Instructions */}
