@@ -6,6 +6,28 @@ type MaintenanceScheduleInsert = Database["public"]["Tables"]["maintenance_sched
 type MaintenanceLog = Database["public"]["Tables"]["maintenance_logs"]["Row"];
 type MaintenanceLogInsert = Database["public"]["Tables"]["maintenance_logs"]["Insert"];
 
+// Define explicit types to avoid deep recursion errors
+interface MaintenanceScheduleWithDetails {
+  id: string;
+  equipment_id: string;
+  title: string;
+  description: string | null;
+  scheduled_date: string;
+  due_date: string | null;
+  priority: "low" | "medium" | "high" | "critical" | null;
+  status: "scheduled" | "in_progress" | "completed" | "overdue" | "cancelled" | null;
+  equipment: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  assigned_to: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+  } | null;
+}
+
 export const maintenanceService = {
   // Get all maintenance schedules
   async getSchedules() {
@@ -155,7 +177,8 @@ export const maintenanceService = {
       .gte("next_maintenance_date", today.toISOString())
       .lte("next_maintenance_date", nextWeek.toISOString())
       .eq("is_active", true)
-      .order("next_maintenance_date", { ascending: true });
+      .order("next_maintenance_date", { ascending: true })
+      .returns<MaintenanceScheduleWithDetails[]>();
 
     if (error) throw error;
     return data || [];
@@ -182,7 +205,8 @@ export const maintenanceService = {
       `)
       .lt("next_maintenance_date", today)
       .eq("is_active", true)
-      .order("next_maintenance_date", { ascending: true });
+      .order("next_maintenance_date", { ascending: true })
+      .returns<MaintenanceScheduleWithDetails[]>();
 
     if (error) throw error;
     return data || [];
