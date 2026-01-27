@@ -96,7 +96,18 @@ export default function AdminUsersPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setUsers(data || []);
+      
+      // Map data to match UserProfile interface
+      const mappedUsers: UserProfile[] = (data || []).map((user: any) => ({
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        created_at: user.created_at,
+        two_factor_enabled: false // Default value as it's not in profiles table directly
+      }));
+
+      setUsers(mappedUsers);
     } catch (error) {
       console.error("Error loading users:", error);
       setError("Errore nel caricamento degli utenti");
