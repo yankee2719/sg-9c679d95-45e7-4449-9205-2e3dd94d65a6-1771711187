@@ -89,7 +89,7 @@ export default function NotificationsPage() {
         return;
       }
 
-      const profile = await authService.getUserProfile(session.user.id);
+      const profile = await userService.getUserProfile(session.user.id);
       const role = await userService.getUserRole(session.user.id);
       
       setUserName(profile?.full_name || session.user.email || "User");
