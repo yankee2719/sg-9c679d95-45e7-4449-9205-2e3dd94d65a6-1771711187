@@ -6,52 +6,57 @@
 
 @layer base {
   :root {
-    /* Dark Theme - Primary Colors */
-    --background: 222 47% 11%;        /* #0F172A - slate-900 dark */
-    --foreground: 210 40% 98%;        /* #F8FAFC - white ice */
-    --card: 217 33% 17%;              /* #1E293B - slate-800 */
+    /* Dark Theme - Updated to match screenshot */
+    --background: 222 47% 11%;        /* #0F172A - Navy dark */
+    --foreground: 210 40% 98%;        /* #F8FAFC - White ice */
+    --card: 217 33% 17%;              /* #1E293B - Slate-800 */
     --card-foreground: 210 40% 98%;   /* #F8FAFC */
     --popover: 217 33% 17%;           /* #1E293B */
     --popover-foreground: 210 40% 98%; /* #F8FAFC */
     
-    /* Primary - Blue/Cyan */
-    --primary: 199 89% 48%;           /* #0EA5E9 - blue-500 */
+    /* Primary - Orange (Updated from Blue) */
+    --primary: 17 94% 60%;            /* #FF6B35 - Orange main */
     --primary-foreground: 210 40% 98%; /* #F8FAFC */
-    --primary-hover: 189 94% 43%;     /* #06B6D4 - cyan-500 */
+    --primary-hover: 17 100% 69%;     /* #FF8C61 - Orange light */
+    
+    /* Sidebar specific */
+    --sidebar-bg: 222 47% 11%;        /* #0F172A - Navy dark */
+    --sidebar-item: 215 20% 65%;      /* #94A3B8 - Slate-400 */
+    --sidebar-item-active: 17 94% 60%; /* #FF6B35 - Orange */
+    --sidebar-item-active-bg: 17 94% 60% / 0.15; /* rgba(255, 107, 53, 0.15) */
     
     /* Secondary/Muted */
     --secondary: 215 28% 17%;         /* #1E293B lighter */
     --secondary-foreground: 210 40% 98%;
     --muted: 215 28% 17%;             /* #1E293B */
-    --muted-foreground: 215 20% 65%;  /* #94A3B8 - slate-400 */
+    --muted-foreground: 215 20% 65%;  /* #94A3B8 - Slate-400 */
     
     /* Accent */
     --accent: 217 33% 17%;            /* #1E293B */
     --accent-foreground: 210 40% 98%;
     
     /* Destructive/Error */
-    --destructive: 0 72% 51%;         /* #DC2626 - red-600 */
+    --destructive: 0 72% 51%;         /* #DC2626 - Red-600 */
     --destructive-foreground: 210 40% 98%;
-    --error: 0 84% 60%;               /* #EF4444 - red-500 */
+    --error: 0 84% 60%;               /* #EF4444 - Red-500 */
     
     /* Success */
-    --success: 142 71% 45%;           /* #10B981 - green-500 */
+    --success: 142 71% 45%;           /* #10B981 - Green-500 */
     --success-foreground: 210 40% 98%;
     
     /* Warning */
-    --warning: 38 92% 50%;            /* #F59E0B - amber-500 */
+    --warning: 38 92% 50%;            /* #F59E0B - Amber-500 */
     --warning-foreground: 210 40% 98%;
     
-    /* Border/Input/Ring */
-    --border: 215 28% 27%;            /* #334155 - slate-700 */
-    --input: 215 28% 27%;             /* #334155 */
-    --ring: 199 89% 48%;              /* #0EA5E9 - blue-500 */
+    /* Info */
+    --info: 217 91% 60%;              /* #3B82F6 - Blue-500 */
     
-    --radius: 1.5rem;                 /* 24px - Large rounded corners */
-  }
-
-  .dark {
-    /* Already using dark theme by default */
+    /* Border/Input/Ring */
+    --border: 215 28% 27%;            /* #334155 - Slate-700 */
+    --input: 215 28% 27%;             /* #334155 */
+    --ring: 17 94% 60%;               /* #FF6B35 - Orange ring */
+    
+    --radius: 1rem;                   /* 16px - Medium rounded corners */
   }
 }
 

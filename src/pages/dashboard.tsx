@@ -176,25 +176,25 @@ export default function DashboardPage() {
         {/* Welcome Header */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-slate-400 text-sm mb-1">Buonasera,</p>
+            <p className="text-slate-400 text-sm mb-1">Good evening,</p>
             <h1 className="text-3xl font-bold text-white">{userName}</h1>
           </div>
-          <Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-400 px-4 py-2 text-sm">
-            👤 {userRole === "admin" ? "Amministratore" : userRole === "supervisor" ? "Supervisore" : "Tecnico"}
+          <Badge variant="outline" className="border-[#FF6B35]/30 bg-[#FF6B35]/10 text-[#FF6B35] px-4 py-2 text-sm font-medium">
+            👤 {userRole === "admin" ? "Administrator" : userRole === "supervisor" ? "Supervisor" : "Technician"}
           </Badge>
         </div>
 
         {/* HERO: QR Scanner */}
-        <div className="rounded-3xl bg-gradient-to-br from-blue-500 via-blue-600 to-cyan-500 p-8 text-white shadow-xl shadow-blue-500/20 relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-blue-500/30"
+        <div className="rounded-2xl bg-gradient-to-br from-[#FF6B35] via-[#FF7B47] to-[#FF8C61] p-8 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-orange-500/30"
              onClick={() => router.push("/scanner")}>
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center">
                 <QrCode className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold mb-1">Scansiona QR Code</h2>
-                <p className="text-blue-50 font-medium">Accedi rapidamente alle informazioni del macchinario</p>
+                <h2 className="text-2xl font-bold mb-1">Scan QR Code</h2>
+                <p className="text-white/90 font-medium">Quick access to equipment information</p>
               </div>
             </div>
             <div className="bg-white/20 p-3 rounded-full hover:bg-white/30 transition-colors">
@@ -261,55 +261,55 @@ export default function DashboardPage() {
         {/* KPI CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Equipment Stat */}
-          <Card className="rounded-3xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
             <CardContent className="p-6">
-              <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
                 <Wrench className="w-6 h-6 text-blue-400" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-4xl font-bold text-white">{stats.totalEquipment}</h3>
-                <p className="font-medium text-slate-300">Equipaggiamenti</p>
-                <p className="text-sm text-blue-400 font-medium">{stats.activeEquipment} operativi</p>
+                <p className="font-medium text-slate-300 text-sm">Total Equipment</p>
+                <p className="text-xs text-blue-400 font-medium">{stats.activeEquipment} active</p>
               </div>
             </CardContent>
           </Card>
 
           {/* Tasks Stat */}
-          <Card className="rounded-3xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
             <CardContent className="p-6">
-              <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center mb-4">
-                <ClipboardList className="w-6 h-6 text-amber-400" />
+              <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
+                <ClipboardList className="w-6 h-6 text-[#FF6B35]" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-4xl font-bold text-white">{stats.pendingTasks}</h3>
-                <p className="font-medium text-slate-300">Task Pendenti</p>
-                <p className="text-sm text-amber-400 font-medium">{stats.overdueTasks} scaduti</p>
+                <p className="font-medium text-slate-300 text-sm">Pending Tasks</p>
+                <p className="text-xs text-orange-400 font-medium">{stats.overdueTasks} overdue</p>
               </div>
             </CardContent>
           </Card>
 
           {/* Completed Stat */}
-          <Card className="rounded-3xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
             <CardContent className="p-6">
-              <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
                 <CheckCircle className="w-6 h-6 text-green-400" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-4xl font-bold text-white">{stats.completedToday}</h3>
-                <p className="font-medium text-slate-300">Completati Oggi</p>
+                <p className="font-medium text-slate-300 text-sm">Completed Today</p>
               </div>
             </CardContent>
           </Card>
 
           {/* Time Stat */}
-          <Card className="rounded-3xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
             <CardContent className="p-6">
-              <div className="w-12 h-12 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center mb-4">
                 <Clock className="w-6 h-6 text-cyan-400" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-4xl font-bold text-white">{stats.avgTime}</h3>
-                <p className="font-medium text-slate-300">Tempo Medio</p>
+                <p className="font-medium text-slate-300 text-sm">Avg Time</p>
               </div>
             </CardContent>
           </Card>
