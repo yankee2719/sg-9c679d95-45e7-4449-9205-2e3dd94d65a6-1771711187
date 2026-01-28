@@ -145,33 +145,29 @@ export default function AdminUsersPage() {
         return;
       }
 
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        setError("Sessione non valida. Effettua nuovamente il login.");
-        return;
-      }
-
-      // Call Edge Function with JWT for admin verification
-      const { data, error: funcError } = await supabase.functions.invoke("create-user", {
-        body: {
-          email: createForm.email,
-          password: createForm.password,
-          full_name: createForm.full_name,
-          role: createForm.role
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
+      // Create user using Supabase Admin API directly
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: createForm.email,
+        password: createForm.password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: createForm.full_name
         }
       });
 
-      if (funcError) {
-        throw funcError;
-      }
-      
-      if (data?.error) {
-        throw new Error(data.error);
+      if (authError) throw authError;
+
+      // Update profile with role
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({
+            role: createForm.role,
+            full_name: createForm.full_name || null
+          })
+          .eq("id", authData.user.id);
+
+        if (profileError) throw profileError;
       }
 
       setSuccess("Utente creato con successo");
