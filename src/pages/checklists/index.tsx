@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ClipboardList,
   Plus,
   Search,
@@ -18,16 +26,24 @@ import {
   AlertCircle,
   ChevronRight,
   Filter,
-  Loader2
+  Loader2,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ChecklistsPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [templates, setTemplates] = useState<ChecklistTemplateWithTasks[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<ChecklistTemplateWithTasks | null>(null);
+  const [deleteStats, setDeleteStats] = useState<{ tasksCount: number; executionsCount: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const categories = ["all", "Preventiva", "Sicurezza", "Elettrica", "CNC", "Robotica", "Idraulica"];
 
@@ -51,13 +67,67 @@ export default function ChecklistsPage() {
       }
 
       // Load templates
-      const data = await checklistService.getAllTemplates();
-      setTemplates(data);
+      await loadTemplates();
 
     } catch (error) {
       console.error("Error loading checklists page:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTemplates = async () => {
+    const data = await checklistService.getAllTemplates();
+    setTemplates(data);
+  };
+
+  const handleDeleteClick = async (template: ChecklistTemplateWithTasks, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Load stats for the template
+    const stats = await checklistService.getTemplateStats(template.id);
+    
+    setTemplateToDelete(template);
+    setDeleteStats(stats);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!templateToDelete) return;
+
+    setDeleting(true);
+    try {
+      const success = await checklistService.deleteTemplate(templateToDelete.id);
+      
+      if (success) {
+        toast({
+          title: "✅ Template eliminato",
+          description: `"${templateToDelete.name}" è stato eliminato con successo.`,
+        });
+        
+        // Reload templates
+        await loadTemplates();
+        
+        // Close dialog
+        setDeleteDialogOpen(false);
+        setTemplateToDelete(null);
+        setDeleteStats(null);
+      } else {
+        toast({
+          title: "❌ Errore",
+          description: "Impossibile eliminare il template. Riprova più tardi.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      toast({
+        title: "❌ Errore",
+        description: "Si è verificato un errore durante l'eliminazione.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -101,6 +171,8 @@ export default function ChecklistsPage() {
       ? Math.round(templates.reduce((acc, t) => acc + (t.estimated_time || 0), 0) / templates.length) 
       : 0
   };
+
+  const canDelete = userRole === "admin" || userRole === "supervisor";
 
   if (loading) {
     return (
@@ -237,16 +309,28 @@ export default function ChecklistsPage() {
             return (
               <Card
                 key={template.id}
-                className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
+                className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden relative"
                 onClick={() => router.push(`/checklist/${template.id}`)}
               >
                 <CardContent className="p-6">
-                  {/* Header */}
+                  {/* Header with Delete Button */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
                       <ClipboardList className="w-6 h-6 text-blue-400" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-blue-400 transition-colors" />
+                    <div className="flex items-center gap-2">
+                      {canDelete && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                          onClick={(e) => handleDeleteClick(template, e)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-blue-400 transition-colors" />
+                    </div>
                   </div>
 
                   {/* Title & Category */}
@@ -327,6 +411,88 @@ export default function ChecklistsPage() {
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <AlertTriangle className="h-6 w-6 text-red-400" />
+              Elimina Template Checklist
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Questa azione è irreversibile e comporterà l'eliminazione definitiva di tutti i dati associati.
+            </DialogDescription>
+          </DialogHeader>
+
+          {templateToDelete && (
+            <div className="space-y-4 py-4">
+              {/* Template Name */}
+              <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                <p className="text-sm text-slate-400 mb-1">Template da eliminare:</p>
+                <p className="text-lg font-semibold text-white">{templateToDelete.name}</p>
+                <Badge className={`mt-2 ${getCategoryColor(templateToDelete.category)}`}>
+                  {templateToDelete.category}
+                </Badge>
+              </div>
+
+              {/* Stats Warning */}
+              {deleteStats && (
+                <div className="space-y-2 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <p className="text-sm font-semibold text-red-400 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    ATTENZIONE: Verranno eliminati anche:
+                  </p>
+                  <ul className="space-y-1 ml-6 text-sm text-slate-300">
+                    <li>• <strong>{deleteStats.tasksCount}</strong> task associati</li>
+                    <li>• <strong>{deleteStats.executionsCount}</strong> esecuzioni completate</li>
+                    <li>• Tutte le note e segnalazioni</li>
+                    <li>• Tutti i dati storici collegati</li>
+                  </ul>
+                </div>
+              )}
+
+              {/* Confirmation Text */}
+              <p className="text-sm text-slate-400">
+                Sei sicuro di voler procedere con l'eliminazione? Questa operazione non può essere annullata.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setTemplateToDelete(null);
+                setDeleteStats(null);
+              }}
+              disabled={deleting}
+              className="bg-slate-700 border-slate-600 text-white hover:bg-slate-600"
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminazione...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Elimina Definitivamente
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
