@@ -4,9 +4,10 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { equipmentService } from "@/services/equipmentService";
 import { userService } from "@/services/userService";
+import { authService } from "@/services/authService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -16,18 +17,42 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, QrCode, FileText, Settings, Loader2 } from "lucide-react";
+import { Plus, Search, QrCode, FileText, Settings, Loader2, Wrench } from "lucide-react";
+import { useRouter } from "next/router";
 
 export default function EquipmentListPage() {
+  const router = useRouter();
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    loadEquipment();
-    checkUserRole();
+    checkAuthAndLoadData();
   }, []);
+
+  const checkAuthAndLoadData = async () => {
+    try {
+      const session = await authService.getCurrentSession();
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      const role = await userService.getUserRole(session.user.id);
+      const profile = await userService.getUserProfile(session.user.id);
+      
+      setUserRole(role as any);
+      setUserName(profile?.full_name || session.user.email || "User");
+
+      await loadEquipment();
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadEquipment = async () => {
     try {
@@ -35,14 +60,7 @@ export default function EquipmentListPage() {
       setEquipment(data);
     } catch (error) {
       console.error("Error loading equipment:", error);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const checkUserRole = async () => {
-    const user = await userService.getCurrentUser();
-    if (user?.role === "admin") setIsAdmin(true);
   };
 
   const filteredEquipment = equipment.filter(item => 
@@ -51,110 +69,206 @@ export default function EquipmentListPage() {
     item.serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const getStatusBadge = (status: string) => {
+    const config: Record<string, { label: string; className: string }> = {
+      active: { label: "Attiva", className: "bg-green-500/10 text-green-400 border-green-500/20" },
+      under_maintenance: { label: "In Manutenzione", className: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+      inactive: { label: "Inattiva", className: "bg-slate-500/10 text-slate-400 border-slate-500/20" },
+      decommissioned: { label: "Dismessa", className: "bg-red-500/10 text-red-400 border-red-500/20" }
+    };
+    return config[status] || config.active;
+  };
+
+  const canModify = userRole === "admin" || userRole === "supervisor";
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <MainLayout userRole={isAdmin ? "admin" : "technician"}>
-      <SEO title="Macchine e Attrezzature - Industrial Maintenance" />
+    <MainLayout userRole={userRole} userName={userName}>
+      <SEO title="Anagrafica Macchine - MaintPro" />
       
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Anagrafica Macchine</h1>
-            <p className="text-muted-foreground mt-1">
-              Gestisci il parco macchine
-            </p>
+            <h1 className="text-3xl font-bold text-white mb-2">Anagrafica Macchine</h1>
+            <p className="text-slate-400">Gestisci il parco macchine e attrezzature</p>
           </div>
-          <Link href="/equipment/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuova Macchina
+          {canModify && (
+            <Button 
+              asChild
+              className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl px-6"
+            >
+              <Link href="/equipment/new">
+                <Plus className="mr-2 h-5 w-5" />
+                Nuova Macchina
+              </Link>
             </Button>
-          </Link>
+          )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Cerca per nome, codice o seriale..."
-                  className="pl-9"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-400 mb-1">Totale</p>
+                  <p className="text-3xl font-bold text-white">{equipment.length}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                  <Wrench className="w-6 h-6 text-blue-400" />
+                </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-400 mb-1">Attive</p>
+                  <p className="text-3xl font-bold text-white">
+                    {equipment.filter(e => e.status === 'active').length}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
+                  <Settings className="w-6 h-6 text-green-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-400 mb-1">In Manutenzione</p>
+                  <p className="text-3xl font-bold text-white">
+                    {equipment.filter(e => e.status === 'under_maintenance').length}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center">
+                  <Wrench className="w-6 h-6 text-[#FF6B35]" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-400 mb-1">Inattive</p>
+                  <p className="text-3xl font-bold text-white">
+                    {equipment.filter(e => e.status === 'inactive' || e.status === 'decommissioned').length}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-slate-500/10 rounded-xl flex items-center justify-center">
+                  <Settings className="w-6 h-6 text-slate-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Equipment List */}
+        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+          <CardHeader className="border-b border-slate-700/50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-500" />
+              <Input
+                placeholder="Cerca per nome, codice o seriale..."
+                className="pl-11 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
           </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <CardContent className="p-0">
+            {filteredEquipment.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Wrench className="w-12 h-12 mx-auto mb-3 text-slate-600" />
+                <p>Nessuna macchina trovata</p>
               </div>
             ) : (
-              <div className="rounded-md border">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Codice</TableHead>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>Stato</TableHead>
-                      <TableHead>Ultima Manutenzione</TableHead>
-                      <TableHead className="text-right">Azioni</TableHead>
+                    <TableRow className="border-slate-700/50 hover:bg-slate-800/30">
+                      <TableHead className="text-slate-400 font-semibold">Codice</TableHead>
+                      <TableHead className="text-slate-400 font-semibold">Nome</TableHead>
+                      <TableHead className="text-slate-400 font-semibold">Categoria</TableHead>
+                      <TableHead className="text-slate-400 font-semibold">Stato</TableHead>
+                      <TableHead className="text-slate-400 font-semibold text-right">Azioni</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredEquipment.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                          Nessuna macchina trovata
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredEquipment.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-mono font-medium">{item.code}</TableCell>
-                          <TableCell>
-                            <div className="font-medium">{item.name}</div>
-                            <div className="text-xs text-muted-foreground">{item.manufacturer} {item.model}</div>
+                    {filteredEquipment.map((item) => {
+                      const statusConfig = getStatusBadge(item.status);
+                      return (
+                        <TableRow 
+                          key={item.id}
+                          className="border-slate-700/50 hover:bg-slate-800/30 cursor-pointer"
+                          onClick={() => router.push(`/equipment/${item.id}`)}
+                        >
+                          <TableCell className="font-mono font-semibold text-white">
+                            {item.code}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{item.equipment_categories?.name || "N/A"}</Badge>
+                            <div>
+                              <div className="font-semibold text-white">{item.name}</div>
+                              <div className="text-xs text-slate-400">
+                                {item.manufacturer} {item.model}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={
-                              item.status === 'active' ? 'bg-green-500' :
-                              item.status === 'under_maintenance' ? 'bg-orange-500' :
-                              'bg-gray-500'
-                            }>
-                              {item.status === 'active' ? 'Attiva' :
-                               item.status === 'under_maintenance' ? 'In Manutenzione' :
-                               item.status === 'inactive' ? 'Inattiva' : 'Dismessa'}
+                            <Badge variant="outline" className="rounded-full bg-blue-500/10 text-blue-400 border-blue-500/20">
+                              {item.equipment_categories?.name || "N/A"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            -
+                          <TableCell>
+                            <Badge className={`rounded-full border ${statusConfig.className}`}>
+                              {statusConfig.label}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="icon" asChild title="Dettagli">
-                                <Link href={`/equipment/${item.id}`}>
-                                  <FileText className="h-4 w-4" />
-                                </Link>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/equipment/${item.id}`);
+                                }}
+                                className="h-9 w-9 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
+                                title="Dettagli"
+                              >
+                                <FileText className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" title="QR Code">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                className="h-9 w-9 rounded-lg text-slate-400 hover:text-[#FF6B35] hover:bg-orange-500/10"
+                                title="QR Code"
+                              >
                                 <QrCode className="h-4 w-4" />
                               </Button>
-                              {isAdmin && (
-                                <Button variant="ghost" size="icon" title="Modifica">
-                                  <Settings className="h-4 w-4" />
-                                </Button>
-                              )}
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

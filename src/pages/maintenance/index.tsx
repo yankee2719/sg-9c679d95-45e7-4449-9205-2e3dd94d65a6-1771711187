@@ -254,10 +254,11 @@ export default function MaintenancePage() {
       <SEO title="Manutenzioni Programmate - Industrial Maintenance" />
       
       <div className="space-y-6">
+        {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">Manutenzioni Programmate</h1>
-            <p className="text-slate-400 mt-1">
+            <h1 className="text-3xl font-bold text-white mb-2">Manutenzioni Programmate</h1>
+            <p className="text-slate-400">
               Gestisci e pianifica le manutenzioni delle macchine
             </p>
           </div>
@@ -266,7 +267,7 @@ export default function MaintenancePage() {
               onClick={handleExportCSV}
               disabled={exporting || schedules.length === 0}
               variant="outline"
-              className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+              className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl"
             >
               <Download className="h-4 w-4" />
               CSV
@@ -275,7 +276,7 @@ export default function MaintenancePage() {
               onClick={handleExportPDF}
               disabled={exporting || schedules.length === 0}
               variant="outline"
-              className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+              className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl"
             >
               <FileText className="h-4 w-4" />
               PDF
@@ -283,10 +284,10 @@ export default function MaintenancePage() {
             {canModify && (
               <Button 
                 asChild 
-                className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+                className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl px-6"
               >
                 <Link href="/maintenance/new">
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2 h-5 w-5" />
                   Nuova Manutenzione
                 </Link>
               </Button>
@@ -294,56 +295,56 @@ export default function MaintenancePage() {
           </div>
         </div>
 
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-400">Prossime 7 Giorni</CardTitle>
-              <Clock className="h-4 w-4 text-blue-400" />
+              <Clock className="h-5 w-5 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{upcomingCount}</div>
-              <p className="text-xs text-slate-500">Manutenzioni in arrivo</p>
+              <div className="text-3xl font-bold text-white mb-1">{upcomingCount}</div>
+              <p className="text-xs text-slate-400">Manutenzioni in arrivo</p>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-400">In Ritardo</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-400" />
+              <AlertCircle className="h-5 w-5 text-red-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-400">{overdueCount}</div>
-              <p className="text-xs text-slate-500">Richiedono attenzione</p>
+              <div className="text-3xl font-bold text-red-400 mb-1">{overdueCount}</div>
+              <p className="text-xs text-slate-400">Richiedono attenzione</p>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-400">Totale Pianificate</CardTitle>
-              <Calendar className="h-4 w-4 text-blue-400" />
+              <Calendar className="h-5 w-5 text-[#FF6B35]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{schedules.length}</div>
-              <p className="text-xs text-slate-500">Tutte le manutenzioni</p>
+              <div className="text-3xl font-bold text-white mb-1">{schedules.length}</div>
+              <p className="text-xs text-slate-400">Tutte le manutenzioni</p>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardHeader>
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <Input
-                  placeholder="Cerca per macchina o tipo manutenzione..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
-                />
-              </div>
+        {/* Maintenance List */}
+        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+          <CardHeader className="border-b border-slate-700/50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-500" />
+              <Input
+                placeholder="Cerca per macchina o tipo manutenzione..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-11 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
+              />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {loading ? (
               <div className="text-center py-8 text-slate-400">Caricamento...</div>
             ) : filteredSchedules.length === 0 ? (

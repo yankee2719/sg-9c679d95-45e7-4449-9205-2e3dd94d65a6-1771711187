@@ -199,7 +199,7 @@ export default function ChecklistsPage() {
           {(userRole === "admin" || userRole === "supervisor") && (
             <Button
               onClick={() => router.push("/checklists/new")}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl px-6"
+              className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white font-semibold rounded-xl px-6"
             >
               <Plus className="h-5 w-5 mr-2" />
               Crea Template
@@ -209,7 +209,7 @@ export default function ChecklistsPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -223,7 +223,7 @@ export default function ChecklistsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -237,7 +237,7 @@ export default function ChecklistsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -251,7 +251,7 @@ export default function ChecklistsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -275,7 +275,7 @@ export default function ChecklistsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cerca template per nome o descrizione..."
-              className="pl-12 h-12 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 rounded-xl"
+              className="pl-12 h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl"
             />
           </div>
 
@@ -289,8 +289,8 @@ export default function ChecklistsPage() {
                 variant={selectedCategory === category ? "default" : "outline"}
                 className={`rounded-xl whitespace-nowrap ${
                   selectedCategory === category
-                    ? "bg-blue-500 text-white hover:bg-blue-600"
-                    : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
+                    ? "bg-[#FF6B35] text-white hover:bg-[#FF8C61]"
+                    : "bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
                 }`}
               >
                 {category === "all" ? "Tutte" : category}
