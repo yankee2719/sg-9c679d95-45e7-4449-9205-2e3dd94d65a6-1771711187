@@ -280,15 +280,24 @@ export default function ChecklistsPage() {
                   </div>
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-700/50">
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <span>{requiredItems} richiesti</span>
-                      <span>•</span>
+                      <span className="text-slate-600">•</span>
                       <span>{optionalItems} opzionali</span>
                     </div>
-                    <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
-                      {status.label}
-                    </Badge>
+                    
+                    <Button 
+                      size="sm" 
+                      className="bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20 transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/checklist/${template.id}`);
+                      }}
+                    >
+                      <ClipboardList className="w-4 h-4 mr-2" />
+                      Esegui
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
