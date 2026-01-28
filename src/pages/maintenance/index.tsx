@@ -3,6 +3,8 @@ import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { maintenanceService } from "@/services/maintenanceService";
+import { authService } from "@/services/authService";
+import { userService } from "@/services/userService";
 import { exportMaintenanceLogsToCSV, exportMaintenanceLogsToPDF } from "@/utils/exportUtils";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Calendar, 
   Search, 
@@ -26,9 +38,15 @@ import {
   Clock,
   Download,
   FileText,
+  Edit,
+  Trash2,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
+import { useRouter } from "next/router";
 
 export default function MaintenancePage() {
+  const router = useRouter();
   const { toast } = useToast();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [upcomingCount, setUpcomingCount] = useState(0);
@@ -36,10 +54,35 @@ export default function MaintenancePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [scheduleToDelete, setScheduleToDelete] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    loadData();
+    checkAuthAndLoadData();
   }, []);
+
+  const checkAuthAndLoadData = async () => {
+    try {
+      const session = await authService.getCurrentSession();
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      const role = await userService.getUserRole(session.user.id);
+      if (role) {
+        setUserRole(role as any);
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -54,8 +97,38 @@ export default function MaintenancePage() {
       setOverdueCount(overdue.length);
     } catch (error) {
       console.error("Error loading maintenance data:", error);
+    }
+  };
+
+  const handleDeleteClick = (schedule: any) => {
+    setScheduleToDelete(schedule);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!scheduleToDelete) return;
+
+    setDeleting(true);
+    try {
+      await maintenanceService.deleteSchedule(scheduleToDelete.id);
+      
+      toast({
+        title: "✅ Manutenzione eliminata",
+        description: `"${scheduleToDelete.title}" è stata eliminata con successo.`,
+      });
+      
+      await loadData();
+      setDeleteDialogOpen(false);
+      setScheduleToDelete(null);
+    } catch (error) {
+      console.error("Error deleting schedule:", error);
+      toast({
+        title: "❌ Errore",
+        description: "Impossibile eliminare la manutenzione. Riprova più tardi.",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      setDeleting(false);
     }
   };
 
@@ -71,7 +144,6 @@ export default function MaintenancePage() {
 
     setExporting(true);
     try {
-      // Get all completed maintenance logs for export
       const logs = await maintenanceService.getLogs();
       
       exportMaintenanceLogsToCSV(
@@ -107,7 +179,6 @@ export default function MaintenancePage() {
 
     setExporting(true);
     try {
-      // Get all completed maintenance logs for export
       const logs = await maintenanceService.getLogs();
       
       exportMaintenanceLogsToPDF(
@@ -151,21 +222,42 @@ export default function MaintenancePage() {
     }
   };
 
+  const getStatusLabel = (status: string | null) => {
+    switch (status) {
+      case "scheduled": return "Pianificata";
+      case "in_progress": return "In corso";
+      case "completed": return "Completata";
+      case "overdue": return "In ritardo";
+      case "cancelled": return "Annullata";
+      default: return "N/A";
+    }
+  };
+
   const filteredSchedules = schedules.filter(schedule =>
     schedule.equipment?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     schedule.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     schedule.equipment?.code?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const canModify = userRole === "admin" || userRole === "supervisor";
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <MainLayout userRole="admin">
+    <MainLayout userRole={userRole}>
       <SEO title="Manutenzioni Programmate - Industrial Maintenance" />
       
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Manutenzioni Programmate</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-3xl font-bold text-white">Manutenzioni Programmate</h1>
+            <p className="text-slate-400 mt-1">
               Gestisci e pianifica le manutenzioni delle macchine
             </p>
           </div>
@@ -174,7 +266,7 @@ export default function MaintenancePage() {
               onClick={handleExportCSV}
               disabled={exporting || schedules.length === 0}
               variant="outline"
-              className="gap-2"
+              className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
             >
               <Download className="h-4 w-4" />
               CSV
@@ -183,135 +275,246 @@ export default function MaintenancePage() {
               onClick={handleExportPDF}
               disabled={exporting || schedules.length === 0}
               variant="outline"
-              className="gap-2"
+              className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
             >
               <FileText className="h-4 w-4" />
               PDF
             </Button>
-            <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600">
-              <Link href="/maintenance/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Nuova Manutenzione
-              </Link>
-            </Button>
+            {canModify && (
+              <Button 
+                asChild 
+                className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+              >
+                <Link href="/maintenance/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuova Manutenzione
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
+          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Prossime 7 Giorni</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-slate-400">Prossime 7 Giorni</CardTitle>
+              <Clock className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{upcomingCount}</div>
-              <p className="text-xs text-muted-foreground">Manutenzioni in arrivo</p>
+              <div className="text-2xl font-bold text-white">{upcomingCount}</div>
+              <p className="text-xs text-slate-500">Manutenzioni in arrivo</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Ritardo</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-500" />
+              <CardTitle className="text-sm font-medium text-slate-400">In Ritardo</CardTitle>
+              <AlertCircle className="h-4 w-4 text-red-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{overdueCount}</div>
-              <p className="text-xs text-muted-foreground">Richiedono attenzione</p>
+              <div className="text-2xl font-bold text-red-400">{overdueCount}</div>
+              <p className="text-xs text-slate-500">Richiedono attenzione</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Totale Pianificate</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-slate-400">Totale Pianificate</CardTitle>
+              <Calendar className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{schedules.length}</div>
-              <p className="text-xs text-muted-foreground">Tutte le manutenzioni</p>
+              <div className="text-2xl font-bold text-white">{schedules.length}</div>
+              <p className="text-xs text-slate-500">Tutte le manutenzioni</p>
             </CardContent>
           </Card>
         </div>
 
-        <Card>
+        <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
           <CardHeader>
             <div className="flex items-center gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
                   placeholder="Cerca per macchina o tipo manutenzione..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
                 />
               </div>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8">Caricamento...</div>
+              <div className="text-center py-8 text-slate-400">Caricamento...</div>
             ) : filteredSchedules.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-slate-400">
                 Nessuna manutenzione programmata trovata
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Macchina</TableHead>
-                    <TableHead>Titolo</TableHead>
-                    <TableHead>Data Pianificata</TableHead>
-                    <TableHead>Priorità</TableHead>
-                    <TableHead>Assegnato a</TableHead>
-                    <TableHead>Stato</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSchedules.map((schedule) => (
-                    <TableRow key={schedule.id}>
-                      <TableCell className="font-medium">
-                        {schedule.equipment?.name || "N/A"}
-                        <div className="text-xs text-muted-foreground">
-                          {schedule.equipment?.code}
-                        </div>
-                      </TableCell>
-                      <TableCell>{schedule.title || "N/A"}</TableCell>
-                      <TableCell>
-                        {schedule.scheduled_date 
-                          ? new Date(schedule.scheduled_date).toLocaleDateString("it-IT")
-                          : "Non pianificata"
-                        }
-                        {schedule.due_date && (
-                          <div className="text-xs text-muted-foreground">
-                            Scadenza: {new Date(schedule.due_date).toLocaleDateString("it-IT")}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getPriorityColor(schedule.priority)}>
-                          {schedule.priority || "N/A"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {schedule.assigned_to?.full_name || "Non assegnato"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusColor(schedule.status)}>
-                          {schedule.status === "scheduled" ? "Pianificata" :
-                           schedule.status === "in_progress" ? "In corso" :
-                           schedule.status === "completed" ? "Completata" :
-                           schedule.status === "overdue" ? "In ritardo" :
-                           schedule.status === "cancelled" ? "Annullata" :
-                           "N/A"}
-                        </Badge>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-700 hover:bg-slate-800/50">
+                      <TableHead className="text-slate-400">Macchina</TableHead>
+                      <TableHead className="text-slate-400">Titolo</TableHead>
+                      <TableHead className="text-slate-400">Data Pianificata</TableHead>
+                      <TableHead className="text-slate-400">Priorità</TableHead>
+                      <TableHead className="text-slate-400">Assegnato a</TableHead>
+                      <TableHead className="text-slate-400">Stato</TableHead>
+                      {canModify && <TableHead className="text-slate-400 text-right">Azioni</TableHead>}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSchedules.map((schedule) => (
+                      <TableRow 
+                        key={schedule.id}
+                        className="border-slate-700 hover:bg-slate-800/30 cursor-pointer"
+                        onClick={() => router.push(`/maintenance/${schedule.id}`)}
+                      >
+                        <TableCell className="font-medium text-white">
+                          {schedule.equipment?.name || "N/A"}
+                          <div className="text-xs text-slate-500">
+                            {schedule.equipment?.code}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-slate-300">{schedule.title || "N/A"}</TableCell>
+                        <TableCell className="text-slate-300">
+                          {schedule.scheduled_date 
+                            ? new Date(schedule.scheduled_date).toLocaleDateString("it-IT")
+                            : "Non pianificata"
+                          }
+                          {schedule.due_date && (
+                            <div className="text-xs text-slate-500">
+                              Scadenza: {new Date(schedule.due_date).toLocaleDateString("it-IT")}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getPriorityColor(schedule.priority)} className="rounded-lg">
+                            {schedule.priority || "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-slate-300">
+                          {schedule.assigned_to?.full_name || "Non assegnato"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(schedule.status)} className="rounded-lg">
+                            {getStatusLabel(schedule.status)}
+                          </Badge>
+                        </TableCell>
+                        {canModify && (
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/maintenance/edit/${schedule.id}`);
+                                }}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteClick(schedule);
+                                }}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-xl">
+              <AlertTriangle className="h-6 w-6 text-red-400" />
+              Elimina Manutenzione
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              Questa azione è irreversibile e comporterà l'eliminazione definitiva della manutenzione programmata.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {scheduleToDelete && (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                <p className="text-sm text-slate-400 mb-1">Manutenzione da eliminare:</p>
+                <p className="text-lg font-semibold text-white">{scheduleToDelete.title}</p>
+                <p className="text-sm text-slate-400 mt-2">
+                  Macchina: {scheduleToDelete.equipment?.name || "N/A"}
+                </p>
+                <p className="text-sm text-slate-400">
+                  Data: {scheduleToDelete.scheduled_date 
+                    ? new Date(scheduleToDelete.scheduled_date).toLocaleDateString("it-IT")
+                    : "N/A"
+                  }
+                </p>
+              </div>
+
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <p className="text-sm font-semibold text-red-400 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  ATTENZIONE: Verranno eliminati anche:
+                </p>
+                <ul className="space-y-1 ml-6 text-sm text-slate-300 mt-2">
+                  <li>• Tutte le checklist associate</li>
+                  <li>• Tutte le esecuzioni completate</li>
+                  <li>• Tutti i log e note</li>
+                  <li>• Tutti i dati storici collegati</li>
+                </ul>
+              </div>
+
+              <p className="text-sm text-slate-400">
+                Sei sicuro di voler procedere con l'eliminazione? Questa operazione non può essere annullata.
+              </p>
+            </div>
+          )}
+
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel
+              disabled={deleting}
+              className="bg-slate-700 border-slate-600 text-white hover:bg-slate-600"
+            >
+              Annulla
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminazione...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Elimina Definitivamente
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 }

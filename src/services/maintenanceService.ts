@@ -108,6 +108,17 @@ export const maintenanceService = {
     return data;
   },
 
+  // Delete maintenance schedule
+  async deleteSchedule(id: string) {
+    const { error } = await supabase
+      .from("maintenance_schedules")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+    return true;
+  },
+
   // Get maintenance logs
   async getLogs(equipmentId?: string) {
     let query = supabase
