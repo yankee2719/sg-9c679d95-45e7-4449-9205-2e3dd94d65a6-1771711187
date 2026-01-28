@@ -43,6 +43,16 @@ export function MainLayout({ children, userRole = "admin" }: MainLayoutProps) {
     { name: "Checklist", href: "/checklists", icon: ClipboardList, active: router.pathname.startsWith("/checklist") },
   ];
 
+  // Add Analytics link for Admin and Supervisor only
+  if (userRole === "admin" || userRole === "supervisor") {
+    navigation.push({
+      name: "Analytics",
+      href: "/analytics/checklist-executions",
+      icon: Settings,
+      active: router.pathname.startsWith("/analytics"),
+    });
+  }
+
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Sidebar */}

@@ -88,6 +88,7 @@ export type Database = {
           technician_id: string
           template_id: string | null
           total_duration: number | null
+          updated_at: string | null
         }
         Insert: {
           approved?: boolean | null
@@ -107,6 +108,7 @@ export type Database = {
           technician_id: string
           template_id?: string | null
           total_duration?: number | null
+          updated_at?: string | null
         }
         Update: {
           approved?: boolean | null
@@ -126,6 +128,7 @@ export type Database = {
           technician_id?: string
           template_id?: string | null
           total_duration?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
