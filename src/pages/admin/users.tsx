@@ -104,10 +104,11 @@ export default function AdminUsersPage() {
         full_name: user.full_name,
         role: user.role,
         created_at: user.created_at,
-        two_factor_enabled: false // Default value as it's not in profiles table directly
+        two_factor_enabled: user.two_factor_enabled || false
       }));
 
       setUsers(mappedUsers);
+      console.log("=== Users loaded ===", mappedUsers.length, "users");
     } catch (error) {
       console.error("Error loading users:", error);
       setError("Errore nel caricamento degli utenti");
