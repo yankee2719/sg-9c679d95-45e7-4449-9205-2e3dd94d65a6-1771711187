@@ -60,7 +60,7 @@ export default function EditMaintenancePage() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
-  const [maintenanceType, setMaintenanceType] = useState<"preventive" | "corrective" | "predictive">("preventive");
+  const [maintenanceType, setMaintenanceType] = useState<"preventive" | "corrective" | "predictive" | "extraordinary">("preventive");
   const [assignedTo, setAssignedTo] = useState("");
 
   // Data
@@ -149,7 +149,7 @@ export default function EditMaintenancePage() {
       setScheduledDate(data.scheduled_date?.split("T")[0] || "");
       setDueDate(data.due_date?.split("T")[0] || "");
       setPriority(data.priority || "medium");
-      setMaintenanceType(data.maintenance_type || "preventive");
+      setMaintenanceType((data.maintenance_type as any) || "preventive");
       setAssignedTo(data.assigned_to || "");
 
       // Load associated checklists
@@ -506,6 +506,7 @@ export default function EditMaintenancePage() {
                       <SelectItem value="preventive" className="text-white">Preventiva</SelectItem>
                       <SelectItem value="corrective" className="text-white">Correttiva</SelectItem>
                       <SelectItem value="predictive" className="text-white">Predittiva</SelectItem>
+                      <SelectItem value="extraordinary" className="text-white">Straordinaria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
