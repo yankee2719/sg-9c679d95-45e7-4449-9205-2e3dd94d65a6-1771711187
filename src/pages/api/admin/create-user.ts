@@ -1,139 +1,115 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
+type ResponseData = {
+  success: boolean;
+  message: string;
+  data?: any;
+  error?: string;
+};
+
+/**
+ * API endpoint to create a new user (Admin only)
+ * POST /api/admin/create-user
+ * 
+ * Body:
+ * {
+ *   email: string;
+ *   password: string;
+ *   fullName: string;
+ *   role: "admin" | "supervisor" | "technician";
+ * }
+ */
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse<ResponseData>
 ) {
   // Only allow POST requests
   if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
+    return res.status(405).json({
+      success: false,
+      message: "Method not allowed",
+    });
   }
 
   try {
-    const { email, password, full_name, role } = req.body;
+    const { email, password, fullName, role } = req.body;
 
-    // Validate input
-    if (!email || !password || !full_name || !role) {
+    // Validate required fields
+    if (!email || !password || !fullName || !role) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields",
-        received: {
-          email: !!email,
-          password: !!password,
-          full_name: !!full_name,
-          role: !!role,
-        },
+        message: "Missing required fields",
+        error: "Email, password, fullName, and role are required",
       });
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    // Validate role
+    const validRoles = ["admin", "supervisor", "technician"];
+    if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
-        error: "Invalid email format",
+        message: "Invalid role",
+        error: `Role must be one of: ${validRoles.join(", ")}`,
       });
     }
 
     // Validate password strength
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        error: "Password must be at least 6 characters long",
+        message: "Password too weak",
+        error: "Password must be at least 8 characters long",
       });
     }
 
-    // Get Supabase credentials from environment
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Call the Edge Function to create user
+    console.log("Calling Edge Function to create user:", { email, role });
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("Missing Supabase credentials");
-      return res.status(500).json({
-        success: false,
-        error: "Server configuration error",
-      });
-    }
-
-    // Create Supabase Admin client
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    console.log("Creating user with email:", email, "role:", role);
-
-    // Create user in auth.users
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name,
+    const { data, error } = await supabase.functions.invoke("create-user", {
+      body: {
+        email,
+        password,
+        fullName,
         role,
       },
     });
 
-    if (authError) {
-      console.error("Auth creation error:", authError);
-      return res.status(400).json({
-        success: false,
-        error: authError.message || "Failed to create user in authentication",
-      });
-    }
-
-    if (!authData.user) {
-      console.error("No user returned from auth creation");
+    if (error) {
+      console.error("Edge Function error:", error);
       return res.status(500).json({
         success: false,
-        error: "User creation failed - no user returned",
+        message: "Failed to create user",
+        error: error.message || "Unknown error from Edge Function",
       });
     }
 
-    console.log("Auth user created:", authData.user.id);
-
-    // Create profile in profiles table
-    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
-      id: authData.user.id,
-      email,
-      full_name,
-      role,
-      is_active: true,
-    });
-
-    if (profileError) {
-      console.error("Profile creation error:", profileError);
-
-      // Rollback: delete the auth user
-      console.log("Rolling back - deleting auth user:", authData.user.id);
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-
+    if (!data.success) {
+      console.error("Edge Function returned error:", data.error);
       return res.status(400).json({
         success: false,
-        error: profileError.message || "Failed to create user profile",
+        message: "User creation failed",
+        error: data.error || "Unknown error",
       });
     }
 
-    console.log("Profile created successfully for:", email);
+    console.log("User created successfully:", data.data);
 
-    // Return success with user data
     return res.status(200).json({
       success: true,
-      user: {
-        id: authData.user.id,
-        email: authData.user.email,
-        full_name,
-        role,
+      message: "User created successfully",
+      data: {
+        userId: data.data.userId,
+        email: data.data.email,
+        role: data.data.role,
       },
     });
   } catch (error: any) {
-    console.error("Unexpected error in create-user API:", error);
+    console.error("API error:", error);
     return res.status(500).json({
       success: false,
-      error: error.message || "Internal server error",
+      message: "Internal server error",
+      error: error.message || "Unknown error",
     });
   }
 }

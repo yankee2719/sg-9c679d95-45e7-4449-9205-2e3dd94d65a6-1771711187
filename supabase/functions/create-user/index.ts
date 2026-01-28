@@ -7,23 +7,13 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
+  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Get request body
-    const { email, password, full_name, role } = await req.json();
-
-    if (!email || !password || !full_name || !role) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Create Supabase Admin client
+    // Create Supabase admin client
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -35,72 +25,78 @@ serve(async (req) => {
       }
     );
 
-    console.log("=== Creating user in Auth ===");
-    console.log("Email:", email);
+    const { email, password, fullName, role } = await req.json();
 
-    // Create user in Auth
+    console.log("Creating user:", email);
+
+    // Create user with admin client
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
+      email: email,
+      password: password,
       email_confirm: true,
       user_metadata: {
-        full_name,
-        role,
+        full_name: fullName,
       },
     });
 
     if (authError) {
       console.error("Auth error:", authError);
-      return new Response(
-        JSON.stringify({ error: authError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw authError;
     }
 
-    console.log("=== User created in Auth, ID:", authData.user.id);
-    console.log("=== Creating profile ===");
+    if (!authData?.user) {
+      throw new Error("No user data returned");
+    }
+
+    const userId = authData.user.id;
+    console.log("User created with ID:", userId);
 
     // Create profile
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .insert({
-        id: authData.user.id,
-        email,
-        full_name,
-        role,
+      .upsert({
+        id: userId,
+        email: email,
+        full_name: fullName,
+        role: role || "technician",
         is_active: true,
-        two_factor_enabled: false,
+        updated_at: new Date().toISOString(),
       })
-      .select()
-      .single();
+      .select();
 
     if (profileError) {
       console.error("Profile error:", profileError);
-      
-      // If profile creation fails, delete the auth user
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      
-      return new Response(
-        JSON.stringify({ error: profileError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw profileError;
     }
 
-    console.log("=== Profile created successfully ===");
+    console.log("Profile created successfully");
 
     return new Response(
       JSON.stringify({
         success: true,
-        user: authData.user,
-        profile: profileData,
+        user: {
+          id: userId,
+          email: email,
+          full_name: fullName,
+          role: role,
+        },
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      }
     );
   } catch (error) {
-    console.error("Unexpected error:", error);
+    console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success: false,
+        error: error.message,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      }
     );
   }
 });
