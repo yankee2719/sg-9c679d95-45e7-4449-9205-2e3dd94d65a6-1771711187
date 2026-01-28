@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
+import { authService } from "@/services/authService";
+import { userService } from "@/services/userService";
+import { checklistService } from "@/services/checklistService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { checklistService } from "@/services/checklistService";
 import {
   Select,
   SelectContent,
@@ -41,11 +44,6 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { authService } from "@/services/authService";
-import { userService } from "@/services/userService";
 
 interface ChecklistTask {
   id: string;
@@ -58,9 +56,8 @@ interface ChecklistTask {
 export default function NewChecklistPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
   
   // Form state
@@ -80,6 +77,8 @@ export default function NewChecklistPage() {
       order: 1,
     },
   ]);
+
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
   // Role check on mount
   useEffect(() => {
