@@ -126,6 +126,7 @@ serve(async (req) => {
     }
 
     // Create user in Supabase Auth
+    // Note: The profile will be automatically created by the database trigger
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -148,42 +149,32 @@ serve(async (req) => {
     }
 
     console.log("User created successfully in Auth:", newUser.user.id);
+    console.log("Profile will be created automatically by database trigger");
 
-    // Create profile in profiles table
-    const profileData = {
-      id: newUser.user.id,
-      email: email,
-      full_name: full_name || null,
-      role: role,
-      created_at: new Date().toISOString()
-    };
+    // Wait a moment for the trigger to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    console.log("Attempting to insert profile:", JSON.stringify(profileData));
-
-    const { error: profileInsertError } = await supabaseAdmin
+    // Verify profile was created by trigger
+    const { data: createdProfile, error: profileCheckError } = await supabaseAdmin
       .from("profiles")
-      .insert(profileData);
+      .select("id, email, full_name, role")
+      .eq("id", newUser.user.id)
+      .single();
 
-    if (profileInsertError) {
-      console.error("Error creating profile:", profileInsertError.message);
-      console.error("Profile error details:", JSON.stringify(profileInsertError));
-      console.error("Profile error code:", profileInsertError.code);
-      console.error("Profile error hint:", profileInsertError.hint);
-      
-      // Try to delete the auth user if profile creation fails
+    if (profileCheckError) {
+      console.error("Profile was not created by trigger:", profileCheckError.message);
+      // Try to delete the auth user if profile creation failed
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-      
       return new Response(
         JSON.stringify({ 
           error: "Failed to create user profile", 
-          details: profileInsertError.message,
-          code: profileInsertError.code
+          details: "Database trigger did not create profile" 
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Profile created successfully");
+    console.log("Profile verified:", createdProfile);
 
     // Return success response
     return new Response(
@@ -192,8 +183,8 @@ serve(async (req) => {
         user: {
           id: newUser.user.id,
           email: email,
-          role: role,
-          full_name: full_name || null
+          role: createdProfile.role,
+          full_name: createdProfile.full_name
         }
       }),
       { 
