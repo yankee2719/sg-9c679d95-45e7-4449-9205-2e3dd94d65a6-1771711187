@@ -1,37 +1,51 @@
-const http = require("http");
+const { createClient } = require("@supabase/supabase-js");
 
-const data = JSON.stringify({
-  userId: "6dc4cd76-c961-458d-9d63-01f403c02f87",
-  newPassword: "Admin2026!"
-});
+// Supabase credentials from .env.local
+const supabaseUrl = "https://gfygjissdhwhulzvowjt.supabase.co";
+const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmeWdqaXNzZGh3aHVsenZvd2p0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzk5MTA1NywiZXhwIjoyMDUzNTY3MDU3fQ.qBVvKrYMLb7qH1yVJfv9sZSIsImlhdCI6MTc2OTUyODI5NywiZXhwIjoyMDg1MTA0Mjk3fQ.VYm5ypmuKN5vHh0hJOZ8wF9s9z-xEPqJBZYLNxJMd1M";
 
-const options = {
-  hostname: "localhost",
-  port: 3000,
-  path: "/api/admin/reset-password",
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Content-Length": data.length
+// User details
+const userId = "6dc4cd76-c961-458d-9d63-01f403c02f87";
+const newPassword = "Admin2026!";
+
+console.log("=== Starting Password Reset ===");
+console.log("User ID:", userId);
+console.log("New Password:", newPassword);
+
+// Create Supabase Admin client
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
   }
-};
-
-const req = http.request(options, (res) => {
-  let body = "";
-  
-  res.on("data", (chunk) => {
-    body += chunk;
-  });
-  
-  res.on("end", () => {
-    console.log("Status:", res.statusCode);
-    console.log("Response:", body);
-  });
 });
 
-req.on("error", (error) => {
-  console.error("Error:", error);
-});
+// Reset password
+async function resetPassword() {
+  try {
+    console.log("\n=== Calling Supabase Admin API ===");
+    
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { password: newPassword }
+    );
 
-req.write(data);
-req.end();
+    if (error) {
+      console.error("❌ ERROR:", error.message);
+      process.exit(1);
+    }
+
+    console.log("\n✅ SUCCESS! Password reset completed!");
+    console.log("User:", data.user.email);
+    console.log("\n🔐 NEW CREDENTIALS:");
+    console.log("Email: denis.sernagiotto@outlook.it");
+    console.log("Password: Admin2026!");
+    console.log("\nYou can now login with these credentials!");
+    
+  } catch (err) {
+    console.error("❌ UNEXPECTED ERROR:", err);
+    process.exit(1);
+  }
+}
+
+resetPassword();
