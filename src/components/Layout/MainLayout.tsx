@@ -44,6 +44,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       if (!session) return;
 
       const profile = await userService.getUserProfile(session.user.id);
+      
+      console.log("🔍 SIDEBAR DEBUG - User Profile:", profile);
+      console.log("🔍 SIDEBAR DEBUG - User Role:", profile?.role);
+      
       const name = profile?.full_name || session.user.email || "User";
       setUserName(name);
 

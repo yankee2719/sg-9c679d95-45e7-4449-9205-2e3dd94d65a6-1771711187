@@ -66,22 +66,28 @@ export default function DashboardPage() {
         return;
       }
 
-      const role = await userService.getUserRole(session.user.id);
-      if (role) {
-        setUserRole(role as any);
+      // Get user profile directly to ensure we have the latest role
+      const profile = await userService.getUserProfile(session.user.id);
+      
+      console.log("🔍 DEBUG - User Profile:", profile);
+      console.log("🔍 DEBUG - User Role:", profile?.role);
+      
+      if (profile?.role) {
+        setUserRole(profile.role as any);
         
         // Get user full name from profile
-        const profile = await userService.getUserProfile(session.user.id);
-        if (profile?.full_name) {
+        if (profile.full_name) {
           setUserName(profile.full_name);
         }
         
         await loadDashboardData();
         
         // Load user stats if admin
-        if (role === "admin") {
+        if (profile.role === "admin") {
           await loadUserStats();
         }
+      } else {
+        console.error("❌ No role found in profile!");
       }
     } catch (error) {
       console.error("Error checking auth:", error);
