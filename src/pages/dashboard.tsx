@@ -19,7 +19,9 @@ import {
   CheckCircle,
   Clock,
   ChevronRight,
-  AlertTriangle
+  AlertTriangle,
+  Users,
+  Shield
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -38,6 +40,14 @@ export default function DashboardPage() {
     overdueTasks: 0,
     completedToday: 0,
     avgTime: "2.5h"
+  });
+  
+  // User stats for admin
+  const [userStats, setUserStats] = useState({
+    total: 0,
+    admins: 0,
+    supervisors: 0,
+    technicians: 0
   });
   
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -66,6 +76,11 @@ export default function DashboardPage() {
         }
         
         await loadDashboardData();
+        
+        // Load user stats if admin
+        if (role === "admin") {
+          await loadUserStats();
+        }
       }
     } catch (error) {
       console.error("Error checking auth:", error);
@@ -102,6 +117,27 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error("Error loading data:", error);
+    }
+  };
+
+  const loadUserStats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role");
+
+      if (error) throw error;
+
+      const stats = {
+        total: data.length,
+        admins: data.filter(u => u.role === "admin").length,
+        supervisors: data.filter(u => u.role === "supervisor").length,
+        technicians: data.filter(u => u.role === "technician").length
+      };
+
+      setUserStats(stats);
+    } catch (error) {
+      console.error("Error loading user stats:", error);
     }
   };
 
@@ -169,6 +205,57 @@ export default function DashboardPage() {
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
           <div className="absolute bottom-0 left-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
         </div>
+
+        {/* ADMIN CARD - Only visible for admins */}
+        {userRole === "admin" && (
+          <div className="rounded-3xl bg-gradient-to-br from-purple-500 via-purple-600 to-indigo-600 p-8 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-500/30"
+               onClick={() => router.push("/admin/users")}>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+                    <Shield className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1">Amministrazione Sistema</h2>
+                    <p className="text-purple-50 font-medium">Gestisci utenti, ruoli e permessi</p>
+                  </div>
+                </div>
+                <div className="bg-white/20 p-3 rounded-full hover:bg-white/30 transition-colors">
+                  <ArrowRight className="w-6 h-6 text-white" />
+                </div>
+              </div>
+
+              {/* User Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                  <Users className="w-5 h-5 text-white/80 mb-2" />
+                  <div className="text-2xl font-bold mb-1">{userStats.total}</div>
+                  <div className="text-sm text-purple-100 font-medium">Utenti Totali</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                  <Shield className="w-5 h-5 text-white/80 mb-2" />
+                  <div className="text-2xl font-bold mb-1">{userStats.admins}</div>
+                  <div className="text-sm text-purple-100 font-medium">Amministratori</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                  <Users className="w-5 h-5 text-white/80 mb-2" />
+                  <div className="text-2xl font-bold mb-1">{userStats.supervisors}</div>
+                  <div className="text-sm text-purple-100 font-medium">Supervisori</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                  <Wrench className="w-5 h-5 text-white/80 mb-2" />
+                  <div className="text-2xl font-bold mb-1">{userStats.technicians}</div>
+                  <div className="text-sm text-purple-100 font-medium">Tecnici</div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Decorative circles */}
+            <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
+          </div>
+        )}
 
         {/* KPI CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
