@@ -24,14 +24,40 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 
 async function createAdminUser() {
   try {
-    console.log('🚀 Starting user creation...\n');
+    console.log('🚀 Starting FRESH user creation...\n');
 
     // Admin user details
     const email = 'denis.sernagiotto@outlook.it';
     const password = 'Admin123!@#';
     const fullName = 'Denis Sernagiotto';
 
-    console.log('📧 Creating user:', email);
+    console.log('🗑️  First, let\'s check for existing users...');
+    
+    // List all users
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('❌ Error listing users:', listError.message);
+    } else {
+      console.log(`📋 Found ${existingUsers.users.length} existing users:`);
+      existingUsers.users.forEach(u => {
+        console.log(`   - ${u.email} (${u.id})`);
+      });
+      
+      // Check if our user exists
+      const existingUser = existingUsers.users.find(u => u.email === email);
+      if (existingUser) {
+        console.log('\n⚠️  User already exists! Deleting first...');
+        const { error: deleteError } = await supabase.auth.admin.deleteUser(existingUser.id);
+        if (deleteError) {
+          console.error('❌ Error deleting user:', deleteError.message);
+        } else {
+          console.log('✅ Old user deleted successfully!');
+        }
+      }
+    }
+
+    console.log('\n📧 Creating NEW user:', email);
 
     // Create user with Admin API
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -54,7 +80,7 @@ async function createAdminUser() {
     }
 
     const userId = authData.user.id;
-    console.log('✅ Auth user created with ID:', userId);
+    console.log('✅ Auth user created with NEW ID:', userId);
 
     // Create profile
     console.log('📝 Creating profile...');
