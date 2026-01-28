@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
+import { supabase } from "@/integrations/supabase/client";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
 import { equipmentService } from "@/services/equipmentService";
