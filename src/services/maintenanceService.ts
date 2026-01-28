@@ -129,7 +129,7 @@ export const maintenanceService = {
           maintenance_type
         )
       `)
-      .order("completed_at", { ascending: false });
+      .order("created_at", { ascending: false });
 
     if (equipmentId) {
       query = query.eq("equipment_id", equipmentId);
