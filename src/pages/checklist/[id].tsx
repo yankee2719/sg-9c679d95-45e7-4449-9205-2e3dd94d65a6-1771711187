@@ -20,7 +20,8 @@ import {
   MessageSquarePlus,
   Check,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Wrench
 } from "lucide-react";
 
 interface ChecklistItem {
@@ -34,6 +35,16 @@ interface ChecklistItem {
   flagged?: boolean;
 }
 
+interface MaintenanceScheduleInfo {
+  id: string;
+  title: string;
+  equipment: {
+    id: string;
+    name: string;
+    code: string;
+  };
+}
+
 export default function ChecklistExecutionPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -42,6 +53,7 @@ export default function ChecklistExecutionPage() {
   const [loading, setLoading] = useState(true);
   const [template, setTemplate] = useState<ChecklistTemplateWithTasks | null>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
+  const [scheduleInfo, setScheduleInfo] = useState<MaintenanceScheduleInfo | null>(null);
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [timer, setTimer] = useState(0);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -122,7 +134,7 @@ export default function ChecklistExecutionPage() {
           technician_id: session.user.id,
           status: "in_progress",
           started_at: new Date().toISOString(),
-          items_data: {} // Required by legacy schema constraint
+          items_data: {}
         })
         .select()
         .single();
@@ -130,6 +142,31 @@ export default function ChecklistExecutionPage() {
       if (execError) throw execError;
 
       setExecutionId(execution.id);
+
+      // Load schedule info if exists
+      if (execution.schedule_id) {
+        const { data: scheduleData } = await supabase
+          .from("maintenance_schedules")
+          .select(`
+            id,
+            title,
+            equipment:equipment_id (
+              id,
+              name,
+              code
+            )
+          `)
+          .eq("id", execution.schedule_id)
+          .single();
+
+        if (scheduleData) {
+          setScheduleInfo({
+            id: scheduleData.id,
+            title: scheduleData.title,
+            equipment: scheduleData.equipment as any
+          });
+        }
+      }
 
       // Create execution items
       const executionItemsData = executionItems.map(item => ({
@@ -171,14 +208,12 @@ export default function ChecklistExecutionPage() {
     const newCompleted = !item.completed;
     const now = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 
-    // Update local state
     setItems(items.map(i => 
       i.id === itemId 
         ? { ...i, completed: newCompleted, completedAt: newCompleted ? now : undefined }
         : i
     ));
 
-    // Update database
     try {
       const { error } = await supabase
         .from("checklist_execution_items")
@@ -317,26 +352,34 @@ export default function ChecklistExecutionPage() {
     try {
       setSubmitting(true);
 
-      // Update execution record
-      const { error: execError } = await supabase
+      // Update execution with signature
+      const { error: updateError } = await supabase
         .from("checklist_executions")
         .update({
-          completed_at: new Date().toISOString(),
-          total_duration: Math.floor(timer / 60),
           signature_name: signatureName,
-          status: "completed",
+          total_duration: Math.floor(timer / 60),
           updated_at: new Date().toISOString()
         })
         .eq("id", executionId);
 
-      if (execError) throw execError;
+      if (updateError) throw updateError;
+
+      // Use service to complete and auto-update maintenance status
+      await checklistService.completeExecutionForSchedule(executionId);
 
       toast({
         title: "Checklist completata!",
-        description: "La checklist è stata firmata e salvata con successo"
+        description: scheduleInfo 
+          ? "La manutenzione è stata aggiornata automaticamente"
+          : "La checklist è stata firmata e salvata con successo"
       });
 
-      router.push("/checklists");
+      // Redirect based on context
+      if (scheduleInfo) {
+        router.push(`/maintenance/${scheduleInfo.id}`);
+      } else {
+        router.push("/checklists");
+      }
     } catch (error) {
       console.error("Error completing checklist:", error);
       toast({
@@ -383,6 +426,31 @@ export default function ChecklistExecutionPage() {
       <SEO title={`${template.name} - Maint Ops`} />
       
       <div className="min-h-screen bg-slate-900 text-white">
+        {/* Maintenance Banner */}
+        {scheduleInfo && (
+          <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-b border-blue-500/30">
+            <div className="max-w-4xl mx-auto px-6 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Wrench className="h-5 w-5 text-blue-400" />
+                  <div>
+                    <p className="text-sm text-slate-400">Parte della manutenzione</p>
+                    <button
+                      onClick={() => router.push(`/maintenance/${scheduleInfo.id}`)}
+                      className="text-base font-semibold text-white hover:text-blue-400 transition-colors"
+                    >
+                      {scheduleInfo.title}
+                    </button>
+                  </div>
+                </div>
+                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                  {scheduleInfo.equipment.name} ({scheduleInfo.equipment.code})
+                </Badge>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <header className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-lg border-b border-slate-800">
           <div className="flex items-center justify-between px-6 py-4">
@@ -390,7 +458,7 @@ export default function ChecklistExecutionPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => router.back()}
+                onClick={() => scheduleInfo ? router.push(`/maintenance/${scheduleInfo.id}`) : router.back()}
                 className="text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <ArrowLeft className="h-5 w-5" />

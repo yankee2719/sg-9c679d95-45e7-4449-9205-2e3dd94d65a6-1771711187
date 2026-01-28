@@ -41,6 +41,11 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { MainLayout } from "@/components/Layout/MainLayout";
+import { authService } from "@/services/authService";
+import { userService } from "@/services/userService";
 
 interface ChecklistTask {
   id: string;
@@ -55,6 +60,8 @@ export default function NewChecklistPage() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
   
   // Form state
   const [templateName, setTemplateName] = useState("");
@@ -73,6 +80,45 @@ export default function NewChecklistPage() {
       order: 1,
     },
   ]);
+
+  // Role check on mount
+  useEffect(() => {
+    checkAuthAndRole();
+  }, []);
+
+  const checkAuthAndRole = async () => {
+    try {
+      const session = await authService.getCurrentSession();
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      const role = await userService.getUserRole(session.user.id);
+      if (!role) {
+        router.push("/dashboard");
+        return;
+      }
+
+      setUserRole(role as any);
+
+      // RBAC: Only admin and supervisor can create templates
+      if (role === "technician") {
+        toast({
+          variant: "destructive",
+          title: "Accesso Negato",
+          description: "Solo amministratori e supervisori possono creare template checklist",
+        });
+        router.push("/dashboard");
+        return;
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error checking auth:", error);
+      router.push("/login");
+    }
+  };
 
   // Add new task
   const addTask = () => {
@@ -211,8 +257,16 @@ export default function NewChecklistPage() {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <>
+    <MainLayout userRole={userRole}>
       <SEO title="Crea Template Checklist - Maint Ops" />
       
       <div className="min-h-screen bg-slate-900">
@@ -576,6 +630,6 @@ export default function NewChecklistPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </MainLayout>
   );
 }
