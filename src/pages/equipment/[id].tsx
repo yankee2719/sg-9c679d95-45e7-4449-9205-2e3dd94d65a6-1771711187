@@ -33,7 +33,8 @@ import {
   Wrench,
   BarChart3,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from "lucide-react";
 import {
   AlertDialog,
@@ -53,6 +54,13 @@ import { documentService } from "@/services/documentService";
 // Define strict type for status to match DB enum
 type EquipmentStatus = "active" | "under_maintenance" | "inactive" | "decommissioned";
 
+interface TechnicalSpec {
+  id?: string;
+  spec_key: string;
+  spec_value: string;
+  unit?: string;
+}
+
 export default function EquipmentDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -63,13 +71,14 @@ export default function EquipmentDetailPage() {
   const [equipment, setEquipment] = useState<any>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]); // New state for categories
+  const [categories, setCategories] = useState<any[]>([]);
+  const [technicalSpecs, setTechnicalSpecs] = useState<TechnicalSpec[]>([]);
   
   // Initialize with proper typing - renamed category to category_id
   const [formData, setFormData] = useState<{
     name: string;
     code: string;
-    category_id: string; // Renamed from category to match DB
+    category_id: string;
     manufacturer: string;
     model: string;
     serial_number: string;
@@ -80,7 +89,7 @@ export default function EquipmentDetailPage() {
   }>({
     name: "",
     code: "",
-    category_id: "", // Renamed
+    category_id: "",
     manufacturer: "",
     model: "",
     serial_number: "",
@@ -92,7 +101,7 @@ export default function EquipmentDetailPage() {
 
   useEffect(() => {
     if (id && typeof id === "string") {
-      loadData(id); // Renamed to loadData to reflect multiple fetches
+      loadData(id);
     }
   }, [id]);
 
@@ -100,14 +109,16 @@ export default function EquipmentDetailPage() {
     try {
       setLoading(true);
       
-      const [equipmentData, maintenanceData, documentsData, categoriesData] = await Promise.all([
+      const [equipmentData, maintenanceData, documentsData, categoriesData, specsData] = await Promise.all([
         equipmentService.getById(equipmentId),
         maintenanceService.getByEquipmentId(equipmentId),
         documentService.getByEquipmentId(equipmentId),
-        equipmentService.getCategories() // Fetch categories
+        equipmentService.getCategories(),
+        equipmentService.getSpecifications(equipmentId)
       ]);
 
       setCategories(categoriesData || []);
+      setTechnicalSpecs(specsData || []);
 
       if (!equipmentData) {
         router.push("/equipment");
@@ -123,7 +134,7 @@ export default function EquipmentDetailPage() {
       setFormData({
         name: equipmentData.name || "",
         code: equipmentData.code || "",
-        category_id: equipmentData.category_id || "", // Use category_id
+        category_id: equipmentData.category_id || "",
         manufacturer: equipmentData.manufacturer || "",
         model: equipmentData.model || "",
         serial_number: equipmentData.serial_number || "",
@@ -146,13 +157,16 @@ export default function EquipmentDetailPage() {
     try {
       setSaving(true);
       
-      // Clean up UUID fields: convert empty strings to null
       const cleanedData = {
         ...formData,
         category_id: formData.category_id || null,
       };
       
       await equipmentService.update(id, cleanedData);
+      
+      // Save technical specifications
+      await equipmentService.updateSpecifications(id, technicalSpecs);
+      
       await loadData(id);
       setEditMode(false);
     } catch (error) {
@@ -167,8 +181,6 @@ export default function EquipmentDetailPage() {
     if (!id || typeof id !== "string") return;
 
     try {
-      // Documents are deleted automatically via cascade, but files in storage need manual cleanup if not using triggers
-      // For now we rely on DB cascade for records
       await equipmentService.delete(id);
       router.push("/equipment");
     } catch (error) {
@@ -180,7 +192,6 @@ export default function EquipmentDetailPage() {
   const handleDocumentDelete = async (docId: string, filePath?: string) => {
     try {
       await documentService.delete(docId, filePath);
-      // Reload documents
       if (id && typeof id === "string") {
         const docs = await documentService.getByEquipmentId(id);
         setDocuments(docs || []);
@@ -195,6 +206,20 @@ export default function EquipmentDetailPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleAddSpec = () => {
+    setTechnicalSpecs([...technicalSpecs, { spec_key: "", spec_value: "", unit: "" }]);
+  };
+
+  const handleSpecChange = (index: number, field: keyof TechnicalSpec, value: string) => {
+    const updated = [...technicalSpecs];
+    updated[index] = { ...updated[index], [field]: value };
+    setTechnicalSpecs(updated);
+  };
+
+  const handleRemoveSpec = (index: number) => {
+    setTechnicalSpecs(technicalSpecs.filter((_, i) => i !== index));
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline", label: string }> = {
       active: { variant: "default", label: "Attiva" },
@@ -202,7 +227,6 @@ export default function EquipmentDetailPage() {
       inactive: { variant: "outline", label: "Inattiva" },
       decommissioned: { variant: "destructive", label: "Dismessa" }
     };
-    // Handle legacy "maintenance" value just in case
     if (status === "maintenance") status = "under_maintenance";
     
     const config = variants[status] || variants.active;
@@ -303,6 +327,7 @@ export default function EquipmentDetailPage() {
                       status: equipment.status || "active",
                       notes: equipment.notes || ""
                     });
+                    loadData(id as string);
                   }}
                   className="bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 rounded-xl"
                 >
@@ -531,6 +556,97 @@ export default function EquipmentDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Technical Specifications */}
+            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-white">Specifiche Tecniche</CardTitle>
+                  {editMode && (
+                    <Button
+                      onClick={handleAddSpec}
+                      size="sm"
+                      className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Aggiungi Specifica
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {technicalSpecs.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <p>Nessuna specifica tecnica definita</p>
+                    {editMode && (
+                      <Button
+                        onClick={handleAddSpec}
+                        variant="outline"
+                        className="mt-4"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Aggiungi Prima Specifica
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {technicalSpecs.map((spec, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-3 items-end">
+                        <div className="col-span-4">
+                          <Label>Nome Parametro</Label>
+                          {editMode ? (
+                            <Input
+                              value={spec.spec_key}
+                              onChange={(e) => handleSpecChange(index, "spec_key", e.target.value)}
+                              placeholder="es. speed, length, load_capacity"
+                            />
+                          ) : (
+                            <p className="text-sm font-medium text-white mt-2">{spec.spec_key}</p>
+                          )}
+                        </div>
+                        <div className="col-span-4">
+                          <Label>Valore</Label>
+                          {editMode ? (
+                            <Input
+                              value={spec.spec_value}
+                              onChange={(e) => handleSpecChange(index, "spec_value", e.target.value)}
+                              placeholder="es. 0.5-2, 50, 100"
+                            />
+                          ) : (
+                            <p className="text-sm font-medium text-white mt-2">{spec.spec_value}</p>
+                          )}
+                        </div>
+                        <div className="col-span-3">
+                          <Label>Unità di Misura</Label>
+                          {editMode ? (
+                            <Input
+                              value={spec.unit || ""}
+                              onChange={(e) => handleSpecChange(index, "unit", e.target.value)}
+                              placeholder="es. m/s, m, kg/m"
+                            />
+                          ) : (
+                            <p className="text-sm font-medium text-white mt-2">{spec.unit || "-"}</p>
+                          )}
+                        </div>
+                        {editMode && (
+                          <div className="col-span-1">
+                            <Button
+                              onClick={() => handleRemoveSpec(index)}
+                              variant="ghost"
+                              size="icon"
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* QR Code Tab */}
@@ -561,7 +677,7 @@ export default function EquipmentDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-white">Storico Manutenzioni</CardTitle>
-                  <Button onClick={() => router.push("/maintenance/new")}>
+                  <Button onClick={() => router.push("/maintenance/new")} className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl">
                     <Calendar className="h-4 w-4 mr-2" />
                     Nuova Manutenzione
                   </Button>
@@ -576,12 +692,12 @@ export default function EquipmentDetailPage() {
                 ) : (
                   <div className="space-y-4">
                     {maintenanceHistory.map((maintenance) => (
-                      <div key={maintenance.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div key={maintenance.id} className="border border-slate-700 rounded-lg p-4 hover:bg-slate-700/30 transition-colors">
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
-                            <h4 className="font-medium">{maintenance.title}</h4>
-                            <p className="text-sm text-gray-500">{maintenance.description}</p>
-                            <div className="flex items-center gap-4 text-xs text-gray-400">
+                            <h4 className="font-medium text-white">{maintenance.title}</h4>
+                            <p className="text-sm text-slate-400">{maintenance.description}</p>
+                            <div className="flex items-center gap-4 text-xs text-slate-500">
                               <span>
                                 Data: {new Date(maintenance.scheduled_date).toLocaleDateString("it-IT")}
                               </span>
@@ -629,7 +745,7 @@ export default function EquipmentDetailPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{maintenanceHistory.length}</div>
+                  <div className="text-3xl font-bold text-white">{maintenanceHistory.length}</div>
                 </CardContent>
               </Card>
 

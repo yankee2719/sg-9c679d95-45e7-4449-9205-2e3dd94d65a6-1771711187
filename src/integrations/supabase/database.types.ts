@@ -533,6 +533,44 @@ export type Database = {
           },
         ]
       }
+      equipment_specifications: {
+        Row: {
+          created_at: string | null
+          equipment_id: string
+          id: string
+          spec_key: string
+          spec_value: string
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          equipment_id: string
+          id?: string
+          spec_key: string
+          spec_value: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          equipment_id?: string
+          id?: string
+          spec_key?: string
+          spec_value?: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_specifications_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_logs: {
         Row: {
           created_at: string | null

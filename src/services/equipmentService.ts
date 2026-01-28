@@ -89,13 +89,71 @@ export const equipmentService = {
   },
 
   // Delete equipment
-  async delete(id: string) {
+  async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from("equipment")
       .delete()
       .eq("id", id);
 
     if (error) throw error;
+  },
+
+  // Get technical specifications
+  async getSpecifications(equipmentId: string) {
+    const { data, error } = await supabase
+      .from("equipment_specifications")
+      .select("*")
+      .eq("equipment_id", equipmentId)
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Update technical specifications
+  async updateSpecifications(equipmentId: string, specs: { id?: string; spec_key: string; spec_value: string; unit?: string }[]) {
+    // 1. Get current specs to identify what to delete
+    const { data: currentSpecs } = await supabase
+      .from("equipment_specifications")
+      .select("id")
+      .eq("equipment_id", equipmentId);
+      
+    const currentIds = currentSpecs?.map(s => s.id) || [];
+    const newIds = specs.filter(s => s.id).map(s => s.id);
+    
+    // 2. Delete removed specs
+    const idsToDelete = currentIds.filter(id => !newIds.includes(id));
+    if (idsToDelete.length > 0) {
+      await supabase
+        .from("equipment_specifications")
+        .delete()
+        .in("id", idsToDelete);
+    }
+    
+    // 3. Insert or Update specs
+    for (const spec of specs) {
+      if (spec.id) {
+        // Update existing
+        await supabase
+          .from("equipment_specifications")
+          .update({
+            spec_key: spec.spec_key,
+            spec_value: spec.spec_value,
+            unit: spec.unit
+          })
+          .eq("id", spec.id);
+      } else {
+        // Insert new
+        await supabase
+          .from("equipment_specifications")
+          .insert({
+            equipment_id: equipmentId,
+            spec_key: spec.spec_key,
+            spec_value: spec.spec_value,
+            unit: spec.unit
+          });
+      }
+    }
   },
 
   // Get all categories
