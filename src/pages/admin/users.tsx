@@ -140,42 +140,50 @@ export default function AdminUsersPage() {
       setError("");
       setSuccess("");
 
-      if (!createForm.email || !createForm.password) {
-        setError("Email e password sono obbligatori");
+      if (!createForm.email || !createForm.password || !createForm.full_name) {
+        setError("Email, password e nome completo sono obbligatori");
         return;
       }
 
-      // Create user using Supabase Admin API directly
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      console.log("=== Creating user via Edge Function ===");
+      console.log("Request data:", {
         email: createForm.email,
-        password: createForm.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: createForm.full_name
+        full_name: createForm.full_name,
+        role: createForm.role
+      });
+
+      // Call Edge Function to create user
+      const { data, error: functionError } = await supabase.functions.invoke("create-user", {
+        body: {
+          email: createForm.email,
+          password: createForm.password,
+          full_name: createForm.full_name,
+          role: createForm.role
         }
       });
 
-      if (authError) throw authError;
+      console.log("=== Edge Function Response ===");
+      console.log("Data:", data);
+      console.log("Error:", functionError);
 
-      // Update profile with role
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({
-            role: createForm.role,
-            full_name: createForm.full_name || null
-          })
-          .eq("id", authData.user.id);
-
-        if (profileError) throw profileError;
+      if (functionError) {
+        console.error("=== Function Error ===", functionError);
+        throw functionError;
       }
+
+      if (data?.error) {
+        console.error("=== Data Error ===", data.error);
+        throw new Error(data.error);
+      }
+
+      console.log("=== User Created Successfully ===", data);
 
       setSuccess("Utente creato con successo");
       setCreateModalOpen(false);
       setCreateForm({ email: "", password: "", full_name: "", role: "technician" });
       await loadUsers();
     } catch (error: any) {
-      console.error("Error creating user:", error);
+      console.error("=== Final Error ===", error);
       setError(error.message || "Errore nella creazione dell'utente");
     }
   };
