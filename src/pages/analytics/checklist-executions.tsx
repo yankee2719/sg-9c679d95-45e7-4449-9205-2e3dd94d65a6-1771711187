@@ -74,7 +74,7 @@ export default function ChecklistExecutionsAnalytics() {
 
   useEffect(() => {
     // Redirect technicians
-    if (userRole === "technician") {
+    if ((userRole as string) === "technician") {
       router.push("/dashboard");
       return;
     }
