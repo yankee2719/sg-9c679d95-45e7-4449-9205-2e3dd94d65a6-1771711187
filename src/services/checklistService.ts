@@ -393,5 +393,127 @@ export const checklistService = {
       console.error("Error getting executions by schedule:", error);
       return [];
     }
+  },
+
+  /**
+   * Update existing template
+   */
+  async updateTemplate(
+    templateId: string,
+    data: {
+      name: string;
+      description?: string;
+      category: string;
+      estimated_time: number;
+      equipment?: string;
+      status: "draft" | "active" | "archived";
+    }
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from("checklist_templates")
+        .update({
+          name: data.name,
+          description: data.description,
+          category: data.category,
+          estimated_time: data.estimated_time,
+          equipment: data.equipment,
+          status: data.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", templateId);
+
+      if (error) {
+        console.error("Error updating template:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error updateTemplate:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete all tasks for a template (used before updating)
+   */
+  async deleteTemplateTasks(templateId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from("checklist_tasks")
+        .delete()
+        .eq("template_id", templateId);
+
+      if (error) {
+        console.error("Error deleting template tasks:", error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error deleteTemplateTasks:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Update template with tasks (delete old, insert new)
+   */
+  async updateTemplateWithTasks(
+    templateId: string,
+    templateData: {
+      name: string;
+      description?: string;
+      category: string;
+      estimated_time: number;
+      equipment?: string;
+      status: "draft" | "active" | "archived";
+    },
+    tasks: {
+      title: string;
+      description?: string;
+      required: boolean;
+      task_order: number;
+    }[]
+  ): Promise<boolean> {
+    try {
+      // 1. Update template
+      const updateSuccess = await this.updateTemplate(templateId, templateData);
+      if (!updateSuccess) {
+        throw new Error("Failed to update template");
+      }
+
+      // 2. Delete old tasks
+      const deleteSuccess = await this.deleteTemplateTasks(templateId);
+      if (!deleteSuccess) {
+        throw new Error("Failed to delete old tasks");
+      }
+
+      // 3. Insert new tasks
+      if (tasks.length > 0) {
+        const tasksToInsert = tasks.map((task) => ({
+          template_id: templateId,
+          title: task.title,
+          description: task.description,
+          required: task.required,
+          task_order: task.task_order,
+        }));
+
+        const { error: tasksError } = await supabase
+          .from("checklist_tasks")
+          .insert(tasksToInsert);
+
+        if (tasksError) {
+          console.error("Error inserting new tasks:", error);
+          throw tasksError;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error updateTemplateWithTasks:", error);
+      return false;
+    }
   }
 };

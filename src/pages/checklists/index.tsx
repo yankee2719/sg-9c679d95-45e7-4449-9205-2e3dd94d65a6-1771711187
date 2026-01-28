@@ -28,7 +28,8 @@ import {
   Filter,
   Loader2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Edit
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -320,14 +321,27 @@ export default function ChecklistsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {canDelete && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
-                          onClick={(e) => handleDeleteClick(template, e)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/checklists/edit/${template.id}`);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                            onClick={(e) => handleDeleteClick(template, e)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
                       )}
                       <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-blue-400 transition-colors" />
                     </div>
