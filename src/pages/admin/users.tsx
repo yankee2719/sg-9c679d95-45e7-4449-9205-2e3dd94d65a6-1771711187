@@ -169,42 +169,37 @@ export default function AdminUsersPage() {
         return;
       }
 
-      console.log("=== Creating user via Edge Function ===");
+      console.log("=== Creating user via API Route ===");
       console.log("Request data:", {
         email: createForm.email,
         full_name: createForm.full_name,
         role: createForm.role
       });
 
-      // Call Edge Function instead of Database Function
-      const { data, error: functionError } = await supabase.functions.invoke("create-user", {
-        body: {
+      // Call Next.js API Route instead of Edge Function
+      const response = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           email: createForm.email,
           password: createForm.password,
           full_name: createForm.full_name,
           role: createForm.role
-        }
+        })
       });
 
-      console.log("=== Edge Function Response ===");
+      console.log("=== API Response ===");
+      console.log("Status:", response.status);
+      console.log("OK:", response.ok);
+
+      const data = await response.json();
       console.log("Data:", data);
-      console.log("Error:", functionError);
 
-      if (functionError) {
-        console.error("=== Function Error Details ===", functionError);
-        console.error("Error Message:", functionError.message);
-        console.error("Error Context:", functionError.context);
-        throw new Error(functionError.message || "Edge Function error");
-      }
-
-      if (data?.error) {
-        console.error("=== Response Error ===", data.error);
-        throw new Error(data.error);
-      }
-
-      if (!data?.success) {
-        console.error("=== Unexpected Response ===", data);
-        throw new Error(data?.message || "Failed to create user");
+      if (!response.ok || !data.success) {
+        console.error("=== API Error ===", data.error);
+        throw new Error(data.error || "Failed to create user");
       }
 
       console.log("=== User Created Successfully ===", data);
@@ -213,9 +208,13 @@ export default function AdminUsersPage() {
       setCreateModalOpen(false);
       setCreateForm({ email: "", password: "", full_name: "", role: "technician" });
       await loadUsers();
+
+      toast({
+        title: "Utente creato",
+        description: `L'utente ${createForm.email} è stato creato con successo`,
+      });
     } catch (error: any) {
       console.error("=== Final Error ===", error);
-      console.error("=== Error Stack ===", error.stack);
       setError(error.message || "Errore nella creazione dell'utente");
       
       toast({
