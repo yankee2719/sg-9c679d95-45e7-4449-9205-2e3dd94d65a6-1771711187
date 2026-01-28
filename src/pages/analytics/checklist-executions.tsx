@@ -70,7 +70,7 @@ export default function ChecklistExecutionsAnalytics() {
   const [statusDistribution, setStatusDistribution] = useState<StatusDistribution[]>([]);
 
   // Get user role (mock - replace with actual auth)
-  const userRole = "admin"; // Replace with actual role from auth context
+  const userRole: "admin" | "supervisor" | "technician" = "admin"; // Replace with actual role from auth context
 
   useEffect(() => {
     // Redirect technicians
@@ -283,7 +283,7 @@ export default function ChecklistExecutionsAnalytics() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry) => `${entry.status}: ${entry.percentage.toFixed(1)}%`}
+                    label={(props: any) => `${props.status}: ${props.percentage.toFixed(1)}%`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="count"

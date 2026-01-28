@@ -172,18 +172,22 @@ export const analyticsService = {
       // Get issue counts per template
       const templateStats: TemplateUsageStats[] = [];
       
+      // Get all executions with flagged items first to avoid subquery issues
+      const { data: flaggedExecutions } = await supabase
+        .from("checklist_execution_items")
+        .select("execution_id")
+        .eq("flagged", true);
+        
+      const flaggedExecutionIds = flaggedExecutions?.map(i => i.execution_id) || [];
+      const flaggedSet = new Set(flaggedExecutionIds);
+
       for (const [templateId, stats] of templateMap.entries()) {
         const { count: issueCount } = await supabase
           .from("checklist_executions")
           .select("id", { count: "exact", head: true })
           .eq("template_id", templateId)
           .gte("created_at", since.toISOString())
-          .in("id", 
-            supabase
-              .from("checklist_execution_items")
-              .select("execution_id")
-              .eq("flagged", true)
-          );
+          .in("id", Array.from(flaggedSet)); // Use prepared array instead of builder
 
         const avgDuration = stats.durations.length > 0
           ? Math.round(stats.durations.reduce((sum, d) => sum + d, 0) / stats.durations.length)
@@ -264,6 +268,15 @@ export const analyticsService = {
       });
 
       const techStats: TechnicianPerformanceStats[] = [];
+      
+      // We can reuse the flaggedExecutionIds from above if needed, or query again if context differs.
+      // Since it's a new function scope, we query again for safety/independence.
+      const { data: flaggedExecutionsTech } = await supabase
+        .from("checklist_execution_items")
+        .select("execution_id")
+        .eq("flagged", true);
+        
+      const flaggedExecutionIdsTech = flaggedExecutionsTech?.map(i => i.execution_id) || [];
 
       for (const [techId, stats] of techMap.entries()) {
         const total = stats.completed + stats.inProgress;
@@ -277,12 +290,7 @@ export const analyticsService = {
           .select("id", { count: "exact", head: true })
           .eq("technician_id", techId)
           .gte("created_at", since.toISOString())
-          .in("id",
-            supabase
-              .from("checklist_execution_items")
-              .select("execution_id")
-              .eq("flagged", true)
-          );
+          .in("id", flaggedExecutionIdsTech); // Use prepared array
 
         techStats.push({
           technicianId: techId,
