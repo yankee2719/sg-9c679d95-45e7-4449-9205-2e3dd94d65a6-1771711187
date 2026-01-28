@@ -232,5 +232,35 @@ export const checklistService = {
       console.error("Error getTemplateWithTasks:", error);
       return null;
     }
+  },
+
+  // Get statistics for a template (task count, execution count)
+  async getTemplateStats(templateId: string): Promise<{ tasksCount: number; executionsCount: number }> {
+    try {
+      // Count tasks
+      const { count: tasksCount, error: tasksError } = await supabase
+        .from("checklist_tasks")
+        .select("*", { count: "exact", head: true })
+        .eq("template_id", templateId);
+
+      if (tasksError) throw tasksError;
+
+      // Count executions
+      // Note: we check both checklist_template_id (legacy) and template_id (new)
+      const { count: executionsCount, error: execError } = await supabase
+        .from("checklist_executions")
+        .select("*", { count: "exact", head: true })
+        .or(`checklist_template_id.eq.${templateId},template_id.eq.${templateId}`);
+
+      if (execError) throw execError;
+
+      return {
+        tasksCount: tasksCount || 0,
+        executionsCount: executionsCount || 0
+      };
+    } catch (error) {
+      console.error("Error getTemplateStats:", error);
+      return { tasksCount: 0, executionsCount: 0 };
+    }
   }
 };
