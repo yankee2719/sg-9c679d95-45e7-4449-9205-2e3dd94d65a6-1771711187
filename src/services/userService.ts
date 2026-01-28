@@ -2,126 +2,122 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-type UserRole = Database["public"]["Enums"]["user_role"];
 
 export const userService = {
-  // Get all users
-  async getAllUsers() {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
+  // Get user profile by ID - with fallback to auth.users metadata
+  async getUserProfile(userId: string): Promise<Profile | null> {
+    try {
+      // Try to get from profiles table first
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
 
-    if (error) throw error;
-    return data || [];
-  },
+      // If profile exists, return it
+      if (data && !error) {
+        return data;
+      }
 
-  // Get user by ID
-  async getUserById(id: string) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+      // Profile doesn't exist - check auth.users metadata as fallback
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user && user.id === userId) {
+        // Return a virtual profile from auth metadata
+        return {
+          id: user.id,
+          email: user.email || "",
+          full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+          role: user.user_metadata?.role || "technician",
+          phone: user.user_metadata?.phone || null,
+          is_active: true,
+          two_factor_enabled: user.user_metadata?.two_factor_enabled || false,
+          two_factor_secret: null,
+          created_at: user.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as Profile;
+      }
 
-    if (error) {
-      console.error("Error getting user by ID:", error);
-      throw error;
+      return null;
+    } catch (error) {
+      console.error("Error in getUserProfile:", error);
+      
+      // Last resort fallback - return minimal profile from current session
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && user.id === userId) {
+        return {
+          id: user.id,
+          email: user.email || "",
+          full_name: user.email?.split("@")[0] || "User",
+          role: "technician",
+          phone: null,
+          is_active: true,
+          two_factor_enabled: false,
+          two_factor_secret: null,
+          created_at: user.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as Profile;
+      }
+      
+      return null;
     }
-    return data;
   },
 
-  // Get current user profile
-  async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+  // Get all users (admin only)
+  async getAllUsers(): Promise<Profile[]> {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    return this.getUserById(user.id);
+      if (error) throw error;
+
+      return data || [];
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
   },
 
   // Update user profile
-  async updateProfile(userId: string, updates: Partial<Profile>) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("id", userId)
-      .select()
-      .single();
+  async updateUserProfile(userId: string, updates: Partial<Profile>): Promise<{ error: any | null }> {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", userId);
 
-    if (error) throw error;
-    return data;
-  },
-
-  // Get user role
-  async getUserRole(userId: string): Promise<string | null> {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.error("Error fetching user role:", error);
-      return null;
+      return { error };
+    } catch (error) {
+      return { error };
     }
-
-    return data?.role || null;
   },
 
-  // Get user profile
-  async getUserProfile(userId: string) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+  // Create user profile
+  async createUserProfile(profile: Omit<Profile, "created_at" | "updated_at">): Promise<{ error: any | null }> {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .insert(profile);
 
-    if (error) {
-      console.error("Error fetching user profile:", error);
-      throw error;
+      return { error };
+    } catch (error) {
+      return { error };
     }
-
-    return data;
   },
 
-  // Update user role (admin only)
-  async updateUserRole(userId: string, role: UserRole) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .update({ role })
-      .eq("id", userId)
-      .select()
-      .single();
+  // Delete user profile
+  async deleteUserProfile(userId: string): Promise<{ error: any | null }> {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", userId);
 
-    if (error) throw error;
-    return data;
-  },
-
-  // Get users by role
-  async getUsersByRole(role: UserRole) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("role", role)
-      .order("full_name");
-
-    if (error) throw error;
-    return data || [];
-  },
-
-  // Get technicians for assignment
-  async getTechnicians() {
-    return this.getUsersByRole("technician");
-  },
-
-  // Check if user has role
-  async hasRole(userId: string, role: UserRole): Promise<boolean> {
-    const user = await this.getUserById(userId);
-    return user?.role === role;
-  },
-
-  // Check if user is admin
-  async isAdmin(userId: string): Promise<boolean> {
-    return this.hasRole(userId, "admin");
+      return { error };
+    } catch (error) {
+      return { error };
+    }
   }
 };

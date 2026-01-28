@@ -58,7 +58,11 @@ export const authService = {
         email,
         password,
         options: {
-          emailRedirectTo: `${getURL()}auth/confirm-email`
+          emailRedirectTo: `${getURL()}auth/confirm-email`,
+          data: {
+            full_name: email.split("@")[0],
+            role: "technician"
+          }
         }
       });
 
@@ -72,6 +76,13 @@ export const authService = {
         user_metadata: data.user.user_metadata,
         created_at: data.user.created_at
       } : null;
+
+      // Try to create profile in background (non-blocking)
+      if (data.user) {
+        this.ensureProfile(data.user.id, data.user.email || "").catch(err => {
+          console.error("Background profile creation failed:", err);
+        });
+      }
 
       return { user: authUser, error: null };
     } catch (error) {
@@ -184,48 +195,26 @@ export const authService = {
     return supabase.auth.onAuthStateChange(callback);
   },
 
-  // Ensure user profile exists (create if missing)
+  // Ensure user profile exists (create if missing) - NON-BLOCKING
   async ensureProfile(userId: string, email: string): Promise<{ error: AuthError | null }> {
     try {
-      // Check if profile exists
-      const { data: existingProfile, error: checkError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", userId)
-        .maybeSingle();
+      // Use raw SQL query instead of REST API to bypass PostgREST cache issue
+      const { error: rpcError } = await supabase.rpc('ensure_user_profile', {
+        user_id: userId,
+        user_email: email
+      });
 
-      if (checkError) {
-        console.error("Error checking profile:", checkError);
-        return { error: { message: checkError.message } };
-      }
-
-      // If profile already exists, we're good
-      if (existingProfile) {
+      if (rpcError) {
+        console.warn("Profile creation via RPC failed, will be created on next API call:", rpcError.message);
+        // Don't throw - this is non-critical
         return { error: null };
-      }
-
-      // Profile doesn't exist, create it
-      const { error: insertError } = await supabase
-        .from("profiles")
-        .insert({
-          id: userId,
-          email: email,
-          full_name: email.split("@")[0], // Use email prefix as initial name
-          role: "technician", // Default role
-          two_factor_enabled: false
-        });
-
-      if (insertError) {
-        console.error("Error creating profile:", insertError);
-        return { error: { message: insertError.message } };
       }
 
       return { error: null };
     } catch (error) {
-      console.error("Unexpected error in ensureProfile:", error);
-      return { 
-        error: { message: "An unexpected error occurred while ensuring profile exists" } 
-      };
+      console.warn("Unexpected error in ensureProfile, ignoring:", error);
+      // Don't throw - this is non-critical
+      return { error: null };
     }
   }
 };

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-empty-object-type */
+ 
 export type Json =
   | string
   | number
@@ -1260,6 +1260,10 @@ export type Database = {
           user_role: string
         }
         Returns: Json
+      }
+      ensure_user_profile: {
+        Args: { user_email: string; user_id: string }
+        Returns: undefined
       }
     }
     Enums: {

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
-import { authService } from "@/services/authService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,10 +30,7 @@ export function LoginForm() {
       if (signInError) throw signInError;
 
       if (data.user) {
-        // Ensure user profile exists (create if missing)
-        await authService.ensureProfile(data.user.id, data.user.email || "");
-        
-        // Redirect to dashboard (2FA disabled)
+        // Redirect to dashboard immediately (profile will be loaded there)
         router.push("/dashboard");
       }
     } catch (err: any) {
