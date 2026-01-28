@@ -1,8 +1,31 @@
+const fs = require('fs');
 const { createClient } = require("@supabase/supabase-js");
 
-// Supabase credentials from .env.local
-const supabaseUrl = "https://gfygjissdhwhulzvowjt.supabase.co";
-const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmeWdqaXNzZGh3aHVsenZvd2p0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzk5MTA1NywiZXhwIjoyMDUzNTY3MDU3fQ.qBVvKrYMLb7qH1yVJfv9sZSIsImlhdCI6MTc2OTUyODI5NywiZXhwIjoyMDg1MTA0Mjk3fQ.VYm5ypmuKN5vHh0hJOZ8wF9s9z-xEPqJBZYLNxJMd1M";
+// Read .env.local to get the service key
+console.log("Reading configuration...");
+let supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+try {
+  const envContent = fs.readFileSync('.env.local', 'utf8');
+  
+  if (!supabaseServiceKey) {
+    const keyMatch = envContent.match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/);
+    if (keyMatch) supabaseServiceKey = keyMatch[1].trim();
+  }
+  
+  if (!supabaseUrl) {
+    const urlMatch = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/);
+    if (urlMatch) supabaseUrl = urlMatch[1].trim();
+  }
+} catch (e) {
+  console.log("Could not read .env.local, relying on process.env");
+}
+
+if (!supabaseServiceKey || !supabaseUrl) {
+  console.error("❌ Missing credentials. Please check .env.local");
+  process.exit(1);
+}
 
 // User details
 const userId = "6dc4cd76-c961-458d-9d63-01f403c02f87";

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Edit, Trash2, Search, AlertCircle, CheckCircle, Shield, UserCog, Wrench } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Search, AlertCircle, CheckCircle, Shield, UserCog, Wrench, Key, Pencil } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician";
 
@@ -59,6 +59,9 @@ export default function AdminUsersPage() {
   // Delete confirmation modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
     checkAdminAccess();
@@ -274,6 +277,53 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!selectedUser || !newPassword) {
+      toast({
+        variant: "destructive",
+        title: "Errore",
+        description: "Inserisci una nuova password",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          newPassword: newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Errore nel reset della password");
+      }
+
+      toast({
+        title: "Password resettata",
+        description: `La password per ${selectedUser.email} è stata aggiornata con successo`,
+      });
+
+      setIsResetPasswordDialogOpen(false);
+      setNewPassword("");
+      setSelectedUser(null);
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      toast({
+        variant: "destructive",
+        title: "Errore",
+        description: error.message || "Impossibile resettare la password",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openEditModal = (user: UserProfile) => {
     setSelectedUser(user);
     setEditForm({
@@ -480,21 +530,39 @@ export default function AdminUsersPage() {
                           {new Date(user.created_at).toLocaleDateString("it-IT")}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => openEditModal(user)}
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setEditModalOpen(true);
+                              }}
                             >
-                              <Edit className="h-4 w-4" />
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Modifica
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => openDeleteModal(user)}
-                              className="text-red-600 hover:text-red-700"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setIsResetPasswordDialogOpen(true);
+                              }}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Key className="h-4 w-4 mr-1" />
+                              Reset Password
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setDeleteModalOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Elimina
                             </Button>
                           </div>
                         </TableCell>
@@ -659,6 +727,48 @@ export default function AdminUsersPage() {
               <Button variant="destructive" onClick={handleDeleteUser}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Elimina Utente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset Password</DialogTitle>
+              <DialogDescription>
+                Inserisci una nuova password per {selectedUser?.email}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="new-password">Nuova Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Inserisci nuova password"
+                />
+                <p className="text-sm text-muted-foreground">
+                  La password deve essere di almeno 6 caratteri
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsResetPasswordDialogOpen(false);
+                  setNewPassword("");
+                  setSelectedUser(null);
+                }}
+              >
+                Annulla
+              </Button>
+              <Button onClick={handleResetPassword} disabled={loading || !newPassword}>
+                {loading ? "Resettando..." : "Reset Password"}
               </Button>
             </DialogFooter>
           </DialogContent>
