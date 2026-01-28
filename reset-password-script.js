@@ -4,63 +4,106 @@ require('dotenv').config({ path: '.env.local' });
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+console.log('🔍 Environment check...');
+console.log('URL:', supabaseUrl);
+
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ Missing Supabase credentials in .env.local');
+  console.error('❌ Missing environment variables!');
   process.exit(1);
 }
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false
   }
 });
 
-async function resetPassword() {
+async function getUserIdAndCreateProfile() {
   try {
-    console.log('🔄 Resetting password for denis.sernagiotto@outlook.it...');
-    
-    // First, get the user ID from the database
-    const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-    
+    console.log('🔍 Looking for user by email...\n');
+
+    const email = 'denis.sernagiotto@outlook.it';
+
+    // List all users to find the one we need
+    const { data: users, error: listError } = await supabase.auth.admin.listUsers();
+
     if (listError) {
       console.error('❌ Error listing users:', listError.message);
+      throw listError;
+    }
+
+    if (!users || users.users.length === 0) {
+      console.error('❌ No users found in the database!');
       process.exit(1);
     }
 
-    const user = users.users.find(u => u.email === 'denis.sernagiotto@outlook.it');
-    
+    console.log(`✅ Found ${users.users.length} total users\n`);
+
+    // Find our specific user
+    const user = users.users.find(u => u.email === email);
+
     if (!user) {
-      console.error('❌ User not found');
+      console.error(`❌ User ${email} not found!`);
+      console.log('Available users:');
+      users.users.forEach(u => console.log(`  - ${u.email} (${u.id})`));
       process.exit(1);
     }
 
-    console.log('✅ User found:', user.id);
+    console.log('✅ User found!');
+    console.log('   ID:', user.id);
+    console.log('   Email:', user.email);
+    console.log('   Created:', user.created_at);
+    console.log('   Confirmed:', user.email_confirmed_at ? 'Yes' : 'No');
 
-    // Reset password using updateUserById
-    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
-      { password: 'Admin2026!' }
-    );
+    // Check if profile exists
+    console.log('\n🔍 Checking for existing profile...');
+    const { data: existingProfile, error: profileCheckError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
-    if (error) {
-      console.error('❌ Password reset error:', error.message);
-      process.exit(1);
+    if (existingProfile) {
+      console.log('✅ Profile already exists!');
+      console.log('   Role:', existingProfile.role);
+      console.log('   Name:', existingProfile.full_name);
+      console.log('\n🎉 Everything is set up correctly!');
+      return;
     }
 
-    console.log('✅ Password reset successfully!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('👤 USER ID:', user.id);
-    console.log('📧 EMAIL: denis.sernagiotto@outlook.it');
-    console.log('🔐 NEW PASSWORD: Admin2026!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🎉 You can now login with the new password!');
-    
-    process.exit(0);
+    // Create profile
+    console.log('📝 Creating profile...');
+    const { data: newProfile, error: insertError } = await supabase
+      .from('profiles')
+      .insert({
+        id: user.id,
+        email: email,
+        full_name: 'Denis Sernagiotto',
+        role: 'admin',
+        is_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('❌ Error creating profile:', insertError.message);
+      throw insertError;
+    }
+
+    console.log('✅ Profile created successfully!');
+    console.log('\n🎉 Setup complete!\n');
+    console.log('📋 You can now login at: http://localhost:3000/login');
+    console.log('   Email:', email);
+    console.log('   User ID:', user.id);
+    console.log('   Role: admin\n');
+
   } catch (error) {
-    console.error('❌ Unexpected error:', error.message);
+    console.error('\n❌ Fatal error:', error.message);
+    console.error('Full error:', error);
     process.exit(1);
   }
 }
 
-resetPassword();
+getUserIdAndCreateProfile();

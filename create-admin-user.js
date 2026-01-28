@@ -4,15 +4,18 @@ require('dotenv').config({ path: '.env.local' });
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+console.log('🔍 Verifying environment variables...');
+console.log('URL:', supabaseUrl);
+console.log('Service Key (first 50 chars):', supabaseServiceKey?.substring(0, 50));
+
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ Missing Supabase environment variables');
+  console.error('❌ Missing environment variables!');
+  console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl);
+  console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? 'exists' : 'missing');
   process.exit(1);
 }
 
-console.log('🔑 Using Supabase URL:', supabaseUrl);
-console.log('🔑 Service Key length:', supabaseServiceKey?.length || 0);
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false
@@ -21,52 +24,69 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 
 async function createAdminUser() {
   try {
-    console.log('🔄 Creating admin user...');
-    
-    // Create auth user
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: 'denis.sernagiotto@outlook.it',
-      password: 'Admin2026!',
-      email_confirm: true,
+    console.log('🚀 Starting user creation...\n');
+
+    // Admin user details
+    const email = 'denis.sernagiotto@outlook.it';
+    const password = 'Admin123!@#';
+    const fullName = 'Denis Sernagiotto';
+
+    console.log('📧 Creating user:', email);
+
+    // Create user with Admin API
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: email,
+      password: password,
+      email_confirm: true, // Auto-confirm email
       user_metadata: {
-        full_name: 'Denis Sernagiotto'
+        full_name: fullName
       }
     });
 
     if (authError) {
-      console.error('❌ Auth error:', authError.message);
-      process.exit(1);
+      console.error('❌ Error creating auth user:', authError.message);
+      throw authError;
     }
 
-    console.log('✅ Auth user created:', authData.user.id);
+    if (!authData?.user) {
+      console.error('❌ No user data returned');
+      throw new Error('User creation failed - no data returned');
+    }
+
+    const userId = authData.user.id;
+    console.log('✅ Auth user created with ID:', userId);
 
     // Create profile
-    const { error: profileError } = await supabaseAdmin
+    console.log('📝 Creating profile...');
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: 'denis.sernagiotto@outlook.it',
-        full_name: 'Denis Sernagiotto',
-        role: 'admin'
-      });
+      .upsert({
+        id: userId,
+        email: email,
+        full_name: fullName,
+        role: 'admin',
+        is_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .select();
 
     if (profileError) {
-      console.error('❌ Profile error:', profileError.message);
-      process.exit(1);
+      console.error('❌ Error creating profile:', profileError.message);
+      throw profileError;
     }
 
-    console.log('✅ Profile created with admin role');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('👤 USER ID:', authData.user.id);
-    console.log('📧 EMAIL: denis.sernagiotto@outlook.it');
-    console.log('🔐 PASSWORD: Admin2026!');
-    console.log('👤 ROLE: admin');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🎉 Admin user created successfully!');
-    
-    process.exit(0);
+    console.log('✅ Profile created successfully!');
+    console.log('\n🎉 Admin user created successfully!\n');
+    console.log('📋 Login credentials:');
+    console.log('   Email:', email);
+    console.log('   Password:', password);
+    console.log('   Role: admin');
+    console.log('   User ID:', userId);
+    console.log('\n✅ You can now login at: http://localhost:3000/login\n');
+
   } catch (error) {
-    console.error('❌ Unexpected error:', error.message);
+    console.error('\n❌ Fatal error:', error.message);
+    console.error('Full error:', error);
     process.exit(1);
   }
 }
