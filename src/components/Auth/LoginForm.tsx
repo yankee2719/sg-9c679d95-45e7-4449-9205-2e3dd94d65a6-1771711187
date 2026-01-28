@@ -87,6 +87,15 @@ export function LoginForm() {
               />
             </div>
 
+            <div className="flex items-center justify-end">
+              <Link 
+                href="/forgot-password" 
+                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Password dimenticata?
+              </Link>
+            </div>
+
             <Button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700" disabled={loading}>
               {loading ? (
                 <>
