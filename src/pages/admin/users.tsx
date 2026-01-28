@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import { Users, Plus, Edit, Trash2, Search, AlertCircle, CheckCircle, Shield, UserCog, Wrench } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician";
@@ -29,6 +30,7 @@ interface UserProfile {
 
 export default function AdminUsersPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -90,28 +92,49 @@ export default function AdminUsersPage() {
   const loadUsers = async () => {
     try {
       setLoading(true);
+      console.log("=== Loading users ===");
+
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select(`
+          id,
+          email,
+          full_name,
+          role,
+          created_at,
+          two_factor_auth!left (
+            is_enabled
+          )
+        `)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      
-      // Map data to match UserProfile interface
-      const mappedUsers: UserProfile[] = (data || []).map((user: any) => ({
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-        created_at: user.created_at,
-        two_factor_enabled: user.two_factor_enabled || false
+      if (error) {
+        console.error("=== Error loading users ===", error);
+        throw error;
+      }
+
+      console.log("=== Users loaded ===", data?.length || 0, "users");
+      console.log("=== First user sample ===", data?.[0]);
+
+      // Transform data to match User interface
+      const transformedUsers: UserProfile[] = (data || []).map((profile) => ({
+        id: profile.id,
+        email: profile.email || "",
+        full_name: profile.full_name || "",
+        role: profile.role as "admin" | "supervisor" | "technician",
+        two_factor_enabled: profile.two_factor_auth?.[0]?.is_enabled || false,
+        created_at: profile.created_at || new Date().toISOString()
       }));
 
-      setUsers(mappedUsers);
-      console.log("=== Users loaded ===", mappedUsers.length, "users");
-    } catch (error) {
-      console.error("Error loading users:", error);
-      setError("Errore nel caricamento degli utenti");
+      console.log("=== Transformed users ===", transformedUsers.length);
+      setUsers(transformedUsers);
+    } catch (error: any) {
+      console.error("=== Failed to load users ===", error);
+      toast({
+        title: "Errore",
+        description: error.message || "Impossibile caricare gli utenti",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
