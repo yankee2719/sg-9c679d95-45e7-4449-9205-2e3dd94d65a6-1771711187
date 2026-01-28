@@ -145,35 +145,28 @@ export default function AdminUsersPage() {
         return;
       }
 
-      console.log("=== Creating user via Edge Function ===");
+      console.log("=== Creating user via Database Function ===");
       console.log("Request data:", {
         email: createForm.email,
         full_name: createForm.full_name,
         role: createForm.role
       });
 
-      // Call Edge Function to create user
-      const { data, error: functionError } = await supabase.functions.invoke("create-user", {
-        body: {
-          email: createForm.email,
-          password: createForm.password,
-          full_name: createForm.full_name,
-          role: createForm.role
-        }
+      // Call PostgreSQL function via RPC
+      const { data, error: rpcError } = await supabase.rpc("create_maintenance_user", {
+        user_email: createForm.email,
+        user_password: createForm.password,
+        user_full_name: createForm.full_name,
+        user_role: createForm.role
       });
 
-      console.log("=== Edge Function Response ===");
+      console.log("=== Database Function Response ===");
       console.log("Data:", data);
-      console.log("Error:", functionError);
+      console.log("Error:", rpcError);
 
-      if (functionError) {
-        console.error("=== Function Error ===", functionError);
-        throw functionError;
-      }
-
-      if (data?.error) {
-        console.error("=== Data Error ===", data.error);
-        throw new Error(data.error);
+      if (rpcError) {
+        console.error("=== RPC Error ===", rpcError);
+        throw rpcError;
       }
 
       console.log("=== User Created Successfully ===", data);
