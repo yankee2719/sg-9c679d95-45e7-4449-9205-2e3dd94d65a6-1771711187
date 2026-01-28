@@ -47,6 +47,7 @@ interface SelectedChecklist {
 export default function EditMaintenancePage() {
   const router = useRouter();
   const { id } = router.query;
+  const scheduleId = Array.isArray(id) ? id[0] : id; // Safe string id
   const { toast } = useToast();
 
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician" | null>(null);
@@ -70,10 +71,10 @@ export default function EditMaintenancePage() {
   const [selectedChecklists, setSelectedChecklists] = useState<SelectedChecklist[]>([]);
 
   useEffect(() => {
-    if (id) {
+    if (scheduleId) {
       checkAuthAndLoadData();
     }
-  }, [id]);
+  }, [scheduleId]);
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -120,6 +121,8 @@ export default function EditMaintenancePage() {
   };
 
   const loadMaintenanceData = async () => {
+    if (!scheduleId) return;
+    
     try {
       const { data, error } = await supabase
         .from("maintenance_schedules")
@@ -127,7 +130,7 @@ export default function EditMaintenancePage() {
           *,
           equipment (id, name, code)
         `)
-        .eq("id", id)
+        .eq("id", scheduleId)
         .single();
 
       if (error) throw error;
@@ -153,7 +156,7 @@ export default function EditMaintenancePage() {
       setAssignedTo(data.assigned_to || "");
 
       // Load associated checklists
-      const checklists = await maintenanceService.getScheduleChecklists(id as string);
+      const checklists = await maintenanceService.getScheduleChecklists(scheduleId);
       const selectedChecklistsData: SelectedChecklist[] = checklists.map((c) => ({
         templateId: c.template_id,
         templateName: c.template?.name || "Checklist",
@@ -279,7 +282,7 @@ export default function EditMaintenancePage() {
     setSaving(true);
     try {
       // Update maintenance schedule
-      await maintenanceService.updateSchedule(id as string, {
+      await maintenanceService.updateSchedule(scheduleId as string, {
         title,
         description: description || undefined,
         equipment_id: equipmentId,
@@ -292,17 +295,17 @@ export default function EditMaintenancePage() {
 
       // Update checklists: delete old, insert new
       // First, get current checklist links
-      const currentLinks = await maintenanceService.getScheduleChecklists(id as string);
+      const currentLinks = await maintenanceService.getScheduleChecklists(scheduleId as string);
       
       // Delete all current links
       for (const link of currentLinks) {
-        await maintenanceService.unlinkChecklistFromSchedule(id as string, link.template_id);
+        await maintenanceService.unlinkChecklistFromSchedule(scheduleId as string, link.template_id);
       }
 
       // Insert new links
       if (selectedChecklists.length > 0) {
         await maintenanceService.linkChecklistsToSchedule(
-          id as string,
+          scheduleId as string,
           selectedChecklists.map((c) => ({
             templateId: c.templateId,
             isRequired: c.isRequired,

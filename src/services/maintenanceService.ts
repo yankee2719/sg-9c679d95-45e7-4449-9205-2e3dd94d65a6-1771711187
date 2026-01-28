@@ -30,8 +30,8 @@ interface MaintenanceScheduleWithDetails {
 
 export const maintenanceService = {
   // Get all maintenance schedules
-  async getSchedules() {
-    const { data, error } = await supabase
+  async getSchedules(assignedToUserId?: string) {
+    let query = supabase
       .from("maintenance_schedules")
       .select(`
         *,
@@ -53,6 +53,12 @@ export const maintenanceService = {
         )
       `)
       .order("scheduled_date", { ascending: true });
+
+    if (assignedToUserId) {
+      query = query.eq("assigned_to", assignedToUserId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
     return data || [];
