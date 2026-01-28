@@ -83,15 +83,18 @@ export default function EquipmentListPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
-        <Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" />
-      </div>
+      <MainLayout userRole="admin">
+        <SEO title="Caricamento..." />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      </MainLayout>
     );
   }
 
   return (
-    <MainLayout userRole={userRole} userName={userName}>
-      <SEO title="Anagrafica Macchine - MaintPro" />
+    <MainLayout userRole="admin">
+      <SEO title="Equipment - Industrial Maintenance" />
       
       <div className="space-y-6">
         {/* Header */}

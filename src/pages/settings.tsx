@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function SettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [userRole, setUserRole] = useState<string>("");
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("admin");
   const [userName, setUserName] = useState<string>("");
   
   // Settings state
@@ -58,7 +58,7 @@ export default function SettingsPage() {
       const role = await userService.getUserRole(session.user.id);
       
       setUserName(profile?.full_name || session.user.email || "User");
-      setUserRole(role as string);
+      setUserRole((role as "admin" | "supervisor" | "technician") || "admin");
 
       // Only admin can access settings
       if (role !== "admin") {
@@ -88,7 +88,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <MainLayout userRole={userRole as any} userName={userName}>
+    <MainLayout userRole={userRole}>
       <div className="space-y-6">
         {/* Page Header */}
         <div>

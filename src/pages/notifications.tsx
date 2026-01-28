@@ -29,7 +29,7 @@ interface Notification {
 export default function NotificationsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [userRole, setUserRole] = useState<string>("");
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
   const [userName, setUserName] = useState<string>("");
   const [activeTab, setActiveTab] = useState("all");
   
@@ -93,7 +93,7 @@ export default function NotificationsPage() {
       const role = await userService.getUserRole(session.user.id);
       
       setUserName(profile?.full_name || session.user.email || "User");
-      setUserRole(role as string);
+      setUserRole((role as "admin" | "supervisor" | "technician") || "technician");
     } catch (error) {
       console.error("Error loading data:", error);
       router.push("/login");
@@ -167,7 +167,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <MainLayout userRole={userRole as any} userName={userName}>
+    <MainLayout userRole={userRole}>
       <div className="space-y-6">
         {/* Page Header */}
         <div>
