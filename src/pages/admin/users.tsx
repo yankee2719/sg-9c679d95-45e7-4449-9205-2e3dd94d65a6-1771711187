@@ -191,13 +191,20 @@ export default function AdminUsersPage() {
       console.log("Error:", functionError);
 
       if (functionError) {
-        console.error("=== Function Error ===", functionError);
-        throw functionError;
+        console.error("=== Function Error Details ===", functionError);
+        console.error("Error Message:", functionError.message);
+        console.error("Error Context:", functionError.context);
+        throw new Error(functionError.message || "Edge Function error");
       }
 
       if (data?.error) {
         console.error("=== Response Error ===", data.error);
         throw new Error(data.error);
+      }
+
+      if (!data?.success) {
+        console.error("=== Unexpected Response ===", data);
+        throw new Error(data?.message || "Failed to create user");
       }
 
       console.log("=== User Created Successfully ===", data);
@@ -208,7 +215,14 @@ export default function AdminUsersPage() {
       await loadUsers();
     } catch (error: any) {
       console.error("=== Final Error ===", error);
+      console.error("=== Error Stack ===", error.stack);
       setError(error.message || "Errore nella creazione dell'utente");
+      
+      toast({
+        title: "Errore creazione utente",
+        description: error.message || "Si è verificato un errore durante la creazione dell'utente",
+        variant: "destructive",
+      });
     }
   };
 

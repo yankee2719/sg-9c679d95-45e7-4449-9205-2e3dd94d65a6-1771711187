@@ -17,10 +17,16 @@ serve(async (req) => {
     // Get request body
     const { email, password, full_name, role } = await req.json();
 
+    console.log("=== Edge Function: Create User ===");
+    console.log("Email:", email);
+    console.log("Role:", role);
+
     // Validate input
     if (!email || !password || !full_name || !role) {
+      console.error("Missing required fields");
       return new Response(
         JSON.stringify({ 
+          success: false,
           error: "Missing required fields",
           received: { email: !!email, password: !!password, full_name: !!full_name, role: !!role }
         }),
@@ -33,8 +39,12 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Missing environment variables");
       return new Response(
-        JSON.stringify({ error: "Server configuration error - missing environment variables" }),
+        JSON.stringify({ 
+          success: false,
+          error: "Server configuration error - missing environment variables" 
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -46,6 +56,8 @@ serve(async (req) => {
         persistSession: false
       }
     });
+
+    console.log("Creating user in auth.users...");
 
     // Create user in Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -59,6 +71,7 @@ serve(async (req) => {
       console.error("Auth creation error:", authError);
       return new Response(
         JSON.stringify({ 
+          success: false,
           error: "Auth creation failed",
           details: authError.message 
         }),
@@ -66,7 +79,10 @@ serve(async (req) => {
       );
     }
 
-    // Create profile with correct fields
+    console.log("Auth user created:", authData.user.id);
+    console.log("Creating profile in profiles table...");
+
+    // Create profile with ONLY the fields that exist in the table
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -74,25 +90,28 @@ serve(async (req) => {
         email,
         full_name,
         role,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        is_active: true
       });
 
     if (profileError) {
       console.error("Profile creation error:", profileError);
       
       // Rollback auth user
+      console.log("Rolling back auth user...");
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       
       return new Response(
         JSON.stringify({ 
+          success: false,
           error: "Profile creation failed",
           details: profileError.message 
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("Profile created successfully!");
+    console.log("=== User Created Successfully ===");
 
     return new Response(
       JSON.stringify({ 
@@ -111,6 +130,7 @@ serve(async (req) => {
     console.error("Internal error:", error);
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error"
       }),
