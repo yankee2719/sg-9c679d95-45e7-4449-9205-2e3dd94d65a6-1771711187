@@ -249,51 +249,71 @@ export default function EquipmentDetailPage() {
       
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
+            <Button 
+              variant="ghost" 
+              onClick={() => router.back()} 
+              className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl"
+            >
+              <ArrowLeft className="h-5 w-5 mr-2" />
               Indietro
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">{equipment.name}</h1>
-              <p className="text-sm text-gray-500">Codice: {equipment.code}</p>
+              <h1 className="text-3xl font-bold text-white">{equipment.name}</h1>
+              <p className="text-sm text-slate-400 mt-1">Codice: {equipment.code}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {getStatusBadge(equipment.status)}
             {!editMode ? (
               <>
-                <Button variant="outline" onClick={() => setEditMode(true)}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setEditMode(true)}
+                  className="bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl"
+                >
                   <Edit className="h-4 w-4 mr-2" />
                   Modifica
                 </Button>
-                <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
+                >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Elimina
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={() => {
-                  setEditMode(false);
-                  setFormData({
-                    name: equipment.name || "",
-                    code: equipment.code || "",
-                    category_id: equipment.category_id || "", // Use category_id
-                    manufacturer: equipment.manufacturer || "",
-                    model: equipment.model || "",
-                    serial_number: equipment.serial_number || "",
-                    installation_date: equipment.installation_date || "",
-                    location: equipment.location || "",
-                    status: equipment.status || "active",
-                    notes: equipment.notes || ""
-                  });
-                }}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setEditMode(false);
+                    setFormData({
+                      name: equipment.name || "",
+                      code: equipment.code || "",
+                      category_id: equipment.category_id || "",
+                      manufacturer: equipment.manufacturer || "",
+                      model: equipment.model || "",
+                      serial_number: equipment.serial_number || "",
+                      installation_date: equipment.installation_date || "",
+                      location: equipment.location || "",
+                      status: equipment.status || "active",
+                      notes: equipment.notes || ""
+                    });
+                  }}
+                  className="bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 rounded-xl"
+                >
                   <X className="h-4 w-4 mr-2" />
                   Annulla
                 </Button>
-                <Button onClick={handleSave} disabled={saving}>
+                <Button 
+                  onClick={handleSave} 
+                  disabled={saving}
+                  className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl"
+                >
                   {saving ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -312,7 +332,7 @@ export default function EquipmentDetailPage() {
         </div>
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5 bg-slate-800/50 p-1 rounded-xl">
             <TabsTrigger value="details">
               <FileText className="h-4 w-4 mr-2" />
               Dettagli
@@ -337,9 +357,9 @@ export default function EquipmentDetailPage() {
 
           {/* Details Tab */}
           <TabsContent value="details" className="space-y-4">
-            <Card>
+            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
               <CardHeader>
-                <CardTitle>Informazioni Generali</CardTitle>
+                <CardTitle className="text-white">Informazioni Generali</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -515,9 +535,9 @@ export default function EquipmentDetailPage() {
 
           {/* QR Code Tab */}
           <TabsContent value="qr">
-            <Card>
+            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
               <CardHeader>
-                <CardTitle>Codice QR Macchina</CardTitle>
+                <CardTitle className="text-white">Codice QR Macchina</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center space-y-4">
                 <QRCodeGenerator 
@@ -537,10 +557,10 @@ export default function EquipmentDetailPage() {
 
           {/* Maintenance Tab */}
           <TabsContent value="maintenance" className="space-y-4">
-            <Card>
+            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Storico Manutenzioni</CardTitle>
+                  <CardTitle className="text-white">Storico Manutenzioni</CardTitle>
                   <Button onClick={() => router.push("/maintenance/new")}>
                     <Calendar className="h-4 w-4 mr-2" />
                     Nuova Manutenzione
@@ -582,9 +602,9 @@ export default function EquipmentDetailPage() {
 
           {/* Documents Tab */}
           <TabsContent value="documents">
-            <Card>
+            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Documentazione Tecnica</CardTitle>
+                <CardTitle className="text-white">Documentazione Tecnica</CardTitle>
                 <DocumentUpload 
                   equipmentId={equipment.id} 
                   onUploadComplete={() => loadData(equipment.id)} 
@@ -602,7 +622,7 @@ export default function EquipmentDetailPage() {
           {/* Stats Tab */}
           <TabsContent value="stats" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
+              <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-gray-500">
                     Manutenzioni Totali
@@ -613,7 +633,7 @@ export default function EquipmentDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-gray-500">
                     Completate
@@ -626,7 +646,7 @@ export default function EquipmentDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-gray-500">
                     Uptime Stimato
@@ -640,9 +660,9 @@ export default function EquipmentDetailPage() {
               </Card>
             </div>
 
-            <Card>
+            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
               <CardHeader>
-                <CardTitle>Analisi Manutenzioni per Tipo</CardTitle>
+                <CardTitle className="text-white">Analisi Manutenzioni per Tipo</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-center py-8 text-gray-500">

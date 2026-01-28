@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -348,280 +348,280 @@ export default function EditMaintenancePage() {
 
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.back()}
-              className="text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                <Wrench className="h-8 w-8 text-blue-400" />
-                Modifica Manutenzione
-              </h1>
-              <p className="text-slate-400 mt-1">Aggiorna i dettagli della manutenzione programmata</p>
-            </div>
-          </div>
+        <div className="mb-8">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Indietro
+          </Button>
+          <h1 className="text-2xl font-bold">Modifica Manutenzione</h1>
         </div>
 
-        <div className="space-y-6">
-          {/* Basic Info */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6 space-y-4">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                📋 Informazioni Base
-              </h2>
+        {/* Main Form */}
+        <Card className="max-w-4xl mx-auto">
+          <CardHeader>
+            <CardTitle>Informazioni Base</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-6 space-y-4">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    📋 Informazioni Base
+                  </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-slate-300">
-                    Titolo Manutenzione *
-                  </Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="es. Manutenzione Ordinaria Tornio"
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="equipment" className="text-slate-300">
-                    Macchina *
-                  </Label>
-                  <Select value={equipmentId} onValueChange={setEquipmentId}>
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona macchina" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      {equipments.map((equipment) => (
-                        <SelectItem key={equipment.id} value={equipment.id} className="text-white">
-                          {equipment.name} ({equipment.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description" className="text-slate-300">
-                  Descrizione
-                </Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrizione dettagliata dell'intervento..."
-                  rows={3}
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 resize-none focus:ring-2 focus:ring-blue-500/50"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Scheduling */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6 space-y-4">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-blue-400" />
-                Pianificazione
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="scheduledDate" className="text-slate-300">
-                    Data Programmata *
-                  </Label>
-                  <Input
-                    id="scheduledDate"
-                    type="date"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dueDate" className="text-slate-300">
-                    Data Scadenza
-                  </Label>
-                  <Input
-                    id="dueDate"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="assignedTo" className="text-slate-300">
-                    Assegnata a
-                  </Label>
-                  <Select value={assignedTo} onValueChange={setAssignedTo}>
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona tecnico" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      {technicians.map((tech) => (
-                        <SelectItem key={tech.id} value={tech.id} className="text-white">
-                          {tech.full_name || tech.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="priority" className="text-slate-300">
-                    Priorità
-                  </Label>
-                  <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="low" className="text-white">🟢 Bassa</SelectItem>
-                      <SelectItem value="medium" className="text-white">🟡 Media</SelectItem>
-                      <SelectItem value="high" className="text-white">🟠 Alta</SelectItem>
-                      <SelectItem value="critical" className="text-white">🔴 Critica</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="maintenanceType" className="text-slate-300">
-                    Tipo Manutenzione
-                  </Label>
-                  <Select value={maintenanceType} onValueChange={(value: any) => setMaintenanceType(value)}>
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="preventive" className="text-white">Preventiva</SelectItem>
-                      <SelectItem value="corrective" className="text-white">Correttiva</SelectItem>
-                      <SelectItem value="predictive" className="text-white">Predittiva</SelectItem>
-                      <SelectItem value="extraordinary" className="text-white">Straordinaria</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Checklists */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <CheckSquare className="h-5 w-5 text-blue-400" />
-                  Checklist Associate ({selectedChecklists.length})
-                </h2>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-300">Aggiungi Checklist</Label>
-                <Select onValueChange={handleAddChecklist}>
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue placeholder="Seleziona una checklist da aggiungere" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    {availableChecklists.map((checklist) => (
-                      <SelectItem key={checklist.id} value={checklist.id} className="text-white">
-                        {checklist.name} ({checklist.checklist_tasks.length} task)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedChecklists.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">
-                  <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Nessuna checklist associata</p>
-                  <p className="text-sm">Aggiungi almeno una checklist per questa manutenzione</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {selectedChecklists.map((checklist, index) => (
-                    <div
-                      key={checklist.templateId}
-                      className="flex items-center justify-between p-4 bg-slate-700/50 rounded-xl border border-slate-600"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white">{checklist.templateName}</p>
-                          <p className="text-sm text-slate-400">
-                            {checklist.isRequired ? "🔴 Richiesta" : "⚪ Opzionale"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleToggleRequired(checklist.templateId)}
-                          className="text-slate-400 hover:text-white hover:bg-slate-600"
-                        >
-                          {checklist.isRequired ? "Rendi Opzionale" : "Rendi Richiesta"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemoveChecklist(checklist.templateId)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="title" className="text-slate-300">
+                        Titolo Manutenzione *
+                      </Label>
+                      <Input
+                        id="title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="es. Manutenzione Ordinaria Tornio"
+                        className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/50"
+                      />
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={saving}
-              className="border-slate-600 text-slate-300 hover:bg-slate-800"
-            >
-              Annulla
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-8"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Salvataggio...
-                </>
-              ) : (
-                <>
-                  <Save className="h-5 w-5 mr-2" />
-                  Salva Modifiche
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="equipment" className="text-slate-300">
+                        Macchina *
+                      </Label>
+                      <Select value={equipmentId} onValueChange={setEquipmentId}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue placeholder="Seleziona macchina" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          {equipments.map((equipment) => (
+                            <SelectItem key={equipment.id} value={equipment.id} className="text-white">
+                              {equipment.name} ({equipment.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description" className="text-slate-300">
+                      Descrizione
+                    </Label>
+                    <Textarea
+                      id="description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Descrizione dettagliata dell'intervento..."
+                      rows={3}
+                      className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 resize-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Scheduling */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-6 space-y-4">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-blue-400" />
+                    Pianificazione
+                  </h2>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduledDate" className="text-slate-300">
+                        Data Programmata *
+                      </Label>
+                      <Input
+                        id="scheduledDate"
+                        type="date"
+                        value={scheduledDate}
+                        onChange={(e) => setScheduledDate(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="dueDate" className="text-slate-300">
+                        Data Scadenza
+                      </Label>
+                      <Input
+                        id="dueDate"
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="bg-slate-700 border-slate-600 text-white focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="assignedTo" className="text-slate-300">
+                        Assegnata a
+                      </Label>
+                      <Select value={assignedTo} onValueChange={setAssignedTo}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue placeholder="Seleziona tecnico" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          {technicians.map((tech) => (
+                            <SelectItem key={tech.id} value={tech.id} className="text-white">
+                              {tech.full_name || tech.email}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="priority" className="text-slate-300">
+                        Priorità
+                      </Label>
+                      <Select value={priority} onValueChange={(value: any) => setPriority(value)}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectItem value="low" className="text-white">🟢 Bassa</SelectItem>
+                          <SelectItem value="medium" className="text-white">🟡 Media</SelectItem>
+                          <SelectItem value="high" className="text-white">🟠 Alta</SelectItem>
+                          <SelectItem value="critical" className="text-white">🔴 Critica</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="maintenanceType" className="text-slate-300">
+                        Tipo Manutenzione
+                      </Label>
+                      <Select value={maintenanceType} onValueChange={(value: any) => setMaintenanceType(value)}>
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectItem value="preventive" className="text-white">Preventiva</SelectItem>
+                          <SelectItem value="corrective" className="text-white">Correttiva</SelectItem>
+                          <SelectItem value="predictive" className="text-white">Predittiva</SelectItem>
+                          <SelectItem value="extraordinary" className="text-white">Straordinaria</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Checklists */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <CheckSquare className="h-5 w-5 text-blue-400" />
+                      Checklist Associate ({selectedChecklists.length})
+                    </h2>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">Aggiungi Checklist</Label>
+                    <Select onValueChange={handleAddChecklist}>
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                        <SelectValue placeholder="Seleziona una checklist da aggiungere" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        {availableChecklists.map((checklist) => (
+                          <SelectItem key={checklist.id} value={checklist.id} className="text-white">
+                            {checklist.name} ({checklist.checklist_tasks.length} task)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {selectedChecklists.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>Nessuna checklist associata</p>
+                      <p className="text-sm">Aggiungi almeno una checklist per questa manutenzione</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedChecklists.map((checklist, index) => (
+                        <div
+                          key={checklist.templateId}
+                          className="flex items-center justify-between p-4 bg-slate-700/50 rounded-xl border border-slate-600"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-white">{checklist.templateName}</p>
+                              <p className="text-sm text-slate-400">
+                                {checklist.isRequired ? "🔴 Richiesta" : "⚪ Opzionale"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleToggleRequired(checklist.templateId)}
+                              className="text-slate-400 hover:text-white hover:bg-slate-600"
+                            >
+                              {checklist.isRequired ? "Rendi Opzionale" : "Rendi Richiesta"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRemoveChecklist(checklist.templateId)}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={saving}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                >
+                  Annulla
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-8"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Salvataggio...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-5 w-5 mr-2" />
+                      Salva Modifiche
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   );

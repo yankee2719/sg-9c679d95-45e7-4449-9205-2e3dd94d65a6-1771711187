@@ -119,8 +119,13 @@ export default function NewEquipmentPage() {
       <SEO title="Nuova Macchina - Industrial Maintenance" />
       
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.back()}>
+        {/* Header */}
+        <div className="mb-8">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mb-4 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Indietro
           </Button>
@@ -135,7 +140,7 @@ export default function NewEquipmentPage() {
           </Alert>
         )}
 
-        <Card>
+        <Card className="rounded-2xl bg-slate-800/50">
           <CardHeader>
             <CardTitle>Dati Generali</CardTitle>
           </CardHeader>
@@ -275,7 +280,7 @@ export default function NewEquipmentPage() {
               <div className="flex justify-end pt-4">
                 <Button 
                   type="submit" 
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600"
+                  className="bg-gradient-to-r from-orange-600 to-red-600"
                   disabled={loading}
                 >
                   {loading ? (

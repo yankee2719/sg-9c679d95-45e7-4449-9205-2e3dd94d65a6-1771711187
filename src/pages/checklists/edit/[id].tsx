@@ -305,58 +305,22 @@ export default function EditChecklistPage() {
 
       <div className="space-y-6 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={() => router.push("/checklists")}
-              className="text-slate-400 hover:text-white"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Torna
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">✏️ Modifica Template Checklist</h1>
-              <p className="text-slate-400">Aggiorna il template e i suoi task</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => router.push("/checklists")}
-              disabled={saving}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
-            >
-              Annulla
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl px-6"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Salvataggio...
-                </>
-              ) : (
-                <>
-                  <Save className="h-5 w-5 mr-2" />
-                  Salva Modifiche
-                </>
-              )}
-            </Button>
-          </div>
+        <div className="mb-8">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Indietro
+          </Button>
+          <h1 className="text-2xl font-bold">Modifica Template Checklist</h1>
         </div>
 
-        {/* Template Info */}
-        <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+        {/* Template Info Card */}
+        <Card className="max-w-4xl mx-auto mb-6">
           <CardHeader>
-            <CardTitle className="text-white text-xl">📋 Informazioni Template</CardTitle>
-            <CardDescription className="text-slate-400">
-              Modifica i dettagli del template checklist
-            </CardDescription>
+            <CardTitle>Informazioni Template</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Name & Category Row */}
@@ -608,7 +572,7 @@ export default function EditChecklistPage() {
                 onClick={handleSave}
                 disabled={saving}
                 size="lg"
-                className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl px-8"
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl px-8"
               >
                 {saving ? (
                   <>

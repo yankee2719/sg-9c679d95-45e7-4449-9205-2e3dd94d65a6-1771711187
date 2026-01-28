@@ -171,9 +171,9 @@ export default function MaintenanceDetail() {
           <Button
             variant="ghost"
             onClick={() => router.push("/maintenance")}
-            className="gap-2"
+            className="gap-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
             Torna alle Manutenzioni
           </Button>
 
@@ -189,9 +189,9 @@ export default function MaintenanceDetail() {
         </div>
 
         {/* Info Card */}
-        <Card className="mb-8">
+        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50 mb-8">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-white">
               <Wrench className="h-5 w-5" />
               Informazioni Manutenzione
             </CardTitle>
@@ -265,9 +265,9 @@ export default function MaintenanceDetail() {
         </Card>
 
         {/* Progress Card */}
-        <Card className="mb-8">
+        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50 mb-8">
           <CardHeader>
-            <CardTitle>Progresso Checklist</CardTitle>
+            <CardTitle className="text-white">Progresso Checklist</CardTitle>
             <CardDescription>
               {checklistStats.completed} di {checklistStats.total} checklist completate
             </CardDescription>
@@ -300,9 +300,9 @@ export default function MaintenanceDetail() {
 
         {/* Pending Checklists */}
         {pendingChecklists.length > 0 && (
-          <Card className="mb-8">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50 mb-8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-white">
                 <Circle className="h-5 w-5 text-blue-500" />
                 Checklist da Eseguire ({pendingChecklists.length})
               </CardTitle>
@@ -340,7 +340,7 @@ export default function MaintenanceDetail() {
                             checklist.template?.name
                           )}
                           disabled={startingChecklist === checklist.template_id}
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl"
                         >
                           {startingChecklist === checklist.template_id ? (
                             <>
@@ -391,9 +391,9 @@ export default function MaintenanceDetail() {
 
         {/* Completed Checklists */}
         {completedChecklists.length > 0 && (
-          <Card>
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-white">
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
                 Checklist Completate ({completedChecklists.length})
               </CardTitle>
@@ -454,7 +454,7 @@ export default function MaintenanceDetail() {
 
         {/* Empty State */}
         {checklists.length === 0 && (
-          <Card>
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardContent className="py-12 text-center">
               <Circle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-semibold mb-2">Nessuna Checklist Associata</h3>

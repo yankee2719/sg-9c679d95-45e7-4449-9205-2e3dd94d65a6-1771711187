@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Users, Plus, Edit, Trash2, Search, AlertCircle, CheckCircle } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Search, AlertCircle, CheckCircle, Shield, UserCog, Wrench } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician";
 
@@ -277,93 +277,67 @@ export default function AdminUsersPage() {
       />
 
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Users className="h-8 w-8" />
-              Gestione Utenti
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Crea, modifica ed elimina gli utenti del sistema
-            </p>
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">User Management</h1>
+              <p className="text-slate-400">
+                {users.length} users • {users.filter(u => u.role === "admin").length} admins • 
+                {users.filter(u => u.role === "supervisor").length} supervisors • 
+                {users.filter(u => u.role === "technician").length} technicians
+              </p>
+            </div>
+            <Button onClick={() => setCreateModalOpen(true)} className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl">
+              <Plus className="h-5 w-5 mr-2" />
+              Add User
+            </Button>
           </div>
+        </div>
 
-          <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg">
-                <Plus className="h-4 w-4 mr-2" />
-                Nuovo Utente
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Crea Nuovo Utente</DialogTitle>
-                <DialogDescription>
-                  Inserisci i dati del nuovo utente
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="create-email">Email *</Label>
-                  <Input
-                    id="create-email"
-                    type="email"
-                    value={createForm.email}
-                    onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                    placeholder="utente@esempio.com"
-                  />
+        {/* Role Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-red-400" />
                 </div>
-
                 <div>
-                  <Label htmlFor="create-password">Password *</Label>
-                  <Input
-                    id="create-password"
-                    type="password"
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                    placeholder="Minimo 8 caratteri"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="create-name">Nome Completo</Label>
-                  <Input
-                    id="create-name"
-                    value={createForm.full_name}
-                    onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
-                    placeholder="Mario Rossi"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="create-role">Ruolo *</Label>
-                  <Select
-                    value={createForm.role}
-                    onValueChange={(value: UserRole) => setCreateForm({ ...createForm, role: value })}
-                  >
-                    <SelectTrigger id="create-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Amministratore</SelectItem>
-                      <SelectItem value="supervisor">Supervisore</SelectItem>
-                      <SelectItem value="technician">Tecnico</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <h3 className="text-3xl font-bold text-white">{users.filter(u => u.role === "admin").length}</h3>
+                  <p className="text-sm text-slate-400">Administrators</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
-                  Annulla
-                </Button>
-                <Button onClick={handleCreateUser}>
-                  Crea Utente
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                  <UserCog className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-3xl font-bold text-white">{users.filter(u => u.role === "supervisor").length}</h3>
+                  <p className="text-sm text-slate-400">Supervisors</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
+                  <Wrench className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-3xl font-bold text-white">{users.filter(u => u.role === "technician").length}</h3>
+                  <p className="text-sm text-slate-400">Technicians</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {error && (

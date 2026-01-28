@@ -33,6 +33,8 @@ import {
   RefreshCw,
   Download,
   FileText,
+  ClipboardCheck,
+  CheckCircle,
 } from "lucide-react";
 import { analyticsService } from "@/services/analyticsService";
 import { exportAnalyticsToCSV, exportAnalyticsToPDF } from "@/utils/exportUtils";
@@ -64,7 +66,18 @@ export default function ChecklistExecutionsAnalytics() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [period, setPeriod] = useState<number>(30);
+  const [timeRange, setTimeRange] = useState("month");
+
+  // Helper to convert timeRange to days
+  const getPeriodDays = (range: string) => {
+    switch (range) {
+      case "week": return 7;
+      case "month": return 30;
+      case "quarter": return 90;
+      case "year": return 365;
+      default: return 30;
+    }
+  };
 
   // Stats data
   const [stats, setStats] = useState<ChecklistExecutionStats | null>(null);
@@ -85,10 +98,12 @@ export default function ChecklistExecutionsAnalytics() {
     }
 
     loadAnalytics();
-  }, [userRole, period]);
+  }, [userRole, timeRange]);
 
   const loadAnalytics = async () => {
     setLoading(true);
+    const period = getPeriodDays(timeRange);
+    
     try {
       const [
         statsData,
@@ -137,9 +152,9 @@ export default function ChecklistExecutionsAnalytics() {
 
     try {
       const periodLabel =
-        period === 7 ? "Ultimi 7 giorni" :
-        period === 30 ? "Ultimi 30 giorni" :
-        period === 90 ? "Ultimi 90 giorni" :
+        timeRange === "week" ? "Ultimi 7 giorni" :
+        timeRange === "month" ? "Ultimi 30 giorni" :
+        timeRange === "quarter" ? "Ultimi 90 giorni" :
         "Ultimo anno";
 
       exportAnalyticsToCSV({
@@ -176,9 +191,9 @@ export default function ChecklistExecutionsAnalytics() {
 
     try {
       const periodLabel =
-        period === 7 ? "Ultimi 7 giorni" :
-        period === 30 ? "Ultimi 30 giorni" :
-        period === 90 ? "Ultimi 90 giorni" :
+        timeRange === "week" ? "Ultimi 7 giorni" :
+        timeRange === "month" ? "Ultimi 30 giorni" :
+        timeRange === "quarter" ? "Ultimi 90 giorni" :
         "Ultimo anno";
 
       exportAnalyticsToPDF({
@@ -223,114 +238,109 @@ export default function ChecklistExecutionsAnalytics() {
     <MainLayout userRole={userRole as any}>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Analytics Esecuzioni Checklist</h1>
-            <p className="text-muted-foreground mt-1">
-              Monitoraggio e analisi delle performance delle checklist
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Select value={period.toString()} onValueChange={(v) => setPeriod(parseInt(v))}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Ultimi 7 giorni</SelectItem>
-                <SelectItem value="30">Ultimi 30 giorni</SelectItem>
-                <SelectItem value="90">Ultimi 90 giorni</SelectItem>
-                <SelectItem value="365">Ultimo anno</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              variant="outline"
-              size="icon"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            </Button>
-            <Button
-              onClick={handleExportCSV}
-              variant="outline"
-              className="gap-2"
-            >
-              <Download className="h-4 w-4" />
-              CSV
-            </Button>
-            <Button
-              onClick={handleExportPDF}
-              variant="outline"
-              className="gap-2"
-            >
-              <FileText className="h-4 w-4" />
-              PDF
-            </Button>
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">Reports & Analytics</h1>
+              <p className="text-slate-400">Performance metrics and maintenance insights</p>
+            </div>
+            <div className="flex gap-3">
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger className="w-[180px] bg-slate-800/50 border-slate-700 text-white rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl">
+                <Download className="h-5 w-5 mr-2" />
+                Export
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Totale Esecuzioni</CardTitle>
-              <Activity className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalExecutions || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Ultimi {period} giorni
-              </p>
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
+                <ClipboardCheck className="w-6 h-6 text-blue-400" />
+              </div>
+              <h3 className="text-3xl font-bold text-white mb-1">{stats.totalExecutions}</h3>
+              <p className="text-sm text-slate-400 font-medium">Total Executions</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completate</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.completedExecutions || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.completionRate.toFixed(1)}% tasso completamento
-              </p>
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
+                <CheckCircle className="w-6 h-6 text-green-400" />
+              </div>
+              <h3 className="text-3xl font-bold text-white mb-1">{stats.completedExecutions}</h3>
+              <p className="text-sm text-slate-400 font-medium">Completed</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Corso</CardTitle>
-              <Clock className="h-4 w-4 text-amber-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.inProgressExecutions || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.totalExecutions ? ((stats.inProgressExecutions / stats.totalExecutions) * 100).toFixed(1) : 0}% del totale
-              </p>
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center mb-4">
+                <Clock className="w-6 h-6 text-amber-400" />
+              </div>
+              <h3 className="text-3xl font-bold text-white mb-1">{stats.avgDuration}</h3>
+              <p className="text-sm text-slate-400 font-medium">Avg Duration (min)</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Con Problemi</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalIssues || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats?.totalExecutions ? ((stats.totalIssues / stats.totalExecutions) * 100).toFixed(1) : 0}% con segnalazioni
-              </p>
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mb-4">
+                <TrendingUp className="w-6 h-6 text-purple-400" />
+              </div>
+              <h3 className="text-3xl font-bold text-white mb-1">{stats.completionRate}%</h3>
+              <p className="text-sm text-slate-400 font-medium">Completion Rate</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts Row 1 */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Daily Trend */}
-          <Card>
+        {/* Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
             <CardHeader>
-              <CardTitle>Trend Esecuzioni Giornaliere</CardTitle>
-              <CardDescription>Andamento completamenti negli ultimi {period} giorni</CardDescription>
+              <CardTitle className="text-white">Executions by Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={statusDistribution}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(props: any) => `${props.status}: ${props.percentage.toFixed(1)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {statusDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <CardHeader>
+              <CardTitle className="text-white">Daily Execution Trend</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -364,37 +374,6 @@ export default function ChecklistExecutionsAnalytics() {
                     dot={{ fill: COLORS.inProgress }}
                   />
                 </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Status Distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Distribuzione Stati</CardTitle>
-              <CardDescription>Percentuale esecuzioni per stato</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={statusDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(props: any) => `${props.status}: ${props.percentage.toFixed(1)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="count"
-                  >
-                    {statusDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
-                  />
-                </PieChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
