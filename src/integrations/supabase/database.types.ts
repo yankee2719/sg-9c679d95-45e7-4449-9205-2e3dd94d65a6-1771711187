@@ -82,6 +82,7 @@ export type Database = {
           notes: string | null
           review_notes: string | null
           reviewed_by: string | null
+          schedule_id: string | null
           signature_name: string | null
           started_at: string | null
           status: string | null
@@ -102,6 +103,7 @@ export type Database = {
           notes?: string | null
           review_notes?: string | null
           reviewed_by?: string | null
+          schedule_id?: string | null
           signature_name?: string | null
           started_at?: string | null
           status?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           notes?: string | null
           review_notes?: string | null
           reviewed_by?: string | null
+          schedule_id?: string | null
           signature_name?: string | null
           started_at?: string | null
           status?: string | null
@@ -150,6 +153,13 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_executions_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_schedules"
             referencedColumns: ["id"]
           },
           {
@@ -598,6 +608,48 @@ export type Database = {
             columns: ["technician_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_schedule_checklists: {
+        Row: {
+          created_at: string | null
+          execution_order: number | null
+          id: string
+          is_required: boolean | null
+          schedule_id: string
+          template_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          execution_order?: number | null
+          id?: string
+          is_required?: boolean | null
+          schedule_id: string
+          template_id: string
+        }
+        Update: {
+          created_at?: string | null
+          execution_order?: number | null
+          id?: string
+          is_required?: boolean | null
+          schedule_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_schedule_checklists_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_schedule_checklists_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
             referencedColumns: ["id"]
           },
         ]

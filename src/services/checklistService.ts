@@ -262,5 +262,134 @@ export const checklistService = {
       console.error("Error getTemplateStats:", error);
       return { tasksCount: 0, executionsCount: 0 };
     }
+  },
+
+  // Create checklist execution linked to maintenance schedule
+  async createExecutionForSchedule(templateId: string, scheduleId: string, technicianId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_executions")
+        .insert({
+          template_id: templateId,
+          schedule_id: scheduleId,
+          technician_id: technicianId,
+          status: "in_progress",
+          started_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return data;
+    } catch (error) {
+      console.error("Error creating execution for schedule:", error);
+      throw error;
+    }
+  },
+
+  // Get execution by ID with full details
+  async getExecutionById(executionId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_executions")
+        .select(`
+          *,
+          template:checklist_templates (
+            id,
+            name,
+            description,
+            category,
+            estimated_time
+          ),
+          technician:profiles!checklist_executions_technician_id_fkey (
+            id,
+            full_name,
+            email
+          ),
+          schedule:maintenance_schedules (
+            id,
+            title,
+            equipment_id,
+            equipment (
+              id,
+              name,
+              code
+            )
+          )
+        `)
+        .eq("id", executionId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("Error getting execution by ID:", error);
+      return null;
+    }
+  },
+
+  // Complete execution and update maintenance schedule status
+  async completeExecutionForSchedule(executionId: string) {
+    try {
+      // Get execution details
+      const execution = await this.getExecutionById(executionId);
+      
+      if (!execution) {
+        throw new Error("Execution not found");
+      }
+
+      // Update execution status
+      const { error: updateError } = await supabase
+        .from("checklist_executions")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString()
+        })
+        .eq("id", executionId);
+
+      if (updateError) throw updateError;
+
+      // If linked to schedule, update maintenance status
+      if (execution.schedule_id) {
+        const { maintenanceService } = await import("./maintenanceService");
+        await maintenanceService.updateScheduleStatusAuto(execution.schedule_id);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error completing execution:", error);
+      throw error;
+    }
+  },
+
+  // Get all executions for a specific schedule
+  async getExecutionsBySchedule(scheduleId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_executions")
+        .select(`
+          *,
+          template:checklist_templates (
+            id,
+            name,
+            description,
+            estimated_time
+          ),
+          technician:profiles!checklist_executions_technician_id_fkey (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq("schedule_id", scheduleId)
+        .order("started_at", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error getting executions by schedule:", error);
+      return [];
+    }
   }
 };
