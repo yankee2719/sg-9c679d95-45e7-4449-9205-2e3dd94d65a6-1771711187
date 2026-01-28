@@ -151,13 +151,13 @@ export default function EditMaintenancePage() {
       setEquipmentId(data.equipment_id);
       setScheduledDate(data.scheduled_date?.split("T")[0] || "");
       setDueDate(data.due_date?.split("T")[0] || "");
-      setPriority(data.priority || "medium");
+      setPriority((data.priority as "low" | "medium" | "high" | "critical") || "medium");
       setMaintenanceType((data.maintenance_type as any) || "preventive");
       setAssignedTo(data.assigned_to || "");
 
       // Load associated checklists
       const checklists = await maintenanceService.getScheduleChecklists(scheduleId);
-      const selectedChecklistsData: SelectedChecklist[] = checklists.map((c) => ({
+      const selectedChecklistsData: SelectedChecklist[] = checklists.map((c: any) => ({
         templateId: c.template_id,
         templateName: c.template?.name || "Checklist",
         isRequired: c.is_required,

@@ -122,22 +122,25 @@ export const analyticsService = {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
+      // Simplified query with explicit casting to avoid deep type instantiation error
       const { data, error } = await supabase
         .from("checklist_executions")
         .select(`
           template_id,
           total_duration,
           status,
-          checklist_templates!checklist_executions_template_id_fkey (
+          checklist_templates (
             id,
             name,
             estimated_time
           )
         `)
-        .gte("created_at", since.toISOString())
-        .not("checklist_templates", "is", null);
-
+        .gte("created_at", since.toISOString()) as any;
+      
       if (error) throw error;
+      
+      // Filter out items where checklist_templates is null
+      const validData = data?.filter((item: any) => item.checklist_templates) || [];
 
       // Group by template
       const templateMap = new Map<string, {
@@ -147,7 +150,7 @@ export const analyticsService = {
         estimatedTime: number;
       }>();
 
-      data?.forEach((exec: any) => {
+      validData.forEach((exec: any) => {
         const template = exec.checklist_templates;
         if (!template) return;
 
@@ -336,7 +339,7 @@ export const analyticsService = {
           )
         `)
         .gte("checklist_executions.created_at", since.toISOString())
-        .not("checklist_tasks", "is", null);
+        .not("checklist_tasks", "is", null) as any;
 
       if (error) throw error;
 

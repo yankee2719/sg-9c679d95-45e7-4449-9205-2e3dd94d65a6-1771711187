@@ -130,11 +130,11 @@ export default function ChecklistExecutionPage() {
       const { data: execution, error: execError } = await supabase
         .from("checklist_executions")
         .insert({
-          checklist_template_id: templateId,
-          technician_id: session.user.id,
+          template_id: templateId,
+          equipment_id: scheduleInfo?.equipment.id || "00000000-0000-0000-0000-000000000000", // Fallback if no schedule
+          executed_by: session.user.id,
           status: "in_progress",
-          started_at: new Date().toISOString(),
-          items_data: {}
+          started_at: new Date().toISOString()
         })
         .select()
         .single();

@@ -267,16 +267,25 @@ export const checklistService = {
   // Create checklist execution linked to maintenance schedule
   async createExecutionForSchedule(templateId: string, scheduleId: string, technicianId: string) {
     try {
+      // Get equipment ID from schedule first to ensure referential integrity
+      const { data: schedule } = await supabase
+        .from("maintenance_schedules")
+        .select("equipment_id")
+        .eq("id", scheduleId)
+        .single();
+
+      if (!schedule) throw new Error("Schedule not found");
+
       const { data, error } = await supabase
         .from("checklist_executions")
         .insert({
           template_id: templateId,
-          checklist_template_id: templateId, // Required for legacy compatibility
+          // checklist_template_id: templateId, // REMOVED: Legacy field not in new schema
           schedule_id: scheduleId,
-          technician_id: technicianId,
+          equipment_id: schedule.equipment_id, // REQUIRED: Added equipment_id
+          executed_by: technicianId, // Renamed from technician_id
           status: "in_progress",
-          started_at: new Date().toISOString(),
-          items_data: {} // Required field
+          started_at: new Date().toISOString()
         })
         .select()
         .single();

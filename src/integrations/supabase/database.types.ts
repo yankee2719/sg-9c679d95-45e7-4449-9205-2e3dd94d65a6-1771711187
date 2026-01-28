@@ -90,13 +90,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "checklist_execution_items_execution_id_fkey"
-            columns: ["execution_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_executions"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "checklist_execution_items_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
@@ -105,83 +98,125 @@ export type Database = {
           },
         ]
       }
-      checklist_executions: {
+      checklist_execution_steps: {
         Row: {
-          approved: boolean | null
-          checklist_template_id: string
+          actual_value: string | null
           completed_at: string | null
-          created_at: string | null
-          digital_signature: string | null
+          created_at: string
+          execution_id: string
           id: string
-          items_data: Json
-          maintenance_log_id: string | null
+          is_completed: boolean
           notes: string | null
-          review_notes: string | null
-          reviewed_by: string | null
-          schedule_id: string | null
-          signature_name: string | null
-          started_at: string | null
-          status: string | null
-          technician_id: string
-          template_id: string | null
-          total_duration: number | null
-          updated_at: string | null
+          photos: Json | null
+          step_order: number
+          template_step_id: string
+          title: string
+          updated_at: string
         }
         Insert: {
-          approved?: boolean | null
-          checklist_template_id: string
+          actual_value?: string | null
           completed_at?: string | null
-          created_at?: string | null
-          digital_signature?: string | null
+          created_at?: string
+          execution_id: string
           id?: string
-          items_data: Json
-          maintenance_log_id?: string | null
+          is_completed?: boolean
           notes?: string | null
-          review_notes?: string | null
-          reviewed_by?: string | null
-          schedule_id?: string | null
-          signature_name?: string | null
-          started_at?: string | null
-          status?: string | null
-          technician_id: string
-          template_id?: string | null
-          total_duration?: number | null
-          updated_at?: string | null
+          photos?: Json | null
+          step_order: number
+          template_step_id: string
+          title: string
+          updated_at?: string
         }
         Update: {
-          approved?: boolean | null
-          checklist_template_id?: string
+          actual_value?: string | null
           completed_at?: string | null
-          created_at?: string | null
-          digital_signature?: string | null
+          created_at?: string
+          execution_id?: string
           id?: string
-          items_data?: Json
-          maintenance_log_id?: string | null
+          is_completed?: boolean
           notes?: string | null
-          review_notes?: string | null
-          reviewed_by?: string | null
-          schedule_id?: string | null
-          signature_name?: string | null
-          started_at?: string | null
-          status?: string | null
-          technician_id?: string
-          template_id?: string | null
-          total_duration?: number | null
-          updated_at?: string | null
+          photos?: Json | null
+          step_order?: number
+          template_step_id?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "checklist_executions_checklist_template_id_fkey"
-            columns: ["checklist_template_id"]
+            foreignKeyName: "checklist_execution_steps_execution_id_fkey"
+            columns: ["execution_id"]
             isOneToOne: false
-            referencedRelation: "checklist_templates"
+            referencedRelation: "checklist_executions"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "checklist_executions_maintenance_log_id_fkey"
-            columns: ["maintenance_log_id"]
+            foreignKeyName: "checklist_execution_steps_template_step_id_fkey"
+            columns: ["template_step_id"]
             isOneToOne: false
-            referencedRelation: "maintenance_logs"
+            referencedRelation: "checklist_template_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_executions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          equipment_id: string
+          executed_by: string
+          id: string
+          notes: string | null
+          schedule_id: string | null
+          signature: string | null
+          started_at: string
+          status: string
+          template_id: string
+          total_duration: number | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          equipment_id: string
+          executed_by: string
+          id?: string
+          notes?: string | null
+          schedule_id?: string | null
+          signature?: string | null
+          started_at?: string
+          status?: string
+          template_id: string
+          total_duration?: number | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          equipment_id?: string
+          executed_by?: string
+          id?: string
+          notes?: string | null
+          schedule_id?: string | null
+          signature?: string | null
+          started_at?: string
+          status?: string
+          template_id?: string
+          total_duration?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_executions_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_executions_executed_by_fkey"
+            columns: ["executed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -225,15 +260,7 @@ export type Database = {
           order_index?: number
           template_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "checklist_items_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       checklist_tasks: {
         Row: {
@@ -263,9 +290,48 @@ export type Database = {
           template_id?: string
           title?: string
         }
+        Relationships: []
+      }
+      checklist_template_steps: {
+        Row: {
+          created_at: string
+          description: string | null
+          expected_value: string | null
+          id: string
+          input_type: string
+          is_required: boolean
+          step_order: number
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          expected_value?: string | null
+          id?: string
+          input_type?: string
+          is_required?: boolean
+          step_order: number
+          template_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          expected_value?: string | null
+          id?: string
+          input_type?: string
+          is_required?: boolean
+          step_order?: number
+          template_id?: string
+          title?: string
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "checklist_tasks_template_id_fkey"
+            foreignKeyName: "checklist_template_steps_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "checklist_templates"
@@ -276,52 +342,59 @@ export type Database = {
       checklist_templates: {
         Row: {
           category: string | null
-          created_at: string | null
+          category_id: string | null
+          created_at: string
           created_by: string | null
           description: string | null
           equipment: string | null
-          equipment_category_id: string | null
           estimated_time: number | null
           id: string
-          is_active: boolean | null
+          is_active: boolean
           name: string
           status: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
           category?: string | null
-          created_at?: string | null
+          category_id?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           equipment?: string | null
-          equipment_category_id?: string | null
           estimated_time?: number | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           name: string
           status?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
           category?: string | null
-          created_at?: string | null
+          category_id?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           equipment?: string | null
-          equipment_category_id?: string | null
           estimated_time?: number | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           name?: string
           status?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "checklist_templates_equipment_category_id_fkey"
-            columns: ["equipment_category_id"]
+            foreignKeyName: "checklist_templates_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "equipment_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -363,22 +436,14 @@ export type Database = {
           uploaded_by?: string | null
           version?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "documents_equipment_id_fkey"
-            columns: ["equipment_id"]
-            isOneToOne: false
-            referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       equipment: {
         Row: {
           category_id: string | null
           code: string
-          created_at: string | null
-          created_by: string | null
+          created_at: string
+          description: string | null
           id: string
           installation_date: string | null
           location: string | null
@@ -388,15 +453,15 @@ export type Database = {
           notes: string | null
           qr_code: string | null
           serial_number: string | null
-          status: Database["public"]["Enums"]["equipment_status"] | null
-          technical_specs: Json | null
-          updated_at: string | null
+          specifications: Json | null
+          status: string
+          updated_at: string
         }
         Insert: {
           category_id?: string | null
           code: string
-          created_at?: string | null
-          created_by?: string | null
+          created_at?: string
+          description?: string | null
           id?: string
           installation_date?: string | null
           location?: string | null
@@ -406,15 +471,15 @@ export type Database = {
           notes?: string | null
           qr_code?: string | null
           serial_number?: string | null
-          status?: Database["public"]["Enums"]["equipment_status"] | null
-          technical_specs?: Json | null
-          updated_at?: string | null
+          specifications?: Json | null
+          status?: string
+          updated_at?: string
         }
         Update: {
           category_id?: string | null
           code?: string
-          created_at?: string | null
-          created_by?: string | null
+          created_at?: string
+          description?: string | null
           id?: string
           installation_date?: string | null
           location?: string | null
@@ -424,9 +489,9 @@ export type Database = {
           notes?: string | null
           qr_code?: string | null
           serial_number?: string | null
-          status?: Database["public"]["Enums"]["equipment_status"] | null
-          technical_specs?: Json | null
-          updated_at?: string | null
+          specifications?: Json | null
+          status?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -440,80 +505,74 @@ export type Database = {
       }
       equipment_categories: {
         Row: {
-          created_at: string | null
+          created_at: string
           description: string | null
           id: string
           name: string
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           id?: string
           name: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           id?: string
           name?: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
       equipment_documents: {
         Row: {
-          category: string
-          created_at: string | null
+          category: string | null
+          created_at: string
           description: string | null
           document_type: string
           equipment_id: string
-          external_url: string | null
-          file_name: string | null
-          file_path: string | null
+          file_name: string
           file_size: number | null
-          file_type: string | null
+          file_url: string
           id: string
-          tags: string[] | null
+          mime_type: string | null
           title: string
-          updated_at: string | null
+          updated_at: string
           uploaded_by: string | null
           version: string | null
         }
         Insert: {
-          category: string
-          created_at?: string | null
+          category?: string | null
+          created_at?: string
           description?: string | null
           document_type: string
           equipment_id: string
-          external_url?: string | null
-          file_name?: string | null
-          file_path?: string | null
+          file_name: string
           file_size?: number | null
-          file_type?: string | null
+          file_url: string
           id?: string
-          tags?: string[] | null
+          mime_type?: string | null
           title: string
-          updated_at?: string | null
+          updated_at?: string
           uploaded_by?: string | null
           version?: string | null
         }
         Update: {
-          category?: string
-          created_at?: string | null
+          category?: string | null
+          created_at?: string
           description?: string | null
           document_type?: string
           equipment_id?: string
-          external_url?: string | null
-          file_name?: string | null
-          file_path?: string | null
+          file_name?: string
           file_size?: number | null
-          file_type?: string | null
+          file_url?: string
           id?: string
-          tags?: string[] | null
+          mime_type?: string | null
           title?: string
-          updated_at?: string | null
+          updated_at?: string
           uploaded_by?: string | null
           version?: string | null
         }
@@ -523,6 +582,13 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -555,15 +621,7 @@ export type Database = {
           unit?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "equipment_specifications_equipment_id_fkey"
-            columns: ["equipment_id"]
-            isOneToOne: false
-            referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       equipment_videos: {
         Row: {
@@ -602,15 +660,7 @@ export type Database = {
           uploaded_by?: string | null
           video_url?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "equipment_videos_equipment_id_fkey"
-            columns: ["equipment_id"]
-            isOneToOne: false
-            referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       maintenance_checklist_responses: {
         Row: {
@@ -665,58 +715,58 @@ export type Database = {
       }
       maintenance_logs: {
         Row: {
-          created_at: string | null
+          completed_at: string
+          cost: number | null
+          created_at: string
           description: string | null
           duration_minutes: number | null
-          end_time: string | null
           equipment_id: string
           id: string
-          issues_found: string | null
+          maintenance_type: string
           notes: string | null
-          parts_replaced: string[] | null
-          photo_urls: string[] | null
+          parts_replaced: Json | null
+          performed_by: string
+          photos: Json | null
           schedule_id: string | null
-          start_time: string
-          status: Database["public"]["Enums"]["maintenance_status"] | null
-          technician_id: string
           title: string
-          updated_at: string | null
+          updated_at: string
+          work_performed: string | null
         }
         Insert: {
-          created_at?: string | null
+          completed_at?: string
+          cost?: number | null
+          created_at?: string
           description?: string | null
           duration_minutes?: number | null
-          end_time?: string | null
           equipment_id: string
           id?: string
-          issues_found?: string | null
+          maintenance_type: string
           notes?: string | null
-          parts_replaced?: string[] | null
-          photo_urls?: string[] | null
+          parts_replaced?: Json | null
+          performed_by: string
+          photos?: Json | null
           schedule_id?: string | null
-          start_time: string
-          status?: Database["public"]["Enums"]["maintenance_status"] | null
-          technician_id: string
           title: string
-          updated_at?: string | null
+          updated_at?: string
+          work_performed?: string | null
         }
         Update: {
-          created_at?: string | null
+          completed_at?: string
+          cost?: number | null
+          created_at?: string
           description?: string | null
           duration_minutes?: number | null
-          end_time?: string | null
           equipment_id?: string
           id?: string
-          issues_found?: string | null
+          maintenance_type?: string
           notes?: string | null
-          parts_replaced?: string[] | null
-          photo_urls?: string[] | null
+          parts_replaced?: Json | null
+          performed_by?: string
+          photos?: Json | null
           schedule_id?: string | null
-          start_time?: string
-          status?: Database["public"]["Enums"]["maintenance_status"] | null
-          technician_id?: string
           title?: string
-          updated_at?: string | null
+          updated_at?: string
+          work_performed?: string | null
         }
         Relationships: [
           {
@@ -724,6 +774,13 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -828,22 +885,7 @@ export type Database = {
           priority?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "maintenance_plans_checklist_template_id_fkey"
-            columns: ["checklist_template_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_plans_equipment_id_fkey"
-            columns: ["equipment_id"]
-            isOneToOne: false
-            referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       maintenance_records: {
         Row: {
@@ -929,20 +971,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "maintenance_records_checklist_template_id_fkey"
-            columns: ["checklist_template_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_records_equipment_id_fkey"
-            columns: ["equipment_id"]
-            isOneToOne: false
-            referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "maintenance_records_maintenance_plan_id_fkey"
             columns: ["maintenance_plan_id"]
             isOneToOne: false
@@ -976,90 +1004,76 @@ export type Database = {
           schedule_id?: string
           template_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "maintenance_schedule_checklists_schedule_id_fkey"
-            columns: ["schedule_id"]
-            isOneToOne: false
-            referencedRelation: "maintenance_schedules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_schedule_checklists_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       maintenance_schedules: {
         Row: {
           assigned_to: string | null
-          checklist_template_id: string | null
-          created_at: string | null
+          completed_at: string | null
+          created_at: string
           created_by: string | null
           description: string | null
           due_date: string | null
           equipment_id: string
-          estimated_duration_minutes: number | null
-          frequency_days: number | null
+          estimated_duration: number | null
           id: string
-          is_active: boolean
-          maintenance_type: Database["public"]["Enums"]["maintenance_type_enum"]
-          priority: Database["public"]["Enums"]["maintenance_priority"] | null
-          recurrence_pattern: string | null
+          maintenance_type: string
+          notes: string | null
+          priority: string
           scheduled_date: string
-          status: Database["public"]["Enums"]["maintenance_status"] | null
+          status: string
           title: string
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
           assigned_to?: string | null
-          checklist_template_id?: string | null
-          created_at?: string | null
+          completed_at?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           due_date?: string | null
           equipment_id: string
-          estimated_duration_minutes?: number | null
-          frequency_days?: number | null
+          estimated_duration?: number | null
           id?: string
-          is_active?: boolean
-          maintenance_type?: Database["public"]["Enums"]["maintenance_type_enum"]
-          priority?: Database["public"]["Enums"]["maintenance_priority"] | null
-          recurrence_pattern?: string | null
+          maintenance_type: string
+          notes?: string | null
+          priority?: string
           scheduled_date: string
-          status?: Database["public"]["Enums"]["maintenance_status"] | null
+          status?: string
           title: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
           assigned_to?: string | null
-          checklist_template_id?: string | null
-          created_at?: string | null
+          completed_at?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           due_date?: string | null
           equipment_id?: string
-          estimated_duration_minutes?: number | null
-          frequency_days?: number | null
+          estimated_duration?: number | null
           id?: string
-          is_active?: boolean
-          maintenance_type?: Database["public"]["Enums"]["maintenance_type_enum"]
-          priority?: Database["public"]["Enums"]["maintenance_priority"] | null
-          recurrence_pattern?: string | null
+          maintenance_type?: string
+          notes?: string | null
+          priority?: string
           scheduled_date?: string
-          status?: Database["public"]["Enums"]["maintenance_status"] | null
+          status?: string
           title?: string
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "maintenance_schedules_checklist_template_id_fkey"
-            columns: ["checklist_template_id"]
+            foreignKeyName: "maintenance_schedules_assigned_to_fkey"
+            columns: ["assigned_to"]
             isOneToOne: false
-            referencedRelation: "checklist_templates"
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_schedules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1109,40 +1123,40 @@ export type Database = {
       }
       profiles: {
         Row: {
-          created_at: string | null
+          created_at: string
           email: string
           full_name: string | null
           id: string
-          is_active: boolean | null
+          is_active: boolean
           phone: string | null
-          role: string | null
-          two_factor_enabled: boolean | null
+          role: string
+          two_factor_enabled: boolean
           two_factor_secret: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           email: string
           full_name?: string | null
           id: string
-          is_active?: boolean | null
+          is_active?: boolean
           phone?: string | null
-          role?: string | null
-          two_factor_enabled?: boolean | null
+          role?: string
+          two_factor_enabled?: boolean
           two_factor_secret?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           email?: string
           full_name?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           phone?: string | null
-          role?: string | null
-          two_factor_enabled?: boolean | null
+          role?: string
+          two_factor_enabled?: boolean
           two_factor_secret?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1237,15 +1251,7 @@ export type Database = {
           uploaded_by?: string | null
           video_url?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "video_tutorials_equipment_id_fkey"
-            columns: ["equipment_id"]
-            isOneToOne: false
-            referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -1260,10 +1266,6 @@ export type Database = {
           user_role: string
         }
         Returns: Json
-      }
-      ensure_user_profile: {
-        Args: { user_email: string; user_id: string }
-        Returns: undefined
       }
     }
     Enums: {

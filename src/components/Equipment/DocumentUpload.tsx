@@ -122,11 +122,11 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
         title: fileFormData.title,
         description: fileFormData.description || null,
         category: fileFormData.category as any,
-        document_type: "file",
-        file_path: filePath,
+        document_type: "manual",
+        file_url: filePath,
         file_name: selectedFile.name,
         file_size: selectedFile.size,
-        file_type: selectedFile.type,
+        mime_type: selectedFile.type,
         version: fileFormData.version || null,
         uploaded_by: user?.id || null
       });
@@ -174,8 +174,11 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
         title: linkFormData.title,
         description: linkFormData.description || null,
         category: linkFormData.category as any,
-        document_type: "link",
-        external_url: linkFormData.external_url,
+        document_type: "manual",
+        file_url: linkFormData.external_url,
+        file_name: "External Link",
+        file_size: 0,
+        mime_type: "application/x-url",
         uploaded_by: user?.id || null
       });
 

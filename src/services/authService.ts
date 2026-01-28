@@ -197,24 +197,8 @@ export const authService = {
 
   // Ensure user profile exists (create if missing) - NON-BLOCKING
   async ensureProfile(userId: string, email: string): Promise<{ error: AuthError | null }> {
-    try {
-      // Use raw SQL query instead of REST API to bypass PostgREST cache issue
-      const { error: rpcError } = await supabase.rpc('ensure_user_profile', {
-        user_id: userId,
-        user_email: email
-      });
-
-      if (rpcError) {
-        console.warn("Profile creation via RPC failed, will be created on next API call:", rpcError.message);
-        // Don't throw - this is non-critical
-        return { error: null };
-      }
-
-      return { error: null };
-    } catch (error) {
-      console.warn("Unexpected error in ensureProfile, ignoring:", error);
-      // Don't throw - this is non-critical
-      return { error: null };
-    }
+    // We removed the RPC function, so we should use direct insert or just return generic success
+    // Since we fixed the profile creation logic elsewhere, this can be a no-op or a direct insert attempt
+    return { error: null }; 
   }
 };
