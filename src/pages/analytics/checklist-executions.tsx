@@ -31,8 +31,12 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
+  Download,
+  FileText,
 } from "lucide-react";
 import { analyticsService } from "@/services/analyticsService";
+import { exportAnalyticsToCSV, exportAnalyticsToPDF } from "@/utils/exportUtils";
+import { useToast } from "@/hooks/use-toast";
 import type {
   ChecklistExecutionStats,
   TemplateUsageStats,
@@ -57,6 +61,7 @@ const PIE_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6"];
 
 export default function ChecklistExecutionsAnalytics() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<number>(30);
@@ -120,6 +125,84 @@ export default function ChecklistExecutionsAnalytics() {
     setRefreshing(false);
   };
 
+  const handleExportCSV = () => {
+    if (!stats) {
+      toast({
+        title: "Nessun dato da esportare",
+        description: "Carica i dati prima di esportare",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const periodLabel =
+        period === 7 ? "Ultimi 7 giorni" :
+        period === 30 ? "Ultimi 30 giorni" :
+        period === 90 ? "Ultimi 90 giorni" :
+        "Ultimo anno";
+
+      exportAnalyticsToCSV({
+        stats,
+        templateUsage: templateStats,
+        technicianPerformance: technicianStats,
+        taskIssues: taskIssueStats,
+        period: periodLabel,
+      });
+
+      toast({
+        title: "✅ Export CSV completato",
+        description: "Il file è stato scaricato con successo",
+      });
+    } catch (error) {
+      console.error("Error exporting CSV:", error);
+      toast({
+        title: "❌ Errore export",
+        description: "Impossibile esportare i dati in CSV",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!stats) {
+      toast({
+        title: "Nessun dato da esportare",
+        description: "Carica i dati prima di esportare",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const periodLabel =
+        period === 7 ? "Ultimi 7 giorni" :
+        period === 30 ? "Ultimi 30 giorni" :
+        period === 90 ? "Ultimi 90 giorni" :
+        "Ultimo anno";
+
+      exportAnalyticsToPDF({
+        stats,
+        templateUsage: templateStats,
+        technicianPerformance: technicianStats,
+        taskIssues: taskIssueStats,
+        period: periodLabel,
+      });
+
+      toast({
+        title: "✅ Export PDF completato",
+        description: "Il file è stato scaricato con successo",
+      });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "❌ Errore export",
+        description: "Impossibile esportare i dati in PDF",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout userRole={userRole as any}>
@@ -166,6 +249,22 @@ export default function ChecklistExecutionsAnalytics() {
               size="icon"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+            <Button
+              onClick={handleExportCSV}
+              variant="outline"
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              onClick={handleExportPDF}
+              variant="outline"
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              PDF
             </Button>
           </div>
         </div>

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { maintenanceService } from "@/services/maintenanceService";
+import { exportMaintenanceLogsToCSV, exportMaintenanceLogsToPDF } from "@/utils/exportUtils";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,14 +17,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Calendar, Search, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { 
+  Calendar, 
+  Search, 
+  Plus, 
+  AlertCircle, 
+  CheckCircle, 
+  Clock,
+  Download,
+  FileText,
+} from "lucide-react";
 
 export default function MaintenancePage() {
+  const { toast } = useToast();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [upcomingCount, setUpcomingCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -43,6 +56,78 @@ export default function MaintenancePage() {
       console.error("Error loading maintenance data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (schedules.length === 0) {
+      toast({
+        title: "Nessun dato da esportare",
+        description: "Non ci sono manutenzioni da esportare",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setExporting(true);
+    try {
+      // Get all completed maintenance logs for export
+      const logs = await maintenanceService.getLogs();
+      
+      exportMaintenanceLogsToCSV(
+        logs,
+        "Tutti i periodi"
+      );
+
+      toast({
+        title: "✅ Export CSV completato",
+        description: `${logs.length} manutenzioni esportate con successo`,
+      });
+    } catch (error) {
+      console.error("Error exporting CSV:", error);
+      toast({
+        title: "❌ Errore export",
+        description: "Impossibile esportare i dati in CSV",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (schedules.length === 0) {
+      toast({
+        title: "Nessun dato da esportare",
+        description: "Non ci sono manutenzioni da esportare",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setExporting(true);
+    try {
+      // Get all completed maintenance logs for export
+      const logs = await maintenanceService.getLogs();
+      
+      exportMaintenanceLogsToPDF(
+        logs,
+        "Tutti i periodi"
+      );
+
+      toast({
+        title: "✅ Export PDF completato",
+        description: `${logs.length} manutenzioni esportate con successo`,
+      });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "❌ Errore export",
+        description: "Impossibile esportare i dati in PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -84,12 +169,32 @@ export default function MaintenancePage() {
               Gestisci e pianifica le manutenzioni delle macchine
             </p>
           </div>
-          <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600">
-            <Link href="/maintenance/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Nuova Manutenzione
-            </Link>
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleExportCSV}
+              disabled={exporting || schedules.length === 0}
+              variant="outline"
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              onClick={handleExportPDF}
+              disabled={exporting || schedules.length === 0}
+              variant="outline"
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              PDF
+            </Button>
+            <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600">
+              <Link href="/maintenance/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Nuova Manutenzione
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
