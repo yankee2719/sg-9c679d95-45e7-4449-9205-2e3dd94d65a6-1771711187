@@ -18,6 +18,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ArrowLeft,
   Plus,
   Trash2,
@@ -28,6 +38,8 @@ import {
   Clock,
   GripVertical,
   Loader2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 interface ChecklistTask {
@@ -42,6 +54,7 @@ export default function NewChecklistPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   
   // Form state
   const [templateName, setTemplateName] = useState("");
@@ -73,11 +86,48 @@ export default function NewChecklistPage() {
     setTasks([...tasks, newTask]);
   };
 
-  // Remove task
+  // Remove task with confirmation
   const removeTask = (id: string) => {
-    if (tasks.length > 1) {
-      setTasks(tasks.filter((task) => task.id !== id));
+    if (tasks.length === 1) {
+      toast({
+        variant: "destructive",
+        title: "Impossibile eliminare",
+        description: "Deve esserci almeno un task nella checklist",
+      });
+      return;
     }
+    setTaskToDelete(id);
+  };
+
+  // Confirm delete
+  const confirmDelete = () => {
+    if (taskToDelete) {
+      const updatedTasks = tasks
+        .filter((task) => task.id !== taskToDelete)
+        .map((task, index) => ({ ...task, order: index + 1 }));
+      setTasks(updatedTasks);
+      toast({
+        title: "Task eliminato",
+        description: "Il task è stato rimosso dalla checklist",
+      });
+    }
+    setTaskToDelete(null);
+  };
+
+  // Move task up
+  const moveTaskUp = (index: number) => {
+    if (index === 0) return;
+    const newTasks = [...tasks];
+    [newTasks[index - 1], newTasks[index]] = [newTasks[index], newTasks[index - 1]];
+    setTasks(newTasks.map((task, idx) => ({ ...task, order: idx + 1 })));
+  };
+
+  // Move task down
+  const moveTaskDown = (index: number) => {
+    if (index === tasks.length - 1) return;
+    const newTasks = [...tasks];
+    [newTasks[index], newTasks[index + 1]] = [newTasks[index + 1], newTasks[index]];
+    setTasks(newTasks.map((task, idx) => ({ ...task, order: idx + 1 })));
   };
 
   // Update task field
@@ -129,7 +179,7 @@ export default function NewChecklistPage() {
             title: t.title,
             description: t.description,
             required: t.required,
-            task_order: index + 1 // Re-index to ensure correct order
+            task_order: index + 1
         }))
       });
 
@@ -352,6 +402,26 @@ export default function NewChecklistPage() {
                     {/* Task Header */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => moveTaskUp(index)}
+                            disabled={index === 0}
+                            className="h-6 w-8 text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-30"
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => moveTaskDown(index)}
+                            disabled={index === tasks.length - 1}
+                            className="h-6 w-8 text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-30"
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                          </Button>
+                        </div>
                         <div className="w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center text-slate-400 cursor-grab">
                           <GripVertical className="h-4 w-4" />
                         </div>
@@ -387,7 +457,7 @@ export default function NewChecklistPage() {
                           size="icon"
                           onClick={() => removeTask(task.id)}
                           disabled={tasks.length === 1}
-                          className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                          className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -402,8 +472,8 @@ export default function NewChecklistPage() {
                       <Input
                         value={task.title}
                         onChange={(e) => updateTask(task.id, "title", e.target.value)}
-                        placeholder="es. Spegnimento macchina"
-                        className="h-11 bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
+                        placeholder="es. Verifica livello olio"
+                        className="h-11 bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
 
@@ -414,7 +484,7 @@ export default function NewChecklistPage() {
                         value={task.description}
                         onChange={(e) => updateTask(task.id, "description", e.target.value)}
                         placeholder="Descrivi in dettaglio cosa fare in questo step..."
-                        className="min-h-20 bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 rounded-xl resize-none"
+                        className="min-h-20 bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 rounded-xl resize-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
                   </CardContent>
@@ -483,6 +553,29 @@ export default function NewChecklistPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!taskToDelete} onOpenChange={() => setTaskToDelete(null)}>
+        <AlertDialogContent className="bg-slate-800 border-slate-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Conferma Eliminazione</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              Sei sicuro di voler eliminare questo task? Questa azione non può essere annullata.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-slate-700 text-slate-300 hover:bg-slate-600 border-slate-600">
+              Annulla
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              Elimina
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
