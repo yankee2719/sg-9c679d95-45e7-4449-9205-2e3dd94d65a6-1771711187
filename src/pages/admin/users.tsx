@@ -462,6 +462,77 @@ export default function AdminUsersPage() {
           </CardContent>
         </Card>
 
+        {/* Create User Modal */}
+        <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Crea Nuovo Utente</DialogTitle>
+              <DialogDescription>
+                Aggiungi un nuovo utente al sistema
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="create-email">Email</Label>
+                <Input
+                  id="create-email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="mario.rossi@example.com"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="create-password">Password</Label>
+                <Input
+                  id="create-password"
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  placeholder="Password sicura"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="create-name">Nome Completo</Label>
+                <Input
+                  id="create-name"
+                  value={createForm.full_name}
+                  onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+                  placeholder="Mario Rossi"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="create-role">Ruolo *</Label>
+                <Select
+                  value={createForm.role}
+                  onValueChange={(value: UserRole) => setCreateForm({ ...createForm, role: value })}
+                >
+                  <SelectTrigger id="create-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Amministratore</SelectItem>
+                    <SelectItem value="supervisor">Supervisore</SelectItem>
+                    <SelectItem value="technician">Tecnico</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+                Annulla
+              </Button>
+              <Button onClick={handleCreateUser}>
+                Crea Utente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Edit User Modal */}
         <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
           <DialogContent className="max-w-md">
