@@ -118,10 +118,11 @@ export default function ChecklistExecutionPage() {
       const { data: execution, error: execError } = await supabase
         .from("checklist_executions")
         .insert({
-          template_id: templateId,
+          checklist_template_id: templateId,
           technician_id: session.user.id,
           status: "in_progress",
-          started_at: new Date().toISOString()
+          started_at: new Date().toISOString(),
+          items_data: {} // Required by legacy schema constraint
         })
         .select()
         .single();

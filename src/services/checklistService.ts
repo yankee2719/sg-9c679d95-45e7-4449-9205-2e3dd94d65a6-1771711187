@@ -213,13 +213,7 @@ export const checklistService = {
         .from("checklist_templates")
         .select(`
           *,
-          checklist_tasks (
-            id,
-            title,
-            description,
-            required,
-            task_order
-          )
+          checklist_tasks (*)
         `)
         .eq("id", templateId)
         .single();
