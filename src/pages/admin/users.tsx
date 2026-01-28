@@ -457,7 +457,7 @@ export default function AdminUsersPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell suppressHydrationWarning>
                           {new Date(user.created_at).toLocaleDateString("it-IT")}
                         </TableCell>
                         <TableCell className="text-right">
