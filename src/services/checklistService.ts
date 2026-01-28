@@ -204,5 +204,39 @@ export const checklistService = {
         console.error("Errore getActiveTemplates:", error);
         return [];
       }
+  },
+
+  // Get template by ID with all its tasks
+  async getTemplateWithTasks(templateId: string): Promise<ChecklistTemplateWithTasks | null> {
+    try {
+      const { data, error } = await supabase
+        .from("checklist_templates")
+        .select(`
+          *,
+          checklist_tasks (
+            id,
+            title,
+            description,
+            required,
+            task_order
+          )
+        `)
+        .eq("id", templateId)
+        .single();
+
+      if (error) throw error;
+      
+      if (!data) return null;
+
+      return {
+        ...data,
+        checklist_tasks: Array.isArray(data.checklist_tasks) 
+          ? data.checklist_tasks.sort((a, b) => a.task_order - b.task_order)
+          : []
+      };
+    } catch (error) {
+      console.error("Error getTemplateWithTasks:", error);
+      return null;
+    }
   }
 };
