@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -15,6 +15,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      checklist_execution_items: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          execution_id: string
+          flag_reason: string | null
+          flagged: boolean | null
+          id: string
+          notes: string | null
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          execution_id: string
+          flag_reason?: string | null
+          flagged?: boolean | null
+          id?: string
+          notes?: string | null
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          execution_id?: string
+          flag_reason?: string | null
+          flagged?: boolean | null
+          id?: string
+          notes?: string | null
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_execution_items_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_execution_items_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_executions: {
         Row: {
           approved: boolean | null
@@ -24,10 +78,16 @@ export type Database = {
           digital_signature: string | null
           id: string
           items_data: Json
-          maintenance_log_id: string
+          maintenance_log_id: string | null
+          notes: string | null
           review_notes: string | null
           reviewed_by: string | null
+          signature_name: string | null
+          started_at: string | null
+          status: string | null
           technician_id: string
+          template_id: string | null
+          total_duration: number | null
         }
         Insert: {
           approved?: boolean | null
@@ -37,10 +97,16 @@ export type Database = {
           digital_signature?: string | null
           id?: string
           items_data: Json
-          maintenance_log_id: string
+          maintenance_log_id?: string | null
+          notes?: string | null
           review_notes?: string | null
           reviewed_by?: string | null
+          signature_name?: string | null
+          started_at?: string | null
+          status?: string | null
           technician_id: string
+          template_id?: string | null
+          total_duration?: number | null
         }
         Update: {
           approved?: boolean | null
@@ -50,10 +116,16 @@ export type Database = {
           digital_signature?: string | null
           id?: string
           items_data?: Json
-          maintenance_log_id?: string
+          maintenance_log_id?: string | null
+          notes?: string | null
           review_notes?: string | null
           reviewed_by?: string | null
+          signature_name?: string | null
+          started_at?: string | null
+          status?: string | null
           technician_id?: string
+          template_id?: string | null
+          total_duration?: number | null
         }
         Relationships: [
           {
@@ -82,6 +154,13 @@ export type Database = {
             columns: ["technician_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_executions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
             referencedColumns: ["id"]
           },
         ]
