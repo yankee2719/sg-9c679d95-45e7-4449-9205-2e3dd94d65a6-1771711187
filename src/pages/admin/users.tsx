@@ -145,50 +145,35 @@ export default function AdminUsersPage() {
         return;
       }
 
-      console.log("=== Starting user creation ===");
-      console.log("Form data:", {
-        email: createForm.email,
-        role: createForm.role,
-        has_full_name: !!createForm.full_name
-      });
-
       // Get current session token
       const { data: { session } } = await supabase.auth.getSession();
-      console.log("Session status:", {
-        hasSession: !!session,
-        hasAccessToken: !!session?.access_token
-      });
 
       if (!session) {
         setError("Sessione non valida. Effettua nuovamente il login.");
         return;
       }
 
-      // TEST: Call Edge Function WITHOUT headers first (since JWT is disabled)
-      console.log("Calling Edge Function...");
+      // Call Edge Function with JWT for admin verification
       const { data, error: funcError } = await supabase.functions.invoke("create-user", {
         body: {
           email: createForm.email,
           password: createForm.password,
           full_name: createForm.full_name,
           role: createForm.role
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
-        // NO headers for now - testing without Authorization
       });
 
-      console.log("Edge Function response:", { data, error: funcError });
-
       if (funcError) {
-        console.error("Function error:", funcError);
         throw funcError;
       }
       
       if (data?.error) {
-        console.error("Data error:", data.error);
         throw new Error(data.error);
       }
 
-      console.log("User created successfully:", data);
       setSuccess("Utente creato con successo");
       setCreateModalOpen(false);
       setCreateForm({ email: "", password: "", full_name: "", role: "technician" });
