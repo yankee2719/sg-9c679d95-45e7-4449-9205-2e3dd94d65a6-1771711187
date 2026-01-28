@@ -34,7 +34,7 @@ serve(async (req) => {
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
-        JSON.stringify({ error: "Server configuration error" }),
+        JSON.stringify({ error: "Server configuration error - missing environment variables" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -56,6 +56,7 @@ serve(async (req) => {
     });
 
     if (authError) {
+      console.error("Auth creation error:", authError);
       return new Response(
         JSON.stringify({ 
           error: "Auth creation failed",
@@ -65,7 +66,7 @@ serve(async (req) => {
       );
     }
 
-    // Create profile
+    // Create profile with correct fields
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -73,12 +74,14 @@ serve(async (req) => {
         email,
         full_name,
         role,
-        two_factor_enabled: false,
+        is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
 
     if (profileError) {
+      console.error("Profile creation error:", profileError);
+      
       // Rollback auth user
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       
@@ -105,6 +108,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    console.error("Internal error:", error);
     return new Response(
       JSON.stringify({ 
         error: "Internal server error",
