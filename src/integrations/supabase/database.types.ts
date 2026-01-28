@@ -15,6 +15,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_execution_items: {
         Row: {
           completed: boolean
@@ -571,6 +615,118 @@ export type Database = {
           },
         ]
       }
+      equipment_videos: {
+        Row: {
+          description: string | null
+          duration: number | null
+          equipment_id: string | null
+          id: string
+          tags: string[] | null
+          thumbnail_url: string | null
+          title: string
+          uploaded_at: string | null
+          uploaded_by: string | null
+          video_url: string
+        }
+        Insert: {
+          description?: string | null
+          duration?: number | null
+          equipment_id?: string | null
+          id?: string
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          title: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+          video_url: string
+        }
+        Update: {
+          description?: string | null
+          duration?: number | null
+          equipment_id?: string | null
+          id?: string
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          title?: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+          video_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_videos_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_videos_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_checklist_responses: {
+        Row: {
+          checklist_item_id: string
+          id: string
+          is_completed: boolean | null
+          maintenance_record_id: string
+          notes: string | null
+          photo_urls: string[] | null
+          responded_at: string | null
+          responded_by: string | null
+          response_value: string | null
+        }
+        Insert: {
+          checklist_item_id: string
+          id?: string
+          is_completed?: boolean | null
+          maintenance_record_id: string
+          notes?: string | null
+          photo_urls?: string[] | null
+          responded_at?: string | null
+          responded_by?: string | null
+          response_value?: string | null
+        }
+        Update: {
+          checklist_item_id?: string
+          id?: string
+          is_completed?: boolean | null
+          maintenance_record_id?: string
+          notes?: string | null
+          photo_urls?: string[] | null
+          responded_at?: string | null
+          responded_by?: string | null
+          response_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_checklist_responses_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_checklist_responses_maintenance_record_id_fkey"
+            columns: ["maintenance_record_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_checklist_responses_responded_by_fkey"
+            columns: ["responded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_logs: {
         Row: {
           created_at: string | null
@@ -644,6 +800,271 @@ export type Database = {
           {
             foreignKeyName: "maintenance_logs_technician_id_fkey"
             columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_photos: {
+        Row: {
+          caption: string | null
+          id: string
+          maintenance_record_id: string
+          photo_url: string
+          taken_at: string | null
+          taken_by: string | null
+        }
+        Insert: {
+          caption?: string | null
+          id?: string
+          maintenance_record_id: string
+          photo_url: string
+          taken_at?: string | null
+          taken_by?: string | null
+        }
+        Update: {
+          caption?: string | null
+          id?: string
+          maintenance_record_id?: string
+          photo_url?: string
+          taken_at?: string | null
+          taken_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_photos_maintenance_record_id_fkey"
+            columns: ["maintenance_record_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_photos_taken_by_fkey"
+            columns: ["taken_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_plans: {
+        Row: {
+          assigned_to: string | null
+          checklist_template_id: string | null
+          created_at: string | null
+          created_by: string | null
+          custom_frequency_days: number | null
+          equipment_id: string
+          estimated_duration: number | null
+          frequency: string
+          id: string
+          is_active: boolean | null
+          last_completed_date: string | null
+          maintenance_type: string
+          next_due_date: string
+          notes: string | null
+          plan_name: string
+          priority: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          checklist_template_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          custom_frequency_days?: number | null
+          equipment_id: string
+          estimated_duration?: number | null
+          frequency: string
+          id?: string
+          is_active?: boolean | null
+          last_completed_date?: string | null
+          maintenance_type: string
+          next_due_date: string
+          notes?: string | null
+          plan_name: string
+          priority?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          checklist_template_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          custom_frequency_days?: number | null
+          equipment_id?: string
+          estimated_duration?: number | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          last_completed_date?: string | null
+          maintenance_type?: string
+          next_due_date?: string
+          notes?: string | null
+          plan_name?: string
+          priority?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_plans_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_plans_checklist_template_id_fkey"
+            columns: ["checklist_template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_plans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_plans_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_records: {
+        Row: {
+          actions_taken: string | null
+          assigned_to: string | null
+          checklist_template_id: string | null
+          completed_at: string | null
+          cost: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          equipment_id: string
+          id: string
+          issues_found: string | null
+          maintenance_plan_id: string | null
+          maintenance_type: string
+          notes: string | null
+          parts_used: Json | null
+          performed_by: string | null
+          priority: string | null
+          reviewed_by: string | null
+          scheduled_date: string | null
+          signature_data: string | null
+          started_at: string | null
+          status: string
+          time_spent_minutes: number | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          actions_taken?: string | null
+          assigned_to?: string | null
+          checklist_template_id?: string | null
+          completed_at?: string | null
+          cost?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          equipment_id: string
+          id?: string
+          issues_found?: string | null
+          maintenance_plan_id?: string | null
+          maintenance_type: string
+          notes?: string | null
+          parts_used?: Json | null
+          performed_by?: string | null
+          priority?: string | null
+          reviewed_by?: string | null
+          scheduled_date?: string | null
+          signature_data?: string | null
+          started_at?: string | null
+          status?: string
+          time_spent_minutes?: number | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          actions_taken?: string | null
+          assigned_to?: string | null
+          checklist_template_id?: string | null
+          completed_at?: string | null
+          cost?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          equipment_id?: string
+          id?: string
+          issues_found?: string | null
+          maintenance_plan_id?: string | null
+          maintenance_type?: string
+          notes?: string | null
+          parts_used?: Json | null
+          performed_by?: string | null
+          priority?: string | null
+          reviewed_by?: string | null
+          scheduled_date?: string | null
+          signature_data?: string | null
+          started_at?: string | null
+          status?: string
+          time_spent_minutes?: number | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_records_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_checklist_template_id_fkey"
+            columns: ["checklist_template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_maintenance_plan_id_fkey"
+            columns: ["maintenance_plan_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
