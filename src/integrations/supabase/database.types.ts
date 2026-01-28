@@ -49,15 +49,7 @@ export type Database = {
           user_agent?: string | null
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "activity_logs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       checklist_execution_items: {
         Row: {
@@ -193,24 +185,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "checklist_executions_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "checklist_executions_schedule_id_fkey"
             columns: ["schedule_id"]
             isOneToOne: false
             referencedRelation: "maintenance_schedules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "checklist_executions_technician_id_fkey"
-            columns: ["technician_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -340,13 +318,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "checklist_templates_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "checklist_templates_equipment_category_id_fkey"
             columns: ["equipment_category_id"]
             isOneToOne: false
@@ -398,13 +369,6 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -470,13 +434,6 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "equipment_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "equipment_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -568,13 +525,6 @@ export type Database = {
             referencedRelation: "equipment"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "equipment_documents_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       equipment_specifications: {
@@ -660,13 +610,6 @@ export type Database = {
             referencedRelation: "equipment"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "equipment_videos_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       maintenance_checklist_responses: {
@@ -716,13 +659,6 @@ export type Database = {
             columns: ["maintenance_record_id"]
             isOneToOne: false
             referencedRelation: "maintenance_records"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_checklist_responses_responded_by_fkey"
-            columns: ["responded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -797,13 +733,6 @@ export type Database = {
             referencedRelation: "maintenance_schedules"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "maintenance_logs_technician_id_fkey"
-            columns: ["technician_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       maintenance_photos: {
@@ -837,13 +766,6 @@ export type Database = {
             columns: ["maintenance_record_id"]
             isOneToOne: false
             referencedRelation: "maintenance_records"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_photos_taken_by_fkey"
-            columns: ["taken_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -908,24 +830,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "maintenance_plans_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "maintenance_plans_checklist_template_id_fkey"
             columns: ["checklist_template_id"]
             isOneToOne: false
             referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_plans_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1021,24 +929,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "maintenance_records_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "maintenance_records_checklist_template_id_fkey"
             columns: ["checklist_template_id"]
             isOneToOne: false
             referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_records_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1053,20 +947,6 @@ export type Database = {
             columns: ["maintenance_plan_id"]
             isOneToOne: false
             referencedRelation: "maintenance_plans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_records_performed_by_fkey"
-            columns: ["performed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_records_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1176,24 +1056,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "maintenance_schedules_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "maintenance_schedules_checklist_template_id_fkey"
             columns: ["checklist_template_id"]
             isOneToOne: false
             referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_schedules_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1239,48 +1105,43 @@ export type Database = {
           type?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
-          avatar_url: string | null
           created_at: string | null
-          email: string | null
+          email: string
           full_name: string | null
           id: string
           is_active: boolean | null
           phone: string | null
-          role: Database["public"]["Enums"]["user_role"] | null
+          role: string | null
+          two_factor_enabled: boolean | null
+          two_factor_secret: string | null
           updated_at: string | null
         }
         Insert: {
-          avatar_url?: string | null
           created_at?: string | null
-          email?: string | null
+          email: string
           full_name?: string | null
           id: string
           is_active?: boolean | null
           phone?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
+          role?: string | null
+          two_factor_enabled?: boolean | null
+          two_factor_secret?: string | null
           updated_at?: string | null
         }
         Update: {
-          avatar_url?: string | null
           created_at?: string | null
-          email?: string | null
+          email?: string
           full_name?: string | null
           id?: string
           is_active?: boolean | null
           phone?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
+          role?: string | null
+          two_factor_enabled?: boolean | null
+          two_factor_secret?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1337,15 +1198,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "two_factor_auth_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       video_tutorials: {
         Row: {
@@ -1390,13 +1243,6 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "equipment"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "video_tutorials_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

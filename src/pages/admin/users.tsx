@@ -120,14 +120,22 @@ export default function AdminUsersPage() {
       console.log("=== First user sample ===", data?.[0]);
 
       // Transform data to match User interface
-      const transformedUsers: UserProfile[] = (data || []).map((profile) => ({
-        id: profile.id,
-        email: profile.email || "",
-        full_name: profile.full_name || "",
-        role: profile.role as "admin" | "supervisor" | "technician",
-        two_factor_enabled: profile.two_factor_auth?.[0]?.is_enabled || false,
-        created_at: profile.created_at || new Date().toISOString()
-      }));
+      const transformedUsers: UserProfile[] = (data || []).map((profile) => {
+        // Safe access to two_factor_auth relationship which might be inferred incorrectly
+        const twoFactorAuth = profile.two_factor_auth as any;
+        const isTwoFactorEnabled = Array.isArray(twoFactorAuth) 
+          ? twoFactorAuth[0]?.is_enabled 
+          : twoFactorAuth?.is_enabled;
+
+        return {
+          id: profile.id,
+          email: profile.email || "",
+          full_name: profile.full_name || "",
+          role: profile.role as "admin" | "supervisor" | "technician",
+          two_factor_enabled: !!isTwoFactorEnabled,
+          created_at: profile.created_at || new Date().toISOString()
+        };
+      });
 
       console.log("=== Transformed users ===", transformedUsers.length);
       setUsers(transformedUsers);
