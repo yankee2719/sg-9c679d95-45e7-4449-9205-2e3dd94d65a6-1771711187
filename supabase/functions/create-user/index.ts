@@ -14,12 +14,34 @@ serve(async (req) => {
   }
 
   try {
-    // Get request body
-    const { email, password, full_name, role } = await req.json();
-
     console.log("=== Edge Function: Create User ===");
+    console.log("Request method:", req.method);
+    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
+
+    // Get request body with error handling
+    let body;
+    try {
+      const rawBody = await req.text();
+      console.log("Raw body:", rawBody);
+      body = JSON.parse(rawBody);
+      console.log("Parsed body:", body);
+    } catch (parseError) {
+      console.error("Body parsing error:", parseError);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Invalid JSON in request body",
+          details: parseError instanceof Error ? parseError.message : "Unknown parsing error"
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { email, password, full_name, role } = body;
+
     console.log("Email:", email);
     console.log("Role:", role);
+    console.log("Full name:", full_name);
 
     // Validate input
     if (!email || !password || !full_name || !role) {
@@ -28,7 +50,12 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false,
           error: "Missing required fields",
-          received: { email: !!email, password: !!password, full_name: !!full_name, role: !!role }
+          received: { 
+            email: !!email, 
+            password: !!password, 
+            full_name: !!full_name, 
+            role: !!role 
+          }
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -37,6 +64,9 @@ serve(async (req) => {
     // Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    console.log("Supabase URL:", supabaseUrl);
+    console.log("Service key exists:", !!supabaseServiceKey);
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing environment variables");
