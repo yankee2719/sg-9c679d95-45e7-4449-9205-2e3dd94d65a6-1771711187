@@ -505,7 +505,7 @@ export const checklistService = {
           .insert(tasksToInsert);
 
         if (tasksError) {
-          console.error("Error inserting new tasks:", error);
+          console.error("Error inserting new tasks:", tasksError);
           throw tasksError;
         }
       }
