@@ -271,10 +271,12 @@ export const checklistService = {
         .from("checklist_executions")
         .insert({
           template_id: templateId,
+          checklist_template_id: templateId, // Required for legacy compatibility
           schedule_id: scheduleId,
           technician_id: technicianId,
           status: "in_progress",
-          started_at: new Date().toISOString()
+          started_at: new Date().toISOString(),
+          items_data: {} // Required field
         })
         .select()
         .single();
