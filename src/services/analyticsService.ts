@@ -15,7 +15,7 @@ export interface TemplateUsageStats {
   templateName: string;
   executionCount: number;
   avgDuration: number;
-  estimatedDuration: number;
+  estimatedTime: number;
   issueCount: number;
 }
 
@@ -131,7 +131,7 @@ export const analyticsService = {
           checklist_templates!checklist_executions_template_id_fkey (
             id,
             name,
-            estimated_duration
+            estimated_time
           )
         `)
         .gte("created_at", since.toISOString())
@@ -144,7 +144,7 @@ export const analyticsService = {
         name: string;
         executions: number;
         durations: number[];
-        estimatedDuration: number;
+        estimatedTime: number;
       }>();
 
       data?.forEach((exec: any) => {
@@ -158,7 +158,7 @@ export const analyticsService = {
             name: template.name,
             executions: 0,
             durations: [],
-            estimatedDuration: template.estimated_duration || 0,
+            estimatedTime: template.estimated_time || 0,
           });
         }
 
@@ -187,7 +187,7 @@ export const analyticsService = {
           .select("id", { count: "exact", head: true })
           .eq("template_id", templateId)
           .gte("created_at", since.toISOString())
-          .in("id", Array.from(flaggedSet)); // Use prepared array instead of builder
+          .in("id", Array.from(flaggedSet));
 
         const avgDuration = stats.durations.length > 0
           ? Math.round(stats.durations.reduce((sum, d) => sum + d, 0) / stats.durations.length)
@@ -198,7 +198,7 @@ export const analyticsService = {
           templateName: stats.name,
           executionCount: stats.executions,
           avgDuration,
-          estimatedDuration: stats.estimatedDuration,
+          estimatedTime: stats.estimatedTime,
           issueCount: issueCount || 0,
         });
       }
