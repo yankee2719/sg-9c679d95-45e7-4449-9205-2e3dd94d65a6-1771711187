@@ -129,7 +129,7 @@ serve(async (req) => {
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true,
       user_metadata: {
         full_name: full_name || null,
         role: role
@@ -150,25 +150,34 @@ serve(async (req) => {
     console.log("User created successfully in Auth:", newUser.user.id);
 
     // Create profile in profiles table
+    const profileData = {
+      id: newUser.user.id,
+      email: email,
+      full_name: full_name || null,
+      role: role,
+      created_at: new Date().toISOString()
+    };
+
+    console.log("Attempting to insert profile:", JSON.stringify(profileData));
+
     const { error: profileInsertError } = await supabaseAdmin
       .from("profiles")
-      .insert({
-        id: newUser.user.id,
-        email: email,
-        full_name: full_name || null,
-        role: role,
-        created_at: new Date().toISOString()
-      });
+      .insert(profileData);
 
     if (profileInsertError) {
       console.error("Error creating profile:", profileInsertError.message);
+      console.error("Profile error details:", JSON.stringify(profileInsertError));
+      console.error("Profile error code:", profileInsertError.code);
+      console.error("Profile error hint:", profileInsertError.hint);
+      
       // Try to delete the auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
       
       return new Response(
         JSON.stringify({ 
           error: "Failed to create user profile", 
-          details: profileInsertError.message 
+          details: profileInsertError.message,
+          code: profileInsertError.code
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
