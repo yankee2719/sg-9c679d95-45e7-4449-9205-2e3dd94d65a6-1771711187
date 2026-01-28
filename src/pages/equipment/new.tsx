@@ -156,153 +156,114 @@ export default function NewEquipment() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-gray-900 dark:text-white">
-                    Equipment Name *
-                  </Label>
+                <div>
+                  <Label htmlFor="name" className="text-gray-900 dark:text-gray-100">Equipment Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g., Conveyor Belt System"
                     required
-                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                   />
                 </div>
 
-                {/* Code */}
-                <div className="space-y-2">
-                  <Label htmlFor="code" className="text-gray-900 dark:text-white">
-                    Equipment Code *
-                  </Label>
+                <div>
+                  <Label htmlFor="code" className="text-gray-900 dark:text-gray-100">Equipment Code *</Label>
                   <Input
                     id="code"
                     value={formData.code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, code: e.target.value })
-                    }
-                    required
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     placeholder="e.g., CNV-001"
-                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    required
                   />
                 </div>
 
-                {/* Category */}
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-gray-900 dark:text-white">
-                    Category *
-                  </Label>
+                <div>
+                  <Label htmlFor="category" className="text-gray-900 dark:text-gray-100">Category *</Label>
                   <Select
                     value={formData.category}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, category: value })
-                    }
-                    required
+                    onValueChange={(value) => setFormData({ ...formData, category: value })}
                   >
-                    <SelectTrigger className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                    <SelectTrigger id="category">
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Conveyor Systems">Conveyor Systems</SelectItem>
+                      <SelectItem value="Robotic Arms">Robotic Arms</SelectItem>
+                      <SelectItem value="CNC Machines">CNC Machines</SelectItem>
+                      <SelectItem value="Packaging Equipment">Packaging Equipment</SelectItem>
+                      <SelectItem value="Material Handling">Material Handling</SelectItem>
+                      <SelectItem value="Quality Control">Quality Control</SelectItem>
+                      <SelectItem value="Power Systems">Power Systems</SelectItem>
+                      <SelectItem value="Safety Equipment">Safety Equipment</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Status */}
-                <div className="space-y-2">
-                  <Label htmlFor="status" className="text-gray-900 dark:text-white">
-                    Status *
-                  </Label>
+                <div>
+                  <Label htmlFor="status" className="text-gray-900 dark:text-gray-100">Status *</Label>
                   <Select
                     value={formData.status}
-                    onValueChange={(value: any) =>
-                      setFormData({ ...formData, status: value })
-                    }
+                    onValueChange={(value) => setFormData({ 
+                      ...formData, 
+                      status: value as "active" | "inactive" | "under_maintenance" | "decommissioned" 
+                    })}
                   >
-                    <SelectTrigger className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                    <SelectTrigger id="status">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
                       <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
                       <SelectItem value="decommissioned">Decommissioned</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Manufacturer */}
-                <div className="space-y-2">
-                  <Label htmlFor="manufacturer" className="text-gray-900 dark:text-white">
-                    Manufacturer
-                  </Label>
+                <div>
+                  <Label htmlFor="manufacturer" className="text-gray-900 dark:text-gray-100">Manufacturer</Label>
                   <Input
                     id="manufacturer"
-                    value={formData.manufacturer}
-                    onChange={(e) =>
-                      setFormData({ ...formData, manufacturer: e.target.value })
-                    }
-                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    value={formData.manufacturer || ""}
+                    onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                    placeholder="e.g., Siemens"
                   />
                 </div>
 
-                {/* Model */}
-                <div className="space-y-2">
-                  <Label htmlFor="model" className="text-gray-900 dark:text-white">
-                    Model
-                  </Label>
+                <div>
+                  <Label htmlFor="model" className="text-gray-900 dark:text-gray-100">Model</Label>
                   <Input
                     id="model"
-                    value={formData.model}
-                    onChange={(e) =>
-                      setFormData({ ...formData, model: e.target.value })
-                    }
-                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    value={formData.model || ""}
+                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                    placeholder="e.g., S7-1500"
                   />
                 </div>
 
-                {/* Serial Number */}
-                <div className="space-y-2">
-                  <Label htmlFor="serial_number" className="text-gray-900 dark:text-white">
-                    Serial Number
-                  </Label>
+                <div>
+                  <Label htmlFor="serial_number" className="text-gray-900 dark:text-gray-100">Serial Number</Label>
                   <Input
                     id="serial_number"
-                    value={formData.serial_number}
-                    onChange={(e) =>
-                      setFormData({ ...formData, serial_number: e.target.value })
-                    }
-                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                    value={formData.serial_number || ""}
+                    onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    placeholder="e.g., SN-2024-001"
                   />
                 </div>
 
-                {/* Location */}
-                <div className="space-y-2">
-                  <Label htmlFor="location" className="text-gray-900 dark:text-white">
-                    Location
-                  </Label>
+                <div>
+                  <Label htmlFor="location" className="text-gray-900 dark:text-gray-100">Location</Label>
                   <Input
                     id="location"
-                    value={formData.location}
-                    onChange={(e) =>
-                      setFormData({ ...formData, location: e.target.value })
-                    }
+                    value={formData.location || ""}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="e.g., Building A - Assembly Line 1"
-                    className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                   />
                 </div>
 
-                {/* Installation Date */}
-                <div className="space-y-2">
-                  <Label htmlFor="installation_date" className="text-gray-900 dark:text-white">
-                    Installation Date
-                  </Label>
+                <div>
+                  <Label htmlFor="installation_date" className="text-gray-900 dark:text-gray-100">Installation Date</Label>
                   <Input
                     id="installation_date"
                     type="date"
@@ -317,11 +278,8 @@ export default function NewEquipment() {
                   />
                 </div>
 
-                {/* Notes */}
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="notes" className="text-gray-900 dark:text-white">
-                    Notes
-                  </Label>
+                  <Label htmlFor="notes" className="text-gray-900 dark:text-gray-100">Notes</Label>
                   <textarea
                     id="notes"
                     value={formData.notes}
@@ -375,67 +333,46 @@ export default function NewEquipment() {
               ) : (
                 <div className="space-y-4">
                   {specifications.map((spec, index) => (
-                    <div
-                      key={index}
-                      className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700"
-                    >
-                      <div className="md:col-span-4 space-y-2">
-                        <Label className="text-gray-900 dark:text-white text-sm">
-                          Key
-                        </Label>
-                        <Input
-                          value={spec.spec_key}
-                          onChange={(e) =>
-                            handleSpecificationChange(
-                              index,
-                              "spec_key",
-                              e.target.value
-                            )
-                          }
-                          placeholder="e.g., speed, voltage, power"
-                          className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-                        />
-                      </div>
-                      <div className="md:col-span-4 space-y-2">
-                        <Label className="text-gray-900 dark:text-white text-sm">
-                          Value
-                        </Label>
-                        <Input
-                          value={spec.spec_value}
-                          onChange={(e) =>
-                            handleSpecificationChange(
-                              index,
-                              "spec_value",
-                              e.target.value
-                            )
-                          }
-                          placeholder="e.g., 0.5-2, 400, 7.5"
-                          className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-                        />
-                      </div>
-                      <div className="md:col-span-3 space-y-2">
-                        <Label className="text-gray-900 dark:text-white text-sm">
-                          Unit
-                        </Label>
-                        <Input
-                          value={spec.unit}
-                          onChange={(e) =>
-                            handleSpecificationChange(index, "unit", e.target.value)
-                          }
-                          placeholder="e.g., m/s, V, kW"
-                          className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-                        />
-                      </div>
-                      <div className="md:col-span-1 flex items-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveSpecification(index)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                    <div key={index} className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div className="md:col-span-4">
+                          <Label htmlFor={`spec-key-${index}`} className="text-gray-900 dark:text-gray-100">Key</Label>
+                          <Input
+                            id={`spec-key-${index}`}
+                            value={spec.spec_key}
+                            onChange={(e) => handleSpecificationChange(index, "spec_key", e.target.value)}
+                            placeholder="e.g., speed, voltage, power"
+                          />
+                        </div>
+                        <div className="md:col-span-4">
+                          <Label htmlFor={`spec-value-${index}`} className="text-gray-900 dark:text-gray-100">Value</Label>
+                          <Input
+                            id={`spec-value-${index}`}
+                            value={spec.spec_value}
+                            onChange={(e) => handleSpecificationChange(index, "spec_value", e.target.value)}
+                            placeholder="e.g., 0.5-2, 400, 7.5"
+                          />
+                        </div>
+                        <div className="md:col-span-3">
+                          <Label htmlFor={`spec-unit-${index}`} className="text-gray-900 dark:text-gray-100">Unit</Label>
+                          <Input
+                            id={`spec-unit-${index}`}
+                            value={spec.unit || ""}
+                            onChange={(e) => handleSpecificationChange(index, "unit", e.target.value)}
+                            placeholder="e.g., m/s, V, kW"
+                          />
+                        </div>
+                        <div className="md:col-span-1 flex items-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveSpecification(index)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
