@@ -63,6 +63,18 @@ export const userService = {
     }
   },
 
+  // Get user role
+  async getUserRole(userId: string): Promise<string | null> {
+    const profile = await this.getUserProfile(userId);
+    return profile?.role || null;
+  },
+
+  // Check if user is admin
+  async isAdmin(userId: string): Promise<boolean> {
+    const profile = await this.getUserProfile(userId);
+    return profile?.role === "admin";
+  },
+
   // Get all users (admin only)
   async getAllUsers(): Promise<Profile[]> {
     try {
