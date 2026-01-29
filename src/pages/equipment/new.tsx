@@ -112,6 +112,7 @@ export default function NewEquipment() {
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -122,6 +123,7 @@ export default function NewEquipment() {
                     id="equipment_code"
                     value={formData.equipment_code}
                     onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -132,6 +134,7 @@ export default function NewEquipment() {
                     id="category"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
@@ -141,6 +144,7 @@ export default function NewEquipment() {
                     id="manufacturer"
                     value={formData.manufacturer}
                     onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
@@ -150,6 +154,7 @@ export default function NewEquipment() {
                     id="model"
                     value={formData.model}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
@@ -159,6 +164,7 @@ export default function NewEquipment() {
                     id="serial_number"
                     value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
@@ -169,6 +175,7 @@ export default function NewEquipment() {
                     type="date"
                     value={formData.installation_date}
                     onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
@@ -178,19 +185,25 @@ export default function NewEquipment() {
                     id="location"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value: "active" | "under_maintenance" | "out_of_service") => setFormData({ ...formData, status: value })}>
-                    <SelectTrigger>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value: "active" | "under_maintenance" | "out_of_service") =>
+                      setFormData({ ...formData, status: value })
+                    }
+                  >
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
-                      <SelectItem value="out_of_service">Out of Service</SelectItem>
+                    <SelectContent className="bg-slate-700 border-slate-600">
+                      <SelectItem value="active" className="text-white hover:bg-slate-600">Active</SelectItem>
+                      <SelectItem value="under_maintenance" className="text-white hover:bg-slate-600">Under Maintenance</SelectItem>
+                      <SelectItem value="out_of_service" className="text-white hover:bg-slate-600">Out of Service</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -198,21 +211,23 @@ export default function NewEquipment() {
 
               <div className="space-y-2">
                 <Label htmlFor="technical_specs">Technical Specifications</Label>
-                <Textarea
+                <textarea
                   id="technical_specs"
                   value={formData.technical_specs}
                   onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
-                  rows={4}
+                  className="w-full min-h-[100px] p-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Enter technical specifications..."
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
-                <Textarea
+                <textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={4}
+                  className="w-full min-h-[100px] p-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder:text-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Additional notes..."
                 />
               </div>
 

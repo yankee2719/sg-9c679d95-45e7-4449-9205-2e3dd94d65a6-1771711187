@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { BarChart3, Download, Calendar } from "lucide-react";
+import { Download, Calendar } from "lucide-react";
 import { format } from "date-fns";
 
 interface ChecklistExecution {
@@ -66,13 +66,13 @@ export default function ChecklistExecutionsAnalytics() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-green-500/10 text-green-700 dark:text-green-400";
+        return "bg-green-500/10 text-green-400 hover:bg-green-500/20 border-green-500/20";
       case "in_progress":
-        return "bg-blue-500/10 text-blue-700 dark:text-blue-400";
+        return "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border-blue-500/20";
       case "failed":
-        return "bg-red-500/10 text-red-700 dark:text-red-400";
+        return "bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20";
       default:
-        return "bg-gray-500/10 text-gray-700 dark:text-gray-400";
+        return "bg-slate-500/10 text-slate-400 hover:bg-slate-500/20 border-slate-500/20";
     }
   };
 
@@ -83,31 +83,33 @@ export default function ChecklistExecutionsAnalytics() {
     failed: executions.filter(e => e.status === "failed").length,
   };
 
+  const successRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
   return (
     <MainLayout>
-      <SEO title="Checklist Executions Analytics - Industrial Maintenance" />
-      <div className="container mx-auto p-6">
-        <div className="mb-6 flex items-center justify-between">
+      <SEO title="Checklist Analytics" />
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Checklist Executions Analytics</h1>
-            <p className="text-muted-foreground mt-2">Track and analyze checklist execution performance</p>
+            <h1 className="text-3xl font-bold text-white">Analytics</h1>
+            <p className="text-slate-400 mt-2">Checklist execution performance</p>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
             <Download className="mr-2 h-4 w-4" />
-            Export Report
+            Export
           </Button>
         </div>
 
-        <div className="mb-6 flex items-center gap-4">
+        <div className="flex items-center gap-4 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Time Range:</span>
+            <Calendar className="h-4 w-4 text-slate-400" />
+            <span className="text-sm text-slate-400">Time Range:</span>
           </div>
           <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] bg-slate-900 border-slate-700 text-white">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-800 border-slate-700 text-white">
               <SelectItem value="7">Last 7 Days</SelectItem>
               <SelectItem value="30">Last 30 Days</SelectItem>
               <SelectItem value="90">Last 90 Days</SelectItem>
@@ -116,80 +118,69 @@ export default function ChecklistExecutionsAnalytics() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Executions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-foreground">{stats.total}</div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="text-sm font-medium text-slate-400">Total Executions</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.total}</div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-green-600 dark:text-green-400">{stats.completed}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% success rate
-              </p>
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="text-sm font-medium text-slate-400">Completed</div>
+              <div className="text-3xl font-bold text-green-400 mt-2">{stats.completed}</div>
+              <div className="text-xs text-slate-500 mt-1">{successRate}% success rate</div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.inProgress}</div>
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="text-sm font-medium text-slate-400">In Progress</div>
+              <div className="text-3xl font-bold text-blue-400 mt-2">{stats.inProgress}</div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Failed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-red-600 dark:text-red-400">{stats.failed}</div>
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-6">
+              <div className="text-sm font-medium text-slate-400">Failed</div>
+              <div className="text-3xl font-bold text-red-400 mt-2">{stats.failed}</div>
             </CardContent>
           </Card>
         </div>
 
-        <Card>
+        {/* Recent Executions */}
+        <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Recent Executions
-            </CardTitle>
+            <CardTitle className="text-white">Recent Executions</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              <div className="text-center py-8 text-slate-400">Loading...</div>
             ) : executions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No executions found</div>
+              <div className="text-center py-8 text-slate-400">No executions found</div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {executions.map((execution) => (
                   <div
                     key={execution.id}
-                    className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors"
+                    className="flex items-center justify-between p-4 border border-slate-700/50 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors"
                   >
                     <div className="flex-1">
-                      <div className="font-semibold text-foreground">
+                      <div className="font-medium text-white">
                         {execution.checklists?.name || "Unknown Checklist"}
                       </div>
-                      <div className="text-sm text-muted-foreground mt-1">
+                      <div className="text-sm text-slate-400 mt-1">
                         Equipment: {execution.equipment?.name || "N/A"} ({execution.equipment?.equipment_code || "N/A"})
                       </div>
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-slate-500">
                         Executed by: {execution.profiles?.full_name || "Unknown"}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="text-sm text-muted-foreground">
-                        {format(new Date(execution.started_at), "MMM dd, yyyy HH:mm")}
+                      <div className="text-sm text-slate-400">
+                        {format(new Date(execution.started_at), "MMM dd, HH:mm")}
                       </div>
                       <Badge className={getStatusColor(execution.status)}>
                         {execution.status.replace("_", " ")}
