@@ -6,57 +6,105 @@
 
 @layer base {
   :root {
-    /* Dark Theme - Updated to match screenshot */
-    --background: 222 47% 11%;        /* #0F172A - Navy dark */
-    --foreground: 210 40% 98%;        /* #F8FAFC - White ice */
-    --card: 217 33% 17%;              /* #1E293B - Slate-800 */
-    --card-foreground: 210 40% 98%;   /* #F8FAFC */
-    --popover: 217 33% 17%;           /* #1E293B */
+    /* Light Theme */
+    --background: 0 0% 100%;           /* #FFFFFF - White */
+    --foreground: 222 47% 11%;         /* #0F172A - Navy dark */
+    --card: 0 0% 100%;                 /* #FFFFFF */
+    --card-foreground: 222 47% 11%;    /* #0F172A */
+    --popover: 0 0% 100%;              /* #FFFFFF */
+    --popover-foreground: 222 47% 11%; /* #0F172A */
+    
+    /* Primary - Orange */
+    --primary: 17 94% 60%;             /* #FF6B35 - Orange main */
+    --primary-foreground: 0 0% 100%;   /* #FFFFFF */
+    --primary-hover: 17 100% 69%;      /* #FF8C61 - Orange light */
+    
+    /* Secondary/Muted */
+    --secondary: 210 40% 96%;          /* #F1F5F9 - Slate-100 */
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;              /* #F1F5F9 */
+    --muted-foreground: 215 16% 47%;   /* #64748B - Slate-500 */
+    
+    /* Accent */
+    --accent: 210 40% 96%;             /* #F1F5F9 */
+    --accent-foreground: 222 47% 11%;
+    
+    /* Destructive/Error */
+    --destructive: 0 72% 51%;          /* #DC2626 - Red-600 */
+    --destructive-foreground: 0 0% 100%;
+    --error: 0 84% 60%;                /* #EF4444 - Red-500 */
+    
+    /* Success */
+    --success: 142 71% 45%;            /* #10B981 - Green-500 */
+    --success-foreground: 0 0% 100%;
+    
+    /* Warning */
+    --warning: 38 92% 50%;             /* #F59E0B - Amber-500 */
+    --warning-foreground: 0 0% 100%;
+    
+    /* Info */
+    --info: 217 91% 60%;               /* #3B82F6 - Blue-500 */
+    
+    /* Border/Input/Ring */
+    --border: 214 32% 91%;             /* #E2E8F0 - Slate-200 */
+    --input: 214 32% 91%;              /* #E2E8F0 */
+    --ring: 17 94% 60%;                /* #FF6B35 - Orange ring */
+    
+    --radius: 1rem;                    /* 16px */
+  }
+
+  .dark {
+    /* Dark Theme */
+    --background: 222 47% 11%;         /* #0F172A - Navy dark */
+    --foreground: 210 40% 98%;         /* #F8FAFC - White ice */
+    --card: 217 33% 17%;               /* #1E293B - Slate-800 */
+    --card-foreground: 210 40% 98%;    /* #F8FAFC */
+    --popover: 217 33% 17%;            /* #1E293B */
     --popover-foreground: 210 40% 98%; /* #F8FAFC */
     
-    /* Primary - Orange (Updated from Blue) */
-    --primary: 17 94% 60%;            /* #FF6B35 - Orange main */
+    /* Primary - Orange */
+    --primary: 17 94% 60%;             /* #FF6B35 - Orange main */
     --primary-foreground: 210 40% 98%; /* #F8FAFC */
-    --primary-hover: 17 100% 69%;     /* #FF8C61 - Orange light */
+    --primary-hover: 17 100% 69%;      /* #FF8C61 - Orange light */
     
     /* Sidebar specific */
-    --sidebar-bg: 222 47% 11%;        /* #0F172A - Navy dark */
-    --sidebar-item: 215 20% 65%;      /* #94A3B8 - Slate-400 */
+    --sidebar-bg: 222 47% 11%;         /* #0F172A - Navy dark */
+    --sidebar-item: 215 20% 65%;       /* #94A3B8 - Slate-400 */
     --sidebar-item-active: 17 94% 60%; /* #FF6B35 - Orange */
     --sidebar-item-active-bg: 17 94% 60% / 0.15; /* rgba(255, 107, 53, 0.15) */
     
     /* Secondary/Muted */
-    --secondary: 215 28% 17%;         /* #1E293B lighter */
+    --secondary: 215 28% 17%;          /* #1E293B lighter */
     --secondary-foreground: 210 40% 98%;
-    --muted: 215 28% 17%;             /* #1E293B */
-    --muted-foreground: 215 20% 65%;  /* #94A3B8 - Slate-400 */
+    --muted: 215 28% 17%;              /* #1E293B */
+    --muted-foreground: 215 20% 65%;   /* #94A3B8 - Slate-400 */
     
     /* Accent */
-    --accent: 217 33% 17%;            /* #1E293B */
+    --accent: 217 33% 17%;             /* #1E293B */
     --accent-foreground: 210 40% 98%;
     
     /* Destructive/Error */
-    --destructive: 0 72% 51%;         /* #DC2626 - Red-600 */
+    --destructive: 0 72% 51%;          /* #DC2626 - Red-600 */
     --destructive-foreground: 210 40% 98%;
-    --error: 0 84% 60%;               /* #EF4444 - Red-500 */
+    --error: 0 84% 60%;                /* #EF4444 - Red-500 */
     
     /* Success */
-    --success: 142 71% 45%;           /* #10B981 - Green-500 */
+    --success: 142 71% 45%;            /* #10B981 - Green-500 */
     --success-foreground: 210 40% 98%;
     
     /* Warning */
-    --warning: 38 92% 50%;            /* #F59E0B - Amber-500 */
+    --warning: 38 92% 50%;             /* #F59E0B - Amber-500 */
     --warning-foreground: 210 40% 98%;
     
     /* Info */
-    --info: 217 91% 60%;              /* #3B82F6 - Blue-500 */
+    --info: 217 91% 60%;               /* #3B82F6 - Blue-500 */
     
     /* Border/Input/Ring */
-    --border: 215 28% 27%;            /* #334155 - Slate-700 */
-    --input: 215 28% 27%;             /* #334155 */
-    --ring: 17 94% 60%;               /* #FF6B35 - Orange ring */
+    --border: 215 28% 27%;             /* #334155 - Slate-700 */
+    --input: 215 28% 27%;              /* #334155 */
+    --ring: 17 94% 60%;                /* #FF6B35 - Orange ring */
     
-    --radius: 1rem;                   /* 16px - Medium rounded corners */
+    --radius: 1rem;                    /* 16px */
   }
 }
 
@@ -101,11 +149,11 @@
   
   /* Sidebar utilities */
   .sidebar-item {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all font-medium;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all font-medium;
   }
   
   .sidebar-item-active {
-    @apply bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300;
+    @apply bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 hover:text-orange-700 dark:hover:text-orange-300;
   }
   
   /* Icon badge utilities */
@@ -113,20 +161,20 @@
     @apply w-12 h-12 rounded-2xl flex items-center justify-center;
   }
   
-  /* Custom scrollbar for dark theme */
+  /* Custom scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 8px;
   }
   
   .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-slate-800;
+    @apply bg-slate-100 dark:bg-slate-800;
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-600 rounded-full;
+    @apply bg-slate-300 dark:bg-slate-600 rounded-full;
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500;
+    @apply bg-slate-400 dark:bg-slate-500;
   }
 }

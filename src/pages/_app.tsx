@@ -5,12 +5,7 @@ import { ThemeProvider } from "@/contexts/ThemeProvider";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
+    <ThemeProvider>
       <Component {...pageProps} />
       <Toaster />
     </ThemeProvider>
