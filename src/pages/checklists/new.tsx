@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import MainLayout from "@/components/Layout/MainLayout";
+import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,21 +19,15 @@ interface ChecklistItem {
   order_index: number;
 }
 
-interface EquipmentCategory {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
 export default function NewChecklistTemplate() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<EquipmentCategory[]>([]);
   const [formData, setFormData] = useState({
-    name: "",
+    title: "",
     description: "",
-    category_id: "",
+    category: "",
+    equipment_type: "",
   });
   const [items, setItems] = useState<ChecklistItem[]>([
     {
@@ -44,28 +38,18 @@ export default function NewChecklistTemplate() {
     },
   ]);
 
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const loadCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("equipment_categories")
-        .select("id, name, description")
-        .order("name");
-
-      if (error) throw error;
-      setCategories(data || []);
-    } catch (error) {
-      console.error("Error loading categories:", error);
-      toast({
-        title: "Errore",
-        description: "Impossibile caricare le categorie",
-        variant: "destructive",
-      });
-    }
-  };
+  const categories = [
+    "Conveyor Systems",
+    "Robotic Arms",
+    "CNC Machines",
+    "Hydraulic Presses",
+    "Assembly Lines",
+    "Packaging Equipment",
+    "Material Handling",
+    "Quality Control",
+    "Welding Equipment",
+    "Other",
+  ];
 
   const addItem = () => {
     setItems([
@@ -97,16 +81,16 @@ export default function NewChecklistTemplate() {
 
     try {
       // Validation
-      if (!formData.name.trim()) {
+      if (!formData.title.trim()) {
         toast({
           title: "Errore",
-          description: "Il nome del template è obbligatorio",
+          description: "Il titolo del template è obbligatorio",
           variant: "destructive",
         });
         return;
       }
 
-      if (!formData.category_id) {
+      if (!formData.category) {
         toast({
           title: "Errore",
           description: "Seleziona una categoria",
@@ -141,10 +125,12 @@ export default function NewChecklistTemplate() {
       const { data: template, error: templateError } = await supabase
         .from("checklist_templates")
         .insert({
-          name: formData.name.trim(),
+          title: formData.title.trim(),
           description: formData.description.trim() || null,
-          category_id: formData.category_id,
+          category: formData.category,
+          equipment_type: formData.equipment_type.trim() || null,
           created_by: user.id,
+          is_active: true,
         })
         .select()
         .single();
@@ -189,50 +175,55 @@ export default function NewChecklistTemplate() {
       <div className="container mx-auto py-8 px-4 max-w-4xl">
         <Button
           variant="ghost"
-          className="mb-6"
+          className="mb-6 text-gray-200 hover:text-white hover:bg-gray-700"
           onClick={() => router.push("/checklists")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Torna alle Checklist
         </Button>
 
-        <Card>
+        <Card className="bg-gray-800 border-gray-700">
           <CardHeader>
-            <CardTitle>Nuovo Template Checklist</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-white">Nuovo Template Checklist</CardTitle>
+            <CardDescription className="text-gray-300">
               Crea un nuovo template di checklist per le manutenzioni
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="name">Nome Template *</Label>
+                <Label htmlFor="title" className="text-gray-200">Titolo Template *</Label>
                 <Input
-                  id="name"
-                  value={formData.name}
+                  id="title"
+                  value={formData.title}
                   onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
+                    setFormData({ ...formData, title: e.target.value })
                   }
                   placeholder="Es: Checklist Manutenzione Motore"
                   required
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Categoria *</Label>
+                <Label htmlFor="category" className="text-gray-200">Categoria *</Label>
                 <Select
-                  value={formData.category_id}
+                  value={formData.category}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, category_id: value })
+                    setFormData({ ...formData, category: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Seleziona categoria" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-gray-700 border-gray-600">
                     {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
+                      <SelectItem 
+                        key={category} 
+                        value={category}
+                        className="text-white hover:bg-gray-600"
+                      >
+                        {category}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -240,7 +231,20 @@ export default function NewChecklistTemplate() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Descrizione</Label>
+                <Label htmlFor="equipment_type" className="text-gray-200">Tipo Equipaggiamento</Label>
+                <Input
+                  id="equipment_type"
+                  value={formData.equipment_type}
+                  onChange={(e) =>
+                    setFormData({ ...formData, equipment_type: e.target.value })
+                  }
+                  placeholder="Es: Motore Elettrico, Pompa Idraulica"
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-gray-200">Descrizione</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
@@ -249,13 +253,20 @@ export default function NewChecklistTemplate() {
                   }
                   placeholder="Descrizione opzionale del template"
                   rows={3}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label>Elementi Checklist *</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  <Label className="text-gray-200">Elementi Checklist *</Label>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={addItem}
+                    className="border-orange-500 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Aggiungi Elemento
                   </Button>
@@ -263,7 +274,7 @@ export default function NewChecklistTemplate() {
 
                 <div className="space-y-3">
                   {items.map((item, index) => (
-                    <div key={item.id} className="flex items-start gap-3 p-4 border rounded-lg">
+                    <div key={item.id} className="flex items-start gap-3 p-4 border border-gray-600 rounded-lg bg-gray-700/50">
                       <div className="flex-1 space-y-2">
                         <Input
                           value={item.description}
@@ -271,6 +282,7 @@ export default function NewChecklistTemplate() {
                             updateItem(item.id, "description", e.target.value)
                           }
                           placeholder={`Elemento ${index + 1}`}
+                          className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                         />
                         <div className="flex items-center space-x-2">
                           <Checkbox
@@ -282,7 +294,7 @@ export default function NewChecklistTemplate() {
                           />
                           <Label
                             htmlFor={`required-${item.id}`}
-                            className="text-sm font-normal cursor-pointer"
+                            className="text-sm font-normal cursor-pointer text-gray-300"
                           >
                             Obbligatorio
                           </Label>
@@ -294,8 +306,9 @@ export default function NewChecklistTemplate() {
                           variant="ghost"
                           size="icon"
                           onClick={() => removeItem(item.id)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
@@ -309,10 +322,15 @@ export default function NewChecklistTemplate() {
                   variant="outline"
                   onClick={() => router.push("/checklists")}
                   disabled={loading}
+                  className="border-gray-600 text-gray-200 hover:bg-gray-700"
                 >
                   Annulla
                 </Button>
-                <Button type="submit" disabled={loading}>
+                <Button 
+                  type="submit" 
+                  disabled={loading}
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+                >
                   {loading ? "Creazione..." : "Crea Template"}
                 </Button>
               </div>
