@@ -321,7 +321,9 @@ export const analyticsService = {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
-      const { data, error } = await supabase
+      // We use 'as any' to bypass the complex type inference which causes "Type instantiation is excessively deep"
+      // The query structure is correct for the database schema
+      const result: any = await supabase
         .from("checklist_execution_items")
         .select(`
           task_id,
@@ -339,7 +341,9 @@ export const analyticsService = {
           )
         `)
         .gte("checklist_executions.created_at", since.toISOString())
-        .not("checklist_tasks", "is", null) as any;
+        .not("checklist_tasks", "is", null);
+
+      const { data, error } = result;
 
       if (error) throw error;
 
