@@ -40,15 +40,15 @@ export default function NewEquipment() {
       await createEquipment({
         name: formData.name,
         equipment_code: formData.equipment_code,
-        category: formData.category || null,
-        manufacturer: formData.manufacturer || null,
-        model: formData.model || null,
-        serial_number: formData.serial_number || null,
+        category: formData.category.trim() || null,
+        manufacturer: formData.manufacturer.trim() || null,
+        model: formData.model.trim() || null,
+        serial_number: formData.serial_number.trim() || null,
         installation_date: formData.installation_date || null,
-        location: formData.location || null,
+        location: formData.location.trim() || null,
         status: formData.status,
-        technical_specs: formData.technical_specs || null,
-        notes: formData.notes || null
+        technical_specs: formData.technical_specs.trim() || null,
+        notes: formData.notes.trim() || null
       });
 
       toast({
