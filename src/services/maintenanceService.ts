@@ -126,3 +126,14 @@ export const maintenanceService = {
     return [];
   }
 };
+
+export const getMaintenanceByEquipment = async (equipmentId: string) => {
+  const { data, error } = await supabase
+    .from("maintenance_schedules")
+    .select("*")
+    .eq("equipment_id", equipmentId)
+    .order("next_maintenance_date", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+};
