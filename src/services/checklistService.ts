@@ -1,12 +1,32 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-export type ChecklistTemplate = Database["public"]["Tables"]["checklist_templates"]["Row"];
-export type ChecklistTask = Database["public"]["Tables"]["checklist_tasks"]["Row"];
-
-export interface ChecklistTemplateWithTasks extends ChecklistTemplate {
-  checklist_tasks: ChecklistTask[];
+export interface ChecklistTemplate {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  equipment_type: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
+
+export interface ChecklistItem {
+  id: string;
+  template_id: string;
+  description: string;
+  item_order: number;
+  is_required: boolean;
+  requires_photo: boolean;
+  requires_note: boolean;
+  expected_value: string | null;
+  created_at: string;
+}
+
+export type ChecklistTemplateWithTasks = Database["public"]["Tables"]["checklist_templates"]["Row"];
+export type ChecklistTask = Database["public"]["Tables"]["checklist_tasks"]["Row"];
 
 export interface CreateChecklistTemplateData {
   name: string;

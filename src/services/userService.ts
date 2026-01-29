@@ -52,9 +52,9 @@ export const userService = {
         phone: user.user_metadata?.phone || null,
         is_active: true,
         two_factor_enabled: user.user_metadata?.two_factor_enabled || false,
-        two_factor_secret: null,
         created_at: user.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        avatar_url: user.user_metadata?.avatar_url || null
       };
 
       console.log("🔄 Returning virtual profile with role:", virtualProfile.role);

@@ -30,14 +30,14 @@ export default function NewEquipment() {
 
   const [formData, setFormData] = useState({
     name: "",
-    code: "",
+    equipment_code: "",
     category: "",
     manufacturer: "",
     model: "",
     serial_number: "",
     location: "",
     installation_date: "",
-    status: "active" as "active" | "inactive" | "under_maintenance" | "decommissioned",
+    status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
     notes: "",
   });
 
@@ -61,22 +61,11 @@ export default function NewEquipment() {
     setLoading(true);
 
     try {
-      // Create equipment first
       const newEquipment = await equipmentService.create({
         ...formData,
         installation_date: formData.installation_date || null,
+        technical_specs: specifications.length > 0 ? specifications : {}
       });
-
-      // Then add technical specifications if any
-      if (specifications.length > 0 && newEquipment.id) {
-        const validSpecs = specifications.filter(
-          (spec) => spec.spec_key.trim() && spec.spec_value.trim()
-        );
-        
-        if (validSpecs.length > 0) {
-          await equipmentService.updateSpecifications(newEquipment.id, validSpecs);
-        }
-      }
 
       toast({
         title: "Success",
@@ -125,7 +114,6 @@ export default function NewEquipment() {
       />
 
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -146,7 +134,6 @@ export default function NewEquipment() {
           </div>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card className="border-gray-200 dark:border-gray-700">
             <CardHeader className="bg-gradient-to-r from-orange-500/10 to-blue-900/10 border-b border-gray-200 dark:border-gray-700">
@@ -168,11 +155,11 @@ export default function NewEquipment() {
                 </div>
 
                 <div>
-                  <Label htmlFor="code" className="text-gray-900 dark:text-gray-100">Equipment Code *</Label>
+                  <Label htmlFor="equipment_code" className="text-gray-900 dark:text-gray-100">Equipment Code *</Label>
                   <Input
-                    id="code"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    id="equipment_code"
+                    value={formData.equipment_code}
+                    onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
                     placeholder="e.g., CNV-001"
                     required
                   />
@@ -188,15 +175,9 @@ export default function NewEquipment() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Conveyor Systems">Conveyor Systems</SelectItem>
-                      <SelectItem value="Robotic Arms">Robotic Arms</SelectItem>
-                      <SelectItem value="CNC Machines">CNC Machines</SelectItem>
-                      <SelectItem value="Packaging Equipment">Packaging Equipment</SelectItem>
-                      <SelectItem value="Material Handling">Material Handling</SelectItem>
-                      <SelectItem value="Quality Control">Quality Control</SelectItem>
-                      <SelectItem value="Power Systems">Power Systems</SelectItem>
-                      <SelectItem value="Safety Equipment">Safety Equipment</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -207,7 +188,7 @@ export default function NewEquipment() {
                     value={formData.status}
                     onValueChange={(value) => setFormData({ 
                       ...formData, 
-                      status: value as "active" | "inactive" | "under_maintenance" | "decommissioned" 
+                      status: value as "active" | "inactive" | "under_maintenance" | "retired"
                     })}
                   >
                     <SelectTrigger id="status">
@@ -217,7 +198,7 @@ export default function NewEquipment() {
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
                       <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="decommissioned">Decommissioned</SelectItem>
+                      <SelectItem value="retired">Retired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -295,12 +276,11 @@ export default function NewEquipment() {
             </CardContent>
           </Card>
 
-          {/* Technical Specifications */}
           <Card className="border-gray-200 dark:border-gray-700">
             <CardHeader className="bg-gradient-to-r from-orange-500/10 to-blue-900/10 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-gray-900 dark:text-white">
-                  Specifiche Tecniche
+                  Technical Specifications
                 </CardTitle>
                 <Button
                   type="button"
@@ -310,7 +290,7 @@ export default function NewEquipment() {
                   className="border-orange-500 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Aggiungi Specifica
+                  Add Specification
                 </Button>
               </div>
             </CardHeader>
@@ -318,7 +298,7 @@ export default function NewEquipment() {
               {specifications.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-500 dark:text-gray-400 mb-4">
-                    Nessuna specifica tecnica definita
+                    No technical specifications defined
                   </p>
                   <Button
                     type="button"
@@ -327,7 +307,7 @@ export default function NewEquipment() {
                     className="border-orange-500 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Aggiungi Prima Specifica
+                    Add First Specification
                   </Button>
                 </div>
               ) : (
@@ -381,7 +361,6 @@ export default function NewEquipment() {
             </CardContent>
           </Card>
 
-          {/* Actions */}
           <div className="flex justify-end gap-4">
             <Button
               type="button"

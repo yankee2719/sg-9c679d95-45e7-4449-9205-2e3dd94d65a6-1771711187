@@ -30,38 +30,18 @@ interface MaintenanceScheduleWithDetails {
 
 export const maintenanceService = {
   // Get all maintenance schedules
-  async getSchedules(assignedToUserId?: string) {
-    let query = supabase
+  async getSchedules() {
+    const { data, error } = await supabase
       .from("maintenance_schedules")
       .select(`
         *,
-        equipment (
-          id,
-          name,
-          code,
-          qr_code
-        ),
-        assigned_to:profiles!maintenance_schedules_assigned_to_fkey (
-          id,
-          full_name,
-          email
-        ),
-        checklist_template:checklist_templates (
-          id,
-          name,
-          description
-        )
+        equipment:equipment_id(name, equipment_code),
+        assigned_user:assigned_to(full_name)
       `)
-      .order("scheduled_date", { ascending: true });
-
-    if (assignedToUserId) {
-      query = query.eq("assigned_to", assignedToUserId);
-    }
-
-    const { data, error } = await query;
+      .order("next_maintenance_date", { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return data;
   },
 
   // Get schedules by technician
@@ -90,7 +70,7 @@ export const maintenanceService = {
   },
 
   // Create maintenance schedule
-  async createSchedule(schedule: MaintenanceScheduleInsert) {
+  async createSchedule(schedule: any) {
     const { data, error } = await supabase
       .from("maintenance_schedules")
       .insert(schedule)
@@ -102,10 +82,10 @@ export const maintenanceService = {
   },
 
   // Update maintenance schedule
-  async updateSchedule(id: string, schedule: Partial<MaintenanceScheduleInsert>) {
+  async updateSchedule(id: string, updates: any) {
     const { data, error } = await supabase
       .from("maintenance_schedules")
-      .update(schedule)
+      .update(updates)
       .eq("id", id)
       .select()
       .single();
@@ -126,36 +106,18 @@ export const maintenanceService = {
   },
 
   // Get maintenance logs
-  async getLogs(equipmentId?: string) {
-    let query = supabase
+  async getLogs() {
+    const { data, error } = await supabase
       .from("maintenance_logs")
       .select(`
         *,
-        equipment (
-          id,
-          name,
-          code
-        ),
-        technician:profiles!maintenance_logs_technician_id_fkey (
-          id,
-          full_name,
-          email
-        ),
-        schedule:maintenance_schedules (
-          id,
-          maintenance_type
-        )
+        equipment:equipment_id(name, equipment_code),
+        performer:performed_by(full_name)
       `)
-      .order("created_at", { ascending: false });
-
-    if (equipmentId) {
-      query = query.eq("equipment_id", equipmentId);
-    }
-
-    const { data, error } = await query;
+      .order("performed_at", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return data;
   },
 
   // Create maintenance log

@@ -53,47 +53,51 @@ export type Database = {
       }
       checklist_execution_items: {
         Row: {
-          completed: boolean
+          actual_value: string | null
           completed_at: string | null
-          created_at: string
+          created_at: string | null
           execution_id: string
-          flag_reason: string | null
-          flagged: boolean | null
           id: string
+          is_completed: boolean | null
           notes: string | null
-          task_id: string
-          updated_at: string
+          photo_url: string | null
+          template_item_id: string
         }
         Insert: {
-          completed?: boolean
+          actual_value?: string | null
           completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           execution_id: string
-          flag_reason?: string | null
-          flagged?: boolean | null
           id?: string
+          is_completed?: boolean | null
           notes?: string | null
-          task_id: string
-          updated_at?: string
+          photo_url?: string | null
+          template_item_id: string
         }
         Update: {
-          completed?: boolean
+          actual_value?: string | null
           completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           execution_id?: string
-          flag_reason?: string | null
-          flagged?: boolean | null
           id?: string
+          is_completed?: boolean | null
           notes?: string | null
-          task_id?: string
-          updated_at?: string
+          photo_url?: string | null
+          template_item_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "checklist_execution_items_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "checklist_execution_items_execution_id_fkey"
+            columns: ["execution_id"]
             isOneToOne: false
-            referencedRelation: "checklist_tasks"
+            referencedRelation: "checklist_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_execution_items_template_item_id_fkey"
+            columns: ["template_item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_template_items"
             referencedColumns: ["id"]
           },
         ]
@@ -143,13 +147,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "checklist_execution_steps_execution_id_fkey"
-            columns: ["execution_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_executions"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "checklist_execution_steps_template_step_id_fkey"
             columns: ["template_step_id"]
             isOneToOne: false
@@ -161,48 +158,45 @@ export type Database = {
       checklist_executions: {
         Row: {
           completed_at: string | null
-          created_at: string
+          created_at: string | null
           equipment_id: string
-          executed_by: string
+          executed_by: string | null
           id: string
+          maintenance_log_id: string | null
           notes: string | null
-          schedule_id: string | null
-          signature: string | null
-          started_at: string
-          status: string
+          signature_data: string | null
+          started_at: string | null
+          status: string | null
           template_id: string
-          total_duration: number | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           equipment_id: string
-          executed_by: string
+          executed_by?: string | null
           id?: string
+          maintenance_log_id?: string | null
           notes?: string | null
-          schedule_id?: string | null
-          signature?: string | null
-          started_at?: string
-          status?: string
+          signature_data?: string | null
+          started_at?: string | null
+          status?: string | null
           template_id: string
-          total_duration?: number | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           equipment_id?: string
-          executed_by?: string
+          executed_by?: string | null
           id?: string
+          maintenance_log_id?: string | null
           notes?: string | null
-          schedule_id?: string | null
-          signature?: string | null
-          started_at?: string
-          status?: string
+          signature_data?: string | null
+          started_at?: string | null
+          status?: string | null
           template_id?: string
-          total_duration?: number | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -220,10 +214,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "checklist_executions_schedule_id_fkey"
-            columns: ["schedule_id"]
+            foreignKeyName: "checklist_executions_maintenance_log_id_fkey"
+            columns: ["maintenance_log_id"]
             isOneToOne: false
-            referencedRelation: "maintenance_schedules"
+            referencedRelation: "maintenance_logs"
             referencedColumns: ["id"]
           },
           {
@@ -292,6 +286,50 @@ export type Database = {
         }
         Relationships: []
       }
+      checklist_template_items: {
+        Row: {
+          created_at: string | null
+          description: string
+          expected_value: string | null
+          id: string
+          is_required: boolean | null
+          item_order: number
+          requires_note: boolean | null
+          requires_photo: boolean | null
+          template_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          expected_value?: string | null
+          id?: string
+          is_required?: boolean | null
+          item_order: number
+          requires_note?: boolean | null
+          requires_photo?: boolean | null
+          template_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          expected_value?: string | null
+          id?: string
+          is_required?: boolean | null
+          item_order?: number
+          requires_note?: boolean | null
+          requires_photo?: boolean | null
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_template_steps: {
         Row: {
           created_at: string
@@ -329,67 +367,43 @@ export type Database = {
           title?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "checklist_template_steps_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "checklist_templates"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       checklist_templates: {
         Row: {
-          category: string | null
-          category_id: string | null
-          created_at: string
+          category: string
+          created_at: string | null
           created_by: string | null
           description: string | null
-          equipment: string | null
-          estimated_time: number | null
+          equipment_type: string | null
           id: string
-          is_active: boolean
-          name: string
-          status: string | null
-          updated_at: string
+          is_active: boolean | null
+          title: string
+          updated_at: string | null
         }
         Insert: {
-          category?: string | null
-          category_id?: string | null
-          created_at?: string
+          category: string
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
-          equipment?: string | null
-          estimated_time?: number | null
+          equipment_type?: string | null
           id?: string
-          is_active?: boolean
-          name: string
-          status?: string | null
-          updated_at?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string | null
         }
         Update: {
-          category?: string | null
-          category_id?: string | null
-          created_at?: string
+          category?: string
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
-          equipment?: string | null
-          estimated_time?: number | null
+          equipment_type?: string | null
           id?: string
-          is_active?: boolean
-          name?: string
-          status?: string | null
-          updated_at?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "checklist_templates_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "equipment_categories"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "checklist_templates_created_by_fkey"
             columns: ["created_by"]
@@ -440,10 +454,10 @@ export type Database = {
       }
       equipment: {
         Row: {
-          category_id: string | null
-          code: string
-          created_at: string
-          description: string | null
+          category: string
+          created_at: string | null
+          created_by: string | null
+          equipment_code: string
           id: string
           installation_date: string | null
           location: string | null
@@ -453,15 +467,15 @@ export type Database = {
           notes: string | null
           qr_code: string | null
           serial_number: string | null
-          specifications: Json | null
-          status: string
-          updated_at: string
+          status: string | null
+          technical_specs: Json | null
+          updated_at: string | null
         }
         Insert: {
-          category_id?: string | null
-          code: string
-          created_at?: string
-          description?: string | null
+          category: string
+          created_at?: string | null
+          created_by?: string | null
+          equipment_code: string
           id?: string
           installation_date?: string | null
           location?: string | null
@@ -471,15 +485,15 @@ export type Database = {
           notes?: string | null
           qr_code?: string | null
           serial_number?: string | null
-          specifications?: Json | null
-          status?: string
-          updated_at?: string
+          status?: string | null
+          technical_specs?: Json | null
+          updated_at?: string | null
         }
         Update: {
-          category_id?: string | null
-          code?: string
-          created_at?: string
-          description?: string | null
+          category?: string
+          created_at?: string | null
+          created_by?: string | null
+          equipment_code?: string
           id?: string
           installation_date?: string | null
           location?: string | null
@@ -489,16 +503,16 @@ export type Database = {
           notes?: string | null
           qr_code?: string | null
           serial_number?: string | null
-          specifications?: Json | null
-          status?: string
-          updated_at?: string
+          status?: string | null
+          technical_specs?: Json | null
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "equipment_category_id_fkey"
-            columns: ["category_id"]
+            foreignKeyName: "equipment_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "equipment_categories"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -529,50 +543,38 @@ export type Database = {
       }
       equipment_documents: {
         Row: {
-          category: string | null
-          created_at: string
           description: string | null
-          document_type: string
           equipment_id: string
-          file_name: string
           file_size: number | null
+          file_type: string
           file_url: string
           id: string
-          mime_type: string | null
           title: string
-          updated_at: string
+          uploaded_at: string | null
           uploaded_by: string | null
           version: string | null
         }
         Insert: {
-          category?: string | null
-          created_at?: string
           description?: string | null
-          document_type: string
           equipment_id: string
-          file_name: string
           file_size?: number | null
+          file_type: string
           file_url: string
           id?: string
-          mime_type?: string | null
           title: string
-          updated_at?: string
+          uploaded_at?: string | null
           uploaded_by?: string | null
           version?: string | null
         }
         Update: {
-          category?: string | null
-          created_at?: string
           description?: string | null
-          document_type?: string
           equipment_id?: string
-          file_name?: string
           file_size?: number | null
+          file_type?: string
           file_url?: string
           id?: string
-          mime_type?: string | null
           title?: string
-          updated_at?: string
+          uploaded_at?: string | null
           uploaded_by?: string | null
           version?: string | null
         }
@@ -715,9 +717,8 @@ export type Database = {
       }
       maintenance_logs: {
         Row: {
-          completed_at: string
-          cost: number | null
-          created_at: string
+          costs: number | null
+          created_at: string | null
           description: string | null
           duration_minutes: number | null
           equipment_id: string
@@ -725,17 +726,18 @@ export type Database = {
           maintenance_type: string
           notes: string | null
           parts_replaced: Json | null
-          performed_by: string
+          performed_at: string | null
+          performed_by: string | null
           photos: Json | null
           schedule_id: string | null
+          signature_data: string | null
+          status: string | null
           title: string
-          updated_at: string
-          work_performed: string | null
+          updated_at: string | null
         }
         Insert: {
-          completed_at?: string
-          cost?: number | null
-          created_at?: string
+          costs?: number | null
+          created_at?: string | null
           description?: string | null
           duration_minutes?: number | null
           equipment_id: string
@@ -743,17 +745,18 @@ export type Database = {
           maintenance_type: string
           notes?: string | null
           parts_replaced?: Json | null
-          performed_by: string
+          performed_at?: string | null
+          performed_by?: string | null
           photos?: Json | null
           schedule_id?: string | null
+          signature_data?: string | null
+          status?: string | null
           title: string
-          updated_at?: string
-          work_performed?: string | null
+          updated_at?: string | null
         }
         Update: {
-          completed_at?: string
-          cost?: number | null
-          created_at?: string
+          costs?: number | null
+          created_at?: string | null
           description?: string | null
           duration_minutes?: number | null
           equipment_id?: string
@@ -761,12 +764,14 @@ export type Database = {
           maintenance_type?: string
           notes?: string | null
           parts_replaced?: Json | null
-          performed_by?: string
+          performed_at?: string | null
+          performed_by?: string | null
           photos?: Json | null
           schedule_id?: string | null
+          signature_data?: string | null
+          status?: string | null
           title?: string
-          updated_at?: string
-          work_performed?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -1009,57 +1014,54 @@ export type Database = {
       maintenance_schedules: {
         Row: {
           assigned_to: string | null
-          completed_at: string | null
-          created_at: string
+          created_at: string | null
           created_by: string | null
           description: string | null
-          due_date: string | null
           equipment_id: string
           estimated_duration: number | null
+          frequency_days: number
           id: string
+          is_active: boolean | null
+          last_maintenance_date: string | null
           maintenance_type: string
-          notes: string | null
-          priority: string
-          scheduled_date: string
-          status: string
+          next_maintenance_date: string
+          priority: string | null
           title: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           assigned_to?: string | null
-          completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
-          due_date?: string | null
           equipment_id: string
           estimated_duration?: number | null
+          frequency_days: number
           id?: string
+          is_active?: boolean | null
+          last_maintenance_date?: string | null
           maintenance_type: string
-          notes?: string | null
-          priority?: string
-          scheduled_date: string
-          status?: string
+          next_maintenance_date: string
+          priority?: string | null
           title: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           assigned_to?: string | null
-          completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           created_by?: string | null
           description?: string | null
-          due_date?: string | null
           equipment_id?: string
           estimated_duration?: number | null
+          frequency_days?: number
           id?: string
+          is_active?: boolean | null
+          last_maintenance_date?: string | null
           maintenance_type?: string
-          notes?: string | null
-          priority?: string
-          scheduled_date?: string
-          status?: string
+          next_maintenance_date?: string
+          priority?: string | null
           title?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -1088,75 +1090,89 @@ export type Database = {
       notifications: {
         Row: {
           created_at: string | null
+          email_sent_at: string | null
           id: string
+          is_email_sent: boolean | null
           is_read: boolean | null
           message: string
           related_entity_id: string | null
           related_entity_type: string | null
           title: string
-          type: string | null
-          user_id: string
+          type: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
+          email_sent_at?: string | null
           id?: string
+          is_email_sent?: boolean | null
           is_read?: boolean | null
           message: string
           related_entity_id?: string | null
           related_entity_type?: string | null
           title: string
-          type?: string | null
-          user_id: string
+          type: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
+          email_sent_at?: string | null
           id?: string
+          is_email_sent?: boolean | null
           is_read?: boolean | null
           message?: string
           related_entity_id?: string | null
           related_entity_type?: string | null
           title?: string
-          type?: string | null
-          user_id?: string
+          type?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
-          created_at: string
+          avatar_url: string | null
+          created_at: string | null
           email: string
           full_name: string | null
           id: string
-          is_active: boolean
+          is_active: boolean | null
           phone: string | null
           role: string
-          two_factor_enabled: boolean
-          two_factor_secret: string | null
-          updated_at: string
+          two_factor_enabled: boolean | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          avatar_url?: string | null
+          created_at?: string | null
           email: string
           full_name?: string | null
           id: string
-          is_active?: boolean
+          is_active?: boolean | null
           phone?: string | null
           role?: string
-          two_factor_enabled?: boolean
-          two_factor_secret?: string | null
-          updated_at?: string
+          two_factor_enabled?: boolean | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          avatar_url?: string | null
+          created_at?: string | null
           email?: string
           full_name?: string | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           phone?: string | null
           role?: string
-          two_factor_enabled?: boolean
-          two_factor_secret?: string | null
-          updated_at?: string
+          two_factor_enabled?: boolean | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1181,36 +1197,6 @@ export type Database = {
           key?: string
           updated_at?: string | null
           value?: Json
-        }
-        Relationships: []
-      }
-      two_factor_auth: {
-        Row: {
-          backup_codes: string[] | null
-          created_at: string | null
-          id: string
-          is_enabled: boolean | null
-          secret: string
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          backup_codes?: string[] | null
-          created_at?: string | null
-          id?: string
-          is_enabled?: boolean | null
-          secret: string
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          backup_codes?: string[] | null
-          created_at?: string | null
-          id?: string
-          is_enabled?: boolean | null
-          secret?: string
-          updated_at?: string | null
-          user_id?: string
         }
         Relationships: []
       }

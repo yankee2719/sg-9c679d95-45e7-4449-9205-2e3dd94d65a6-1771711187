@@ -5,13 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,32 +24,18 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
-  // File upload state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileFormData, setFileFormData] = useState({
     title: "",
     description: "",
-    category: "manual",
     version: ""
   });
 
-  // Cloud link state
   const [linkFormData, setLinkFormData] = useState({
     title: "",
     description: "",
-    category: "manual",
     external_url: ""
   });
-
-  const categories = [
-    { value: "manual", label: "Manuale d'uso" },
-    { value: "maintenance_manual", label: "Manuale manutenzione" },
-    { value: "electrical_schema", label: "Schema elettrico" },
-    { value: "pneumatic_schema", label: "Schema pneumatico" },
-    { value: "technical_drawing", label: "Disegno tecnico" },
-    { value: "certificate", label: "Certificato" },
-    { value: "other", label: "Altro" }
-  ];
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -106,37 +85,27 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
     try {
       setUploading(true);
 
-      // Import services dynamically to avoid circular dependencies
       const { documentService } = await import("@/services/documentService");
       const { supabase } = await import("@/integrations/supabase/client");
 
-      // Upload file to storage
       const { path: filePath } = await documentService.uploadFile(selectedFile, equipmentId);
-
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Create document record
       await documentService.create({
         equipment_id: equipmentId,
         title: fileFormData.title,
         description: fileFormData.description || null,
-        category: fileFormData.category as any,
-        document_type: "manual",
         file_url: filePath,
-        file_name: selectedFile.name,
+        file_type: selectedFile.type,
         file_size: selectedFile.size,
-        mime_type: selectedFile.type,
         version: fileFormData.version || null,
         uploaded_by: user?.id || null
       });
 
-      // Reset form
       setSelectedFile(null);
       setFileFormData({
         title: "",
         description: "",
-        category: "manual",
         version: ""
       });
 
@@ -173,19 +142,15 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
         equipment_id: equipmentId,
         title: linkFormData.title,
         description: linkFormData.description || null,
-        category: linkFormData.category as any,
-        document_type: "manual",
         file_url: linkFormData.external_url,
-        file_name: "External Link",
+        file_type: "application/x-url",
         file_size: 0,
-        mime_type: "application/x-url",
         uploaded_by: user?.id || null
       });
 
       setLinkFormData({
         title: "",
         description: "",
-        category: "manual",
         external_url: ""
       });
 
@@ -227,7 +192,7 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
         <DialogHeader>
           <DialogTitle>Aggiungi Documentazione</DialogTitle>
           <DialogDescription>
-            Carica file locali o aggiungi link a documenti cloud (Google Drive, Dropbox, etc.)
+            Carica file locali o aggiungi link a documenti cloud
           </DialogDescription>
         </DialogHeader>
 
@@ -243,9 +208,7 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
             </TabsTrigger>
           </TabsList>
 
-          {/* File Upload Tab */}
           <TabsContent value="upload" className="space-y-4">
-            {/* Drag & Drop Area */}
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300"
@@ -276,10 +239,10 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
                 <>
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <p className="text-lg font-medium mb-2">
-                    Trascina file qui o clicca per selezionare
+                    Drag file here or click to select
                   </p>
                   <p className="text-sm text-gray-500 mb-4">
-                    PDF, Immagini, DWG, DXF (max 50MB)
+                    PDF, Images, DWG, DXF (max 50MB)
                   </p>
                   <Input
                     type="file"
@@ -290,62 +253,42 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
                   />
                   <Button variant="outline" asChild>
                     <label htmlFor="file-upload" className="cursor-pointer">
-                      Seleziona File
+                      Select File
                     </label>
                   </Button>
                 </>
               )}
             </div>
 
-            {/* File Metadata Form */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="file-title">Titolo *</Label>
+                <Label htmlFor="file-title">Title *</Label>
                 <Input
                   id="file-title"
                   value={fileFormData.title}
                   onChange={(e) => setFileFormData(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="Es. Manuale utente CNC Tornio"
+                  placeholder="e.g., User Manual CNC Lathe"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="file-category">Categoria *</Label>
-                <Select
-                  value={fileFormData.category}
-                  onValueChange={(value) => setFileFormData(prev => ({ ...prev, category: value }))}
-                >
-                  <SelectTrigger id="file-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="file-version">Versione</Label>
+                <Label htmlFor="file-version">Version</Label>
                 <Input
                   id="file-version"
                   value={fileFormData.version}
                   onChange={(e) => setFileFormData(prev => ({ ...prev, version: e.target.value }))}
-                  placeholder="Es. v2.1"
+                  placeholder="e.g., v2.1"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="file-description">Descrizione</Label>
+                <Label htmlFor="file-description">Description</Label>
                 <Textarea
                   id="file-description"
                   value={fileFormData.description}
                   onChange={(e) => setFileFormData(prev => ({ ...prev, description: e.target.value }))}
                   rows={3}
-                  placeholder="Note aggiuntive sul documento..."
+                  placeholder="Additional notes..."
                 />
               </div>
             </div>
@@ -358,22 +301,21 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
               {uploading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Caricamento in corso...
+                  Uploading...
                 </>
               ) : (
                 <>
                   <Upload className="h-4 w-4 mr-2" />
-                  Carica Documento
+                  Upload Document
                 </>
               )}
             </Button>
           </TabsContent>
 
-          {/* Cloud Link Tab */}
           <TabsContent value="link" className="space-y-4">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="link-url">URL Documento Cloud *</Label>
+                <Label htmlFor="link-url">Cloud Document URL *</Label>
                 <Input
                   id="link-url"
                   type="url"
@@ -381,48 +323,26 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
                   onChange={(e) => setLinkFormData(prev => ({ ...prev, external_url: e.target.value }))}
                   placeholder="https://drive.google.com/..."
                 />
-                <p className="text-xs text-gray-500">
-                  Google Drive, Dropbox, OneDrive, SharePoint, etc.
-                </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="link-title">Titolo *</Label>
+                <Label htmlFor="link-title">Title *</Label>
                 <Input
                   id="link-title"
                   value={linkFormData.title}
                   onChange={(e) => setLinkFormData(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="Es. Schemi elettrici su Google Drive"
+                  placeholder="e.g., Electrical Schematics on Google Drive"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="link-category">Categoria *</Label>
-                <Select
-                  value={linkFormData.category}
-                  onValueChange={(value) => setLinkFormData(prev => ({ ...prev, category: value }))}
-                >
-                  <SelectTrigger id="link-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="link-description">Descrizione</Label>
+                <Label htmlFor="link-description">Description</Label>
                 <Textarea
                   id="link-description"
                   value={linkFormData.description}
                   onChange={(e) => setLinkFormData(prev => ({ ...prev, description: e.target.value }))}
                   rows={3}
-                  placeholder="Note aggiuntive sul documento..."
+                  placeholder="Additional notes..."
                 />
               </div>
             </div>
@@ -435,12 +355,12 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
               {uploading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Salvataggio...
+                  Saving...
                 </>
               ) : (
                 <>
                   <Link2 className="h-4 w-4 mr-2" />
-                  Aggiungi Link
+                  Add Link
                 </>
               )}
             </Button>
