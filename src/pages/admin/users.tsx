@@ -69,7 +69,6 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
-  // Create user dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newUserData, setNewUserData] = useState({
@@ -80,7 +79,6 @@ export default function AdminUsersPage() {
     phone: "",
   });
 
-  // Edit user dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -91,7 +89,6 @@ export default function AdminUsersPage() {
     is_active: true,
   });
 
-  // Delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -101,7 +98,6 @@ export default function AdminUsersPage() {
   }, []);
 
   useEffect(() => {
-    // Filter users based on search query
     if (searchQuery.trim() === "") {
       setFilteredUsers(users);
     } else {
@@ -295,11 +291,11 @@ export default function AdminUsersPage() {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "admin":
-        return <Badge className="bg-red-500">Admin</Badge>;
+        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Admin</Badge>;
       case "supervisor":
-        return <Badge className="bg-blue-500">Supervisore</Badge>;
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Supervisore</Badge>;
       case "technician":
-        return <Badge className="bg-green-500">Tecnico</Badge>;
+        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Tecnico</Badge>;
       default:
         return <Badge>{role}</Badge>;
     }
@@ -309,7 +305,7 @@ export default function AdminUsersPage() {
     return (
       <MainLayout userRole={userRole}>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#fb923c]" />
         </div>
       </MainLayout>
     );
@@ -320,11 +316,10 @@ export default function AdminUsersPage() {
       <SEO title="Gestione Utenti - Maint Ops" />
 
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Shield className="h-8 w-8 text-red-500" />
+            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+              <Shield className="h-8 w-8 text-[#fb923c]" />
               Gestione Utenti
             </h1>
             <p className="text-slate-400 mt-2">
@@ -333,14 +328,13 @@ export default function AdminUsersPage() {
           </div>
           <Button
             onClick={() => setCreateDialogOpen(true)}
-            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+            className="bg-[#fb923c] hover:bg-[#f97316] text-white"
           >
             <UserPlus className="h-5 w-5 mr-2" />
             Nuovo Utente
           </Button>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="bg-slate-800/50 border-slate-700">
             <CardContent className="p-6">
@@ -397,7 +391,6 @@ export default function AdminUsersPage() {
           </Card>
         </div>
 
-        {/* Search Bar */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="p-6">
             <div className="relative">
@@ -406,13 +399,12 @@ export default function AdminUsersPage() {
                 placeholder="Cerca per email, nome o ruolo..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-slate-700 border-slate-600 text-white"
+                className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Users Table */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
             <CardTitle className="text-white">
@@ -508,11 +500,10 @@ export default function AdminUsersPage() {
         </Card>
       </div>
 
-      {/* Create User Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>Crea Nuovo Utente</DialogTitle>
+            <DialogTitle className="text-white">Crea Nuovo Utente</DialogTitle>
             <DialogDescription className="text-slate-400">
               Inserisci i dati del nuovo utente
             </DialogDescription>
@@ -520,7 +511,7 @@ export default function AdminUsersPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-white">Email *</Label>
+              <Label htmlFor="email" className="text-slate-200">Email *</Label>
               <Input
                 id="email"
                 type="email"
@@ -529,12 +520,12 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, email: e.target.value })
                 }
                 placeholder="utente@example.com"
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-white">Password *</Label>
+              <Label htmlFor="password" className="text-slate-200">Password *</Label>
               <Input
                 id="password"
                 type="password"
@@ -543,12 +534,12 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, password: e.target.value })
                 }
                 placeholder="••••••••"
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="full_name" className="text-white">Nome Completo</Label>
+              <Label htmlFor="full_name" className="text-slate-200">Nome Completo</Label>
               <Input
                 id="full_name"
                 value={newUserData.full_name}
@@ -556,31 +547,31 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, full_name: e.target.value })
                 }
                 placeholder="Mario Rossi"
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="role" className="text-white">Ruolo *</Label>
+              <Label htmlFor="role" className="text-slate-200">Ruolo *</Label>
               <Select
                 value={newUserData.role}
                 onValueChange={(value: any) =>
                   setNewUserData({ ...newUserData, role: value })
                 }
               >
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                   <SelectValue placeholder="Seleziona ruolo" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="admin" className="text-white hover:bg-gray-700 focus:bg-gray-700">Admin</SelectItem>
-                  <SelectItem value="supervisor" className="text-white hover:bg-gray-700 focus:bg-gray-700">Supervisor</SelectItem>
-                  <SelectItem value="technician" className="text-white hover:bg-gray-700 focus:bg-gray-700">Technician</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="admin" className="text-white">Admin</SelectItem>
+                  <SelectItem value="supervisor" className="text-white">Supervisor</SelectItem>
+                  <SelectItem value="technician" className="text-white">Technician</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Telefono</Label>
+              <Label htmlFor="phone" className="text-slate-200">Telefono</Label>
               <Input
                 id="phone"
                 type="tel"
@@ -589,7 +580,7 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, phone: e.target.value })
                 }
                 placeholder="+39 123 456 7890"
-                className="bg-slate-700 border-slate-600"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
           </div>
@@ -599,14 +590,14 @@ export default function AdminUsersPage() {
               variant="outline"
               onClick={() => setCreateDialogOpen(false)}
               disabled={creating}
-              className="border-slate-600"
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               Annulla
             </Button>
             <Button
               onClick={handleCreateUser}
               disabled={creating}
-              className="bg-gradient-to-r from-blue-500 to-blue-600"
+              className="bg-[#fb923c] hover:bg-[#f97316] text-white"
             >
               {creating ? (
                 <>
@@ -621,11 +612,10 @@ export default function AdminUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit User Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
-            <DialogTitle>Modifica Utente</DialogTitle>
+            <DialogTitle className="text-white">Modifica Utente</DialogTitle>
             <DialogDescription className="text-slate-400">
               Aggiorna i dati di {selectedUser?.email}
             </DialogDescription>
@@ -633,38 +623,38 @@ export default function AdminUsersPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit_full_name" className="text-white">Nome Completo</Label>
+              <Label htmlFor="edit_full_name" className="text-slate-200">Nome Completo</Label>
               <Input
                 id="edit_full_name"
                 value={editUserData.full_name}
                 onChange={(e) =>
                   setEditUserData({ ...editUserData, full_name: e.target.value })
                 }
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_role" className="text-white">Ruolo</Label>
+              <Label htmlFor="edit_role" className="text-slate-200">Ruolo</Label>
               <Select
                 value={editUserData.role}
                 onValueChange={(value: any) =>
                   setEditUserData({ ...editUserData, role: value })
                 }
               >
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="admin" className="text-white hover:bg-gray-700 focus:bg-gray-700">Admin</SelectItem>
-                  <SelectItem value="supervisor" className="text-white hover:bg-gray-700 focus:bg-gray-700">Supervisor</SelectItem>
-                  <SelectItem value="technician" className="text-white hover:bg-gray-700 focus:bg-gray-700">Technician</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="admin" className="text-white">Admin</SelectItem>
+                  <SelectItem value="supervisor" className="text-white">Supervisor</SelectItem>
+                  <SelectItem value="technician" className="text-white">Technician</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_phone" className="text-white">Telefono</Label>
+              <Label htmlFor="edit_phone" className="text-slate-200">Telefono</Label>
               <Input
                 id="edit_phone"
                 type="tel"
@@ -672,24 +662,24 @@ export default function AdminUsersPage() {
                 onChange={(e) =>
                   setEditUserData({ ...editUserData, phone: e.target.value })
                 }
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_is_active" className="text-white">Stato</Label>
+              <Label htmlFor="edit_is_active" className="text-slate-200">Stato</Label>
               <Select
                 value={editUserData.is_active ? "active" : "inactive"}
                 onValueChange={(value) =>
                   setEditUserData({ ...editUserData, is_active: value === "active" })
                 }
               >
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
-                  <SelectItem value="active" className="text-white hover:bg-gray-700 focus:bg-gray-700">Attivo</SelectItem>
-                  <SelectItem value="inactive" className="text-white hover:bg-gray-700 focus:bg-gray-700">Inattivo</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="active" className="text-white">Attivo</SelectItem>
+                  <SelectItem value="inactive" className="text-white">Inattivo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -700,14 +690,14 @@ export default function AdminUsersPage() {
               variant="outline"
               onClick={() => setEditDialogOpen(false)}
               disabled={editing}
-              className="border-slate-600"
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               Annulla
             </Button>
             <Button
               onClick={handleEditUser}
               disabled={editing}
-              className="bg-gradient-to-r from-blue-500 to-blue-600"
+              className="bg-[#fb923c] hover:bg-[#f97316] text-white"
             >
               {editing ? (
                 <>
@@ -722,7 +712,6 @@ export default function AdminUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white">
           <DialogHeader>
@@ -738,14 +727,14 @@ export default function AdminUsersPage() {
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
               disabled={deleting}
-              className="border-slate-600"
+              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
               Annulla
             </Button>
             <Button
               onClick={handleDeleteUser}
               disabled={deleting}
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-red-500 hover:bg-red-600 text-white"
             >
               {deleting ? (
                 <>

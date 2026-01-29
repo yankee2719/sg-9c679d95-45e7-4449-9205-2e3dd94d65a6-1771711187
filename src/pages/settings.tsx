@@ -19,7 +19,6 @@ import {
   AlertTriangle,
   CheckCircle,
   Database,
-  HardDrive,
   Activity
 } from "lucide-react";
 import { authService } from "@/services/authService";
@@ -32,7 +31,6 @@ export default function SettingsPage() {
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("admin");
   const [userName, setUserName] = useState<string>("");
   
-  // Settings state
   const [darkMode, setDarkMode] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [taskReminders, setTaskReminders] = useState(true);
@@ -60,7 +58,6 @@ export default function SettingsPage() {
       setUserName(profile?.full_name || session.user.email || "User");
       setUserRole((role as "admin" | "supervisor" | "technician") || "admin");
 
-      // Only admin can access settings
       if (role !== "admin") {
         toast({
           variant: "destructive",
@@ -90,18 +87,17 @@ export default function SettingsPage() {
   return (
     <MainLayout userRole={userRole}>
       <div className="space-y-6">
-        {/* Page Header */}
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">System Settings</h1>
           <p className="text-slate-400">Configure system preferences and security settings</p>
         </div>
 
         {/* Appearance Section */}
-        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+        <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Palette className="h-5 w-5 text-[#FF6B35]" />
+              <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
+                <Palette className="h-5 w-5 text-[#fb923c]" />
               </div>
               <h2 className="text-xl font-bold text-white">Appearance</h2>
             </div>
@@ -118,7 +114,7 @@ export default function SettingsPage() {
                 <Switch
                   checked={darkMode}
                   onCheckedChange={setDarkMode}
-                  className="data-[state=checked]:bg-[#FF6B35]"
+                  className="data-[state=checked]:bg-[#fb923c]"
                 />
               </div>
             </div>
@@ -126,11 +122,11 @@ export default function SettingsPage() {
         </Card>
 
         {/* Notifications Section */}
-        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+        <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Bell className="h-5 w-5 text-[#FF6B35]" />
+              <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
+                <Bell className="h-5 w-5 text-[#fb923c]" />
               </div>
               <h2 className="text-xl font-bold text-white">Notifications</h2>
             </div>
@@ -147,7 +143,7 @@ export default function SettingsPage() {
                 <Switch
                   checked={emailNotifications}
                   onCheckedChange={setEmailNotifications}
-                  className="data-[state=checked]:bg-[#FF6B35]"
+                  className="data-[state=checked]:bg-[#fb923c]"
                 />
               </div>
 
@@ -162,7 +158,7 @@ export default function SettingsPage() {
                 <Switch
                   checked={taskReminders}
                   onCheckedChange={setTaskReminders}
-                  className="data-[state=checked]:bg-[#FF6B35]"
+                  className="data-[state=checked]:bg-[#fb923c]"
                 />
               </div>
 
@@ -177,7 +173,7 @@ export default function SettingsPage() {
                 <Switch
                   checked={overdueAlerts}
                   onCheckedChange={setOverdueAlerts}
-                  className="data-[state=checked]:bg-[#FF6B35]"
+                  className="data-[state=checked]:bg-[#fb923c]"
                 />
               </div>
 
@@ -192,7 +188,7 @@ export default function SettingsPage() {
                 <Switch
                   checked={weeklyReports}
                   onCheckedChange={setWeeklyReports}
-                  className="data-[state=checked]:bg-[#FF6B35]"
+                  className="data-[state=checked]:bg-[#fb923c]"
                 />
               </div>
             </div>
@@ -200,11 +196,11 @@ export default function SettingsPage() {
         </Card>
 
         {/* Security Section */}
-        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+        <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-[#FF6B35]" />
+              <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-[#fb923c]" />
               </div>
               <h2 className="text-xl font-bold text-white">Security</h2>
             </div>
@@ -236,7 +232,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <Select value={autoLogout} onValueChange={setAutoLogout}>
-                  <SelectTrigger className="w-[180px] bg-slate-700/50 border-slate-600 text-white">
+                  <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
@@ -252,11 +248,11 @@ export default function SettingsPage() {
         </Card>
 
         {/* Regional Section */}
-        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+        <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Globe className="h-5 w-5 text-[#FF6B35]" />
+              <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
+                <Globe className="h-5 w-5 text-[#fb923c]" />
               </div>
               <h2 className="text-xl font-bold text-white">Regional</h2>
             </div>
@@ -271,7 +267,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="w-[180px] bg-slate-700/50 border-slate-600 text-white">
+                  <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
@@ -292,7 +288,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <Select value={timezone} onValueChange={setTimezone}>
-                  <SelectTrigger className="w-[180px] bg-slate-700/50 border-slate-600 text-white">
+                  <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
@@ -308,7 +304,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* System Information Section */}
-        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+        <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
@@ -347,11 +343,10 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Save Button */}
         <div className="flex justify-end">
           <Button
             onClick={handleSaveSettings}
-            className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white px-6 py-2 rounded-xl"
+            className="bg-[#fb923c] hover:bg-[#f97316] text-white px-6 py-2"
           >
             Save Settings
           </Button>
