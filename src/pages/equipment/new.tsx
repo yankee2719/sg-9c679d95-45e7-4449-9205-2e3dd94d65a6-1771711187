@@ -151,6 +151,7 @@ export default function NewEquipment() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g., Conveyor Belt System"
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
@@ -162,6 +163,7 @@ export default function NewEquipment() {
                     onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
                     placeholder="e.g., CNV-001"
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
@@ -210,6 +212,7 @@ export default function NewEquipment() {
                     value={formData.manufacturer || ""}
                     onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
                     placeholder="e.g., Siemens"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
@@ -220,6 +223,7 @@ export default function NewEquipment() {
                     value={formData.model || ""}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
                     placeholder="e.g., S7-1500"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
@@ -230,6 +234,7 @@ export default function NewEquipment() {
                     value={formData.serial_number || ""}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
                     placeholder="e.g., SN-2024-001"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
@@ -240,6 +245,7 @@ export default function NewEquipment() {
                     value={formData.location || ""}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="e.g., Building A - Assembly Line 1"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
