@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ChecklistItem {
   id: string;
+  title: string;
   description: string;
   is_required: boolean;
   order_index: number;
@@ -32,30 +33,19 @@ export default function NewChecklistTemplate() {
   const [items, setItems] = useState<ChecklistItem[]>([
     {
       id: crypto.randomUUID(),
+      title: "",
       description: "",
       is_required: true,
       order_index: 0,
     },
   ]);
 
-  const categories = [
-    "Conveyor Systems",
-    "Robotic Arms",
-    "CNC Machines",
-    "Hydraulic Presses",
-    "Assembly Lines",
-    "Packaging Equipment",
-    "Material Handling",
-    "Quality Control",
-    "Welding Equipment",
-    "Other",
-  ];
-
   const addItem = () => {
     setItems([
       ...items,
       {
         id: crypto.randomUUID(),
+        title: "",
         description: "",
         is_required: true,
         order_index: items.length,
@@ -98,11 +88,12 @@ export default function NewChecklistTemplate() {
         return;
       }
 
-      const validItems = items.filter((item) => item.description.trim());
+      // Validate items
+      const validItems = items.filter((item) => item.title.trim());
       if (validItems.length === 0) {
         toast({
           title: "Errore",
-          description: "Aggiungi almeno un elemento alla checklist",
+          description: "Aggiungi almeno un elemento valido (con titolo) alla checklist",
           variant: "destructive",
         });
         return;
@@ -119,13 +110,14 @@ export default function NewChecklistTemplate() {
         return;
       }
 
+      // 1. Create Checklist Template
       const { data: template, error: templateError } = await supabase
-        .from("checklist_templates")
+        .from("checklists") // Updated table name
         .insert({
-          title: formData.title.trim(),
+          name: formData.title.trim(), // 'name' in new schema, not 'title'
           description: formData.description.trim() || null,
           category: formData.category,
-          equipment_type: formData.equipment_type.trim() || null,
+          equipment_category: formData.equipment_type.trim() || null, // 'equipment_category' in new schema
           created_by: user.id,
           is_active: true,
         })
@@ -134,11 +126,14 @@ export default function NewChecklistTemplate() {
 
       if (templateError) throw templateError;
 
+      // 2. Create Checklist Items
       const itemsToInsert = validItems.map((item, index) => ({
-        template_id: template.id,
-        description: item.description.trim(),
+        checklist_id: template.id,
+        title: item.title.trim(),
+        description: item.description.trim() || null,
         is_required: item.is_required,
         order_index: index,
+        input_type: "checkbox" // Default input type for now
       }));
 
       const { error: itemsError } = await supabase
@@ -153,12 +148,11 @@ export default function NewChecklistTemplate() {
       });
 
       router.push("/checklists");
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error("Error creating checklist template:", error);
-      const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
       toast({
         title: "Errore",
-        description: `Impossibile creare il template: ${errorMessage}`,
+        description: `Impossibile creare il template: ${error.message || "Errore sconosciuto"}`,
         variant: "destructive",
       });
     } finally {
@@ -265,17 +259,45 @@ export default function NewChecklistTemplate() {
 
                 <div className="space-y-3">
                   {items.map((item, index) => (
-                    <div key={item.id} className="flex items-start gap-3 p-4 border border-slate-700 rounded-lg bg-slate-900/50">
-                      <div className="flex-1 space-y-2">
-                        <Input
-                          value={item.description}
-                          onChange={(e) =>
-                            updateItem(item.id, "description", e.target.value)
-                          }
-                          placeholder={`Elemento ${index + 1}`}
-                          className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
-                        />
-                        <div className="flex items-center space-x-2">
+                    <div key={item.id} className="p-4 border border-slate-700 rounded-lg bg-slate-900/50 space-y-3">
+                      <div className="flex justify-between items-start gap-3">
+                         <div className="flex-1 space-y-3">
+                            <div>
+                                <Label htmlFor={`item-title-${item.id}`} className="text-xs text-slate-400 mb-1 block">Titolo Voce *</Label>
+                                <Input
+                                    id={`item-title-${item.id}`}
+                                    value={item.title}
+                                    onChange={(e) => updateItem(item.id, "title", e.target.value)}
+                                    placeholder="Es: Controllare livello olio"
+                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor={`item-desc-${item.id}`} className="text-xs text-slate-400 mb-1 block">Descrizione (Opzionale)</Label>
+                                <Input
+                                    id={`item-desc-${item.id}`}
+                                    value={item.description}
+                                    onChange={(e) => updateItem(item.id, "description", e.target.value)}
+                                    placeholder="Dettagli aggiuntivi..."
+                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500 text-sm"
+                                />
+                            </div>
+                         </div>
+                         
+                         {items.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeItem(item.id)}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-400/10 mt-6"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
                           <Checkbox
                             id={`required-${item.id}`}
                             checked={item.is_required}
@@ -288,21 +310,9 @@ export default function NewChecklistTemplate() {
                             htmlFor={`required-${item.id}`}
                             className="text-sm font-normal cursor-pointer text-slate-300"
                           >
-                            Obbligatorio
+                            Campo Obbligatorio
                           </Label>
                         </div>
-                      </div>
-                      {items.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeItem(item.id)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
                   ))}
                 </div>

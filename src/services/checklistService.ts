@@ -144,19 +144,18 @@ export const checklistService = {
   /**
    * Create Execution
    */
-  async createExecution(templateId: string, equipmentId: string, scheduleId?: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-
+  async createExecution(execution: {
+    checklist_id: string;
+    maintenance_log_id?: string;
+    equipment_id?: string;
+    executed_by: string;
+    responses: Record<string, any>;
+    notes?: string;
+    signature?: string;
+  }) {
     const { data, error } = await supabase
       .from("checklist_executions")
-      .insert({
-        template_id: templateId,
-        equipment_id: equipmentId,
-        schedule_id: scheduleId,
-        executed_by: user?.id,
-        status: "in_progress",
-        started_at: new Date().toISOString()
-      })
+      .insert(execution)
       .select()
       .single();
 

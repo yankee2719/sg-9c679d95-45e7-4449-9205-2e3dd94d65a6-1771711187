@@ -1,194 +1,248 @@
-import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+import { Loader2, CheckCircle2, AlertTriangle, FileText, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { checklistService } from "@/services/checklistService";
-import { ArrowLeft, Save, CheckCircle } from "lucide-react";
-import { SEO } from "@/components/SEO";
 
-export default function ExecuteChecklist() {
+interface ChecklistExecution {
+  id: string;
+  checklist_id: string;
+  checklist: {
+    name: string;
+    description: string;
+  };
+  responses: Record<string, any>;
+  notes: string | null;
+  signature: string | null;
+  completed_at: string | null;
+  created_at: string;
+  executed_by_profile: {
+    full_name: string;
+    email: string;
+  };
+  equipment: {
+    name: string;
+    equipment_code: string;
+  } | null;
+  checklist_items: {
+    id: string;
+    title: string;
+    description: string | null;
+    input_type: string;
+    order_index: number;
+  }[];
+}
+
+export default function ChecklistExecutionDetail() {
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
-  
+  const [execution, setExecution] = useState<ChecklistExecution | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [execution, setExecution] = useState<any>(null);
-  const [items, setItems] = useState<any[]>([]);
-  const [responses, setResponses] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (id) {
-      loadExecution();
+      loadExecution(id as string);
     }
   }, [id]);
 
-  const loadExecution = async () => {
+  const loadExecution = async (executionId: string) => {
     try {
-      const data = await checklistService.getExecutionById(id as string);
-      setExecution(data);
-      
-      // Get template items
-      const template = await checklistService.getTemplateById(data.template_id);
-      setItems(template.items || []);
+      // 1. Fetch execution details with related data
+      // We perform joins manually or via simple relations to avoid complex embedded filtering issues
+      const { data: executionData, error: executionError } = await supabase
+        .from("checklist_executions")
+        .select(`
+          *,
+          checklist:checklists(name, description),
+          equipment(name, equipment_code),
+          executed_by_profile:profiles!checklist_executions_executed_by_fkey(full_name, email)
+        `)
+        .eq("id", executionId)
+        .single();
 
-      // Load existing responses
-      const existingResponses: Record<string, any> = {};
-      data.items?.forEach((item: any) => {
-        existingResponses[item.template_item_id] = item;
-      });
-      setResponses(existingResponses);
-    } catch (error) {
+      if (executionError) throw executionError;
+
+      // 2. Fetch checklist items separately to ensure we get them all ordered
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("checklist_items")
+        .select("*")
+        .eq("checklist_id", executionData.checklist_id)
+        .order("order_index");
+
+      if (itemsError) throw itemsError;
+
+      // Combine data
+      setExecution({
+        ...executionData,
+        checklist_items: itemsData || [],
+        executed_by_profile: executionData.executed_by_profile || { full_name: 'Unknown', email: '' }
+      } as any);
+
+    } catch (error: any) {
       console.error("Error loading execution:", error);
       toast({
-        title: "Error",
-        description: "Failed to load checklist execution",
         variant: "destructive",
+        title: "Error",
+        description: "Failed to load checklist details"
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResponseChange = (itemId: string, field: string, value: any) => {
-    setResponses(prev => ({
-      ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        [field]: value
-      }
-    }));
-  };
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-[calc(100vh-100px)]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
-  const handleSave = async (complete: boolean = false) => {
-    setSubmitting(true);
-    try {
-      // Save all responses
-      for (const item of items) {
-        const response = responses[item.id];
-        if (response) {
-          await checklistService.updateExecutionItem(
-            id as string,
-            item.id,
-            {
-              is_completed: response.is_completed || false,
-              actual_value: response.actual_value,
-              notes: response.notes
-            }
-          );
-        }
-      }
+  if (!execution) {
+    return (
+      <MainLayout>
+        <div className="p-8 text-center">
+          <h2 className="text-xl font-semibold">Checklist Execution Not Found</h2>
+          <p className="text-muted-foreground mt-2">The requested checklist record could not be found.</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
-      if (complete) {
-        await checklistService.completeExecution(id as string, "Completed by technician");
-        toast({
-          title: "Success",
-          description: "Checklist completed successfully",
-        });
-        router.push("/dashboard");
-      } else {
-        toast({
-          title: "Saved",
-          description: "Progress saved successfully",
-        });
-      }
-    } catch (error) {
-      console.error("Error saving checklist:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save checklist",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
+  const renderResponseValue = (item: any, value: any) => {
+    if (value === undefined || value === null) return <span className="text-muted-foreground italic">No response</span>;
+
+    switch (item.input_type) {
+      case "checkbox":
+        return value ? (
+          <Badge className="bg-green-500 hover:bg-green-600">Pass</Badge>
+        ) : (
+          <Badge variant="destructive">Fail</Badge>
+        );
+      case "photo":
+        return (
+          <div className="mt-2">
+            <img src={value} alt="Response" className="max-w-[200px] rounded-md border" />
+          </div>
+        );
+      default:
+        return <span className="font-medium">{String(value)}</span>;
     }
   };
 
-  if (loading) return <MainLayout>Loading...</MainLayout>;
-  if (!execution) return <MainLayout>Checklist not found</MainLayout>;
-
   return (
     <MainLayout>
-      <SEO title="Execute Checklist" />
-      
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">{execution.template?.title}</h1>
-              <p className="text-gray-500">
-                Equipment: {execution.equipment?.name} ({execution.equipment?.equipment_code})
-              </p>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{execution.checklist.name}</h1>
+            <div className="flex items-center gap-2 text-muted-foreground mt-1">
+              <Badge variant="outline" className="gap-1">
+                <User className="h-3 w-3" />
+                {execution.executed_by_profile.full_name}
+              </Badge>
+              <span>•</span>
+              <span>{format(new Date(execution.created_at), "PPP p")}</span>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handleSave(false)} disabled={submitting}>
-              <Save className="h-4 w-4 mr-2" />
-              Save Progress
-            </Button>
-            <Button onClick={() => handleSave(true)} disabled={submitting}>
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Complete
-            </Button>
-          </div>
+          <Badge variant="default" className="text-base px-4 py-1 bg-green-600 hover:bg-green-700">
+            Completed
+          </Badge>
         </div>
 
-        <div className="space-y-4">
-          {items.map((item, index) => (
-            <Card key={item.id}>
-              <CardHeader className="py-4">
-                <CardTitle className="text-base font-medium flex gap-2">
-                  <span className="text-gray-500">#{index + 1}</span>
-                  {item.description}
-                  {item.is_required && <span className="text-red-500">*</span>}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Main Content - Checklist Items */}
+          <div className="md:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Responses
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={`check-${item.id}`}
-                      checked={responses[item.id]?.is_completed || false}
-                      onCheckedChange={(checked) => handleResponseChange(item.id, "is_completed", checked)}
-                    />
-                    <Label htmlFor={`check-${item.id}`}>Completed</Label>
-                  </div>
-                  
-                  {item.expected_value && (
-                    <div className="flex-1">
-                      <Label className="text-xs text-gray-500">Value</Label>
-                      <Input 
-                        placeholder="Enter value" 
-                        value={responses[item.id]?.actual_value || ""}
-                        onChange={(e) => handleResponseChange(item.id, "actual_value", e.target.value)}
-                      />
+              <CardContent className="space-y-6">
+                {execution.checklist_items.map((item, index) => {
+                  const response = execution.responses?.[item.id];
+                  return (
+                    <div key={item.id} className="border-b pb-4 last:border-0 last:pb-0">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <span className="text-sm text-muted-foreground font-mono mr-2">#{index + 1}</span>
+                          <span className="font-medium">{item.title}</span>
+                          {item.description && (
+                            <p className="text-sm text-muted-foreground mt-1 ml-6">{item.description}</p>
+                          )}
+                        </div>
+                        <div className="ml-4">
+                          {renderResponseValue(item, response)}
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            {execution.notes && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Additional Notes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="whitespace-pre-wrap">{execution.notes}</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Sidebar - Details */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Execution Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {execution.equipment && (
+                  <div>
+                    <span className="text-sm text-muted-foreground block">Equipment</span>
+                    <div className="font-medium">{execution.equipment.name}</div>
+                    <div className="text-sm text-muted-foreground">{execution.equipment.equipment_code}</div>
+                  </div>
+                )}
+                
+                <Separator />
+                
+                <div>
+                  <span className="text-sm text-muted-foreground block">Completed At</span>
+                  <div className="font-medium">
+                    {execution.completed_at ? format(new Date(execution.completed_at), "PPP p") : "N/A"}
+                  </div>
                 </div>
 
-                {item.requires_note && (
-                  <div>
-                    <Label className="text-xs text-gray-500">Notes</Label>
-                    <Textarea 
-                      placeholder="Add notes..." 
-                      className="h-20"
-                      value={responses[item.id]?.notes || ""}
-                      onChange={(e) => handleResponseChange(item.id, "notes", e.target.value)}
-                    />
-                  </div>
+                {execution.signature && (
+                  <>
+                    <Separator />
+                    <div>
+                      <span className="text-sm text-muted-foreground block mb-2">Technician Signature</span>
+                      <div className="bg-muted/30 p-2 rounded border border-dashed">
+                        <img src={execution.signature} alt="Signature" className="max-h-20 opacity-80" />
+                      </div>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
-          ))}
+          </div>
         </div>
       </div>
     </MainLayout>
