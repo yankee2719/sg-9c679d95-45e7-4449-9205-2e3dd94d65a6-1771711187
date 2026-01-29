@@ -4,61 +4,63 @@ import type { Database } from "@/integrations/supabase/types";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export const userService = {
-  // Get user profile by ID - with fallback to auth.users metadata
+  // Get user profile by ID - with proper error handling and fallback
   async getUserProfile(userId: string): Promise<Profile | null> {
     try {
-      // Try to get from profiles table first
-      const { data, error } = await supabase
+      console.log("🔍 getUserProfile called for userId:", userId);
+
+      // Get current auth session first
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error("❌ Auth error:", authError);
+        return null;
+      }
+
+      if (!user) {
+        console.error("❌ No authenticated user found");
+        return null;
+      }
+
+      console.log("✅ Authenticated user:", user.id, user.email);
+
+      // Try to get from profiles table
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .maybeSingle();
 
-      // If profile exists, return it
-      if (data && !error) {
-        return data;
+      console.log("📊 Profile query result:", { profile, profileError });
+
+      // If profile exists in database, return it
+      if (profile && !profileError) {
+        console.log("✅ Profile found in database:", profile.role);
+        return profile;
       }
 
-      // Profile doesn't exist - check auth.users metadata as fallback
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user && user.id === userId) {
-        // Return a virtual profile from auth metadata
-        return {
-          id: user.id,
-          email: user.email || "",
-          full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
-          role: user.user_metadata?.role || "technician",
-          phone: user.user_metadata?.phone || null,
-          is_active: true,
-          two_factor_enabled: user.user_metadata?.two_factor_enabled || false,
-          two_factor_secret: null,
-          created_at: user.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        } as Profile;
-      }
+      // Profile doesn't exist or RLS blocked - use auth metadata as fallback
+      console.warn("⚠️ Profile not found in database, using auth metadata fallback");
+      console.log("📋 User metadata:", user.user_metadata);
 
-      return null;
+      // Return a virtual profile from auth metadata
+      const virtualProfile: Profile = {
+        id: user.id,
+        email: user.email || "",
+        full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+        role: user.user_metadata?.role || "technician",
+        phone: user.user_metadata?.phone || null,
+        is_active: true,
+        two_factor_enabled: user.user_metadata?.two_factor_enabled || false,
+        two_factor_secret: null,
+        created_at: user.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log("🔄 Returning virtual profile with role:", virtualProfile.role);
+      return virtualProfile;
     } catch (error) {
-      console.error("Error in getUserProfile:", error);
-      
-      // Last resort fallback - return minimal profile from current session
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && user.id === userId) {
-        return {
-          id: user.id,
-          email: user.email || "",
-          full_name: user.email?.split("@")[0] || "User",
-          role: "technician",
-          phone: null,
-          is_active: true,
-          two_factor_enabled: false,
-          two_factor_secret: null,
-          created_at: user.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        } as Profile;
-      }
-      
+      console.error("💥 Error in getUserProfile:", error);
       return null;
     }
   },
