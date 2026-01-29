@@ -27,12 +27,13 @@ interface MainLayoutProps {
   userRole?: "admin" | "supervisor" | "technician";
 }
 
-export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
+export function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userName, setUserName] = useState<string>("");
   const [userInitials, setUserInitials] = useState<string>("U");
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
 
   useEffect(() => {
     loadUserData();
@@ -50,6 +51,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       
       const name = profile?.full_name || session.user.email || "User";
       setUserName(name);
+
+      // SET USER ROLE FROM DATABASE PROFILE
+      if (profile?.role) {
+        setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        console.log("✅ ROLE SET TO:", profile.role);
+      }
 
       const initials = name
         .split(" ")
