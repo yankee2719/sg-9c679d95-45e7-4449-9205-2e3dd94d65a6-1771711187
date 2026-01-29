@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -171,24 +171,26 @@ export default function NewChecklistTemplate() {
       <div className="container mx-auto py-8 px-4 max-w-4xl">
         <Button
           variant="ghost"
-          className="mb-6"
+          className="mb-6 hover:bg-slate-800 text-slate-200"
           onClick={() => router.push("/checklists")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Torna alle Checklist
         </Button>
 
-        <Card className="border-slate-700">
+        <Card className="bg-slate-800 border-slate-700 shadow-xl">
           <CardHeader>
-            <CardTitle>Nuovo Template Checklist</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-white">Nuovo Template Checklist</CardTitle>
+            <CardDescription className="text-slate-400">
               Crea un nuovo template di checklist per le manutenzioni
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title">Titolo Template *</Label>
+                <Label htmlFor="title" className="text-slate-200">
+                  Titolo Template *
+                </Label>
                 <Input
                   id="title"
                   value={formData.title}
@@ -197,23 +199,24 @@ export default function NewChecklistTemplate() {
                   }
                   placeholder="Es: Checklist Manutenzione Motore"
                   required
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Categoria *</Label>
+                <Label htmlFor="category" className="text-slate-200">Categoria *</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) =>
                     setFormData({ ...formData, category: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                     <SelectValue placeholder="Seleziona categoria" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
                     {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
+                      <SelectItem key={category} value={category} className="focus:bg-slate-700 focus:text-white">
                         {category}
                       </SelectItem>
                     ))}
@@ -222,7 +225,9 @@ export default function NewChecklistTemplate() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="equipment_type">Tipo Equipaggiamento</Label>
+                <Label htmlFor="equipment_type" className="text-slate-200">
+                  Tipo Equipaggiamento
+                </Label>
                 <Input
                   id="equipment_type"
                   value={formData.equipment_type}
@@ -230,11 +235,14 @@ export default function NewChecklistTemplate() {
                     setFormData({ ...formData, equipment_type: e.target.value })
                   }
                   placeholder="Es: Motore Elettrico, Pompa Idraulica"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Descrizione</Label>
+                <Label htmlFor="description" className="text-slate-200">
+                  Descrizione
+                </Label>
                 <Textarea
                   id="description"
                   value={formData.description}
@@ -243,18 +251,19 @@ export default function NewChecklistTemplate() {
                   }
                   placeholder="Descrizione opzionale del template"
                   rows={3}
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
                 />
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label>Elementi Checklist *</Label>
+                  <Label className="text-slate-200">Elementi Checklist *</Label>
                   <Button 
                     type="button" 
                     variant="outline" 
                     size="sm" 
                     onClick={addItem}
-                    className="border-primary text-primary hover:bg-primary/10"
+                    className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 bg-transparent"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Aggiungi Elemento
@@ -263,7 +272,7 @@ export default function NewChecklistTemplate() {
 
                 <div className="space-y-3">
                   {items.map((item, index) => (
-                    <div key={item.id} className="flex items-start gap-3 p-4 border border-slate-700 rounded-lg bg-slate-800/50">
+                    <div key={item.id} className="flex items-start gap-3 p-4 border border-slate-700 rounded-lg bg-slate-900/50">
                       <div className="flex-1 space-y-2">
                         <Input
                           value={item.description}
@@ -271,6 +280,7 @@ export default function NewChecklistTemplate() {
                             updateItem(item.id, "description", e.target.value)
                           }
                           placeholder={`Elemento ${index + 1}`}
+                          className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
                         />
                         <div className="flex items-center space-x-2">
                           <Checkbox
@@ -279,10 +289,11 @@ export default function NewChecklistTemplate() {
                             onCheckedChange={(checked) =>
                               updateItem(item.id, "is_required", checked === true)
                             }
+                            className="border-slate-500 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                           />
                           <Label
                             htmlFor={`required-${item.id}`}
-                            className="text-sm font-normal cursor-pointer"
+                            className="text-sm font-normal cursor-pointer text-slate-300"
                           >
                             Obbligatorio
                           </Label>
@@ -294,7 +305,7 @@ export default function NewChecklistTemplate() {
                           variant="ghost"
                           size="icon"
                           onClick={() => removeItem(item.id)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -304,19 +315,20 @@ export default function NewChecklistTemplate() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => router.push("/checklists")}
                   disabled={loading}
+                  className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
                 >
                   Annulla
                 </Button>
                 <Button 
                   type="submit" 
                   disabled={loading}
-                  className="bg-primary hover:bg-primary/90"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   {loading ? "Creazione..." : "Crea Template"}
                 </Button>
