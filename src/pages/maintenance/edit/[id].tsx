@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { maintenanceService } from "@/services/maintenanceService";
-import { equipmentService } from "@/services/equipmentService";
+import { getAllEquipment } from "@/services/equipmentService";
 import { ArrowLeft, Save } from "lucide-react";
 import { SEO } from "@/components/SEO";
 
@@ -41,7 +41,7 @@ export default function EditMaintenanceSchedule() {
 
   const loadEquipment = async () => {
     try {
-      const data = await equipmentService.getAll();
+      const data = await getAllEquipment();
       setEquipmentList(data);
     } catch (error) {
       console.error("Error loading equipment:", error);

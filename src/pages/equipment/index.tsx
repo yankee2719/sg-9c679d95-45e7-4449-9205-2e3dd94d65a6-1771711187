@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { equipmentService } from "@/services/equipmentService";
+import { getAllEquipment } from "@/services/equipmentService";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,7 @@ export default function EquipmentListPage() {
 
   const loadEquipment = async () => {
     try {
-      const data = await equipmentService.getAll();
+      const data = await getAllEquipment();
       setEquipment(data);
     } catch (error) {
       console.error("Error loading equipment:", error);

@@ -6,7 +6,7 @@ import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
-import { equipmentService } from "@/services/equipmentService";
+import { getAllEquipment } from "@/services/equipmentService";
 import { maintenanceService } from "@/services/maintenanceService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ export default function DashboardPage() {
   const loadDashboardData = async () => {
     try {
       const [equipment, upcoming, overdue] = await Promise.all([
-        equipmentService.getAll(),
+        getAllEquipment(),
         maintenanceService.getUpcomingMaintenance(),
         maintenanceService.getOverdueMaintenance()
       ]);

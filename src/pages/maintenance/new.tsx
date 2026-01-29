@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { maintenanceService } from "@/services/maintenanceService";
-import { equipmentService } from "@/services/equipmentService";
+import { getAllEquipment } from "@/services/equipmentService";
 import { checklistService, ChecklistTemplateWithTasks } from "@/services/checklistService";
 import { userService } from "@/services/userService";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,7 @@ export default function NewMaintenancePage() {
       try {
         setLoading(true);
         // Load equipment
-        const equipmentData = await equipmentService.getAll();
+        const equipmentData = await getAllEquipment();
         setEquipment(equipmentData);
 
         // Load checklist templates

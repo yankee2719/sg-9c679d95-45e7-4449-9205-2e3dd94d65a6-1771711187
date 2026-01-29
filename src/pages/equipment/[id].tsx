@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { equipmentService, type Equipment } from "@/services/equipmentService";
+import { getEquipmentById, deleteEquipment, type Equipment } from "@/services/equipmentService";
 import { maintenanceService } from "@/services/maintenanceService";
 import { ArrowLeft, Edit, Trash2, Calendar, FileText, Activity } from "lucide-react";
 import { SEO } from "@/components/SEO";
@@ -29,12 +29,12 @@ export default function EquipmentDetail() {
 
   const loadData = async () => {
     try {
-      const eqData = await equipmentService.getById(id as string);
+      const eqData = await getEquipmentById(id as string);
       // Cast the status to the correct type to satisfy TypeScript
       const typedEquipment = {
         ...eqData,
-        status: eqData.status as "active" | "inactive" | "under_maintenance" | "retired",
-        technical_specs: (eqData.technical_specs as Record<string, any>) || null
+        status: eqData.status as "active" | "under_maintenance" | "out_of_service",
+        technical_specs: (eqData.technical_specs as unknown as Record<string, any>) || null
       };
       setEquipment(typedEquipment);
       
@@ -57,7 +57,7 @@ export default function EquipmentDetail() {
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this equipment?")) return;
     try {
-      await equipmentService.delete(id as string);
+      await deleteEquipment(id as string);
       toast({
         title: "Success",
         description: "Equipment deleted successfully",

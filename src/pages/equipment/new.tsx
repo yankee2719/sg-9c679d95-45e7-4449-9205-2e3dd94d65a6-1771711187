@@ -94,7 +94,7 @@ export default function NewEquipment() {
               <CardTitle>QR Code Generator</CardTitle>
             </CardHeader>
             <CardContent>
-              <QRCodeGenerator />
+              <QRCodeGenerator value={formData.equipment_code || "new-equipment"} />
             </CardContent>
           </Card>
         )}
