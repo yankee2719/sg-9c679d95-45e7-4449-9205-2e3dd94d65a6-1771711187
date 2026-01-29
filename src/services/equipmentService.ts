@@ -1,41 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-export interface Equipment {
-  id: string;
-  name: string;
-  equipment_code: string;
-  category: string | null;
-  manufacturer: string | null;
-  model: string | null;
-  serial_number: string | null;
-  installation_date: string | null;
-  location: string | null;
-  status: "active" | "under_maintenance" | "out_of_service";
-  technical_specs: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type Equipment = Database["public"]["Tables"]["equipment"]["Row"];
+export type EquipmentInsert = Database["public"]["Tables"]["equipment"]["Insert"];
+export type EquipmentUpdate = Database["public"]["Tables"]["equipment"]["Update"];
 
-// Helper to safely cast status
-const parseEquipment = (data: any): Equipment => ({
-  ...data,
-  status: (["active", "under_maintenance", "out_of_service"].includes(data.status) 
-    ? data.status 
-    : "active") as "active" | "under_maintenance" | "out_of_service"
-});
-
-export async function getAllEquipment(): Promise<Equipment[]> {
+export async function getAllEquipment() {
   const { data, error } = await supabase
     .from("equipment")
     .select("*")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data || []).map(parseEquipment);
+  return data as Equipment[];
 }
 
-export async function getEquipmentById(id: string): Promise<Equipment> {
+export async function getEquipmentById(id: string) {
   const { data, error } = await supabase
     .from("equipment")
     .select("*")
@@ -43,10 +23,10 @@ export async function getEquipmentById(id: string): Promise<Equipment> {
     .single();
 
   if (error) throw error;
-  return parseEquipment(data);
+  return data as Equipment;
 }
 
-export async function createEquipment(equipment: Omit<Equipment, "id" | "created_at" | "updated_at">): Promise<Equipment> {
+export async function createEquipment(equipment: EquipmentInsert) {
   const { data, error } = await supabase
     .from("equipment")
     .insert(equipment)
@@ -54,10 +34,10 @@ export async function createEquipment(equipment: Omit<Equipment, "id" | "created
     .single();
 
   if (error) throw error;
-  return parseEquipment(data);
+  return data as Equipment;
 }
 
-export async function updateEquipment(id: string, equipment: Partial<Omit<Equipment, "id" | "created_at" | "updated_at">>): Promise<Equipment> {
+export async function updateEquipment(id: string, equipment: EquipmentUpdate) {
   const { data, error } = await supabase
     .from("equipment")
     .update(equipment)
@@ -66,14 +46,35 @@ export async function updateEquipment(id: string, equipment: Partial<Omit<Equipm
     .single();
 
   if (error) throw error;
-  return parseEquipment(data);
+  return data as Equipment;
 }
 
-export async function deleteEquipment(id: string): Promise<void> {
+export async function deleteEquipment(id: string) {
   const { error } = await supabase
     .from("equipment")
     .delete()
     .eq("id", id);
 
   if (error) throw error;
+}
+
+export async function getEquipmentByQrCode(qrCode: string) {
+  const { data, error } = await supabase
+    .from("equipment")
+    .select("*")
+    .eq("qr_code", qrCode)
+    .single();
+
+  if (error) throw error;
+  return data as Equipment;
+}
+
+export async function generateEquipmentQrCode(id: string) {
+  const equipment = await getEquipmentById(id);
+  // Usa equipment_code se disponibile, altrimenti usa l'ID o un fallback
+  const codePart = equipment.equipment_code || equipment.id.substring(0, 8);
+  const qrCode = `EQ-${codePart}-${Date.now()}`;
+  
+  await updateEquipment(id, { qr_code: qrCode });
+  return qrCode;
 }
