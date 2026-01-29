@@ -47,11 +47,9 @@ export default function NewMaintenancePage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        // Load equipment
         const equipmentData = await getAllEquipment();
         setEquipment(equipmentData);
 
-        // Load checklist templates
         const templatesData = await checklistService.getActiveTemplates();
         setTemplates(templatesData);
       } catch (error) {
@@ -111,34 +109,34 @@ export default function NewMaintenancePage() {
       
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.back()}>
+          <Button variant="ghost" onClick={() => router.back()} className="text-slate-400 hover:text-white">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Indietro
           </Button>
-          <h1 className="text-2xl font-bold">Nuova Manutenzione Programmata</h1>
+          <h1 className="text-2xl font-bold text-white">Nuova Manutenzione Programmata</h1>
         </div>
 
-        <Card>
+        <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
-            <CardTitle>Dati Manutenzione</CardTitle>
+            <CardTitle className="text-white">Dati Manutenzione</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="equipment" className="text-white">Macchina *</Label>
+                  <Label htmlFor="equipment" className="text-slate-200">Macchina *</Label>
                   <Select
                     value={formData.equipment_id}
                     onValueChange={(value) => handleChange("equipment_id", value)}
                     required
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue placeholder="Seleziona macchina" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectContent className="bg-slate-800 border-slate-700">
                       {equipment.map((eq) => (
-                        <SelectItem key={eq.id} value={eq.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
-                          {eq.name} ({eq.code})
+                        <SelectItem key={eq.id} value={eq.id} className="text-slate-100">
+                          {eq.name} ({eq.equipment_code})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -146,26 +144,26 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="type" className="text-white">Tipo Manutenzione *</Label>
+                  <Label htmlFor="type" className="text-slate-200">Tipo Manutenzione *</Label>
                   <Select
                     value={formData.maintenance_type}
                     onValueChange={(value) => handleChange("maintenance_type", value)}
                     required
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue placeholder="Seleziona tipo" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="preventive" className="text-white hover:bg-gray-700 focus:bg-gray-700">Preventiva</SelectItem>
-                      <SelectItem value="predictive" className="text-white hover:bg-gray-700 focus:bg-gray-700">Predittiva</SelectItem>
-                      <SelectItem value="corrective" className="text-white hover:bg-gray-700 focus:bg-gray-700">Correttiva</SelectItem>
-                      <SelectItem value="extraordinary" className="text-white hover:bg-gray-700 focus:bg-gray-700">Straordinaria</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="preventive" className="text-slate-100">Preventiva</SelectItem>
+                      <SelectItem value="predictive" className="text-slate-100">Predittiva</SelectItem>
+                      <SelectItem value="corrective" className="text-slate-100">Correttiva</SelectItem>
+                      <SelectItem value="extraordinary" className="text-slate-100">Straordinaria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="title" className="text-white">Titolo *</Label>
+                  <Label htmlFor="title" className="text-slate-200">Titolo *</Label>
                   <Input
                     id="title"
                     type="text"
@@ -173,107 +171,107 @@ export default function NewMaintenancePage() {
                     onChange={(e) => handleChange("title", e.target.value)}
                     placeholder="Es. Manutenzione Preventiva Mensile"
                     required
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="scheduled_date" className="text-white">Data Pianificata *</Label>
+                  <Label htmlFor="scheduled_date" className="text-slate-200">Data Pianificata *</Label>
                   <Input
                     id="scheduled_date"
                     type="date"
                     value={formData.scheduled_date}
                     onChange={(e) => handleChange("scheduled_date", e.target.value)}
                     required
-                    className="bg-gray-700 border-gray-600 text-white"
+                    className="bg-slate-700 border-slate-600 text-slate-100"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="due_date" className="text-white">Data Scadenza</Label>
+                  <Label htmlFor="due_date" className="text-slate-200">Data Scadenza</Label>
                   <Input
                     id="due_date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => handleChange("due_date", e.target.value)}
                     placeholder="Opzionale"
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="priority" className="text-white">Priorità *</Label>
+                  <Label htmlFor="priority" className="text-slate-200">Priorità *</Label>
                   <Select
                     value={formData.priority}
                     onValueChange={(value) => handleChange("priority", value)}
                     required
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue placeholder="Seleziona priorità" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="low" className="text-white hover:bg-gray-700 focus:bg-gray-700">Bassa</SelectItem>
-                      <SelectItem value="medium" className="text-white hover:bg-gray-700 focus:bg-gray-700">Media</SelectItem>
-                      <SelectItem value="high" className="text-white hover:bg-gray-700 focus:bg-gray-700">Alta</SelectItem>
-                      <SelectItem value="critical" className="text-white hover:bg-gray-700 focus:bg-gray-700">Critica</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="low" className="text-slate-100">Bassa</SelectItem>
+                      <SelectItem value="medium" className="text-slate-100">Media</SelectItem>
+                      <SelectItem value="high" className="text-slate-100">Alta</SelectItem>
+                      <SelectItem value="critical" className="text-slate-100">Critica</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-white">Durata Stimata (minuti)</Label>
+                  <Label htmlFor="duration" className="text-slate-200">Durata Stimata (minuti)</Label>
                   <Input
                     id="duration"
                     type="number"
                     value={formData.estimated_duration_minutes}
                     onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)}
                     placeholder="Es. 60"
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="frequency" className="text-white">Frequenza (giorni)</Label>
+                  <Label htmlFor="frequency" className="text-slate-200">Frequenza (giorni)</Label>
                   <Input
                     id="frequency"
                     type="number"
                     value={formData.frequency_days}
                     onChange={(e) => handleChange("frequency_days", e.target.value)}
                     placeholder="Es. 30 per mensile"
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="recurrence" className="text-white">Pattern Ricorrenza</Label>
+                  <Label htmlFor="recurrence" className="text-slate-200">Pattern Ricorrenza</Label>
                   <Select
                     value={formData.recurrence_pattern}
                     onValueChange={(value) => handleChange("recurrence_pattern", value)}
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue placeholder="Nessuna ricorrenza" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="daily" className="text-white hover:bg-gray-700 focus:bg-gray-700">Giornaliera</SelectItem>
-                      <SelectItem value="weekly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Settimanale</SelectItem>
-                      <SelectItem value="monthly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Mensile</SelectItem>
-                      <SelectItem value="yearly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Annuale</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="daily" className="text-slate-100">Giornaliera</SelectItem>
+                      <SelectItem value="weekly" className="text-slate-100">Settimanale</SelectItem>
+                      <SelectItem value="monthly" className="text-slate-100">Mensile</SelectItem>
+                      <SelectItem value="yearly" className="text-slate-100">Annuale</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="technician" className="text-white">Assegna a Tecnico</Label>
+                  <Label htmlFor="technician" className="text-slate-200">Assegna a Tecnico</Label>
                   <Select
                     value={formData.assigned_to}
                     onValueChange={(value) => handleChange("assigned_to", value)}
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue placeholder="Seleziona tecnico" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectContent className="bg-slate-800 border-slate-700">
                       {technicians.map((tech) => (
-                        <SelectItem key={tech.id} value={tech.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
+                        <SelectItem key={tech.id} value={tech.id} className="text-slate-100">
                           {tech.full_name || tech.email}
                         </SelectItem>
                       ))}
@@ -282,17 +280,17 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="template" className="text-white">Template Checklist</Label>
+                  <Label htmlFor="template" className="text-slate-200">Template Checklist</Label>
                   <Select
                     value={formData.checklist_template_id}
                     onValueChange={(value) => handleChange("checklist_template_id", value)}
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue placeholder="Seleziona template (opzionale)" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectContent className="bg-slate-800 border-slate-700">
                       {templates.map((template) => (
-                        <SelectItem key={template.id} value={template.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
+                        <SelectItem key={template.id} value={template.id} className="text-slate-100">
                           {template.name}
                         </SelectItem>
                       ))}
@@ -302,21 +300,29 @@ export default function NewMaintenancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-white">Descrizione / Note</Label>
+                <Label htmlFor="description" className="text-slate-200">Descrizione / Note</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => handleChange("description", e.target.value)}
                   rows={4}
                   placeholder="Dettagli sull'intervento di manutenzione..."
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                 />
               </div>
 
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  Annulla
+                </Button>
                 <Button 
                   type="submit" 
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600"
+                  className="bg-[#fb923c] hover:bg-[#f97316] text-white"
                   disabled={loading}
                 >
                   {loading ? (

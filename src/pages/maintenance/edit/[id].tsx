@@ -26,10 +26,10 @@ export default function EditMaintenanceSchedule() {
     equipment_id: "",
     title: "",
     description: "",
-    frequency: "monthly", // Changed from frequency_days number to enum string
+    frequency: "monthly",
     priority: "medium",
     next_maintenance_date: "",
-    status: "scheduled" // Changed from is_active boolean to status enum
+    status: "scheduled"
   });
 
   useEffect(() => {
@@ -94,37 +94,37 @@ export default function EditMaintenanceSchedule() {
     }
   };
 
-  if (loading) return <MainLayout>Loading...</MainLayout>;
+  if (loading) return <MainLayout><div className="text-white">Loading...</div></MainLayout>;
 
   return (
     <MainLayout>
       <SEO title="Edit Maintenance Schedule" />
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-slate-400 hover:text-white">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold">Edit Maintenance Schedule</h1>
+          <h1 className="text-2xl font-bold text-white">Edit Maintenance Schedule</h1>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <Card>
+          <Card className="bg-slate-800/50 border-slate-700">
             <CardHeader>
-              <CardTitle>Schedule Details</CardTitle>
+              <CardTitle className="text-white">Schedule Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="equipment" className="text-white">Equipment</Label>
+                <Label htmlFor="equipment" className="text-slate-200">Equipment</Label>
                 <Select 
                   value={schedule.equipment_id} 
                   onValueChange={(value) => setSchedule({...schedule, equipment_id: value})}
                 >
-                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                     <SelectValue placeholder="Select equipment" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectContent className="bg-slate-800 border-slate-700">
                     {equipmentList.map((eq) => (
-                      <SelectItem key={eq.id} value={eq.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
+                      <SelectItem key={eq.id} value={eq.id} className="text-slate-100">
                         {eq.name} ({eq.equipment_code})
                       </SelectItem>
                     ))}
@@ -133,91 +133,91 @@ export default function EditMaintenanceSchedule() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="title" className="text-white">Title</Label>
+                <Label htmlFor="title" className="text-slate-200">Title</Label>
                 <Input 
                   id="title"
                   value={schedule.title}
                   onChange={(e) => setSchedule({...schedule, title: e.target.value})}
                   placeholder="e.g. Monthly Inspection"
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description" className="text-white">Description</Label>
+                <Label htmlFor="description" className="text-slate-200">Description</Label>
                 <Textarea 
                   id="description"
                   value={schedule.description}
                   onChange={(e) => setSchedule({...schedule, description: e.target.value})}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="frequency" className="text-white">Frequency</Label>
+                  <Label htmlFor="frequency" className="text-slate-200">Frequency</Label>
                   <Select 
                     value={schedule.frequency} 
                     onValueChange={(value) => setSchedule({...schedule, frequency: value})}
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="daily" className="text-white hover:bg-gray-700 focus:bg-gray-700">Daily</SelectItem>
-                      <SelectItem value="weekly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Weekly</SelectItem>
-                      <SelectItem value="monthly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Monthly</SelectItem>
-                      <SelectItem value="quarterly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Quarterly</SelectItem>
-                      <SelectItem value="yearly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Yearly</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="daily" className="text-slate-100">Daily</SelectItem>
+                      <SelectItem value="weekly" className="text-slate-100">Weekly</SelectItem>
+                      <SelectItem value="monthly" className="text-slate-100">Monthly</SelectItem>
+                      <SelectItem value="quarterly" className="text-slate-100">Quarterly</SelectItem>
+                      <SelectItem value="yearly" className="text-slate-100">Yearly</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 
                 <div className="grid gap-2">
-                  <Label htmlFor="priority" className="text-white">Priority</Label>
+                  <Label htmlFor="priority" className="text-slate-200">Priority</Label>
                   <Select 
                     value={schedule.priority} 
                     onValueChange={(value) => setSchedule({...schedule, priority: value})}
                   >
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="low" className="text-white hover:bg-gray-700 focus:bg-gray-700">Low</SelectItem>
-                      <SelectItem value="medium" className="text-white hover:bg-gray-700 focus:bg-gray-700">Medium</SelectItem>
-                      <SelectItem value="high" className="text-white hover:bg-gray-700 focus:bg-gray-700">High</SelectItem>
-                      <SelectItem value="critical" className="text-white hover:bg-gray-700 focus:bg-gray-700">Critical</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="low" className="text-slate-100">Low</SelectItem>
+                      <SelectItem value="medium" className="text-slate-100">Medium</SelectItem>
+                      <SelectItem value="high" className="text-slate-100">High</SelectItem>
+                      <SelectItem value="critical" className="text-slate-100">Critical</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="date" className="text-white">Next Maintenance Date</Label>
+                <Label htmlFor="date" className="text-slate-200">Next Maintenance Date</Label>
                 <Input 
                   id="date"
                   type="date"
                   value={schedule.next_maintenance_date}
                   onChange={(e) => setSchedule({...schedule, next_maintenance_date: e.target.value})}
-                  className="bg-gray-700 border-gray-600 text-white"
+                  className="bg-slate-700 border-slate-600 text-slate-100"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="status" className="text-white">Status</Label>
+                <Label htmlFor="status" className="text-slate-200">Status</Label>
                 <Select 
                   value={schedule.status} 
                   onValueChange={(value) => setSchedule({...schedule, status: value})}
                 >
-                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-600">
-                    <SelectItem value="scheduled" className="text-white hover:bg-gray-700 focus:bg-gray-700">Scheduled</SelectItem>
-                    <SelectItem value="in_progress" className="text-white hover:bg-gray-700 focus:bg-gray-700">In Progress</SelectItem>
-                    <SelectItem value="completed" className="text-white hover:bg-gray-700 focus:bg-gray-700">Completed</SelectItem>
-                    <SelectItem value="overdue" className="text-white hover:bg-gray-700 focus:bg-gray-700">Overdue</SelectItem>
-                    <SelectItem value="cancelled" className="text-white hover:bg-gray-700 focus:bg-gray-700">Cancelled</SelectItem>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="scheduled" className="text-slate-100">Scheduled</SelectItem>
+                    <SelectItem value="in_progress" className="text-slate-100">In Progress</SelectItem>
+                    <SelectItem value="completed" className="text-slate-100">Completed</SelectItem>
+                    <SelectItem value="overdue" className="text-slate-100">Overdue</SelectItem>
+                    <SelectItem value="cancelled" className="text-slate-100">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -225,8 +225,8 @@ export default function EditMaintenanceSchedule() {
           </Card>
 
           <div className="flex justify-end gap-4 mt-6">
-            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="button" variant="outline" onClick={() => router.back()} className="border-slate-600 text-slate-300 hover:bg-slate-700">Cancel</Button>
+            <Button type="submit" disabled={saving} className="bg-[#fb923c] hover:bg-[#f97316] text-white">
               <Save className="mr-2 h-4 w-4" />
               {saving ? "Saving..." : "Save Changes"}
             </Button>
