@@ -27,7 +27,7 @@ export default function NewEquipment() {
     serial_number: "",
     installation_date: "",
     location: "",
-    status: "active" as "active" | "under_maintenance" | "out_of_service",
+    status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
     technical_specs: "",
     notes: ""
   });
@@ -193,7 +193,7 @@ export default function NewEquipment() {
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={formData.status}
-                    onValueChange={(value: "active" | "under_maintenance" | "out_of_service") =>
+                    onValueChange={(value: "active" | "inactive" | "under_maintenance" | "retired") =>
                       setFormData({ ...formData, status: value })
                     }
                   >
@@ -202,8 +202,9 @@ export default function NewEquipment() {
                     </SelectTrigger>
                     <SelectContent className="bg-slate-700 border-slate-600">
                       <SelectItem value="active" className="text-white hover:bg-slate-600">Active</SelectItem>
+                      <SelectItem value="inactive" className="text-white hover:bg-slate-600">Inactive</SelectItem>
                       <SelectItem value="under_maintenance" className="text-white hover:bg-slate-600">Under Maintenance</SelectItem>
-                      <SelectItem value="out_of_service" className="text-white hover:bg-slate-600">Out of Service</SelectItem>
+                      <SelectItem value="retired" className="text-white hover:bg-slate-600">Retired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
