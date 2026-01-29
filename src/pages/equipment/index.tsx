@@ -5,6 +5,7 @@ import { SEO } from "@/components/SEO";
 import { getAllEquipment } from "@/services/equipmentService";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -29,30 +30,26 @@ export default function EquipmentListPage() {
   const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    checkAuthAndLoadData();
-  }, []);
+    const initPage = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
+          return;
+        }
 
-  const checkAuthAndLoadData = async () => {
-    try {
-      const session = await authService.getCurrentSession();
-      if (!session) {
-        router.push("/login");
-        return;
+        const profile = await userService.getUserById(user.id);
+        setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        await loadEquipment();
+      } catch (error) {
+        console.error("Error initializing page:", error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const role = await userService.getUserRole(session.user.id);
-      const profile = await userService.getUserProfile(session.user.id);
-      
-      setUserRole(role as any);
-      setUserName(profile?.full_name || session.user.email || "User");
-
-      await loadEquipment();
-    } catch (error) {
-      console.error("Error loading data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    initPage();
+  }, [router]);
 
   const loadEquipment = async () => {
     try {

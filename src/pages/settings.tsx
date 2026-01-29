@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Shield, 
   Key, 
@@ -30,6 +31,11 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("admin");
   const [userName, setUserName] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    full_name: "",
+    email: "",
+  });
   
   const [darkMode, setDarkMode] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -41,37 +47,30 @@ export default function SettingsPage() {
   const [timezone, setTimezone] = useState("Europe/Rome");
 
   useEffect(() => {
-    checkAuthAndLoadData();
-  }, []);
+    const loadUserData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
+          return;
+        }
 
-  const checkAuthAndLoadData = async () => {
-    try {
-      const session = await authService.getCurrentSession();
-      if (!session) {
-        router.push("/login");
-        return;
-      }
-
-      const profile = await userService.getUserProfile(session.user.id);
-      const role = await userService.getUserRole(session.user.id);
-      
-      setUserName(profile?.full_name || session.user.email || "User");
-      setUserRole((role as "admin" | "supervisor" | "technician") || "admin");
-
-      if (role !== "admin") {
-        toast({
-          variant: "destructive",
-          title: "Access Denied",
-          description: "Only administrators can access system settings",
+        const profile = await userService.getUserById(user.id);
+        setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        setUserName(profile.full_name || profile.email || "User");
+        setFormData({
+          full_name: profile.full_name || "",
+          email: profile.email || "",
         });
-        router.push("/dashboard");
-        return;
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading data:", error);
-      router.push("/login");
-    }
-  };
+    };
+
+    loadUserData();
+  }, [router]);
 
   const handleSaveSettings = () => {
     toast({
@@ -80,7 +79,7 @@ export default function SettingsPage() {
     });
   };
 
-  if (!userRole) {
+  if (!userRole || loading) {
     return null;
   }
 

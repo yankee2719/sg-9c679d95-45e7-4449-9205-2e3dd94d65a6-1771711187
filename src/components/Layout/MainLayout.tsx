@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
+import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard,
   Settings as SettingsIcon,
@@ -20,6 +21,12 @@ import {
   LogOut,
   Menu,
   X,
+  Home,
+  Package,
+  ClipboardList,
+  QrCode,
+  Settings,
+  Users,
 } from "lucide-react";
 
 interface MainLayoutProps {
@@ -36,53 +43,51 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
 
   useEffect(() => {
-    loadUserData();
+    const loadUserProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const profile = await userService.getUserById(user.id);
+          setUserName(profile.full_name || profile.email || "User");
+          setUserInitials(getInitials(profile.full_name || profile.email || "U"));
+          setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        }
+      } catch (error) {
+        console.error("Error loading user profile:", error);
+      }
+    };
+
+    loadUserProfile();
   }, []);
 
-  const loadUserData = async () => {
-    try {
-      const session = await authService.getCurrentSession();
-      if (!session) return;
+  const menuItems = [
+    { href: "/dashboard", label: "Dashboard", icon: Home },
+    { href: "/equipment", label: "Equipaggiamenti", icon: Package },
+    { href: "/maintenance", label: "Manutenzioni", icon: Wrench },
+    { href: "/checklists", label: "Checklist", icon: ClipboardList },
+    { href: "/scanner", label: "Scanner QR", icon: QrCode },
+    { href: "/notifications", label: "Notifiche", icon: Bell },
+    { href: "/settings", label: "Impostazioni", icon: Settings },
+  ];
 
-      const profile = await userService.getUserProfile(session.user.id);
-      
-      console.log("🔍 SIDEBAR DEBUG - User Profile:", profile);
-      console.log("🔍 SIDEBAR DEBUG - User Role:", profile?.role);
-      
-      const name = profile?.full_name || session.user.email || "User";
-      setUserName(name);
-
-      // SET USER ROLE FROM DATABASE PROFILE
-      if (profile?.role) {
-        setUserRole(profile.role as "admin" | "supervisor" | "technician");
-        console.log("✅ ROLE SET TO:", profile.role);
-      }
-
-      const initials = name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-      setUserInitials(initials);
-    } catch (error) {
-      console.error("Error loading user data:", error);
-    }
-  };
+  const adminMenuItems = [
+    { href: "/admin/users", label: "Utenti", icon: Users },
+    { href: "/analytics/checklist-executions", label: "Analitiche", icon: BarChart3 },
+  ];
 
   const navigation = useMemo(() => {
     const items = [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Equipment", href: "/equipment", icon: SettingsIcon },
-      { name: "Maintenance", href: "/maintenance", icon: Wrench, badge: 1 },
-      { name: "Checklists", href: "/checklists", icon: ClipboardCheck },
-      { name: "Analytics", href: "/analytics/checklist-executions", icon: BarChart3 },
+      { name: "Equipaggiamenti", href: "/equipment", icon: SettingsIcon },
+      { name: "Manutenzioni", href: "/maintenance", icon: Wrench, badge: 1 },
+      { name: "Checklist", href: "/checklists", icon: ClipboardCheck },
+      { name: "Analitiche", href: "/analytics/checklist-executions", icon: BarChart3 },
     ];
 
     // Add Users menu for admin only
     if (userRole === "admin") {
       items.push({
-        name: "Users",
+        name: "Utenti",
         href: "/admin/users",
         icon: Users2,
       });
@@ -90,7 +95,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     // Add Notifications for all users
     items.push({
-      name: "Notifications",
+      name: "Notifiche",
       href: "/notifications",
       icon: Bell,
       badge: 4,
@@ -99,7 +104,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     // Add Settings menu for admin only
     if (userRole === "admin") {
       items.push({
-        name: "Settings",
+        name: "Impostazioni",
         href: "/settings",
         icon: Settings2,
       });
@@ -107,6 +112,15 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     return items;
   }, [userRole]);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   const handleLogout = async () => {
     try {

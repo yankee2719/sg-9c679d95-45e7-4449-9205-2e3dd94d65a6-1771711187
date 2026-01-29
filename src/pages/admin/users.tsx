@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
@@ -64,6 +65,7 @@ export default function AdminUsersPage() {
   const { toast } = useToast();
 
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician" | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,8 +96,30 @@ export default function AdminUsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   useEffect(() => {
-    checkAuthAndLoadUsers();
-  }, []);
+    const checkAdminAccess = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+        
+        const profile = await userService.getUserById(user.id);
+        if (profile.role !== "admin") {
+          router.push("/dashboard");
+          return;
+        }
+
+        setCurrentUserId(user.id);
+        await loadUsers();
+      } catch (error) {
+        console.error("Error checking admin access:", error);
+        router.push("/login");
+      }
+    };
+
+    checkAdminAccess();
+  }, [router]);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -112,37 +136,6 @@ export default function AdminUsersPage() {
       );
     }
   }, [searchQuery, users]);
-
-  const checkAuthAndLoadUsers = async () => {
-    try {
-      setLoading(true);
-
-      const session = await authService.getCurrentSession();
-      if (!session) {
-        router.push("/login");
-        return;
-      }
-
-      const role = await userService.getUserRole(session.user.id);
-      if (!role || role !== "admin") {
-        toast({
-          variant: "destructive",
-          title: "Accesso Negato",
-          description: "Solo gli amministratori possono accedere a questa pagina",
-        });
-        router.push("/dashboard");
-        return;
-      }
-
-      setUserRole(role as any);
-      await loadUsers();
-    } catch (error) {
-      console.error("Error checking auth:", error);
-      router.push("/login");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadUsers = async () => {
     try {

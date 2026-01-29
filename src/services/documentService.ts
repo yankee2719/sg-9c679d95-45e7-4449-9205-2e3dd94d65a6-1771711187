@@ -1,65 +1,77 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-export interface EquipmentDocument {
-  id: string;
-  equipment_id: string;
-  title: string;
-  file_url: string;
-  file_type: string;
-  uploaded_by: string;
-  created_at: string;
+type Document = Database["public"]["Tables"]["documents"]["Row"];
+type DocumentInsert = Database["public"]["Tables"]["documents"]["Insert"];
+
+export async function uploadDocument(
+  equipmentId: string,
+  file: File,
+  title: string
+): Promise<Document> {
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${equipmentId}_${Date.now()}.${fileExt}`;
+  const filePath = `documents/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("documents")
+    .upload(filePath, file);
+
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase
+    .from("documents")
+    .insert({
+      equipment_id: equipmentId,
+      title,
+      file_path: filePath,
+      file_type: file.type,
+      file_size: file.size,
+      uploaded_by: (await supabase.auth.getUser()).data.user?.id
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
-export const documentService = {
-  async uploadDocument(file: File, equipmentId: string, description: string) {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `${equipmentId}/${fileName}`;
+export async function getDocumentsByEquipment(equipmentId: string): Promise<Document[]> {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("equipment_id", equipmentId)
+    .order("created_at", { ascending: false });
 
-    // 1. Upload file to storage
-    const { error: uploadError } = await supabase.storage
-      .from('equipment-documents')
-      .upload(filePath, file);
+  if (error) throw error;
+  return data || [];
+}
 
-    if (uploadError) throw uploadError;
+export async function deleteDocument(id: string): Promise<void> {
+  const { data: doc, error: fetchError } = await supabase
+    .from("documents")
+    .select("file_path")
+    .eq("id", id)
+    .single();
 
-    // 2. Create database record
-    const { data, error: dbError } = await supabase
-      .from('equipment_documents')
-      .insert({
-        equipment_id: equipmentId,
-        file_name: file.name,
-        file_path: filePath,
-        file_type: file.type,
-        file_size: file.size,
-        description: description
-      })
-      .select()
-      .single();
+  if (fetchError) throw fetchError;
 
-    if (dbError) throw dbError;
-    return data;
-  },
-
-  async getDocuments(equipmentId: string) {
-    const { data, error } = await supabase
-      .from("equipment_documents")
-      .select("*")
-      .eq("equipment_id", equipmentId)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    // Force cast to avoid strict type checks on created_at which might be string vs Date issue
-    return data as any as EquipmentDocument[];
-  },
-
-  async deleteDocument(id: string) {
-    const { error } = await supabase
-      .from("equipment_documents")
-      .delete()
-      .eq("id", id);
-
-    if (error) throw error;
-    return true;
+  if (doc?.file_path) {
+    await supabase.storage.from("documents").remove([doc.file_path]);
   }
-};
+
+  const { error } = await supabase
+    .from("documents")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function getDocumentUrl(filePath: string): Promise<string> {
+  const { data } = supabase.storage
+    .from("documents")
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+}

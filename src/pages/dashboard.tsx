@@ -55,47 +55,31 @@ export default function DashboardPage() {
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const session = await authService.getCurrentSession();
-      if (!session) {
-        router.push("/login");
-        return;
-      }
-
-      // Get user profile directly to ensure we have the latest role
-      const profile = await userService.getUserProfile(session.user.id);
-      
-      console.log("🔍 DEBUG - User Profile:", profile);
-      console.log("🔍 DEBUG - User Role:", profile?.role);
-      
-      if (profile?.role) {
-        setUserRole(profile.role as any);
-        
-        // Get user full name from profile
-        if (profile.full_name) {
-          setUserName(profile.full_name);
+    const loadData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
+          return;
         }
-        
-        await loadDashboardData();
-        
-        // Load user stats if admin
-        if (profile.role === "admin") {
-          await loadUserStats();
-        }
-      } else {
-        console.error("❌ No role found in profile!");
+
+        const profile = await userService.getUserById(user.id);
+        setUserName(profile.full_name || profile.email || "User");
+        setUserRole(profile.role as "admin" | "supervisor" | "technician");
+
+        await Promise.all([
+          loadDashboardData(),
+          profile.role === "admin" ? loadUserStats() : Promise.resolve()
+        ]);
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error checking auth:", error);
-      router.push("/login");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    loadData();
+  }, [router]);
 
   const loadDashboardData = async () => {
     try {

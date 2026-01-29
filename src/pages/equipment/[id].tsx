@@ -136,14 +136,16 @@ export default function EquipmentDetailPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-slate-400">Status</p>
-                  <Badge variant={equipment.status === "active" ? "default" : "secondary"} className="mt-1">
-                    {equipment.status || "N/A"}
-                  </Badge>
+                  <p className="text-sm text-muted-foreground">Purchase Date</p>
+                  <p className="font-medium">
+                    {equipment.purchase_date
+                      ? new Date(equipment.purchase_date).toLocaleDateString()
+                      : "N/A"}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-400">Location</p>
-                  <p className="text-white font-medium">{equipment.location || "N/A"}</p>
+                  <p className="text-sm text-muted-foreground">Location</p>
+                  <p className="font-medium">{equipment.location || "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-400">Manufacturer</p>
@@ -156,14 +158,6 @@ export default function EquipmentDetailPage() {
                 <div>
                   <p className="text-sm text-slate-400">Serial Number</p>
                   <p className="text-white font-medium">{equipment.serial_number || "N/A"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-400">Installation Date</p>
-                  <p className="text-white font-medium">
-                    {equipment.installation_date
-                      ? new Date(equipment.installation_date).toLocaleDateString()
-                      : "N/A"}
-                  </p>
                 </div>
               </div>
               {equipment.technical_specs && (
@@ -272,22 +266,11 @@ export default function EquipmentDetailPage() {
                         <div>
                           <h4 className="font-medium text-white">{item.title}</h4>
                           <p className="text-sm text-slate-400">
-                            {item.next_maintenance_date
-                              ? new Date(item.next_maintenance_date).toLocaleDateString()
+                            {item.next_due_date
+                              ? new Date(item.next_due_date).toLocaleDateString()
                               : "No date"}
                           </p>
                         </div>
-                        <Badge
-                          variant={
-                            item.status === "completed"
-                              ? "default"
-                              : item.status === "in_progress"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {item.status}
-                        </Badge>
                       </div>
                     ))}
                   </div>

@@ -24,7 +24,7 @@ export default function EditEquipment() {
     manufacturer: "",
     model: "",
     serial_number: "",
-    installation_date: "",
+    purchase_date: "",
     location: "",
     status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
     technical_specs: "",
@@ -41,18 +41,16 @@ export default function EditEquipment() {
     try {
       const equipment = await getEquipmentById(equipmentId);
       setFormData({
-        name: equipment.name || "",
-        equipment_code: equipment.equipment_code || "",
+        name: equipment.name,
+        equipment_code: equipment.equipment_code,
         category: equipment.category || "",
+        status: equipment.status as "active" | "inactive" | "under_maintenance" | "retired",
+        location: equipment.location || "",
+        purchase_date: equipment.purchase_date || "",
         manufacturer: equipment.manufacturer || "",
         model: equipment.model || "",
         serial_number: equipment.serial_number || "",
-        installation_date: equipment.installation_date || "",
-        location: equipment.location || "",
-        status: (equipment.status as "active" | "inactive" | "under_maintenance" | "retired") || "active",
-        technical_specs: typeof equipment.technical_specs === 'string' 
-          ? equipment.technical_specs 
-          : JSON.stringify(equipment.technical_specs || ""),
+        technical_specs: JSON.stringify(equipment.technical_specs || ""),
         notes: equipment.notes || ""
       });
     } catch (error) {
@@ -169,16 +167,6 @@ export default function EditEquipment() {
                     id="serial_number"
                     value={formData.serial_number}
                     onChange={(e) => handleChange("serial_number", e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="installation_date">Installation Date</Label>
-                  <Input
-                    id="installation_date"
-                    type="date"
-                    value={formData.installation_date}
-                    onChange={(e) => handleChange("installation_date", e.target.value)}
                   />
                 </div>
 

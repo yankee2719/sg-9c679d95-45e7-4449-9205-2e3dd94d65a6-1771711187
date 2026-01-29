@@ -5,6 +5,8 @@ import { SEO } from "@/components/SEO";
 import { maintenanceService } from "@/services/maintenanceService";
 import { authService } from "@/services/authService";
 import { userService } from "@/services/userService";
+import { supabase } from "@/integrations/supabase/client";
+import { getAllEquipment } from "@/services/equipmentService";
 import { exportMaintenanceLogsToCSV, exportMaintenanceLogsToPDF } from "@/utils/exportUtils";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -55,34 +57,35 @@ export default function MaintenancePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [exporting, setExporting] = useState(false);
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [scheduleToDelete, setScheduleToDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    checkAuthAndLoadData();
-  }, []);
+    const initPage = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
+          return;
+        }
 
-  const checkAuthAndLoadData = async () => {
-    try {
-      const session = await authService.getCurrentSession();
-      if (!session) {
-        router.push("/login");
-        return;
+        const profile = await userService.getUserById(user.id);
+        setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        setCurrentUserId(user.id);
+        await Promise.all([
+          loadData(),
+        ]);
+      } catch (error) {
+        console.error("Error loading maintenance logs:", error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const role = await userService.getUserRole(session.user.id);
-      if (role) {
-        setUserRole(role as any);
-      }
-
-      await loadData();
-    } catch (error) {
-      console.error("Error loading data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    initPage();
+  }, [router]);
 
   const loadData = async () => {
     try {

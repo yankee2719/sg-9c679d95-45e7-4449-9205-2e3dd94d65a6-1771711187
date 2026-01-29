@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { maintenanceService } from "@/services/maintenanceService";
 import { getAllEquipment } from "@/services/equipmentService";
-import { checklistService, ChecklistTemplateWithTasks } from "@/services/checklistService";
+import { getChecklists, type ChecklistWithItems } from "@/services/checklistService";
+import { createMaintenanceSchedule } from "@/services/maintenanceService";
 import { userService } from "@/services/userService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function NewMaintenancePage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [checklists, setChecklists] = useState<ChecklistWithItems[]>([]);
   const [loading, setLoading] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -44,27 +45,27 @@ export default function NewMaintenancePage() {
   });
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const equipmentData = await getAllEquipment();
-        setEquipment(equipmentData);
-
-        const templatesData = await checklistService.getActiveTemplates();
-        setTemplates(templatesData);
-      } catch (error) {
-        console.error("Error loading data:", error);
-        toast({
-          variant: "destructive",
-          title: "Errore durante il caricamento dei dati",
-          description: "Si è verificato un errore durante il caricamento dei dati. Riprova più tardi."
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    loadEquipment();
+    loadChecklists();
   }, []);
+
+  const loadEquipment = async () => {
+    try {
+      const data = await getAllEquipment();
+      setEquipment(data);
+    } catch (error) {
+      console.error("Error loading equipment:", error);
+    }
+  };
+
+  const loadChecklists = async () => {
+    try {
+      const data = await getChecklists();
+      setChecklists(data);
+    } catch (error) {
+      console.error("Error loading checklists:", error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +89,7 @@ export default function NewMaintenancePage() {
         status: "scheduled"
       };
 
-      await maintenanceService.createSchedule(scheduleData as any);
+      await createMaintenanceSchedule(scheduleData as any);
 
       router.push("/maintenance");
     } catch (error) {

@@ -25,7 +25,7 @@ export default function NewEquipment() {
     manufacturer: "",
     model: "",
     serial_number: "",
-    installation_date: "",
+    purchase_date: "",
     location: "",
     status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
     technical_specs: "",
@@ -37,16 +37,16 @@ export default function NewEquipment() {
     setLoading(true);
 
     try {
-      await createEquipment({
-        name: formData.name,
-        equipment_code: formData.equipment_code,
+      const newEquipment = await createEquipment({
+        name: formData.name.trim(),
+        equipment_code: formData.equipment_code.trim(),
         category: formData.category.trim() || null,
+        status: formData.status,
+        location: formData.location.trim() || null,
+        purchase_date: formData.purchase_date || null,
         manufacturer: formData.manufacturer.trim() || null,
         model: formData.model.trim() || null,
         serial_number: formData.serial_number.trim() || null,
-        installation_date: formData.installation_date || null,
-        location: formData.location.trim() || null,
-        status: formData.status,
         technical_specs: formData.technical_specs.trim() || null,
         notes: formData.notes.trim() || null
       });
@@ -169,12 +169,12 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="installation_date">Installation Date</Label>
+                  <Label htmlFor="purchase_date">Purchase Date</Label>
                   <Input
-                    id="installation_date"
+                    id="purchase_date"
                     type="date"
-                    value={formData.installation_date}
-                    onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
+                    value={formData.purchase_date}
+                    onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>

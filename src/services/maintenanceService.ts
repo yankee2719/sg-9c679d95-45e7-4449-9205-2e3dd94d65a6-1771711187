@@ -1,5 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export async function createMaintenanceSchedule(schedule: any) {
+  const { data, error } = await supabase
+    .from("maintenance_schedules")
+    .insert(schedule)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export const maintenanceService = {
   async getSchedules() {
     const { data, error } = await supabase

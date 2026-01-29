@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { documentService } from "@/services/documentService";
+import { uploadDocument } from "@/services/documentService";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Loader2, Plus } from "lucide-react";
 import { DocumentList } from "./DocumentList";
@@ -26,7 +26,7 @@ export function DocumentUpload({ equipmentId, onUploadComplete }: DocumentUpload
 
     setLoading(true);
     try {
-      await documentService.uploadDocument(file, equipmentId, title);
+      await uploadDocument(equipmentId, file, title);
       toast({ title: "Success", description: "Document uploaded successfully" });
       setOpen(false);
       setTitle("");

@@ -22,14 +22,13 @@ export default function EditMaintenanceSchedule() {
   const [saving, setSaving] = useState(false);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   
-  const [schedule, setSchedule] = useState({
+  const [formData, setFormData] = useState({
     equipment_id: "",
     title: "",
     description: "",
-    frequency: "monthly",
-    priority: "medium",
-    next_maintenance_date: "",
-    status: "scheduled"
+    frequency: "monthly" as "daily" | "weekly" | "monthly" | "quarterly" | "yearly",
+    next_due_date: "",
+    assigned_to: ""
   });
 
   useEffect(() => {
@@ -51,14 +50,13 @@ export default function EditMaintenanceSchedule() {
   const loadSchedule = async () => {
     try {
       const data = await maintenanceService.getSchedule(id as string);
-      setSchedule({
+      setFormData({
         equipment_id: data.equipment_id,
-        title: data.title || "",
+        title: data.title,
         description: data.description || "",
-        frequency: data.frequency || "monthly",
-        priority: data.priority || "medium",
-        next_maintenance_date: data.next_maintenance_date ? data.next_maintenance_date.split('T')[0] : "",
-        status: data.status || "scheduled"
+        frequency: data.frequency as "daily" | "weekly" | "monthly" | "quarterly" | "yearly",
+        next_due_date: data.next_due_date ? new Date(data.next_due_date).toISOString().split('T')[0] : "",
+        assigned_to: data.assigned_to || ""
       });
     } catch (error) {
       console.error("Error loading schedule:", error);
@@ -76,7 +74,7 @@ export default function EditMaintenanceSchedule() {
     e.preventDefault();
     setSaving(true);
     try {
-      await maintenanceService.updateSchedule(id as string, schedule);
+      await maintenanceService.updateSchedule(id as string, formData);
       toast({
         title: "Success",
         description: "Schedule updated successfully",
@@ -116,8 +114,8 @@ export default function EditMaintenanceSchedule() {
               <div className="grid gap-2">
                 <Label htmlFor="equipment" className="text-slate-200">Equipment</Label>
                 <Select 
-                  value={schedule.equipment_id} 
-                  onValueChange={(value) => setSchedule({...schedule, equipment_id: value})}
+                  value={formData.equipment_id} 
+                  onValueChange={(value) => setFormData({...formData, equipment_id: value})}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                     <SelectValue placeholder="Select equipment" />
@@ -136,8 +134,8 @@ export default function EditMaintenanceSchedule() {
                 <Label htmlFor="title" className="text-slate-200">Title</Label>
                 <Input 
                   id="title"
-                  value={schedule.title}
-                  onChange={(e) => setSchedule({...schedule, title: e.target.value})}
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
                   placeholder="e.g. Monthly Inspection"
                   className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                 />
@@ -147,79 +145,40 @@ export default function EditMaintenanceSchedule() {
                 <Label htmlFor="description" className="text-slate-200">Description</Label>
                 <Textarea 
                   id="description"
-                  value={schedule.description}
-                  onChange={(e) => setSchedule({...schedule, description: e.target.value})}
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
                   className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="frequency" className="text-slate-200">Frequency</Label>
-                  <Select 
-                    value={schedule.frequency} 
-                    onValueChange={(value) => setSchedule({...schedule, frequency: value})}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="daily" className="text-slate-100">Daily</SelectItem>
-                      <SelectItem value="weekly" className="text-slate-100">Weekly</SelectItem>
-                      <SelectItem value="monthly" className="text-slate-100">Monthly</SelectItem>
-                      <SelectItem value="quarterly" className="text-slate-100">Quarterly</SelectItem>
-                      <SelectItem value="yearly" className="text-slate-100">Yearly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="priority" className="text-slate-200">Priority</Label>
-                  <Select 
-                    value={schedule.priority} 
-                    onValueChange={(value) => setSchedule({...schedule, priority: value})}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="low" className="text-slate-100">Low</SelectItem>
-                      <SelectItem value="medium" className="text-slate-100">Medium</SelectItem>
-                      <SelectItem value="high" className="text-slate-100">High</SelectItem>
-                      <SelectItem value="critical" className="text-slate-100">Critical</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div className="grid gap-2">
-                <Label htmlFor="date" className="text-slate-200">Next Maintenance Date</Label>
-                <Input 
-                  id="date"
-                  type="date"
-                  value={schedule.next_maintenance_date}
-                  onChange={(e) => setSchedule({...schedule, next_maintenance_date: e.target.value})}
-                  className="bg-slate-700 border-slate-600 text-slate-100"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="status" className="text-slate-200">Status</Label>
+                <Label htmlFor="frequency" className="text-slate-200">Frequency</Label>
                 <Select 
-                  value={schedule.status} 
-                  onValueChange={(value) => setSchedule({...schedule, status: value})}
+                  value={formData.frequency} 
+                  onValueChange={(value) => setFormData({...formData, frequency: value as "daily" | "weekly" | "monthly" | "quarterly" | "yearly"})}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="scheduled" className="text-slate-100">Scheduled</SelectItem>
-                    <SelectItem value="in_progress" className="text-slate-100">In Progress</SelectItem>
-                    <SelectItem value="completed" className="text-slate-100">Completed</SelectItem>
-                    <SelectItem value="overdue" className="text-slate-100">Overdue</SelectItem>
-                    <SelectItem value="cancelled" className="text-slate-100">Cancelled</SelectItem>
+                    <SelectItem value="daily" className="text-slate-100">Daily</SelectItem>
+                    <SelectItem value="weekly" className="text-slate-100">Weekly</SelectItem>
+                    <SelectItem value="monthly" className="text-slate-100">Monthly</SelectItem>
+                    <SelectItem value="quarterly" className="text-slate-100">Quarterly</SelectItem>
+                    <SelectItem value="yearly" className="text-slate-100">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="date" className="text-slate-200">Next Due Date</Label>
+                <Input 
+                  id="date"
+                  type="date"
+                  value={formData.next_due_date}
+                  onChange={(e) => setFormData({...formData, next_due_date: e.target.value})}
+                  className="bg-slate-700 border-slate-600 text-slate-100"
+                />
               </div>
             </CardContent>
           </Card>

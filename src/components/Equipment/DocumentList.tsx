@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { documentService } from "@/services/documentService";
+import { getDocumentsByEquipment, deleteDocument } from "@/services/documentService";
 import { FileText, Trash2, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,8 +20,9 @@ export function DocumentList({ equipmentId }: DocumentListProps) {
 
   const loadDocuments = async () => {
     try {
-      const data = await documentService.getDocuments(equipmentId);
-      setDocuments(data);
+      setLoading(true);
+      const docs = await getDocumentsByEquipment(equipmentId);
+      setDocuments(docs);
     } catch (error) {
       console.error("Error loading documents:", error);
     } finally {
@@ -30,13 +31,13 @@ export function DocumentList({ equipmentId }: DocumentListProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this document?")) return;
+    if (!confirm("Are you sure you want to delete this document?")) return;
+    
     try {
-      await documentService.deleteDocument(id);
-      toast({ title: "Success", description: "Document deleted" });
+      await deleteDocument(id);
       loadDocuments();
     } catch (error) {
-      toast({ title: "Error", description: "Failed to delete document", variant: "destructive" });
+      console.error("Error deleting document:", error);
     }
   };
 
