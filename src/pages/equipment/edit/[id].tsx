@@ -49,8 +49,10 @@ export default function EditEquipment() {
         serial_number: equipment.serial_number || "",
         installation_date: equipment.installation_date || "",
         location: equipment.location || "",
-        status: equipment.status,
-        technical_specs: equipment.technical_specs || "",
+        status: (equipment.status as "active" | "under_maintenance" | "out_of_service") || "active",
+        technical_specs: typeof equipment.technical_specs === 'string' 
+          ? equipment.technical_specs 
+          : JSON.stringify(equipment.technical_specs || ""),
         notes: equipment.notes || ""
       });
     } catch (error) {
