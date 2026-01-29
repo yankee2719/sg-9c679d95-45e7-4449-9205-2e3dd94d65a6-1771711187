@@ -203,25 +203,18 @@ export default function NewChecklistTemplate() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="category" className="text-slate-200">Categoria *</Label>
-                <Select
+              <div>
+                <Label htmlFor="category" className="text-slate-200">
+                  Categoria *
+                </Label>
+                <Input
+                  id="category"
                   value={formData.category}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, category: value })
-                  }
-                >
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue placeholder="Seleziona categoria" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category} className="focus:bg-slate-700 focus:text-white">
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="Es: Meccanica, Elettrica, Idraulica"
+                  required
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                />
               </div>
 
               <div className="space-y-2">
