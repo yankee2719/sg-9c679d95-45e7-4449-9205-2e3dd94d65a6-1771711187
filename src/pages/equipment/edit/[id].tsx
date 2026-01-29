@@ -1,49 +1,22 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Save } from "lucide-react";
+import { getEquipmentById, updateEquipment } from "@/services/equipmentService";
 import { useToast } from "@/hooks/use-toast";
-import { equipmentService } from "@/services/equipmentService";
-import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
-import { SEO } from "@/components/SEO";
-
-interface TechnicalSpec {
-  spec_key: string;
-  spec_value: string;
-  unit: string;
-}
-
-interface Equipment {
-  id: string;
-  name: string;
-  equipment_code: string;
-  category: string;
-  manufacturer: string | null;
-  model: string | null;
-  serial_number: string | null;
-  location: string | null;
-  installation_date: string | null;
-  status: "active" | "inactive" | "under_maintenance" | "retired";
-  notes: string | null;
-  technical_specs: Record<string, unknown> | TechnicalSpec[];
-}
 
 export default function EditEquipment() {
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [fetchingData, setFetchingData] = useState(true);
+  const [fetching, setFetching] = useState(true);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -54,75 +27,44 @@ export default function EditEquipment() {
     serial_number: "",
     installation_date: "",
     location: "",
-    status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
+    status: "active" as "active" | "under_maintenance" | "out_of_service",
+    technical_specs: "",
+    notes: ""
   });
 
-  const [specifications, setSpecifications] = useState<TechnicalSpec[]>([]);
-
-  const categories = [
-    "Conveyor Systems",
-    "Robotic Arms",
-    "CNC Machines",
-    "Hydraulic Presses",
-    "Assembly Lines",
-    "Packaging Equipment",
-    "Material Handling",
-    "Quality Control",
-    "Welding Equipment",
-    "Other",
-  ];
-
-  // Load equipment data
   useEffect(() => {
-    if (!id || typeof id !== "string") return;
+    if (id && typeof id === "string") {
+      fetchEquipment(id);
+    }
+  }, [id]);
 
-    const loadEquipment = async () => {
-      try {
-        setFetchingData(true);
-        const equipment = await equipmentService.getById(id);
-
-        setFormData({
-          name: equipment.name,
-          equipment_code: equipment.equipment_code,
-          category: equipment.category || "",
-          manufacturer: equipment.manufacturer || "",
-          model: equipment.model || "",
-          serial_number: equipment.serial_number || "",
-          installation_date: equipment.installation_date || "",
-          location: equipment.location || "",
-          status: equipment.status as "active" | "inactive" | "under_maintenance" | "retired",
-        });
-
-        // Parse technical specs
-        if (equipment.technical_specs) {
-          if (Array.isArray(equipment.technical_specs)) {
-            setSpecifications(equipment.technical_specs as unknown as TechnicalSpec[]);
-          } else if (typeof equipment.technical_specs === "object") {
-            const specs = Object.entries(equipment.technical_specs).map(
-              ([key, value]) => ({
-                spec_key: key,
-                spec_value: String(value),
-                unit: "",
-              })
-            );
-            setSpecifications(specs);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading equipment:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load equipment data",
-          variant: "destructive",
-        });
-        router.push("/equipment");
-      } finally {
-        setFetchingData(false);
-      }
-    };
-
-    loadEquipment();
-  }, [id, router, toast]);
+  const fetchEquipment = async (equipmentId: string) => {
+    try {
+      const equipment = await getEquipmentById(equipmentId);
+      setFormData({
+        name: equipment.name || "",
+        equipment_code: equipment.equipment_code || "",
+        category: equipment.category || "",
+        manufacturer: equipment.manufacturer || "",
+        model: equipment.model || "",
+        serial_number: equipment.serial_number || "",
+        installation_date: equipment.installation_date || "",
+        location: equipment.location || "",
+        status: equipment.status || "active",
+        technical_specs: equipment.technical_specs || "",
+        notes: equipment.notes || ""
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch equipment";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,10 +73,18 @@ export default function EditEquipment() {
     setLoading(true);
 
     try {
-      await equipmentService.update(id, {
-        ...formData,
+      await updateEquipment(id, {
+        name: formData.name,
+        equipment_code: formData.equipment_code,
+        category: formData.category || null,
+        manufacturer: formData.manufacturer || null,
+        model: formData.model || null,
+        serial_number: formData.serial_number || null,
         installation_date: formData.installation_date || null,
-        technical_specs: specifications.length > 0 ? specifications : {},
+        location: formData.location || null,
+        status: formData.status,
+        technical_specs: formData.technical_specs || null,
+        notes: formData.notes || null
       });
 
       toast({
@@ -142,12 +92,12 @@ export default function EditEquipment() {
         description: "Equipment updated successfully",
       });
 
-      router.push(`/equipment/${id}`);
-    } catch (error) {
-      console.error("Error updating equipment:", error);
+      router.push("/equipment");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update equipment";
       toast({
         title: "Error",
-        description: "Failed to update equipment",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -155,35 +105,11 @@ export default function EditEquipment() {
     }
   };
 
-  const handleAddSpecification = () => {
-    setSpecifications([
-      ...specifications,
-      { spec_key: "", spec_value: "", unit: "" },
-    ]);
-  };
-
-  const handleRemoveSpecification = (index: number) => {
-    setSpecifications(specifications.filter((_, i) => i !== index));
-  };
-
-  const handleSpecificationChange = (
-    index: number,
-    field: keyof TechnicalSpec,
-    value: string
-  ) => {
-    const updated = [...specifications];
-    updated[index][field] = value;
-    setSpecifications(updated);
-  };
-
-  if (fetchingData) {
+  if (fetching) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-orange-500" />
-            <p className="text-gray-400">Loading equipment data...</p>
-          </div>
+        <div className="container mx-auto py-6">
+          <p>Loading equipment...</p>
         </div>
       </MainLayout>
     );
@@ -191,144 +117,99 @@ export default function EditEquipment() {
 
   return (
     <MainLayout>
-      <SEO
-        title="Edit Equipment - MaintPro"
-        description="Edit equipment details in the maintenance system"
-      />
-
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push(`/equipment/${id}`)}
-              className="text-gray-300 hover:text-white hover:bg-gray-700"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-white">
-                Edit Equipment
-              </h1>
-              <p className="text-gray-400 mt-1">
-                Update equipment information
-              </p>
-            </div>
-          </div>
+      <div className="container mx-auto py-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/equipment")}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-3xl font-bold">Edit Equipment</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader className="bg-gradient-to-r from-orange-500/10 to-blue-900/10 border-b border-gray-700">
-              <CardTitle className="text-white">
-                Equipment Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Equipment Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="name" className="text-white">Equipment Name *</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-white">Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Conveyor Belt System"
                     required
                     className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
                   <Input
                     id="equipment_code"
                     value={formData.equipment_code}
                     onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
-                    placeholder="e.g., CNV-001"
                     required
                     className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="category" className="text-white">Category *</Label>
-                  <Select
+                <div className="space-y-2">
+                  <Label htmlFor="category" className="text-white">Category</Label>
+                  <Input
+                    id="category"
                     value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger id="category" className="bg-gray-700 border-gray-600 text-white">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-700 border-gray-600">
-                      {categories.map((cat) => (
-                        <SelectItem 
-                          key={cat} 
-                          value={cat}
-                          className="text-white hover:bg-gray-600"
-                        >
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  />
                 </div>
 
-                <div>
-                  <Label htmlFor="status" className="text-white">Status *</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ 
-                      ...formData, 
-                      status: value as "active" | "inactive" | "under_maintenance" | "retired"
-                    })}
-                  >
-                    <SelectTrigger id="status" className="bg-gray-700 border-gray-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-700 border-gray-600">
-                      <SelectItem value="active" className="text-white hover:bg-gray-600">Active</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-white hover:bg-gray-600">Under Maintenance</SelectItem>
-                      <SelectItem value="inactive" className="text-white hover:bg-gray-600">Inactive</SelectItem>
-                      <SelectItem value="retired" className="text-white hover:bg-gray-600">Retired</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
                   <Input
                     id="manufacturer"
-                    value={formData.manufacturer || ""}
+                    value={formData.manufacturer}
                     onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                    placeholder="e.g., Siemens"
                     className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="model" className="text-white">Model</Label>
                   <Input
                     id="model"
-                    value={formData.model || ""}
+                    value={formData.model}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    placeholder="e.g., S7-1500"
                     className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
                   <Input
                     id="serial_number"
-                    value={formData.serial_number || ""}
+                    value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                    placeholder="e.g., SN-2024-001"
                     className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
-                <div>
+                <div className="space-y-2">
+                  <Label htmlFor="installation_date" className="text-white">Installation Date</Label>
+                  <Input
+                    id="installation_date"
+                    type="date"
+                    value={formData.installation_date}
+                    onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="location" className="text-white">Location</Label>
                   <Input
                     id="location"
@@ -338,139 +219,59 @@ export default function EditEquipment() {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="installation_date" className="text-white">Installation Date</Label>
-                  <Input
-                    id="installation_date"
-                    type="date"
-                    value={formData.installation_date}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        installation_date: e.target.value,
-                      })
-                    }
-                    className="bg-gray-700 border-gray-600 text-white"
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="status" className="text-white">Status</Label>
+                  <Select value={formData.status} onValueChange={(value: "active" | "under_maintenance" | "out_of_service") => setFormData({ ...formData, status: value })}>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectItem value="active" className="text-white hover:bg-gray-700 focus:bg-gray-700">Active</SelectItem>
+                      <SelectItem value="under_maintenance" className="text-white hover:bg-gray-700 focus:bg-gray-700">Under Maintenance</SelectItem>
+                      <SelectItem value="out_of_service" className="text-white hover:bg-gray-700 focus:bg-gray-700">Out of Service</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader className="bg-gradient-to-r from-orange-500/10 to-blue-900/10 border-b border-gray-700">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white">
-                  Technical Specifications
-                </CardTitle>
+              <div className="space-y-2">
+                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
+                <Textarea
+                  id="technical_specs"
+                  value={formData.technical_specs}
+                  onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
+                  rows={4}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes" className="text-white">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={4}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                />
+              </div>
+
+              <div className="flex justify-end gap-4">
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  onClick={handleAddSpecification}
-                  className="border-orange-500 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                  onClick={() => router.push("/equipment")}
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Specification
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {loading ? "Saving..." : "Update Equipment"}
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="p-6">
-              {specifications.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-400 mb-4">
-                    No technical specifications defined
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAddSpecification}
-                    className="border-orange-500 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Specification
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {specifications.map((spec, index) => (
-                    <div key={index} className="p-4 rounded-lg bg-gray-700/50 border border-gray-600">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                        <div className="md:col-span-4">
-                          <Label htmlFor={`spec-key-${index}`} className="text-white">Key</Label>
-                          <Input
-                            id={`spec-key-${index}`}
-                            value={spec.spec_key}
-                            onChange={(e) => handleSpecificationChange(index, "spec_key", e.target.value)}
-                            placeholder="e.g., speed, voltage, power"
-                            className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
-                          />
-                        </div>
-                        <div className="md:col-span-4">
-                          <Label htmlFor={`spec-value-${index}`} className="text-white">Value</Label>
-                          <Input
-                            id={`spec-value-${index}`}
-                            value={spec.spec_value}
-                            onChange={(e) => handleSpecificationChange(index, "spec_value", e.target.value)}
-                            placeholder="e.g., 0.5-2, 400, 7.5"
-                            className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
-                          />
-                        </div>
-                        <div className="md:col-span-3">
-                          <Label htmlFor={`spec-unit-${index}`} className="text-white">Unit</Label>
-                          <Input
-                            id={`spec-unit-${index}`}
-                            value={spec.unit || ""}
-                            onChange={(e) => handleSpecificationChange(index, "unit", e.target.value)}
-                            placeholder="e.g., m/s, V, kW"
-                            className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
-                          />
-                        </div>
-                        <div className="md:col-span-1 flex items-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveSpecification(index)}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push(`/equipment/${id}`)}
-              disabled={loading}
-              className="border-gray-600 text-gray-200 hover:bg-gray-700"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                "Update Equipment"
-              )}
-            </Button>
-          </div>
-        </form>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   );
