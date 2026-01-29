@@ -31,10 +31,9 @@ export default function EquipmentDetail() {
     try {
       const eqData = await getEquipmentById(id as string);
       // Cast the status to the correct type to satisfy TypeScript
-      const typedEquipment = {
+      const typedEquipment: Equipment = {
         ...eqData,
-        status: eqData.status as "active" | "under_maintenance" | "out_of_service",
-        technical_specs: (eqData.technical_specs as unknown as Record<string, any>) || null
+        status: eqData.status as "active" | "under_maintenance" | "out_of_service"
       };
       setEquipment(typedEquipment);
       
