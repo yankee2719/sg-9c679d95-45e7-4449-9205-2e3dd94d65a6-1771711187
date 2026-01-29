@@ -24,7 +24,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { data: authData, error: authError } = await serviceSupabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true,
       user_metadata: {
         full_name: full_name || null,
         role,
@@ -40,26 +40,54 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return res.status(500).json({ error: "Failed to create user" });
     }
 
-    // Step 2: Create profile in database (direct insert, bypass PostgREST cache)
-    const { error: profileError } = await serviceSupabase.from("profiles").insert({
-      id: authData.user.id,
-      email,
-      full_name: full_name || null,
-      role,
-      phone: phone || null,
-      is_active: true,
-      two_factor_enabled: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
+    // Step 2: Wait for trigger to complete (100ms delay)
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Step 3: UPSERT profile to ensure it exists with correct data
+    const { error: profileError } = await serviceSupabase
+      .from("profiles")
+      .upsert(
+        {
+          id: authData.user.id,
+          email,
+          full_name: full_name || null,
+          role,
+          phone: phone || null,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "id",
+          ignoreDuplicates: false,
+        }
+      );
 
     if (profileError) {
-      console.error("Error creating profile:", profileError);
+      console.error("Error upserting profile:", profileError);
       
-      // Rollback: Delete auth user if profile creation fails
-      await serviceSupabase.auth.admin.deleteUser(authData.user.id);
+      // Try to rollback: Delete auth user
+      try {
+        await serviceSupabase.auth.admin.deleteUser(authData.user.id);
+      } catch (rollbackError) {
+        console.error("Rollback failed:", rollbackError);
+      }
       
-      return res.status(500).json({ error: "Failed to create user profile" });
+      return res.status(500).json({ 
+        error: "Failed to create user profile", 
+        details: profileError.message 
+      });
+    }
+
+    // Step 4: Verify profile was created
+    const { data: verifyProfile, error: verifyError } = await serviceSupabase
+      .from("profiles")
+      .select("*")
+      .eq("id", authData.user.id)
+      .single();
+
+    if (verifyError || !verifyProfile) {
+      console.error("Profile verification failed:", verifyError);
+      return res.status(500).json({ error: "Profile created but verification failed" });
     }
 
     return res.status(201).json({
@@ -74,7 +102,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     });
   } catch (error) {
     console.error("Unexpected error in /api/users/create:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ 
+      error: "Internal server error",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 }
 
