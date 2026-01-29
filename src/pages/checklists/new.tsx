@@ -192,7 +192,7 @@ export default function NewChecklistTemplate() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="title" className="text-gray-200">Titolo Template *</Label>
+                <Label htmlFor="title" className="text-white">Titolo Template *</Label>
                 <Input
                   id="title"
                   value={formData.title}
@@ -206,7 +206,7 @@ export default function NewChecklistTemplate() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category" className="text-gray-200">Categoria *</Label>
+                <Label htmlFor="category" className="text-white">Categoria *</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) =>
@@ -216,12 +216,12 @@ export default function NewChecklistTemplate() {
                   <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Seleziona categoria" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-700 border-gray-600">
+                  <SelectContent className="bg-gray-800 border-gray-600">
                     {categories.map((category) => (
                       <SelectItem 
                         key={category} 
                         value={category}
-                        className="text-white hover:bg-gray-600"
+                        className="text-white hover:bg-gray-700 focus:bg-gray-700"
                       >
                         {category}
                       </SelectItem>
@@ -231,7 +231,7 @@ export default function NewChecklistTemplate() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="equipment_type" className="text-gray-200">Tipo Equipaggiamento</Label>
+                <Label htmlFor="equipment_type" className="text-white">Tipo Equipaggiamento</Label>
                 <Input
                   id="equipment_type"
                   value={formData.equipment_type}
@@ -244,7 +244,7 @@ export default function NewChecklistTemplate() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-gray-200">Descrizione</Label>
+                <Label htmlFor="description" className="text-white">Descrizione</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
@@ -259,13 +259,13 @@ export default function NewChecklistTemplate() {
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label className="text-gray-200">Elementi Checklist *</Label>
+                  <Label className="text-white">Elementi Checklist *</Label>
                   <Button 
                     type="button" 
                     variant="outline" 
                     size="sm" 
                     onClick={addItem}
-                    className="border-orange-500 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                    className="border-orange-500 text-orange-500 hover:bg-orange-500/10"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Aggiungi Elemento
@@ -274,7 +274,7 @@ export default function NewChecklistTemplate() {
 
                 <div className="space-y-3">
                   {items.map((item, index) => (
-                    <div key={item.id} className="flex items-start gap-3 p-4 border border-gray-600 rounded-lg bg-gray-700/50">
+                    <div key={item.id} className="flex items-start gap-3 p-4 border border-gray-600 rounded-lg bg-gray-800/50">
                       <div className="flex-1 space-y-2">
                         <Input
                           value={item.description}
@@ -291,6 +291,7 @@ export default function NewChecklistTemplate() {
                             onCheckedChange={(checked) =>
                               updateItem(item.id, "is_required", checked === true)
                             }
+                            className="border-gray-500 data-[state=checked]:bg-orange-500"
                           />
                           <Label
                             htmlFor={`required-${item.id}`}

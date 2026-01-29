@@ -119,29 +119,32 @@ export default function EditChecklistTemplate() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title" className="text-white">Title</Label>
                 <Input 
                   id="title"
                   value={template.title}
                   onChange={(e) => setTemplate({...template, title: e.target.value})}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="category" className="text-white">Category</Label>
                 <Input 
                   id="category"
                   value={template.category}
                   onChange={(e) => setTemplate({...template, category: e.target.value})}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description" className="text-white">Description</Label>
                 <Textarea 
                   id="description"
                   value={template.description || ""}
                   onChange={(e) => setTemplate({...template, description: e.target.value})}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
             </CardContent>
@@ -157,32 +160,35 @@ export default function EditChecklistTemplate() {
             </CardHeader>
             <CardContent className="space-y-4">
               {items.map((item, index) => (
-                <div key={index} className="flex gap-4 items-start p-4 border rounded-lg bg-gray-50/50">
+                <div key={index} className="flex gap-4 items-start p-4 border border-gray-600 rounded-lg bg-gray-800/50">
                   <div className="flex-1 space-y-4">
                     <Input 
                       placeholder={`Item ${index + 1} description`}
                       value={item.description}
                       onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                      className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                     />
                     <div className="flex flex-wrap gap-4">
                       <div className="flex items-center space-x-2">
                         <Switch 
                           checked={item.is_required}
                           onCheckedChange={(checked) => handleItemChange(index, "is_required", checked)}
+                          className="data-[state=checked]:bg-orange-500"
                         />
-                        <Label>Required</Label>
+                        <Label className="text-gray-300">Required</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Switch 
                           checked={item.requires_photo}
                           onCheckedChange={(checked) => handleItemChange(index, "requires_photo", checked)}
+                          className="data-[state=checked]:bg-orange-500"
                         />
-                        <Label>Photo Required</Label>
+                        <Label className="text-gray-300">Photo Required</Label>
                       </div>
                     </div>
                   </div>
-                  <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}

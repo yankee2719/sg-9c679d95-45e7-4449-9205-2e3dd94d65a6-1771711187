@@ -114,17 +114,17 @@ export default function EditMaintenanceSchedule() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="equipment">Equipment</Label>
+                <Label htmlFor="equipment" className="text-white">Equipment</Label>
                 <Select 
                   value={schedule.equipment_id} 
                   onValueChange={(value) => setSchedule({...schedule, equipment_id: value})}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue placeholder="Select equipment" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-gray-800 border-gray-600">
                     {equipmentList.map((eq) => (
-                      <SelectItem key={eq.id} value={eq.id}>
+                      <SelectItem key={eq.id} value={eq.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
                         {eq.name} ({eq.equipment_code})
                       </SelectItem>
                     ))}
@@ -133,88 +133,91 @@ export default function EditMaintenanceSchedule() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title" className="text-white">Title</Label>
                 <Input 
                   id="title"
                   value={schedule.title}
                   onChange={(e) => setSchedule({...schedule, title: e.target.value})}
                   placeholder="e.g. Monthly Inspection"
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description" className="text-white">Description</Label>
                 <Textarea 
                   id="description"
                   value={schedule.description}
                   onChange={(e) => setSchedule({...schedule, description: e.target.value})}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="frequency">Frequency</Label>
+                  <Label htmlFor="frequency" className="text-white">Frequency</Label>
                   <Select 
                     value={schedule.frequency} 
                     onValueChange={(value) => setSchedule({...schedule, frequency: value})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                      <SelectItem value="yearly">Yearly</SelectItem>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="daily" className="text-white hover:bg-gray-700 focus:bg-gray-700">Daily</SelectItem>
+                      <SelectItem value="weekly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Weekly</SelectItem>
+                      <SelectItem value="monthly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Monthly</SelectItem>
+                      <SelectItem value="quarterly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Quarterly</SelectItem>
+                      <SelectItem value="yearly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Yearly</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 
                 <div className="grid gap-2">
-                  <Label htmlFor="priority">Priority</Label>
+                  <Label htmlFor="priority" className="text-white">Priority</Label>
                   <Select 
                     value={schedule.priority} 
                     onValueChange={(value) => setSchedule({...schedule, priority: value})}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="critical">Critical</SelectItem>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="low" className="text-white hover:bg-gray-700 focus:bg-gray-700">Low</SelectItem>
+                      <SelectItem value="medium" className="text-white hover:bg-gray-700 focus:bg-gray-700">Medium</SelectItem>
+                      <SelectItem value="high" className="text-white hover:bg-gray-700 focus:bg-gray-700">High</SelectItem>
+                      <SelectItem value="critical" className="text-white hover:bg-gray-700 focus:bg-gray-700">Critical</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="date">Next Maintenance Date</Label>
+                <Label htmlFor="date" className="text-white">Next Maintenance Date</Label>
                 <Input 
                   id="date"
                   type="date"
                   value={schedule.next_maintenance_date}
                   onChange={(e) => setSchedule({...schedule, next_maintenance_date: e.target.value})}
+                  className="bg-gray-700 border-gray-600 text-white"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status" className="text-white">Status</Label>
                 <Select 
                   value={schedule.status} 
                   onValueChange={(value) => setSchedule({...schedule, status: value})}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectItem value="scheduled" className="text-white hover:bg-gray-700 focus:bg-gray-700">Scheduled</SelectItem>
+                    <SelectItem value="in_progress" className="text-white hover:bg-gray-700 focus:bg-gray-700">In Progress</SelectItem>
+                    <SelectItem value="completed" className="text-white hover:bg-gray-700 focus:bg-gray-700">Completed</SelectItem>
+                    <SelectItem value="overdue" className="text-white hover:bg-gray-700 focus:bg-gray-700">Overdue</SelectItem>
+                    <SelectItem value="cancelled" className="text-white hover:bg-gray-700 focus:bg-gray-700">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

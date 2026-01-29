@@ -126,18 +126,18 @@ export default function NewMaintenancePage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="equipment">Macchina *</Label>
+                  <Label htmlFor="equipment" className="text-white">Macchina *</Label>
                   <Select
                     value={formData.equipment_id}
                     onValueChange={(value) => handleChange("equipment_id", value)}
                     required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Seleziona macchina" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-gray-800 border-gray-600">
                       {equipment.map((eq) => (
-                        <SelectItem key={eq.id} value={eq.id}>
+                        <SelectItem key={eq.id} value={eq.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
                           {eq.name} ({eq.code})
                         </SelectItem>
                       ))}
@@ -146,26 +146,26 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="type">Tipo Manutenzione *</Label>
+                  <Label htmlFor="type" className="text-white">Tipo Manutenzione *</Label>
                   <Select
                     value={formData.maintenance_type}
                     onValueChange={(value) => handleChange("maintenance_type", value)}
                     required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Seleziona tipo" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="preventive">Preventiva</SelectItem>
-                      <SelectItem value="predictive">Predittiva</SelectItem>
-                      <SelectItem value="corrective">Correttiva</SelectItem>
-                      <SelectItem value="extraordinary">Straordinaria</SelectItem>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="preventive" className="text-white hover:bg-gray-700 focus:bg-gray-700">Preventiva</SelectItem>
+                      <SelectItem value="predictive" className="text-white hover:bg-gray-700 focus:bg-gray-700">Predittiva</SelectItem>
+                      <SelectItem value="corrective" className="text-white hover:bg-gray-700 focus:bg-gray-700">Correttiva</SelectItem>
+                      <SelectItem value="extraordinary" className="text-white hover:bg-gray-700 focus:bg-gray-700">Straordinaria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="title">Titolo *</Label>
+                  <Label htmlFor="title" className="text-white">Titolo *</Label>
                   <Input
                     id="title"
                     type="text"
@@ -173,102 +173,107 @@ export default function NewMaintenancePage() {
                     onChange={(e) => handleChange("title", e.target.value)}
                     placeholder="Es. Manutenzione Preventiva Mensile"
                     required
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="scheduled_date">Data Pianificata *</Label>
+                  <Label htmlFor="scheduled_date" className="text-white">Data Pianificata *</Label>
                   <Input
                     id="scheduled_date"
                     type="date"
                     value={formData.scheduled_date}
                     onChange={(e) => handleChange("scheduled_date", e.target.value)}
                     required
+                    className="bg-gray-700 border-gray-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="due_date">Data Scadenza</Label>
+                  <Label htmlFor="due_date" className="text-white">Data Scadenza</Label>
                   <Input
                     id="due_date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => handleChange("due_date", e.target.value)}
                     placeholder="Opzionale"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="priority">Priorità *</Label>
+                  <Label htmlFor="priority" className="text-white">Priorità *</Label>
                   <Select
                     value={formData.priority}
                     onValueChange={(value) => handleChange("priority", value)}
                     required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Seleziona priorità" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Bassa</SelectItem>
-                      <SelectItem value="medium">Media</SelectItem>
-                      <SelectItem value="high">Alta</SelectItem>
-                      <SelectItem value="critical">Critica</SelectItem>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="low" className="text-white hover:bg-gray-700 focus:bg-gray-700">Bassa</SelectItem>
+                      <SelectItem value="medium" className="text-white hover:bg-gray-700 focus:bg-gray-700">Media</SelectItem>
+                      <SelectItem value="high" className="text-white hover:bg-gray-700 focus:bg-gray-700">Alta</SelectItem>
+                      <SelectItem value="critical" className="text-white hover:bg-gray-700 focus:bg-gray-700">Critica</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Durata Stimata (minuti)</Label>
+                  <Label htmlFor="duration" className="text-white">Durata Stimata (minuti)</Label>
                   <Input
                     id="duration"
                     type="number"
                     value={formData.estimated_duration_minutes}
                     onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)}
                     placeholder="Es. 60"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="frequency">Frequenza (giorni)</Label>
+                  <Label htmlFor="frequency" className="text-white">Frequenza (giorni)</Label>
                   <Input
                     id="frequency"
                     type="number"
                     value={formData.frequency_days}
                     onChange={(e) => handleChange("frequency_days", e.target.value)}
                     placeholder="Es. 30 per mensile"
+                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="recurrence">Pattern Ricorrenza</Label>
+                  <Label htmlFor="recurrence" className="text-white">Pattern Ricorrenza</Label>
                   <Select
                     value={formData.recurrence_pattern}
                     onValueChange={(value) => handleChange("recurrence_pattern", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Nessuna ricorrenza" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Giornaliera</SelectItem>
-                      <SelectItem value="weekly">Settimanale</SelectItem>
-                      <SelectItem value="monthly">Mensile</SelectItem>
-                      <SelectItem value="yearly">Annuale</SelectItem>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="daily" className="text-white hover:bg-gray-700 focus:bg-gray-700">Giornaliera</SelectItem>
+                      <SelectItem value="weekly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Settimanale</SelectItem>
+                      <SelectItem value="monthly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Mensile</SelectItem>
+                      <SelectItem value="yearly" className="text-white hover:bg-gray-700 focus:bg-gray-700">Annuale</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="technician">Assegna a Tecnico</Label>
+                  <Label htmlFor="technician" className="text-white">Assegna a Tecnico</Label>
                   <Select
                     value={formData.assigned_to}
                     onValueChange={(value) => handleChange("assigned_to", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Seleziona tecnico" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-gray-800 border-gray-600">
                       {technicians.map((tech) => (
-                        <SelectItem key={tech.id} value={tech.id}>
+                        <SelectItem key={tech.id} value={tech.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
                           {tech.full_name || tech.email}
                         </SelectItem>
                       ))}
@@ -277,17 +282,17 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="template">Template Checklist</Label>
+                  <Label htmlFor="template" className="text-white">Template Checklist</Label>
                   <Select
                     value={formData.checklist_template_id}
                     onValueChange={(value) => handleChange("checklist_template_id", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Seleziona template (opzionale)" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-gray-800 border-gray-600">
                       {templates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
+                        <SelectItem key={template.id} value={template.id} className="text-white hover:bg-gray-700 focus:bg-gray-700">
                           {template.name}
                         </SelectItem>
                       ))}
@@ -297,13 +302,14 @@ export default function NewMaintenancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Descrizione / Note</Label>
+                <Label htmlFor="description" className="text-white">Descrizione / Note</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => handleChange("description", e.target.value)}
                   rows={4}
                   placeholder="Dettagli sull'intervento di manutenzione..."
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
