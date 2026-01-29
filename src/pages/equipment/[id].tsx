@@ -8,11 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Edit, Trash2, Activity, ClipboardList, FileText, History } from "lucide-react";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { DocumentList } from "@/components/Equipment/DocumentList";
-import { getEquipmentById } from "@/services/equipmentService";
+import { getEquipmentById, type Equipment } from "@/services/equipmentService";
 import { getMaintenanceByEquipment } from "@/services/maintenanceService";
 import type { Database } from "@/integrations/supabase/types";
 
-type Equipment = Database["public"]["Tables"]["equipment"]["Row"];
 type MaintenanceSchedule = Database["public"]["Tables"]["maintenance_schedules"]["Row"];
 
 export default function EquipmentDetailPage() {
@@ -273,8 +272,8 @@ export default function EquipmentDetailPage() {
                         <div>
                           <h4 className="font-medium text-white">{item.title}</h4>
                           <p className="text-sm text-slate-400">
-                            {item.scheduled_date
-                              ? new Date(item.scheduled_date).toLocaleDateString()
+                            {item.next_maintenance_date
+                              ? new Date(item.next_maintenance_date).toLocaleDateString()
                               : "No date"}
                           </p>
                         </div>
