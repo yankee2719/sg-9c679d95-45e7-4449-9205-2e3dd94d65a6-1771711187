@@ -91,14 +91,14 @@ export default function EditEquipment() {
           serial_number: equipment.serial_number || "",
           location: equipment.location || "",
           installation_date: equipment.installation_date || "",
-          status: equipment.status,
+          status: equipment.status as "active" | "inactive" | "under_maintenance" | "retired",
           notes: equipment.notes || "",
         });
 
         // Parse technical specs
         if (equipment.technical_specs) {
           if (Array.isArray(equipment.technical_specs)) {
-            setSpecifications(equipment.technical_specs);
+            setSpecifications(equipment.technical_specs as TechnicalSpec[]);
           } else if (typeof equipment.technical_specs === "object") {
             const specs = Object.entries(equipment.technical_specs).map(
               ([key, value]) => ({
