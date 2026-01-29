@@ -89,7 +89,7 @@ export default function NewEquipment() {
         </div>
 
         {showQRGenerator && (
-          <Card>
+          <Card className="border-slate-700">
             <CardHeader>
               <CardTitle>QR Code Generator</CardTitle>
             </CardHeader>
@@ -99,7 +99,7 @@ export default function NewEquipment() {
           </Card>
         )}
 
-        <Card>
+        <Card className="border-slate-700">
           <CardHeader>
             <CardTitle>Equipment Information</CardTitle>
           </CardHeader>
@@ -107,122 +107,112 @@ export default function NewEquipment() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-white">Name *</Label>
+                  <Label htmlFor="name">Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
+                  <Label htmlFor="equipment_code">Equipment Code *</Label>
                   <Input
                     id="equipment_code"
                     value={formData.equipment_code}
                     onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
                     required
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category" className="text-white">Category</Label>
+                  <Label htmlFor="category">Category</Label>
                   <Input
                     id="category"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
+                  <Label htmlFor="manufacturer">Manufacturer</Label>
                   <Input
                     id="manufacturer"
                     value={formData.manufacturer}
                     onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="model" className="text-white">Model</Label>
+                  <Label htmlFor="model">Model</Label>
                   <Input
                     id="model"
                     value={formData.model}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
+                  <Label htmlFor="serial_number">Serial Number</Label>
                   <Input
                     id="serial_number"
                     value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="installation_date" className="text-white">Installation Date</Label>
+                  <Label htmlFor="installation_date">Installation Date</Label>
                   <Input
                     id="installation_date"
                     type="date"
                     value={formData.installation_date}
                     onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location" className="text-white">Location</Label>
+                  <Label htmlFor="location">Location</Label>
                   <Input
                     id="location"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status" className="text-white">Status</Label>
+                  <Label htmlFor="status">Status</Label>
                   <Select value={formData.status} onValueChange={(value: "active" | "under_maintenance" | "out_of_service") => setFormData({ ...formData, status: value })}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
-                      <SelectItem value="active" className="text-white hover:bg-gray-700 focus:bg-gray-700">Active</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-white hover:bg-gray-700 focus:bg-gray-700">Under Maintenance</SelectItem>
-                      <SelectItem value="out_of_service" className="text-white hover:bg-gray-700 focus:bg-gray-700">Out of Service</SelectItem>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
+                      <SelectItem value="out_of_service">Out of Service</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
+                <Label htmlFor="technical_specs">Technical Specifications</Label>
                 <Textarea
                   id="technical_specs"
                   value={formData.technical_specs}
                   onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
                   rows={4}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes" className="text-white">Notes</Label>
+                <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={4}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
@@ -234,7 +224,7 @@ export default function NewEquipment() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90">
                   <Save className="mr-2 h-4 w-4" />
                   {loading ? "Saving..." : "Save Equipment"}
                 </Button>

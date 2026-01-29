@@ -1,23 +1,22 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save } from "lucide-react";
-import { getEquipmentById, updateEquipment } from "@/services/equipmentService";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { getEquipmentById, updateEquipment } from "@/services/equipmentService";
+import { ArrowLeft, Save } from "lucide-react";
 
 export default function EditEquipment() {
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-
   const [formData, setFormData] = useState({
     name: "",
     equipment_code: "",
@@ -34,11 +33,11 @@ export default function EditEquipment() {
 
   useEffect(() => {
     if (id && typeof id === "string") {
-      fetchEquipment(id);
+      loadEquipment(id);
     }
   }, [id]);
 
-  const fetchEquipment = async (equipmentId: string) => {
+  const loadEquipment = async (equipmentId: string) => {
     try {
       const equipment = await getEquipmentById(equipmentId);
       setFormData({
@@ -50,19 +49,17 @@ export default function EditEquipment() {
         serial_number: equipment.serial_number || "",
         installation_date: equipment.installation_date || "",
         location: equipment.location || "",
-        status: equipment.status || "active",
+        status: equipment.status,
         technical_specs: equipment.technical_specs || "",
         notes: equipment.notes || ""
       });
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch equipment";
+    } catch (error) {
+      console.error("Error loading equipment:", error);
       toast({
         title: "Error",
-        description: errorMessage,
+        description: "Failed to load equipment data",
         variant: "destructive",
       });
-    } finally {
-      setFetching(false);
     }
   };
 
@@ -71,33 +68,18 @@ export default function EditEquipment() {
     if (!id || typeof id !== "string") return;
 
     setLoading(true);
-
     try {
-      await updateEquipment(id, {
-        name: formData.name,
-        equipment_code: formData.equipment_code,
-        category: formData.category || null,
-        manufacturer: formData.manufacturer || null,
-        model: formData.model || null,
-        serial_number: formData.serial_number || null,
-        installation_date: formData.installation_date || null,
-        location: formData.location || null,
-        status: formData.status,
-        technical_specs: formData.technical_specs || null,
-        notes: formData.notes || null
-      });
-
+      await updateEquipment(id, formData);
       toast({
         title: "Success",
         description: "Equipment updated successfully",
       });
-
-      router.push("/equipment");
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to update equipment";
+      router.push(`/equipment/${id}`);
+    } catch (error) {
+      console.error("Error updating equipment:", error);
       toast({
         title: "Error",
-        description: errorMessage,
+        description: "Failed to update equipment",
         variant: "destructive",
       });
     } finally {
@@ -105,168 +87,159 @@ export default function EditEquipment() {
     }
   };
 
-  if (fetching) {
-    return (
-      <MainLayout>
-        <div className="container mx-auto py-6">
-          <p>Loading equipment...</p>
-        </div>
-      </MainLayout>
-    );
-  }
+  const handleChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <MainLayout>
-      <div className="container mx-auto py-6 space-y-6">
-        <div className="flex items-center gap-4">
+      <SEO title="Edit Equipment - Industrial Maintenance" />
+      <div className="container mx-auto p-6 max-w-4xl">
+        <div className="mb-6">
           <Button
             variant="ghost"
-            size="icon"
-            onClick={() => router.push("/equipment")}
+            onClick={() => router.back()}
+            className="mb-4"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
           </Button>
           <h1 className="text-3xl font-bold">Edit Equipment</h1>
         </div>
 
-        <Card>
+        <Card className="border-slate-700">
           <CardHeader>
-            <CardTitle>Equipment Information</CardTitle>
+            <CardTitle>Equipment Details</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-white">Name *</Label>
+                  <Label htmlFor="name">Equipment Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => handleChange("name", e.target.value)}
                     required
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
+                  <Label htmlFor="equipment_code">Equipment Code *</Label>
                   <Input
                     id="equipment_code"
                     value={formData.equipment_code}
-                    onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
+                    onChange={(e) => handleChange("equipment_code", e.target.value)}
                     required
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category" className="text-white">Category</Label>
+                  <Label htmlFor="category">Category</Label>
                   <Input
                     id="category"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    onChange={(e) => handleChange("category", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
+                  <Label htmlFor="manufacturer">Manufacturer</Label>
                   <Input
                     id="manufacturer"
                     value={formData.manufacturer}
-                    onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    onChange={(e) => handleChange("manufacturer", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="model" className="text-white">Model</Label>
+                  <Label htmlFor="model">Model</Label>
                   <Input
                     id="model"
                     value={formData.model}
-                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    onChange={(e) => handleChange("model", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
+                  <Label htmlFor="serial_number">Serial Number</Label>
                   <Input
                     id="serial_number"
                     value={formData.serial_number}
-                    onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    onChange={(e) => handleChange("serial_number", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="installation_date" className="text-white">Installation Date</Label>
+                  <Label htmlFor="installation_date">Installation Date</Label>
                   <Input
                     id="installation_date"
                     type="date"
                     value={formData.installation_date}
-                    onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    onChange={(e) => handleChange("installation_date", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location" className="text-white">Location</Label>
+                  <Label htmlFor="location">Location</Label>
                   <Input
                     id="location"
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    onChange={(e) => handleChange("location", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status" className="text-white">Status</Label>
-                  <Select value={formData.status} onValueChange={(value: "active" | "under_maintenance" | "out_of_service") => setFormData({ ...formData, status: value })}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <Label htmlFor="status">Status</Label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value) => handleChange("status", value)}
+                  >
+                    <SelectTrigger id="status">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
-                      <SelectItem value="active" className="text-white hover:bg-gray-700 focus:bg-gray-700">Active</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-white hover:bg-gray-700 focus:bg-gray-700">Under Maintenance</SelectItem>
-                      <SelectItem value="out_of_service" className="text-white hover:bg-gray-700 focus:bg-gray-700">Out of Service</SelectItem>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
+                      <SelectItem value="out_of_service">Out of Service</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
+                <Label htmlFor="technical_specs">Technical Specifications</Label>
                 <Textarea
                   id="technical_specs"
                   value={formData.technical_specs}
-                  onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
+                  onChange={(e) => handleChange("technical_specs", e.target.value)}
                   rows={4}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  placeholder="Enter technical specifications..."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes" className="text-white">Notes</Label>
+                <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={4}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                  onChange={(e) => handleChange("notes", e.target.value)}
+                  rows={3}
+                  placeholder="Additional notes..."
                 />
               </div>
 
-              <div className="flex justify-end gap-4">
+              <div className="flex gap-4">
+                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90">
+                  <Save className="mr-2 h-4 w-4" />
+                  {loading ? "Saving..." : "Save Changes"}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.push("/equipment")}
+                  onClick={() => router.back()}
                 >
                   Cancel
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  <Save className="mr-2 h-4 w-4" />
-                  {loading ? "Saving..." : "Update Equipment"}
                 </Button>
               </div>
             </form>
