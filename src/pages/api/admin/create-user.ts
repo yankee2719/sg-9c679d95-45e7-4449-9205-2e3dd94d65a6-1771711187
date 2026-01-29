@@ -28,6 +28,8 @@ export default async function handler(
       return res.status(400).json({ error: "Invalid role" });
     }
 
+    console.log("Creating user with email:", email);
+
     // Create Supabase Admin client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
@@ -55,16 +57,20 @@ export default async function handler(
       return res.status(500).json({ error: "User creation failed" });
     }
 
-    // Create profile in public.profiles
+    console.log("Auth user created with ID:", authData.user.id);
+
+    // Create profile in public.profiles using UPSERT to handle duplicates
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .insert({
+      .upsert({
         id: authData.user.id,
         email: email,
         full_name: fullName || "",
         role: role,
         phone: phone || null,
         is_active: true,
+      }, {
+        onConflict: "id"
       })
       .select()
       .single();
@@ -83,6 +89,8 @@ export default async function handler(
         code: profileError.code 
       });
     }
+
+    console.log("Profile created successfully:", profileData);
 
     return res.status(201).json({
       message: "User created successfully",
