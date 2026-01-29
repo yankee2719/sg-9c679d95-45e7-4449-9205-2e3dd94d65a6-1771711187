@@ -12,73 +12,86 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const { email, password, full_name, role } = await req.json();
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    const { email, password, fullName, role } = await req.json();
+
+    // Validation
+    if (!email || !password) {
+      return new Response(
+        JSON.stringify({ error: "Email and password required" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    console.log("Creating auth user:", email);
 
     // Create user in auth.users
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: {
-        full_name,
-        role,
-      },
+      user_metadata: { full_name: fullName || "" },
     });
 
     if (authError) {
-      throw authError;
+      console.error("Auth error:", authError);
+      return new Response(
+        JSON.stringify({ error: authError.message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
     }
 
-    // Create profile
-    const { error: profileError } = await supabaseAdmin
+    console.log("Auth user created:", authData.user.id);
+
+    // Create profile using service role (bypasses RLS)
+    const { data: profileData, error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
         id: authData.user.id,
-        email,
-        full_name,
-        role,
-        two_factor_enabled: false,
-      });
+        email: email,
+        full_name: fullName || "",
+        role: role || "technician",
+        is_active: true,
+      })
+      .select()
+      .single();
 
     if (profileError) {
-      throw profileError;
+      console.error("Profile error:", profileError);
+      
+      // Rollback: delete auth user
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      
+      return new Response(
+        JSON.stringify({ error: "Profile creation failed: " + profileError.message }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
     }
+
+    console.log("Profile created successfully");
 
     return new Response(
       JSON.stringify({
         success: true,
-        user: {
-          id: authData.user.id,
-          email,
-          role,
-        },
+        user: { id: authData.user.id, email, profile: profileData },
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 201 }
     );
+
   } catch (error) {
+    console.error("Function error:", error);
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      }
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
 });

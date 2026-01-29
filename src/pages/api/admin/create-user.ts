@@ -71,11 +71,17 @@ export default async function handler(
 
     if (profileError) {
       console.error("Profile creation error:", profileError);
+      console.error("Profile error details:", JSON.stringify(profileError, null, 2));
+      console.error("Attempted to insert profile with ID:", authData.user.id);
       
       // Rollback: delete auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       
-      return res.status(500).json({ error: "Profile creation failed" });
+      return res.status(500).json({ 
+        error: "Profile creation failed",
+        details: profileError.message,
+        code: profileError.code 
+      });
     }
 
     return res.status(201).json({
