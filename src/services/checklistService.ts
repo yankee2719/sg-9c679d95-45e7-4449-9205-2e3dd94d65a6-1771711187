@@ -36,7 +36,7 @@ export const checklistService = {
       .from("checklist_templates")
       .select(`
         *,
-        items:checklist_template_items(*)
+        items:checklist_template_items!checklist_template_items_template_id_fkey(*)
       `)
       .order("created_at", { ascending: false });
 
@@ -52,7 +52,7 @@ export const checklistService = {
       .from("checklist_templates")
       .select(`
         *,
-        items:checklist_template_items(*)
+        items:checklist_template_items!checklist_template_items_template_id_fkey(*)
       `)
       .eq("is_active", true)
       .order("created_at", { ascending: false });
@@ -69,7 +69,7 @@ export const checklistService = {
       .from("checklist_templates")
       .select(`
         *,
-        items:checklist_template_items(*)
+        items:checklist_template_items!checklist_template_items_template_id_fkey(*)
       `)
       .eq("id", id)
       .single();
