@@ -98,7 +98,7 @@ export default function EditEquipment() {
         // Parse technical specs
         if (equipment.technical_specs) {
           if (Array.isArray(equipment.technical_specs)) {
-            setSpecifications(equipment.technical_specs as TechnicalSpec[]);
+            setSpecifications(equipment.technical_specs as unknown as TechnicalSpec[]);
           } else if (typeof equipment.technical_specs === "object") {
             const specs = Object.entries(equipment.technical_specs).map(
               ([key, value]) => ({
