@@ -1,72 +1,182 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { checklistService, type ChecklistItem } from "@/services/checklistService";
-import { Plus, Trash2, Save, ArrowLeft } from "lucide-react";
-import { SEO } from "@/components/SEO";
+
+interface ChecklistItem {
+  id: string;
+  description: string;
+  is_required: boolean;
+  order_index: number;
+}
+
+interface EquipmentCategory {
+  id: string;
+  name: string;
+  description: string | null;
+}
 
 export default function NewChecklistTemplate() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
-  const [template, setTemplate] = useState({
-    title: "",
+  const [categories, setCategories] = useState<EquipmentCategory[]>([]);
+  const [formData, setFormData] = useState({
+    name: "",
     description: "",
-    category: "General",
-    equipment_type: "",
-    is_active: true
+    category_id: "",
   });
-
-  const [items, setItems] = useState<Partial<ChecklistItem>[]>([
-    { description: "", is_required: false, requires_photo: false, requires_note: false }
+  const [items, setItems] = useState<ChecklistItem[]>([
+    {
+      id: crypto.randomUUID(),
+      description: "",
+      is_required: true,
+      order_index: 0,
+    },
   ]);
 
-  const handleAddItem = () => {
-    setItems([...items, { description: "", is_required: false, requires_photo: false, requires_note: false }]);
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("equipment_categories")
+        .select("id, name, description")
+        .order("name");
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error("Error loading categories:", error);
+      toast({
+        title: "Errore",
+        description: "Impossibile caricare le categorie",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+  const addItem = () => {
+    setItems([
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        description: "",
+        is_required: true,
+        order_index: items.length,
+      },
+    ]);
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
+  const removeItem = (id: string) => {
+    setItems(items.filter((item) => item.id !== id));
+  };
+
+  const updateItem = (id: string, field: keyof ChecklistItem, value: string | boolean) => {
+    setItems(
+      items.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!template.title) {
-      toast({
-        title: "Error",
-        description: "Template title is required",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setLoading(true);
+
     try {
-      await checklistService.createTemplate(template, items);
+      // Validation
+      if (!formData.name.trim()) {
+        toast({
+          title: "Errore",
+          description: "Il nome del template è obbligatorio",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.category_id) {
+        toast({
+          title: "Errore",
+          description: "Seleziona una categoria",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const validItems = items.filter((item) => item.description.trim());
+      if (validItems.length === 0) {
+        toast({
+          title: "Errore",
+          description: "Aggiungi almeno un elemento alla checklist",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        toast({
+          title: "Errore",
+          description: "Devi essere autenticato",
+          variant: "destructive",
+        });
+        router.push("/login");
+        return;
+      }
+
+      // Create checklist template
+      const { data: template, error: templateError } = await supabase
+        .from("checklist_templates")
+        .insert({
+          name: formData.name.trim(),
+          description: formData.description.trim() || null,
+          category_id: formData.category_id,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (templateError) throw templateError;
+
+      // Create checklist items
+      const itemsToInsert = validItems.map((item, index) => ({
+        template_id: template.id,
+        description: item.description.trim(),
+        is_required: item.is_required,
+        order_index: index,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("checklist_items")
+        .insert(itemsToInsert);
+
+      if (itemsError) throw itemsError;
+
       toast({
-        title: "Success",
-        description: "Template created successfully",
+        title: "Successo",
+        description: "Template checklist creato con successo",
       });
+
       router.push("/checklists");
-    } catch (error) {
-      console.error(error);
+    } catch (error: unknown) {
+      console.error("Error creating checklist template:", error);
+      const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
       toast({
-        title: "Error",
-        description: "Failed to create template",
+        title: "Errore",
+        description: `Impossibile creare il template: ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
@@ -76,110 +186,139 @@ export default function NewChecklistTemplate() {
 
   return (
     <MainLayout>
-      <SEO title="New Checklist Template" />
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">New Checklist Template</h1>
-        </div>
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
+        <Button
+          variant="ghost"
+          className="mb-6"
+          onClick={() => router.push("/checklists")}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Torna alle Checklist
+        </Button>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Template Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="title">Title</Label>
-                <Input 
-                  id="title"
-                  value={template.title}
-                  onChange={(e) => setTemplate({...template, title: e.target.value})}
-                  placeholder="e.g. Daily Forklift Inspection"
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="category">Category</Label>
-                <Input 
-                  id="category"
-                  value={template.category}
-                  onChange={(e) => setTemplate({...template, category: e.target.value})}
-                  placeholder="e.g. Safety"
+        <Card>
+          <CardHeader>
+            <CardTitle>Nuovo Template Checklist</CardTitle>
+            <CardDescription>
+              Crea un nuovo template di checklist per le manutenzioni
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome Template *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Es: Checklist Manutenzione Motore"
+                  required
                 />
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea 
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria *</Label>
+                <Select
+                  value={formData.category_id}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, category_id: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleziona categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Descrizione</Label>
+                <Textarea
                   id="description"
-                  value={template.description}
-                  onChange={(e) => setTemplate({...template, description: e.target.value})}
-                  placeholder="Brief description of this checklist..."
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Descrizione opzionale del template"
+                  rows={3}
                 />
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Checklist Items</CardTitle>
-              <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {items.map((item, index) => (
-                <div key={index} className="flex gap-4 items-start p-4 border rounded-lg bg-gray-50/50">
-                  <div className="flex-1 space-y-4">
-                    <Input 
-                      placeholder={`Item ${index + 1} description`}
-                      value={item.description}
-                      onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                    />
-                    <div className="flex flex-wrap gap-4">
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={item.is_required}
-                          onCheckedChange={(checked) => handleItemChange(index, "is_required", checked)}
-                        />
-                        <Label>Required</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={item.requires_photo}
-                          onCheckedChange={(checked) => handleItemChange(index, "requires_photo", checked)}
-                        />
-                        <Label>Photo Required</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={item.requires_note}
-                          onCheckedChange={(checked) => handleItemChange(index, "requires_note", checked)}
-                        />
-                        <Label>Note Required</Label>
-                      </div>
-                    </div>
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label>Elementi Checklist *</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Aggiungi Elemento
                   </Button>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
 
-          <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" disabled={loading}>
-              <Save className="mr-2 h-4 w-4" />
-              {loading ? "Creating..." : "Create Template"}
-            </Button>
-          </div>
-        </form>
+                <div className="space-y-3">
+                  {items.map((item, index) => (
+                    <div key={item.id} className="flex items-start gap-3 p-4 border rounded-lg">
+                      <div className="flex-1 space-y-2">
+                        <Input
+                          value={item.description}
+                          onChange={(e) =>
+                            updateItem(item.id, "description", e.target.value)
+                          }
+                          placeholder={`Elemento ${index + 1}`}
+                        />
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`required-${item.id}`}
+                            checked={item.is_required}
+                            onCheckedChange={(checked) =>
+                              updateItem(item.id, "is_required", checked === true)
+                            }
+                          />
+                          <Label
+                            htmlFor={`required-${item.id}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            Obbligatorio
+                          </Label>
+                        </div>
+                      </div>
+                      {items.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeItem(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/checklists")}
+                  disabled={loading}
+                >
+                  Annulla
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Creazione..." : "Crea Template"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   );
