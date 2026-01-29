@@ -3,11 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 export const twoFactorService = {
   async enableTwoFactor(userId: string, secret: string, backupCodes: string[]) {
     // Check if entry exists first
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("two_factor_auth" as any)
       .select("id")
       .eq("user_id", userId)
       .maybeSingle();
+      
+    if (existingError) throw existingError;
 
     if (existing) {
       return await supabase
@@ -69,6 +71,11 @@ export const twoFactorService = {
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') throw error;
-    return { isEnabled: data?.is_enabled || false };
+    
+    // Explicit check to ensure data exists before access
+    if (!data) return { isEnabled: false };
+    
+    // Force cast to any to bypass strict type inference issues
+    return { isEnabled: (data as any).is_enabled === true };
   }
 };

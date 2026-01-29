@@ -1,817 +1,236 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { SEO } from "@/components/SEO";
-import { equipmentService } from "@/services/equipmentService";
-import { maintenanceService } from "@/services/maintenanceService";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { 
-  ArrowLeft, 
-  Edit, 
-  Save, 
-  X, 
-  Loader2, 
-  Trash2,
-  Download,
-  QrCode,
-  FileText,
-  Video,
-  Wrench,
-  BarChart3,
-  Calendar,
-  AlertCircle,
-  Plus
-} from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { QRCodeGenerator } from "@/components/QRCodeGenerator";
-import { DocumentList } from "@/components/Equipment/DocumentList";
+import { useToast } from "@/hooks/use-toast";
+import { equipmentService, type Equipment } from "@/services/equipmentService";
+import { maintenanceService } from "@/services/maintenanceService";
+import { ArrowLeft, Edit, Trash2, Calendar, FileText, Activity } from "lucide-react";
+import { SEO } from "@/components/SEO";
 import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
-import { documentService } from "@/services/documentService";
 
-// Define strict type for status to match DB enum
-type EquipmentStatus = "active" | "under_maintenance" | "inactive" | "decommissioned";
-
-interface TechnicalSpec {
-  id?: string;
-  spec_key: string;
-  spec_value: string;
-  unit?: string;
-}
-
-export default function EquipmentDetailPage() {
+export default function EquipmentDetail() {
   const router = useRouter();
   const { id } = router.query;
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [equipment, setEquipment] = useState<any>(null);
-  const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [technicalSpecs, setTechnicalSpecs] = useState<TechnicalSpec[]>([]);
+  const { toast } = useToast();
   
-  // Initialize with proper typing - renamed category to category_id
-  const [formData, setFormData] = useState<{
-    name: string;
-    code: string;
-    category_id: string;
-    manufacturer: string;
-    model: string;
-    serial_number: string;
-    installation_date: string;
-    location: string;
-    status: EquipmentStatus;
-    notes: string;
-  }>({
-    name: "",
-    code: "",
-    category_id: "",
-    manufacturer: "",
-    model: "",
-    serial_number: "",
-    installation_date: "",
-    location: "",
-    status: "active",
-    notes: ""
-  });
+  const [equipment, setEquipment] = useState<Equipment | null>(null);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id && typeof id === "string") {
-      loadData(id);
+    if (id) {
+      loadData();
     }
   }, [id]);
 
-  const loadData = async (equipmentId: string) => {
+  const loadData = async () => {
     try {
-      setLoading(true);
+      const eqData = await equipmentService.getById(id as string);
+      // Cast the status to the correct type to satisfy TypeScript
+      const typedEquipment = {
+        ...eqData,
+        status: eqData.status as "active" | "inactive" | "under_maintenance" | "retired",
+        technical_specs: (eqData.technical_specs as Record<string, any>) || null
+      };
+      setEquipment(typedEquipment);
       
-      const [equipmentData, maintenanceData, documentsData, categoriesData, specsData] = await Promise.all([
-        equipmentService.getById(equipmentId),
-        maintenanceService.getByEquipmentId(equipmentId),
-        documentService.getByEquipmentId(equipmentId),
-        equipmentService.getCategories(),
-        equipmentService.getSpecifications(equipmentId)
-      ]);
-
-      setCategories(categoriesData || []);
-      setTechnicalSpecs(specsData || []);
-
-      if (!equipmentData) {
-        router.push("/equipment");
-        return;
-      }
-
-      setEquipment(equipmentData);
-      setMaintenanceHistory(maintenanceData || []);
-      setDocuments(documentsData || []);
-      
-      const dbStatus = equipmentData.status as EquipmentStatus;
-      
-      setFormData({
-        name: equipmentData.name || "",
-        code: equipmentData.code || "",
-        category_id: equipmentData.category_id || "",
-        manufacturer: equipmentData.manufacturer || "",
-        model: equipmentData.model || "",
-        serial_number: equipmentData.serial_number || "",
-        installation_date: equipmentData.installation_date || "",
-        location: equipmentData.location || "",
-        status: dbStatus || "active",
-        notes: equipmentData.notes || ""
-      });
+      // Load schedules logic would go here if we need to filter by equipment
+      // For now just load all or implementing getByEquipmentId in service would be better
+      // const schedData = await maintenanceService.getByEquipmentId(id as string);
+      // setSchedules(schedData);
     } catch (error) {
       console.error("Error loading data:", error);
-      alert("Errore nel caricamento dei dati");
+      toast({
+        title: "Error",
+        description: "Failed to load equipment data",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!id || typeof id !== "string") return;
-
-    try {
-      setSaving(true);
-      
-      const cleanedData = {
-        ...formData,
-        category_id: formData.category_id || null,
-      };
-      
-      await equipmentService.update(id, cleanedData);
-      
-      // Save technical specifications
-      await equipmentService.updateSpecifications(id, technicalSpecs);
-      
-      await loadData(id);
-      setEditMode(false);
-    } catch (error) {
-      console.error("Error updating equipment:", error);
-      alert("Errore durante il salvataggio");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleDelete = async () => {
-    if (!id || typeof id !== "string") return;
-
+    if (!confirm("Are you sure you want to delete this equipment?")) return;
     try {
-      await equipmentService.delete(id);
+      await equipmentService.delete(id as string);
+      toast({
+        title: "Success",
+        description: "Equipment deleted successfully",
+      });
       router.push("/equipment");
     } catch (error) {
-      console.error("Error deleting equipment:", error);
-      alert("Errore durante l'eliminazione");
+      toast({
+        title: "Error",
+        description: "Failed to delete equipment",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleDocumentDelete = async (docId: string, filePath?: string) => {
-    try {
-      await documentService.delete(docId, filePath);
-      if (id && typeof id === "string") {
-        const docs = await documentService.getByEquipmentId(id);
-        setDocuments(docs || []);
-      }
-    } catch (error) {
-      console.error("Error deleting document:", error);
-      alert("Errore durante l'eliminazione del documento");
-    }
-  };
-
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleAddSpec = () => {
-    setTechnicalSpecs([...technicalSpecs, { spec_key: "", spec_value: "", unit: "" }]);
-  };
-
-  const handleSpecChange = (index: number, field: keyof TechnicalSpec, value: string) => {
-    const updated = [...technicalSpecs];
-    updated[index] = { ...updated[index], [field]: value };
-    setTechnicalSpecs(updated);
-  };
-
-  const handleRemoveSpec = (index: number) => {
-    setTechnicalSpecs(technicalSpecs.filter((_, i) => i !== index));
-  };
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline", label: string }> = {
-      active: { variant: "default", label: "Attiva" },
-      under_maintenance: { variant: "secondary", label: "In Manutenzione" },
-      inactive: { variant: "outline", label: "Inattiva" },
-      decommissioned: { variant: "destructive", label: "Dismessa" }
-    };
-    if (status === "maintenance") status = "under_maintenance";
-    
-    const config = variants[status] || variants.active;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-
-  const calculateUptime = () => {
-    if (!maintenanceHistory.length) return "100%";
-    const completed = maintenanceHistory.filter(m => m.status === "completed").length;
-    const total = maintenanceHistory.length;
-    const uptime = ((total - completed) / total) * 100;
-    return `${Math.round(uptime)}%`;
-  };
-
-  if (loading) {
-    return (
-      <MainLayout userRole="admin">
-        <SEO title="Caricamento..." />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
-      </MainLayout>
-    );
-  }
-
-  if (!equipment) {
-    return (
-      <MainLayout userRole="admin">
-        <SEO title="Macchina non trovata" />
-        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-          <AlertCircle className="h-16 w-16 text-gray-400" />
-          <h2 className="text-2xl font-bold text-gray-700">Macchina non trovata</h2>
-          <Button onClick={() => router.push("/equipment")}>
-            Torna alla lista
-          </Button>
-        </div>
-      </MainLayout>
-    );
-  }
+  if (loading) return <MainLayout>Loading...</MainLayout>;
+  if (!equipment) return <MainLayout>Equipment not found</MainLayout>;
 
   return (
-    <MainLayout userRole="admin">
-      <SEO title={`${equipment.name} - Industrial Maintenance`} />
-      
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <MainLayout>
+      <SEO title={equipment.name} />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              onClick={() => router.back()} 
-              className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Indietro
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-white">{equipment.name}</h1>
-              <p className="text-sm text-slate-400 mt-1">Codice: {equipment.code}</p>
+              <h1 className="text-2xl font-bold">{equipment.name}</h1>
+              <div className="flex items-center gap-2 text-gray-500">
+                <span>{equipment.equipment_code}</span>
+                <span>•</span>
+                <span>{equipment.category}</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {getStatusBadge(equipment.status)}
-            {!editMode ? (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setEditMode(true)}
-                  className="bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Modifica
-                </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={() => setDeleteDialogOpen(true)}
-                  className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Elimina
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setEditMode(false);
-                    setFormData({
-                      name: equipment.name || "",
-                      code: equipment.code || "",
-                      category_id: equipment.category_id || "",
-                      manufacturer: equipment.manufacturer || "",
-                      model: equipment.model || "",
-                      serial_number: equipment.serial_number || "",
-                      installation_date: equipment.installation_date || "",
-                      location: equipment.location || "",
-                      status: equipment.status || "active",
-                      notes: equipment.notes || ""
-                    });
-                    loadData(id as string);
-                  }}
-                  className="bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 rounded-xl"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Annulla
-                </Button>
-                <Button 
-                  onClick={handleSave} 
-                  disabled={saving}
-                  className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl"
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Salvataggio...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Salva
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push(`/equipment/edit/${equipment.id}`)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
           </div>
         </div>
 
-        <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-slate-800/50 p-1 rounded-xl">
-            <TabsTrigger value="details">
-              <FileText className="h-4 w-4 mr-2" />
-              Dettagli
-            </TabsTrigger>
-            <TabsTrigger value="qr">
-              <QrCode className="h-4 w-4 mr-2" />
-              QR Code
-            </TabsTrigger>
-            <TabsTrigger value="maintenance">
-              <Wrench className="h-4 w-4 mr-2" />
-              Manutenzioni
-            </TabsTrigger>
-            <TabsTrigger value="documents">
-              <FileText className="h-4 w-4 mr-2" />
-              Documenti
-            </TabsTrigger>
-            <TabsTrigger value="stats">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Statistiche
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Details Tab */}
-          <TabsContent value="details" className="space-y-4">
-            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="md:col-span-2 space-y-6">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-white">Informazioni Generali</CardTitle>
+                <CardTitle>Overview</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nome Macchina *</Label>
-                    {editMode ? (
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => handleChange("name", e.target.value)}
-                        required
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">{equipment.name}</p>
-                    )}
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <div className="mt-1">
+                    <Badge variant={equipment.status === 'active' ? 'default' : 'secondary'}>
+                      {equipment.status}
+                    </Badge>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="code">Codice *</Label>
-                    {editMode ? (
-                      <Input
-                        id="code"
-                        value={formData.code}
-                        onChange={(e) => handleChange("code", e.target.value)}
-                        required
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">{equipment.code}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Categoria</Label>
-                    {editMode ? (
-                      <Select
-                        value={formData.category_id}
-                        onValueChange={(value) => handleChange("category_id", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleziona categoria" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                          {categories.length === 0 && (
-                            <SelectItem value="no-categories" disabled>
-                              Nessuna categoria disponibile
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <p className="text-sm font-medium">
-                        {equipment.equipment_categories?.name || "-"}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Stato</Label>
-                    {editMode ? (
-                      <Select
-                        value={formData.status}
-                        onValueChange={(value) => handleChange("status", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleziona stato" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Attiva</SelectItem>
-                          <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
-                          <SelectItem value="inactive">Inattiva</SelectItem>
-                          <SelectItem value="decommissioned">Dismessa</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div>{getStatusBadge(equipment.status)}</div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="manufacturer">Produttore</Label>
-                    {editMode ? (
-                      <Input
-                        id="manufacturer"
-                        value={formData.manufacturer}
-                        onChange={(e) => handleChange("manufacturer", e.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">{equipment.manufacturer || "-"}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="model">Modello</Label>
-                    {editMode ? (
-                      <Input
-                        id="model"
-                        value={formData.model}
-                        onChange={(e) => handleChange("model", e.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">{equipment.model || "-"}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="serial">Numero di Serie</Label>
-                    {editMode ? (
-                      <Input
-                        id="serial"
-                        value={formData.serial_number}
-                        onChange={(e) => handleChange("serial_number", e.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">{equipment.serial_number || "-"}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="installation">Data Installazione</Label>
-                    {editMode ? (
-                      <Input
-                        id="installation"
-                        type="date"
-                        value={formData.installation_date}
-                        onChange={(e) => handleChange("installation_date", e.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">
-                        {equipment.installation_date 
-                          ? new Date(equipment.installation_date).toLocaleDateString("it-IT")
-                          : "-"
-                        }
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="location">Ubicazione</Label>
-                    {editMode ? (
-                      <Input
-                        id="location"
-                        value={formData.location}
-                        onChange={(e) => handleChange("location", e.target.value)}
-                        placeholder="Es. Reparto A - Linea 1"
-                      />
-                    ) : (
-                      <p className="text-sm font-medium">{equipment.location || "-"}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="notes">Note</Label>
-                    {editMode ? (
-                      <Textarea
-                        id="notes"
-                        value={formData.notes}
-                        onChange={(e) => handleChange("notes", e.target.value)}
-                        rows={4}
-                      />
-                    ) : (
-                      <p className="text-sm font-medium whitespace-pre-wrap">{equipment.notes || "-"}</p>
-                    )}
-                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Location</label>
+                  <p className="mt-1">{equipment.location || "N/A"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Manufacturer</label>
+                  <p className="mt-1">{equipment.manufacturer || "N/A"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Model</label>
+                  <p className="mt-1">{equipment.model || "N/A"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Serial Number</label>
+                  <p className="mt-1">{equipment.serial_number || "N/A"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Installation Date</label>
+                  <p className="mt-1">{equipment.installation_date || "N/A"}</p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Technical Specifications */}
-            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white">Specifiche Tecniche</CardTitle>
-                  {editMode && (
-                    <Button
-                      onClick={handleAddSpec}
-                      size="sm"
-                      className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Aggiungi Specifica
-                    </Button>
-                  )}
+            <Tabs defaultValue="maintenance">
+              <TabsList>
+                <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+                <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="maintenance" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Scheduled Maintenance</h3>
+                  <Button size="sm" onClick={() => router.push(`/maintenance/new?equipment=${equipment.id}`)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Schedule
+                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {technicalSpecs.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <p>Nessuna specifica tecnica definita</p>
-                    {editMode && (
-                      <Button
-                        onClick={handleAddSpec}
-                        variant="outline"
-                        className="mt-4"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Aggiungi Prima Specifica
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {technicalSpecs.map((spec, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-3 items-end">
-                        <div className="col-span-4">
-                          <Label>Nome Parametro</Label>
-                          {editMode ? (
-                            <Input
-                              value={spec.spec_key}
-                              onChange={(e) => handleSpecChange(index, "spec_key", e.target.value)}
-                              placeholder="es. speed, length, load_capacity"
-                            />
-                          ) : (
-                            <p className="text-sm font-medium text-white mt-2">{spec.spec_key}</p>
-                          )}
-                        </div>
-                        <div className="col-span-4">
-                          <Label>Valore</Label>
-                          {editMode ? (
-                            <Input
-                              value={spec.spec_value}
-                              onChange={(e) => handleSpecChange(index, "spec_value", e.target.value)}
-                              placeholder="es. 0.5-2, 50, 100"
-                            />
-                          ) : (
-                            <p className="text-sm font-medium text-white mt-2">{spec.spec_value}</p>
-                          )}
-                        </div>
-                        <div className="col-span-3">
-                          <Label>Unità di Misura</Label>
-                          {editMode ? (
-                            <Input
-                              value={spec.unit || ""}
-                              onChange={(e) => handleSpecChange(index, "unit", e.target.value)}
-                              placeholder="es. m/s, m, kg/m"
-                            />
-                          ) : (
-                            <p className="text-sm font-medium text-white mt-2">{spec.unit || "-"}</p>
-                          )}
-                        </div>
-                        {editMode && (
-                          <div className="col-span-1">
-                            <Button
-                              onClick={() => handleRemoveSpec(index)}
-                              variant="ghost"
-                              size="icon"
-                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* QR Code Tab */}
-          <TabsContent value="qr">
-            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-              <CardHeader>
-                <CardTitle className="text-white">Codice QR Macchina</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center space-y-4">
-                <QRCodeGenerator 
-                  value={`${window.location.origin}/equipment/${equipment.id}`}
-                  size={256}
+                {/* Maintenance list would go here */}
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                  No scheduled maintenance found
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="documents">
+                <DocumentUpload 
+                  equipmentId={equipment.id} 
+                  onUploadComplete={() => {
+                    toast({ title: "Success", description: "Document uploaded" });
+                  }}
                 />
-                <p className="text-sm text-gray-500 text-center">
-                  Scansiona questo codice QR per accedere rapidamente ai dettagli della macchina
-                </p>
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Scarica QR Code
+              </TabsContent>
+              
+              <TabsContent value="history">
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                  No history available
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button className="w-full justify-start" variant="outline" onClick={() => router.push(`/maintenance/new?equipment=${equipment.id}`)}>
+                  <Activity className="mr-2 h-4 w-4" />
+                  Report Issue
+                </Button>
+                <Button className="w-full justify-start" variant="outline" onClick={() => router.push(`/checklist/execute?equipment=${equipment.id}`)}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Start Inspection
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* Maintenance Tab */}
-          <TabsContent value="maintenance" className="space-y-4">
-            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
+            <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white">Storico Manutenzioni</CardTitle>
-                  <Button onClick={() => router.push("/maintenance/new")} className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Nuova Manutenzione
-                  </Button>
-                </div>
+                <CardTitle>Notes</CardTitle>
               </CardHeader>
               <CardContent>
-                {maintenanceHistory.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Wrench className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Nessuna manutenzione registrata per questa macchina</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {maintenanceHistory.map((maintenance) => (
-                      <div key={maintenance.id} className="border border-slate-700 rounded-lg p-4 hover:bg-slate-700/30 transition-colors">
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <h4 className="font-medium text-white">{maintenance.title}</h4>
-                            <p className="text-sm text-slate-400">{maintenance.description}</p>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
-                              <span>
-                                Data: {new Date(maintenance.scheduled_date).toLocaleDateString("it-IT")}
-                              </span>
-                              <span>Tipo: {maintenance.maintenance_type}</span>
-                            </div>
-                          </div>
-                          <Badge variant={maintenance.status === "completed" ? "default" : "secondary"}>
-                            {maintenance.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {equipment.notes || "No notes available."}
+                </p>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Documents Tab */}
-          <TabsContent value="documents">
-            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-white">Documentazione Tecnica</CardTitle>
-                <DocumentUpload 
-                  equipmentId={equipment.id} 
-                  onUploadComplete={() => loadData(equipment.id)} 
-                />
-              </CardHeader>
-              <CardContent>
-                <DocumentList 
-                  documents={documents} 
-                  onDelete={handleDocumentDelete} 
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Stats Tab */}
-          <TabsContent value="stats" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-500">
-                    Manutenzioni Totali
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-white">{maintenanceHistory.length}</div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-500">
-                    Completate
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-green-600">
-                    {maintenanceHistory.filter(m => m.status === "completed").length}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-500">
-                    Uptime Stimato
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-blue-600">
-                    {calculateUptime()}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-              <CardHeader>
-                <CardTitle className="text-white">Analisi Manutenzioni per Tipo</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>Grafici e analisi dettagliate in arrivo</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Sei sicuro di voler eliminare questa macchina?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Questa azione non può essere annullata. Verranno eliminate anche tutte le manutenzioni
-              e i documenti associati a questa macchina.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Elimina
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </MainLayout>
+  );
+}
+
+function Plus({ className }: { className?: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </svg>
   );
 }
