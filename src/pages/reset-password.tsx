@@ -195,57 +195,36 @@ export default function ResetPasswordPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-white">
                   Nuova Password
                 </Label>
-                <div className="relative mt-1">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Minimo 8 caratteri"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                    className="pr-10 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Deve contenere: 8+ caratteri, maiuscola, minuscola, numero, carattere speciale
-                </p>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimo 8 caratteri"
+                  required
+                  disabled={loading}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                />
               </div>
 
-              <div>
-                <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300">
-                  Conferma Password
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-white">
+                  Conferma Nuova Password
                 </Label>
-                <div className="relative mt-1">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Ripeti la password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                    className="pr-10 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Ripeti la password"
+                  required
+                  disabled={loading}
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                />
               </div>
 
               <Button

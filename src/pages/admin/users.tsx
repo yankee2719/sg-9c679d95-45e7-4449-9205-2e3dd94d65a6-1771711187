@@ -520,7 +520,7 @@ export default function AdminUsersPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="email" className="text-white">Email *</Label>
               <Input
                 id="email"
                 type="email"
@@ -529,12 +529,12 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, email: e.target.value })
                 }
                 placeholder="utente@example.com"
-                className="bg-slate-700 border-slate-600"
+                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
+              <Label htmlFor="password" className="text-white">Password *</Label>
               <Input
                 id="password"
                 type="password"
@@ -543,12 +543,12 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, password: e.target.value })
                 }
                 placeholder="••••••••"
-                className="bg-slate-700 border-slate-600"
+                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="full_name">Nome Completo</Label>
+              <Label htmlFor="full_name" className="text-white">Nome Completo</Label>
               <Input
                 id="full_name"
                 value={newUserData.full_name}
@@ -556,25 +556,25 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, full_name: e.target.value })
                 }
                 placeholder="Mario Rossi"
-                className="bg-slate-700 border-slate-600"
+                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="role">Ruolo *</Label>
+              <Label htmlFor="role" className="text-white">Ruolo *</Label>
               <Select
                 value={newUserData.role}
                 onValueChange={(value: any) =>
                   setNewUserData({ ...newUserData, role: value })
                 }
               >
-                <SelectTrigger className="bg-slate-700 border-slate-600">
-                  <SelectValue />
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectValue placeholder="Seleziona ruolo" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="technician">Tecnico</SelectItem>
-                  <SelectItem value="supervisor">Supervisore</SelectItem>
-                  <SelectItem value="admin">Amministratore</SelectItem>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="admin" className="text-white hover:bg-gray-700 focus:bg-gray-700">Admin</SelectItem>
+                  <SelectItem value="supervisor" className="text-white hover:bg-gray-700 focus:bg-gray-700">Supervisor</SelectItem>
+                  <SelectItem value="technician" className="text-white hover:bg-gray-700 focus:bg-gray-700">Technician</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -633,38 +633,38 @@ export default function AdminUsersPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit_full_name">Nome Completo</Label>
+              <Label htmlFor="edit_full_name" className="text-white">Nome Completo</Label>
               <Input
                 id="edit_full_name"
                 value={editUserData.full_name}
                 onChange={(e) =>
                   setEditUserData({ ...editUserData, full_name: e.target.value })
                 }
-                className="bg-slate-700 border-slate-600"
+                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_role">Ruolo</Label>
+              <Label htmlFor="edit_role" className="text-white">Ruolo</Label>
               <Select
                 value={editUserData.role}
                 onValueChange={(value: any) =>
                   setEditUserData({ ...editUserData, role: value })
                 }
               >
-                <SelectTrigger className="bg-slate-700 border-slate-600">
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="technician">Tecnico</SelectItem>
-                  <SelectItem value="supervisor">Supervisore</SelectItem>
-                  <SelectItem value="admin">Amministratore</SelectItem>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="admin" className="text-white hover:bg-gray-700 focus:bg-gray-700">Admin</SelectItem>
+                  <SelectItem value="supervisor" className="text-white hover:bg-gray-700 focus:bg-gray-700">Supervisor</SelectItem>
+                  <SelectItem value="technician" className="text-white hover:bg-gray-700 focus:bg-gray-700">Technician</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_phone">Telefono</Label>
+              <Label htmlFor="edit_phone" className="text-white">Telefono</Label>
               <Input
                 id="edit_phone"
                 type="tel"
@@ -672,24 +672,24 @@ export default function AdminUsersPage() {
                 onChange={(e) =>
                   setEditUserData({ ...editUserData, phone: e.target.value })
                 }
-                className="bg-slate-700 border-slate-600"
+                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_is_active">Stato</Label>
+              <Label htmlFor="edit_is_active" className="text-white">Stato</Label>
               <Select
                 value={editUserData.is_active ? "active" : "inactive"}
                 onValueChange={(value) =>
                   setEditUserData({ ...editUserData, is_active: value === "active" })
                 }
               >
-                <SelectTrigger className="bg-slate-700 border-slate-600">
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="active">Attivo</SelectItem>
-                  <SelectItem value="inactive">Inattivo</SelectItem>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="active" className="text-white hover:bg-gray-700 focus:bg-gray-700">Attivo</SelectItem>
+                  <SelectItem value="inactive" className="text-white hover:bg-gray-700 focus:bg-gray-700">Inattivo</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -128,18 +128,18 @@ export default function ForgotPasswordPage() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
+                <Label htmlFor="email" className="text-white">
                   Indirizzo Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="nome@azienda.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your.email@example.com"
                   required
                   disabled={loading}
-                  className="mt-1 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 

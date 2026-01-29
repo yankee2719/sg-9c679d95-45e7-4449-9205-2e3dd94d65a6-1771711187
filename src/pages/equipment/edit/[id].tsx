@@ -52,10 +52,9 @@ export default function EditEquipment() {
     manufacturer: "",
     model: "",
     serial_number: "",
-    location: "",
     installation_date: "",
+    location: "",
     status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
-    notes: "",
   });
 
   const [specifications, setSpecifications] = useState<TechnicalSpec[]>([]);
@@ -85,14 +84,13 @@ export default function EditEquipment() {
         setFormData({
           name: equipment.name,
           equipment_code: equipment.equipment_code,
-          category: equipment.category,
+          category: equipment.category || "",
           manufacturer: equipment.manufacturer || "",
           model: equipment.model || "",
           serial_number: equipment.serial_number || "",
-          location: equipment.location || "",
           installation_date: equipment.installation_date || "",
+          location: equipment.location || "",
           status: equipment.status as "active" | "inactive" | "under_maintenance" | "retired",
-          notes: equipment.notes || "",
         });
 
         // Parse technical specs
@@ -334,9 +332,8 @@ export default function EditEquipment() {
                   <Label htmlFor="location" className="text-white">Location</Label>
                   <Input
                     id="location"
-                    value={formData.location || ""}
+                    value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="e.g., Building A - Assembly Line 1"
                     className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                   />
                 </div>
@@ -354,20 +351,6 @@ export default function EditEquipment() {
                       })
                     }
                     className="bg-gray-700 border-gray-600 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="notes" className="text-white">Notes</Label>
-                  <textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, notes: e.target.value })
-                    }
-                    rows={3}
-                    className="w-full px-3 py-2 rounded-md border border-gray-600 bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-orange-500 placeholder:text-gray-400"
-                    placeholder="Additional information about the equipment..."
                   />
                 </div>
               </div>

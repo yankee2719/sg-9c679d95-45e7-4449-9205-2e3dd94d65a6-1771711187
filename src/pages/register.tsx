@@ -129,7 +129,7 @@ export default function RegisterPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="fullName">Nome Completo</Label>
+                <Label htmlFor="fullName" className="text-white">Nome Completo</Label>
                 <Input
                   id="fullName"
                   type="text"
@@ -137,11 +137,12 @@ export default function RegisterPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-white">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -149,19 +150,20 @@ export default function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="role">Ruolo</Label>
+                <Label htmlFor="role" className="text-white">Ruolo</Label>
                 <Select value={role} onValueChange={(value: any) => setRole(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleziona ruolo" />
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Seleziona il tuo ruolo" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Amministratore</SelectItem>
-                    <SelectItem value="supervisor">Supervisore</SelectItem>
-                    <SelectItem value="technician">Tecnico</SelectItem>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectItem value="technician" className="text-white hover:bg-gray-700 focus:bg-gray-700">Tecnico</SelectItem>
+                    <SelectItem value="supervisor" className="text-white hover:bg-gray-700 focus:bg-gray-700">Supervisore</SelectItem>
+                    <SelectItem value="admin" className="text-white hover:bg-gray-700 focus:bg-gray-700">Amministratore</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
@@ -170,7 +172,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-white">Password</Label>
                 <Input
                   id="password"
                   type="password"
@@ -178,6 +180,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
                 <p className="text-xs text-muted-foreground">
                   Minimo 8 caratteri
@@ -185,7 +188,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Conferma Password</Label>
+                <Label htmlFor="confirmPassword" className="text-white">Conferma Password</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -193,6 +196,7 @@ export default function RegisterPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
                 />
               </div>
 
