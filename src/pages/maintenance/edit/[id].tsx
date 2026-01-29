@@ -26,10 +26,10 @@ export default function EditMaintenanceSchedule() {
     equipment_id: "",
     title: "",
     description: "",
-    frequency_days: 30,
+    frequency: "monthly", // Changed from frequency_days number to enum string
     priority: "medium",
     next_maintenance_date: "",
-    is_active: true
+    status: "scheduled" // Changed from is_active boolean to status enum
   });
 
   useEffect(() => {
@@ -55,10 +55,10 @@ export default function EditMaintenanceSchedule() {
         equipment_id: data.equipment_id,
         title: data.title || "",
         description: data.description || "",
-        frequency_days: data.frequency_days || 30,
+        frequency: data.frequency || "monthly",
         priority: data.priority || "medium",
         next_maintenance_date: data.next_maintenance_date ? data.next_maintenance_date.split('T')[0] : "",
-        is_active: data.is_active
+        status: data.status || "scheduled"
       });
     } catch (error) {
       console.error("Error loading schedule:", error);
@@ -153,13 +153,22 @@ export default function EditMaintenanceSchedule() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="frequency">Frequency (Days)</Label>
-                  <Input 
-                    id="frequency"
-                    type="number"
-                    value={schedule.frequency_days}
-                    onChange={(e) => setSchedule({...schedule, frequency_days: parseInt(e.target.value)})}
-                  />
+                  <Label htmlFor="frequency">Frequency</Label>
+                  <Select 
+                    value={schedule.frequency} 
+                    onValueChange={(value) => setSchedule({...schedule, frequency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div className="grid gap-2">
@@ -189,6 +198,25 @@ export default function EditMaintenanceSchedule() {
                   value={schedule.next_maintenance_date}
                   onChange={(e) => setSchedule({...schedule, next_maintenance_date: e.target.value})}
                 />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="status">Status</Label>
+                <Select 
+                  value={schedule.status} 
+                  onValueChange={(value) => setSchedule({...schedule, status: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>

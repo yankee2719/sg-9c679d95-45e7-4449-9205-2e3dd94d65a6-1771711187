@@ -11,39 +11,33 @@ export interface EquipmentDocument {
 }
 
 export const documentService = {
-  async uploadDocument(file: File, equipmentId: string, title: string) {
-    // 1. Upload file to storage
+  async uploadDocument(file: File, equipmentId: string, description: string) {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `documents/${fileName}`;
+    const filePath = `${equipmentId}/${fileName}`;
 
+    // 1. Upload file to storage
     const { error: uploadError } = await supabase.storage
-      .from('equipment_documents')
+      .from('equipment-documents')
       .upload(filePath, file);
 
     if (uploadError) throw uploadError;
 
-    // 2. Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    // 2. Create database record
+    const { data, error: dbError } = await supabase
       .from('equipment_documents')
-      .getPublicUrl(filePath);
-
-    // 3. Create database record
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const { data, error } = await supabase
-      .from("equipment_documents")
       .insert({
         equipment_id: equipmentId,
-        title: title,
-        file_url: publicUrl,
-        file_type: fileExt || 'unknown',
-        uploaded_by: user?.id
+        file_name: file.name,
+        file_path: filePath,
+        file_type: file.type,
+        file_size: file.size,
+        description: description
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (dbError) throw dbError;
     return data;
   },
 
