@@ -1,115 +1,94 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { supabase } from "@/integrations/supabase/client";
+import { NextApiRequest, NextApiResponse } from "next";
+import { createClient } from "@supabase/supabase-js";
 
-type ResponseData = {
-  success: boolean;
-  message: string;
-  data?: any;
-  error?: string;
-};
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * API endpoint to create a new user (Admin only)
- * POST /api/admin/create-user
- * 
- * Body:
- * {
- *   email: string;
- *   password: string;
- *   fullName: string;
- *   role: "admin" | "supervisor" | "technician";
- * }
+ * Admin-only endpoint to create users with profiles
+ * Uses Supabase Admin API to bypass RLS and PostgREST
  */
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<ResponseData>
+  res: NextApiResponse
 ) {
-  // Only allow POST requests
   if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      message: "Method not allowed",
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { email, password, fullName, role } = req.body;
+    const { email, password, fullName, role, phone } = req.body;
 
-    // Validate required fields
-    if (!email || !password || !fullName || !role) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-        error: "Email, password, fullName, and role are required",
-      });
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
     }
 
-    // Validate role
-    const validRoles = ["admin", "supervisor", "technician"];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid role",
-        error: `Role must be one of: ${validRoles.join(", ")}`,
-      });
+    if (!["admin", "supervisor", "technician"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role" });
     }
 
-    // Validate password strength
-    if (password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: "Password too weak",
-        error: "Password must be at least 8 characters long",
-      });
-    }
-
-    // Call the Edge Function to create user
-    console.log("Calling Edge Function to create user:", { email, role });
-
-    const { data, error } = await supabase.functions.invoke("create-user", {
-      body: {
-        email,
-        password,
-        fullName,
-        role,
+    // Create Supabase Admin client
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
     });
 
-    if (error) {
-      console.error("Edge Function error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create user",
-        error: error.message || "Unknown error from Edge Function",
-      });
+    // Create user in auth.users
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: fullName || "",
+      },
+    });
+
+    if (authError) {
+      console.error("Auth creation error:", authError);
+      return res.status(400).json({ error: authError.message });
     }
 
-    if (!data.success) {
-      console.error("Edge Function returned error:", data.error);
-      return res.status(400).json({
-        success: false,
-        message: "User creation failed",
-        error: data.error || "Unknown error",
-      });
+    if (!authData?.user) {
+      return res.status(500).json({ error: "User creation failed" });
     }
 
-    console.log("User created successfully:", data.data);
+    // Create profile in public.profiles
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .insert({
+        id: authData.user.id,
+        email: email,
+        full_name: fullName || "",
+        role: role,
+        phone: phone || null,
+        is_active: true,
+      })
+      .select()
+      .single();
 
-    return res.status(200).json({
-      success: true,
+    if (profileError) {
+      console.error("Profile creation error:", profileError);
+      
+      // Rollback: delete auth user if profile creation fails
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      
+      return res.status(500).json({ error: "Profile creation failed" });
+    }
+
+    return res.status(201).json({
       message: "User created successfully",
-      data: {
-        userId: data.data.userId,
-        email: data.data.email,
-        role: data.data.role,
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        profile: profileData,
       },
     });
-  } catch (error: any) {
-    console.error("API error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message || "Unknown error",
-    });
+
+  } catch (error) {
+    console.error("Error in create-user API:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 }
