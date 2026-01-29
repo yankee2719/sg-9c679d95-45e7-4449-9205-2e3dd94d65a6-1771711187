@@ -41,6 +41,19 @@ export default async function handler(
 
     console.log("=== Resetting password for user:", userId);
 
+    // First verify the user exists
+    const { data: userData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+    if (getUserError || !userData.user) {
+      console.error("User not found:", getUserError);
+      return res.status(404).json({
+        success: false,
+        error: "User not found in authentication system"
+      });
+    }
+
+    console.log("=== User found:", userData.user.email);
+
     // Update user password using Admin API
     const { data: updateData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
