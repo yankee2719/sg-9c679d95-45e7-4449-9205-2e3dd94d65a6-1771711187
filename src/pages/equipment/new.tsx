@@ -237,10 +237,11 @@ export default function NewEquipment() {
                   type="button"
                   variant="outline"
                   onClick={() => router.push("/equipment")}
+                  className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading} className="bg-primary hover:bg-primary/90">
+                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Save className="mr-2 h-4 w-4" />
                   {loading ? "Saving..." : "Save Equipment"}
                 </Button>

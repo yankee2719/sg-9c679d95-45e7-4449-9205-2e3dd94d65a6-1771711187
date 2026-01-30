@@ -98,7 +98,7 @@ export default function EquipmentDetailPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => router.push("/equipment")}
-                            className="hover:bg-slate-700"
+                            className="hover:bg-slate-700 text-white"
                         >
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
@@ -125,7 +125,7 @@ export default function EquipmentDetailPage() {
                         <Button
                             variant="outline"
                             onClick={() => router.push(`/equipment/edit/${equipment.id}`)}
-                            className="hover:bg-slate-700 border-slate-600"
+                            className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
                         >
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
@@ -133,7 +133,7 @@ export default function EquipmentDetailPage() {
                         <Button
                             variant="destructive"
                             onClick={handleDelete}
-                            className="bg-red-600 hover:bg-red-700"
+                            className="bg-red-600 hover:bg-red-700 text-white"
                         >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
@@ -195,7 +195,7 @@ export default function EquipmentDetailPage() {
                         <CardContent className="space-y-2">
                             <Button
                                 variant="outline"
-                                className="w-full justify-start hover:bg-slate-700 border-slate-600"
+                                className="w-full justify-start bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
                                 onClick={() => router.push(`/maintenance/new?equipment=${equipment.id}`)}
                             >
                                 <Activity className="h-4 w-4 mr-2" />
@@ -203,7 +203,7 @@ export default function EquipmentDetailPage() {
                             </Button>
                             <Button
                                 variant="outline"
-                                className="w-full justify-start hover:bg-slate-700 border-slate-600"
+                                className="w-full justify-start bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
                                 onClick={() => router.push(`/checklist/new?equipment=${equipment.id}`)}
                             >
                                 <ClipboardList className="h-4 w-4 mr-2" />
