@@ -41,6 +41,8 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [userName, setUserName] = useState<string>("");
   const [userInitials, setUserInitials] = useState<string>("U");
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  const [notificationCount, setNotificationCount] = useState<number>(0);
+  const [maintenanceCount, setMaintenanceCount] = useState<number>(0);
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -51,6 +53,12 @@ export function MainLayout({ children }: MainLayoutProps) {
           setUserName(profile.full_name || profile.email || "User");
           setUserInitials(getInitials(profile.full_name || profile.email || "U"));
           setUserRole(profile.role as "admin" | "supervisor" | "technician");
+          
+          // Load notification count
+          await loadNotificationCount();
+          
+          // Load maintenance count
+          await loadMaintenanceCount();
         }
       } catch (error) {
         console.error("Error loading user profile:", error);
@@ -59,6 +67,38 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     loadUserProfile();
   }, []);
+
+  const loadNotificationCount = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact" })
+        .eq("is_read", false);
+      
+      if (!error && data) {
+        setNotificationCount(data.length);
+      }
+    } catch (error) {
+      console.error("Error loading notification count:", error);
+    }
+  };
+
+  const loadMaintenanceCount = async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("maintenance_schedules")
+        .select("id", { count: "exact" })
+        .eq("status", "pending")
+        .lte("next_due_date", today);
+      
+      if (!error && data) {
+        setMaintenanceCount(data.length);
+      }
+    } catch (error) {
+      console.error("Error loading maintenance count:", error);
+    }
+  };
 
   const menuItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -79,7 +119,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     const items = [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { name: "Equipaggiamenti", href: "/equipment", icon: SettingsIcon },
-      { name: "Manutenzioni", href: "/maintenance", icon: Wrench, badge: 1 },
+      { name: "Manutenzioni", href: "/maintenance", icon: Wrench, badge: maintenanceCount > 0 ? maintenanceCount : undefined },
       { name: "Checklist", href: "/checklists", icon: ClipboardCheck },
       { name: "Analitiche", href: "/analytics/checklist-executions", icon: BarChart3 },
     ];
@@ -98,7 +138,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       name: "Notifiche",
       href: "/notifications",
       icon: Bell,
-      badge: 4,
+      badge: notificationCount > 0 ? notificationCount : undefined,
     });
 
     // Add Settings menu for admin only
@@ -111,7 +151,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     }
 
     return items;
-  }, [userRole]);
+  }, [userRole, notificationCount, maintenanceCount]);
 
   const getInitials = (name: string) => {
     return name

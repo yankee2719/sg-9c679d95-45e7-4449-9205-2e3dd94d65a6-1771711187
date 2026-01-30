@@ -1,14 +1,14 @@
 import { useRouter } from "next/router";
 import { useEffect, useState, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Loader2, ChevronLeft, Clock, Flag, MessageSquare, Camera } from "lucide-react";
+import { Loader2, ChevronLeft, Clock, Flag, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -48,13 +48,13 @@ export default function ChecklistExecutionPage() {
     const router = useRouter();
     const { id } = router.query;
     const { toast } = useToast();
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [execution, setExecution] = useState<ChecklistExecution | null>(null);
-    const [items, setItems] = useState<ChecklistItem[]>([]);
+    const canvasRef = useRef < HTMLCanvasElement > (null);
+    const [execution, setExecution] = useState < ChecklistExecution | null > (null);
+    const [items, setItems] = useState < ChecklistItem[] > ([]);
     const [loading, setLoading] = useState(true);
-    const [responses, setResponses] = useState<Record<string, boolean>>({});
-    const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
-    const [showNoteDialog, setShowNoteDialog] = useState<string | null>(null);
+    const [responses, setResponses] = useState < Record < string, boolean>> ({});
+    const [itemNotes, setItemNotes] = useState < Record < string, string>> ({});
+    const [showNoteDialog, setShowNoteDialog] = useState < string | null > (null);
     const [showSignatureDialog, setShowSignatureDialog] = useState(false);
     const [isDrawing, setIsDrawing] = useState(false);
     const [signatureConfirmed, setSignatureConfirmed] = useState(false);
@@ -63,8 +63,15 @@ export default function ChecklistExecutionPage() {
     const [elapsedTime, setElapsedTime] = useState(0);
 
     useEffect(() => {
-        if (id && typeof id === "string") {
-            loadExecution(id);
+        if (id && typeof id === "string" && id !== "execute") {
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(id)) {
+                loadExecution(id);
+            } else {
+                setLoading(false);
+            }
+        } else {
+            setLoading(false);
         }
     }, [id]);
 
@@ -82,7 +89,7 @@ export default function ChecklistExecutionPage() {
                 .from("checklist_executions")
                 .select(`
                     *,
-                    checklist:checklists!checklist_id(name, description),
+                    checklist:checklist_templates!checklist_id(name, description),
                     equipment(name, equipment_code),
                     executed_by_profile:profiles!checklist_executions_executed_by_fkey(full_name)
                 `)
@@ -99,12 +106,11 @@ export default function ChecklistExecutionPage() {
 
             if (itemsError) throw itemsError;
 
-            // Handle equipment data safely with proper null checks
             let equipmentData = null;
             const equipmentRaw = executionData.equipment;
-            
-            if (equipmentRaw !== null && 
-                typeof equipmentRaw === 'object' && 
+
+            if (equipmentRaw !== null &&
+                typeof equipmentRaw === 'object' &&
                 'name' in equipmentRaw &&
                 'equipment_code' in equipmentRaw) {
                 const equipment = equipmentRaw as { name: string; equipment_code: string };
@@ -145,10 +151,6 @@ export default function ChecklistExecutionPage() {
             delete newResponses[itemId];
             return newResponses;
         });
-    };
-
-    const handleAddNote = (itemId: string) => {
-        setShowNoteDialog(itemId);
     };
 
     const handleSaveNote = () => {
@@ -317,10 +319,8 @@ export default function ChecklistExecutionPage() {
                 </div>
 
                 <div className="space-y-3">
-                    {items.map((item, index) => {
+                    {items.map((item) => {
                         const isCompleted = responses[item.id] === true;
-                        const isSkipped = !(item.id in responses);
-                        const hasNote = itemNotes[item.id];
 
                         return (
                             <Card key={item.id} className={`${isCompleted ? "border-green-600 bg-green-950/20" : ""}`}>
@@ -356,7 +356,7 @@ export default function ChecklistExecutionPage() {
                                             variant="ghost"
                                             size="sm"
                                             className="h-8 text-xs"
-                                            onClick={() => handleAddNote(item.id)}
+                                            onClick={() => setShowNoteDialog(item.id)}
                                         >
                                             <Flag className="h-3 w-3 mr-1" />
                                             Segnala
