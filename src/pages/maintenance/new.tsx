@@ -141,18 +141,18 @@ export default function NewMaintenancePage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="equipment" className="text-slate-200">Macchina *</Label>
+                  <Label htmlFor="equipment" className="text-white">Macchina *</Label>
                   <Select
                     value={formData.equipment_id}
                     onValueChange={(value) => handleChange("equipment_id", value)}
                     required
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue placeholder="Seleziona macchina" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {equipment.map((eq) => (
-                        <SelectItem key={eq.id} value={eq.id} className="text-slate-100">
+                        <SelectItem key={eq.id} value={eq.id} className="text-white">
                           {eq.name} ({eq.equipment_code})
                         </SelectItem>
                       ))}
@@ -161,26 +161,26 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="type" className="text-slate-200">Tipo Manutenzione *</Label>
+                  <Label htmlFor="type" className="text-white">Tipo Manutenzione *</Label>
                   <Select
                     value={formData.maintenance_type}
                     onValueChange={(value) => handleChange("maintenance_type", value)}
                     required
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue placeholder="Seleziona tipo" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="preventive" className="text-slate-100">Preventiva</SelectItem>
-                      <SelectItem value="predictive" className="text-slate-100">Predittiva</SelectItem>
-                      <SelectItem value="corrective" className="text-slate-100">Correttiva</SelectItem>
-                      <SelectItem value="extraordinary" className="text-slate-100">Straordinaria</SelectItem>
+                      <SelectItem value="preventive" className="text-white">Preventiva</SelectItem>
+                      <SelectItem value="predictive" className="text-white">Predittiva</SelectItem>
+                      <SelectItem value="corrective" className="text-white">Correttiva</SelectItem>
+                      <SelectItem value="extraordinary" className="text-white">Straordinaria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="title" className="text-slate-200">Titolo *</Label>
+                  <Label htmlFor="title" className="text-white">Titolo *</Label>
                   <Input
                     id="title"
                     type="text"
@@ -188,107 +188,107 @@ export default function NewMaintenancePage() {
                     onChange={(e) => handleChange("title", e.target.value)}
                     placeholder="Es. Manutenzione Preventiva Mensile"
                     required
-                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="scheduled_date" className="text-slate-200">Data Pianificata *</Label>
+                  <Label htmlFor="scheduled_date" className="text-white">Data Pianificata *</Label>
                   <Input
                     id="scheduled_date"
                     type="date"
                     value={formData.scheduled_date}
                     onChange={(e) => handleChange("scheduled_date", e.target.value)}
                     required
-                    className="bg-slate-700 border-slate-600 text-slate-100"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="due_date" className="text-slate-200">Data Scadenza</Label>
+                  <Label htmlFor="due_date" className="text-white">Data Scadenza</Label>
                   <Input
                     id="due_date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => handleChange("due_date", e.target.value)}
                     placeholder="Opzionale"
-                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="priority" className="text-slate-200">Priorità *</Label>
+                  <Label htmlFor="priority" className="text-white">Priorità *</Label>
                   <Select
                     value={formData.priority}
                     onValueChange={(value) => handleChange("priority", value)}
                     required
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue placeholder="Seleziona priorità" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="low" className="text-slate-100">Bassa</SelectItem>
-                      <SelectItem value="medium" className="text-slate-100">Media</SelectItem>
-                      <SelectItem value="high" className="text-slate-100">Alta</SelectItem>
-                      <SelectItem value="critical" className="text-slate-100">Critica</SelectItem>
+                      <SelectItem value="low" className="text-white">Bassa</SelectItem>
+                      <SelectItem value="medium" className="text-white">Media</SelectItem>
+                      <SelectItem value="high" className="text-white">Alta</SelectItem>
+                      <SelectItem value="critical" className="text-white">Critica</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-slate-200">Durata Stimata (minuti)</Label>
+                  <Label htmlFor="duration" className="text-white">Durata Stimata (minuti)</Label>
                   <Input
                     id="duration"
                     type="number"
                     value={formData.estimated_duration_minutes}
                     onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)}
                     placeholder="Es. 60"
-                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="frequency" className="text-slate-200">Frequenza (giorni)</Label>
+                  <Label htmlFor="frequency" className="text-white">Frequenza (giorni)</Label>
                   <Input
                     id="frequency"
                     type="number"
                     value={formData.frequency_days}
                     onChange={(e) => handleChange("frequency_days", e.target.value)}
                     placeholder="Es. 30 per mensile"
-                    className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="recurrence" className="text-slate-200">Pattern Ricorrenza</Label>
+                  <Label htmlFor="recurrence" className="text-white">Pattern Ricorrenza</Label>
                   <Select
                     value={formData.recurrence_pattern}
                     onValueChange={(value) => handleChange("recurrence_pattern", value)}
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue placeholder="Nessuna ricorrenza" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="daily" className="text-slate-100">Giornaliera</SelectItem>
-                      <SelectItem value="weekly" className="text-slate-100">Settimanale</SelectItem>
-                      <SelectItem value="monthly" className="text-slate-100">Mensile</SelectItem>
-                      <SelectItem value="yearly" className="text-slate-100">Annuale</SelectItem>
+                      <SelectItem value="daily" className="text-white">Giornaliera</SelectItem>
+                      <SelectItem value="weekly" className="text-white">Settimanale</SelectItem>
+                      <SelectItem value="monthly" className="text-white">Mensile</SelectItem>
+                      <SelectItem value="yearly" className="text-white">Annuale</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="technician" className="text-slate-200">Assegna a Tecnico</Label>
+                  <Label htmlFor="technician" className="text-white">Assegna a Tecnico</Label>
                   <Select
                     value={formData.assigned_to}
                     onValueChange={(value) => handleChange("assigned_to", value)}
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue placeholder="Seleziona tecnico" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {technicians.map((tech) => (
-                        <SelectItem key={tech.id} value={tech.id} className="text-slate-100">
+                        <SelectItem key={tech.id} value={tech.id} className="text-white">
                           {tech.full_name || tech.email}
                         </SelectItem>
                       ))}
@@ -297,17 +297,17 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="template" className="text-slate-200">Template Checklist</Label>
+                  <Label htmlFor="template" className="text-white">Template Checklist</Label>
                   <Select
                     value={formData.checklist_template_id}
                     onValueChange={(value) => handleChange("checklist_template_id", value)}
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue placeholder="Seleziona template (opzionale)" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {checklists.map((checklist) => (
-                        <SelectItem key={checklist.id} value={checklist.id} className="text-slate-100">
+                        <SelectItem key={checklist.id} value={checklist.id} className="text-white">
                           {checklist.name}
                         </SelectItem>
                       ))}
@@ -317,14 +317,14 @@ export default function NewMaintenancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-slate-200">Descrizione / Note</Label>
+                <Label htmlFor="description" className="text-white">Descrizione / Note</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => handleChange("description", e.target.value)}
                   rows={4}
                   placeholder="Dettagli sull'intervento di manutenzione..."
-                  className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                 />
               </div>
 

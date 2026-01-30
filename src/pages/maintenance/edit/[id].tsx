@@ -112,17 +112,17 @@ export default function EditMaintenanceSchedule() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="equipment" className="text-slate-200">Equipment</Label>
+                <Label htmlFor="equipment" className="text-white">Equipment</Label>
                 <Select 
                   value={formData.equipment_id} 
                   onValueChange={(value) => setFormData({...formData, equipment_id: value})}
                 >
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                     <SelectValue placeholder="Select equipment" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
                     {equipmentList.map((eq) => (
-                      <SelectItem key={eq.id} value={eq.id} className="text-slate-100">
+                      <SelectItem key={eq.id} value={eq.id} className="text-white">
                         {eq.name} ({eq.equipment_code})
                       </SelectItem>
                     ))}
@@ -131,53 +131,53 @@ export default function EditMaintenanceSchedule() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="title" className="text-slate-200">Title</Label>
+                <Label htmlFor="title" className="text-white">Title</Label>
                 <Input 
                   id="title"
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
                   placeholder="e.g. Monthly Inspection"
-                  className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description" className="text-slate-200">Description</Label>
+                <Label htmlFor="description" className="text-white">Description</Label>
                 <Textarea 
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="bg-slate-700 border-slate-600 text-slate-100 placeholder:text-slate-400"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="frequency" className="text-slate-200">Frequency</Label>
+                <Label htmlFor="frequency" className="text-white">Frequency</Label>
                 <Select 
                   value={formData.frequency} 
                   onValueChange={(value) => setFormData({...formData, frequency: value as "daily" | "weekly" | "monthly" | "quarterly" | "yearly"})}
                 >
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-slate-100">
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="daily" className="text-slate-100">Daily</SelectItem>
-                    <SelectItem value="weekly" className="text-slate-100">Weekly</SelectItem>
-                    <SelectItem value="monthly" className="text-slate-100">Monthly</SelectItem>
-                    <SelectItem value="quarterly" className="text-slate-100">Quarterly</SelectItem>
-                    <SelectItem value="yearly" className="text-slate-100">Yearly</SelectItem>
+                    <SelectItem value="daily" className="text-white">Daily</SelectItem>
+                    <SelectItem value="weekly" className="text-white">Weekly</SelectItem>
+                    <SelectItem value="monthly" className="text-white">Monthly</SelectItem>
+                    <SelectItem value="quarterly" className="text-white">Quarterly</SelectItem>
+                    <SelectItem value="yearly" className="text-white">Yearly</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="date" className="text-slate-200">Next Due Date</Label>
+                <Label htmlFor="date" className="text-white">Next Due Date</Label>
                 <Input 
                   id="date"
                   type="date"
                   value={formData.next_due_date}
                   onChange={(e) => setFormData({...formData, next_due_date: e.target.value})}
-                  className="bg-slate-700 border-slate-600 text-slate-100"
+                  className="bg-slate-700 border-slate-600 text-white"
                 />
               </div>
             </CardContent>
