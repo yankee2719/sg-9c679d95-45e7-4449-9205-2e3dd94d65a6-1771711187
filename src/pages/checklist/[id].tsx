@@ -107,22 +107,20 @@ export default function ChecklistExecutionPage() {
             if (itemsError) throw itemsError;
 
             let equipmentData = null;
-            const equipmentRaw = executionData.equipment;
-
-            if (equipmentRaw !== null &&
-                typeof equipmentRaw === 'object' &&
-                'name' in equipmentRaw &&
-                'equipment_code' in equipmentRaw) {
-                const equipment = equipmentRaw as { name: string; equipment_code: string };
-                equipmentData = {
-                    name: equipment.name,
-                    equipment_code: equipment.equipment_code
-                };
+            if (executionData.equipment && typeof executionData.equipment === 'object') {
+                const eq = executionData.equipment as any;
+                if (eq.name && eq.equipment_code) {
+                    equipmentData = {
+                        name: eq.name,
+                        equipment_code: eq.equipment_code
+                    };
+                }
             }
 
             setExecution({
                 ...executionData,
-                equipment: equipmentData
+                equipment: equipmentData,
+                checklist: executionData.checklist || { name: "N/A", description: null }
             } as ChecklistExecution);
             setItems(itemsData || []);
 
