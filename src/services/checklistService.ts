@@ -36,7 +36,9 @@ export async function getChecklistById(id: string): Promise<ChecklistWithItems> 
 }
 
 export async function createChecklist(
-    checklist: Partial<Checklist>,
+    checklist: Omit<Checklist, "id" | "created_at" | "updated_at"> & { 
+        name: string;
+    },
     items: any[]
 ): Promise<ChecklistWithItems> {
     const { data: newChecklist, error: checklistError } = await supabase
