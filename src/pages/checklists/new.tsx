@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +75,7 @@ export default function NewChecklistTemplate() {
                     description: "Il titolo del template è obbligatorio",
                     variant: "destructive",
                 });
+                setLoading(false);
                 return;
             }
 
@@ -85,10 +85,10 @@ export default function NewChecklistTemplate() {
                     description: "Seleziona una categoria",
                     variant: "destructive",
                 });
+                setLoading(false);
                 return;
             }
 
-            // Validate items
             const validItems = items.filter((item) => item.title.trim());
             if (validItems.length === 0) {
                 toast({
@@ -96,6 +96,7 @@ export default function NewChecklistTemplate() {
                     description: "Aggiungi almeno un elemento valido (con titolo) alla checklist",
                     variant: "destructive",
                 });
+                setLoading(false);
                 return;
             }
 
@@ -112,7 +113,7 @@ export default function NewChecklistTemplate() {
 
             // 1. Create Checklist Template
             const { data: template, error: templateError } = await supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .insert({
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,

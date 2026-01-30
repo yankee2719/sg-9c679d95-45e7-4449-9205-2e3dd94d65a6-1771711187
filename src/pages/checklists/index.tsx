@@ -8,6 +8,7 @@ import { Plus, Edit, Trash2, ListChecks, Search, Settings, FileText } from "luci
 import { getChecklists, deleteChecklist, type ChecklistWithItems } from "@/services/checklistService";
 import { useToast } from "@/hooks/use-toast";
 import { SEO } from "@/components/SEO";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ChecklistsPage() {
   const router = useRouter();
@@ -39,6 +40,42 @@ export default function ChecklistsPage() {
       loadChecklists();
     } catch (error) {
       console.error("Error deleting checklist:", error);
+    }
+  };
+
+  const handleStartInspection = async (checklistId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to start an inspection",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { data: execution, error } = await supabase
+        .from("checklist_executions")
+        .insert({
+          checklist_id: checklistId,
+          executed_by: user.id,
+          status: "in_progress",
+          results: {}
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      router.push(`/checklist/${execution.id}`);
+    } catch (error) {
+      console.error("Error starting inspection:", error);
+      toast({
+        title: "Error",
+        description: "Failed to start inspection",
+        variant: "destructive"
+      });
     }
   };
 
@@ -103,7 +140,7 @@ export default function ChecklistsPage() {
                     <p className="text-sm text-gray-500 truncate">{checklist.description}</p>
                   )}
                   <div className="pt-4">
-                    <Button className="w-full" variant="outline" onClick={() => router.push(`/checklist/execute?template=${checklist.id}`)}>
+                    <Button className="w-full" variant="outline" onClick={() => handleStartInspection(checklist.id)}>
                       Start Inspection
                     </Button>
                   </div>

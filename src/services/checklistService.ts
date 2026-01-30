@@ -1,15 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 
-type ChecklistRow = Database["public"]["Tables"]["checklists"]["Row"];
-
-export type ChecklistWithItems = ChecklistRow & {
+export type ChecklistWithItems = {
+    id: string;
+    name: string | null;
+    description: string | null;
+    category: string | null;
+    equipment_category: string | null;
+    is_active: boolean | null;
+    created_by: string | null;
+    created_at: string | null;
+    updated_at: string | null;
     items?: any[];
 };
 
 export async function getChecklists(): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .select(`
       *,
       items:checklist_items!checklist_id(*)
@@ -18,12 +24,12 @@ export async function getChecklists(): Promise<ChecklistWithItems[]> {
         .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data || []) as ChecklistWithItems[];
+    return data || [];
 }
 
 export async function getChecklistById(id: string): Promise<ChecklistWithItems> {
     const { data, error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .select(`
       *,
       items:checklist_items!checklist_id(*)
@@ -32,15 +38,15 @@ export async function getChecklistById(id: string): Promise<ChecklistWithItems> 
         .single();
 
     if (error) throw error;
-    return data as ChecklistWithItems;
+    return data;
 }
 
 export async function createChecklist(
-    checklist: Database["public"]["Tables"]["checklists"]["Insert"],
+    checklist: Partial<ChecklistWithItems>,
     items: any[]
 ): Promise<ChecklistWithItems> {
     const { data: newChecklist, error: checklistError } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .insert(checklist)
         .select()
         .single();
@@ -66,11 +72,11 @@ export async function createChecklist(
 
 export async function updateChecklist(
     id: string,
-    checklist: Database["public"]["Tables"]["checklists"]["Update"],
+    checklist: Partial<ChecklistWithItems>,
     items?: any[]
 ): Promise<ChecklistWithItems> {
     const { error: checklistError } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .update(checklist)
         .eq("id", id);
 
@@ -102,7 +108,7 @@ export async function updateChecklist(
 
 export async function deleteChecklist(id: string): Promise<void> {
     const { error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .delete()
         .eq("id", id);
 
@@ -111,7 +117,7 @@ export async function deleteChecklist(id: string): Promise<void> {
 
 export async function getChecklistsByCategory(category: string): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .select(`
       *,
       items:checklist_items!checklist_id(*)
@@ -121,5 +127,5 @@ export async function getChecklistsByCategory(category: string): Promise<Checkli
         .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data || []) as ChecklistWithItems[];
+    return data || [];
 }
