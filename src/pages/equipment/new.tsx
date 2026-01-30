@@ -89,7 +89,7 @@ export default function NewEquipment() {
         </div>
 
         {showQRGenerator && (
-          <Card className="border-slate-200 bg-white">
+          <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
               <CardTitle>QR Code Generator</CardTitle>
             </CardHeader>
@@ -99,7 +99,7 @@ export default function NewEquipment() {
           </Card>
         )}
 
-        <Card className="border-slate-200 bg-white">
+        <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
             <CardTitle>Equipment Information</CardTitle>
           </CardHeader>
@@ -112,7 +112,7 @@ export default function NewEquipment() {
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                     required
                   />
                 </div>
@@ -123,7 +123,7 @@ export default function NewEquipment() {
                     id="equipment_code"
                     value={formData.equipment_code}
                     onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                     required
                   />
                 </div>
@@ -134,7 +134,7 @@ export default function NewEquipment() {
                     id="category"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                   />
                 </div>
 
@@ -144,7 +144,7 @@ export default function NewEquipment() {
                     id="manufacturer"
                     value={formData.manufacturer}
                     onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                   />
                 </div>
 
@@ -154,7 +154,7 @@ export default function NewEquipment() {
                     id="model"
                     value={formData.model}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                   />
                 </div>
 
@@ -164,7 +164,7 @@ export default function NewEquipment() {
                     id="serial_number"
                     value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                   />
                 </div>
 
@@ -175,7 +175,7 @@ export default function NewEquipment() {
                     type="date"
                     value={formData.purchase_date}
                     onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                   />
                 </div>
 
@@ -185,7 +185,7 @@ export default function NewEquipment() {
                     id="location"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="bg-slate-100 border-slate-300 text-slate-900"
+                    className="bg-slate-700 border-slate-600"
                   />
                 </div>
 
@@ -197,14 +197,14 @@ export default function NewEquipment() {
                       setFormData({ ...formData, status: value })
                     }
                   >
-                    <SelectTrigger className="bg-slate-100 border-slate-300 text-slate-900">
+                    <SelectTrigger className="bg-slate-700 border-slate-600">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-slate-300">
-                      <SelectItem value="active" className="text-slate-900">Active</SelectItem>
-                      <SelectItem value="inactive" className="text-slate-900">Inactive</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-slate-900">Under Maintenance</SelectItem>
-                      <SelectItem value="retired" className="text-slate-900">Retired</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
+                      <SelectItem value="retired">Retired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -212,22 +212,22 @@ export default function NewEquipment() {
 
               <div className="space-y-2">
                 <Label htmlFor="technical_specs">Technical Specifications</Label>
-                <textarea
+                <Textarea
                   id="technical_specs"
                   value={formData.technical_specs}
                   onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
-                  className="w-full min-h-[100px] p-3 bg-slate-100 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="bg-slate-700 border-slate-600 min-h-[100px]"
                   placeholder="Enter technical specifications..."
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
-                <textarea
+                <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full min-h-[100px] p-3 bg-slate-100 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="bg-slate-700 border-slate-600 min-h-[100px]"
                   placeholder="Additional notes..."
                 />
               </div>
