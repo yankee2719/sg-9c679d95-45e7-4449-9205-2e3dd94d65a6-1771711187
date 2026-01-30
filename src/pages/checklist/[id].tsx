@@ -83,13 +83,18 @@ export default function ChecklistExecutionDetail() {
 
             const responsesData = executionData.results as Record<string, any> || {};
 
-            // Validate equipment data - check for null first
-            const equipmentData = executionData.equipment !== null && 
-                                  typeof executionData.equipment === 'object' && 
-                                  'name' in executionData.equipment && 
-                                  'equipment_code' in executionData.equipment
-                ? executionData.equipment as { name: string; equipment_code: string }
-                : null;
+            // Validate equipment data - check for null and validate structure
+            let equipmentData: { name: string; equipment_code: string } | null = null;
+            
+            if (executionData.equipment && typeof executionData.equipment === 'object') {
+                const eq = executionData.equipment as any;
+                if (eq.name && eq.equipment_code) {
+                    equipmentData = {
+                        name: eq.name,
+                        equipment_code: eq.equipment_code
+                    };
+                }
+            }
 
             setExecution({
                 ...executionData,
