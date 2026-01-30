@@ -75,7 +75,7 @@ export default function ChecklistExecutionDetail() {
 
             const { data: itemsData, error: itemsError } = await supabase
                 .from("checklist_items")
-                .select("*")
+                .select("id, title, description, input_type, order_index")
                 .eq("checklist_id", executionData.checklist_id)
                 .order("order_index");
 
@@ -83,8 +83,8 @@ export default function ChecklistExecutionDetail() {
 
             const responsesData = executionData.results as Record<string, any> || {};
 
-            // Validate equipment data
-            const equipmentData = executionData.equipment && 
+            // Validate equipment data - check for null first
+            const equipmentData = executionData.equipment !== null && 
                                   typeof executionData.equipment === 'object' && 
                                   'name' in executionData.equipment && 
                                   'equipment_code' in executionData.equipment
