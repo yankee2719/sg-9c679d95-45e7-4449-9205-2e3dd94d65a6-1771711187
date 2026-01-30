@@ -106,8 +106,8 @@ export default function ChecklistExecutionPage() {
                 'name' in executionData.equipment &&
                 'equipment_code' in executionData.equipment) {
                 equipmentData = {
-                    name: executionData.equipment.name,
-                    equipment_code: executionData.equipment.equipment_code
+                    name: (executionData.equipment as any).name,
+                    equipment_code: (executionData.equipment as any).equipment_code
                 };
             }
 
