@@ -15,7 +15,7 @@ export type ChecklistWithItems = {
 
 export async function getChecklists(): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select(`
       *,
       items:checklist_items!checklist_id(*)
@@ -29,7 +29,7 @@ export async function getChecklists(): Promise<ChecklistWithItems[]> {
 
 export async function getChecklistById(id: string): Promise<ChecklistWithItems> {
     const { data, error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select(`
       *,
       items:checklist_items!checklist_id(*)
@@ -46,7 +46,7 @@ export async function createChecklist(
     items: any[]
 ): Promise<ChecklistWithItems> {
     const { data: newChecklist, error: checklistError } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .insert(checklist)
         .select()
         .single();
@@ -76,7 +76,7 @@ export async function updateChecklist(
     items?: any[]
 ): Promise<ChecklistWithItems> {
     const { error: checklistError } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .update(checklist)
         .eq("id", id);
 
@@ -108,7 +108,7 @@ export async function updateChecklist(
 
 export async function deleteChecklist(id: string): Promise<void> {
     const { error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .delete()
         .eq("id", id);
 
@@ -117,7 +117,7 @@ export async function deleteChecklist(id: string): Promise<void> {
 
 export async function getChecklistsByCategory(category: string): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select(`
       *,
       items:checklist_items!checklist_id(*)

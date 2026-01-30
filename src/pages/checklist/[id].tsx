@@ -64,7 +64,7 @@ export default function ChecklistExecutionDetail() {
                 .from("checklist_executions")
                 .select(`
                     *,
-                    checklist:checklist_templates(name, description),
+                    checklist:checklists(name, description),
                     equipment(name, equipment_code),
                     executed_by_profile:profiles!checklist_executions_executed_by_fkey(full_name, email)
                 `)
@@ -81,8 +81,11 @@ export default function ChecklistExecutionDetail() {
 
             if (itemsError) throw itemsError;
 
+            const responsesData = executionData.results as Record<string, any> || {};
+
             setExecution({
                 ...executionData,
+                responses: responsesData,
                 checklist_items: itemsData || [],
                 executed_by_profile: executionData.executed_by_profile || { full_name: 'Unknown', email: '' }
             } as ChecklistExecution);
