@@ -110,11 +110,14 @@ export default function AdminUsersPage() {
           return;
         }
 
+        setUserRole(profile.role);
         setCurrentUserId(user.id);
         await loadUsers();
       } catch (error) {
         console.error("Error checking admin access:", error);
         router.push("/login");
+      } finally {
+        setLoading(false);
       }
     };
 
