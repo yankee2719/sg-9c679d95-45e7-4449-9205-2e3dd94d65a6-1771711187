@@ -87,7 +87,8 @@ export default function ChecklistExecutionDetail() {
                 ...executionData,
                 responses: responsesData,
                 checklist_items: itemsData || [],
-                executed_by_profile: executionData.executed_by_profile || { full_name: 'Unknown', email: '' }
+                executed_by_profile: executionData.executed_by_profile || { full_name: 'Unknown', email: '' },
+                equipment: executionData.equipment || null
             } as ChecklistExecution);
 
         } catch (error: any) {
