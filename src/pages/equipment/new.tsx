@@ -101,7 +101,7 @@ export default function NewEquipment() {
 
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle>Equipment Information</CardTitle>
+            <CardTitle className="text-white">Equipment Information</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
