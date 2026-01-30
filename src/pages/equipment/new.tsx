@@ -107,127 +107,127 @@ export default function NewEquipment() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
+                  <Label htmlFor="name" className="text-white">Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="equipment_code">Equipment Code *</Label>
+                  <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
                   <Input
                     id="equipment_code"
                     value={formData.equipment_code}
                     onChange={(e) => setFormData({ ...formData, equipment_code: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category" className="text-white">Category</Label>
                   <Input
                     id="category"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturer">Manufacturer</Label>
+                  <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
                   <Input
                     id="manufacturer"
                     value={formData.manufacturer}
                     onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="model">Model</Label>
+                  <Label htmlFor="model" className="text-white">Model</Label>
                   <Input
                     id="model"
                     value={formData.model}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number">Serial Number</Label>
+                  <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
                   <Input
                     id="serial_number"
                     value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="purchase_date">Purchase Date</Label>
+                  <Label htmlFor="purchase_date" className="text-white">Purchase Date</Label>
                   <Input
                     id="purchase_date"
                     type="date"
                     value={formData.purchase_date}
                     onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
+                  <Label htmlFor="location" className="text-white">Location</Label>
                   <Input
                     id="location"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="bg-slate-700 border-slate-600"
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status" className="text-white">Status</Label>
                   <Select
                     value={formData.status}
                     onValueChange={(value: "active" | "inactive" | "under_maintenance" | "retired") =>
                       setFormData({ ...formData, status: value })
                     }
                   >
-                    <SelectTrigger className="bg-slate-700 border-slate-600">
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
-                      <SelectItem value="retired">Retired</SelectItem>
+                      <SelectItem value="active" className="text-white">Active</SelectItem>
+                      <SelectItem value="inactive" className="text-white">Inactive</SelectItem>
+                      <SelectItem value="under_maintenance" className="text-white">Under Maintenance</SelectItem>
+                      <SelectItem value="retired" className="text-white">Retired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="technical_specs">Technical Specifications</Label>
+                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
                 <Textarea
                   id="technical_specs"
                   value={formData.technical_specs}
                   onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
-                  className="bg-slate-700 border-slate-600 min-h-[100px]"
+                  className="bg-slate-700 border-slate-600 text-white min-h-[100px]"
                   placeholder="Enter technical specifications..."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes" className="text-white">Notes</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="bg-slate-700 border-slate-600 min-h-[100px]"
+                  className="bg-slate-700 border-slate-600 text-white min-h-[100px]"
                   placeholder="Additional notes..."
                 />
               </div>

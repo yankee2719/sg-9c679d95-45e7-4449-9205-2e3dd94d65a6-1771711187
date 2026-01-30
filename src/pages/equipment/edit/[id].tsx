@@ -107,80 +107,87 @@ export default function EditEquipment() {
           <h1 className="text-3xl font-bold">Edit Equipment</h1>
         </div>
 
-        <Card className="border-slate-700">
+        <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle>Equipment Details</CardTitle>
+            <CardTitle className="text-white">Equipment Details</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Equipment Name *</Label>
+                  <Label htmlFor="name" className="text-white">Equipment Name *</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => handleChange("name", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="equipment_code">Equipment Code *</Label>
+                  <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
                   <Input
                     id="equipment_code"
                     value={formData.equipment_code}
                     onChange={(e) => handleChange("equipment_code", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category" className="text-white">Category</Label>
                   <Input
                     id="category"
                     value={formData.category}
                     onChange={(e) => handleChange("category", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturer">Manufacturer</Label>
+                  <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
                   <Input
                     id="manufacturer"
                     value={formData.manufacturer}
                     onChange={(e) => handleChange("manufacturer", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="model">Model</Label>
+                  <Label htmlFor="model" className="text-white">Model</Label>
                   <Input
                     id="model"
                     value={formData.model}
                     onChange={(e) => handleChange("model", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number">Serial Number</Label>
+                  <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
                   <Input
                     id="serial_number"
                     value={formData.serial_number}
                     onChange={(e) => handleChange("serial_number", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
+                  <Label htmlFor="location" className="text-white">Location</Label>
                   <Input
                     id="location"
                     value={formData.location}
                     onChange={(e) => handleChange("location", e.target.value)}
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status" className="text-white">Status</Label>
                   <Select
                     value={formData.status}
                     onValueChange={(value: "active" | "inactive" | "under_maintenance" | "retired") =>
@@ -190,33 +197,35 @@ export default function EditEquipment() {
                     <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-700 border-slate-600">
-                      <SelectItem value="active" className="text-white hover:bg-slate-600">Active</SelectItem>
-                      <SelectItem value="inactive" className="text-white hover:bg-slate-600">Inactive</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-white hover:bg-slate-600">Under Maintenance</SelectItem>
-                      <SelectItem value="retired" className="text-white hover:bg-slate-600">Retired</SelectItem>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="active" className="text-white">Active</SelectItem>
+                      <SelectItem value="inactive" className="text-white">Inactive</SelectItem>
+                      <SelectItem value="under_maintenance" className="text-white">Under Maintenance</SelectItem>
+                      <SelectItem value="retired" className="text-white">Retired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="technical_specs">Technical Specifications</Label>
+                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
                 <Textarea
                   id="technical_specs"
                   value={formData.technical_specs}
                   onChange={(e) => handleChange("technical_specs", e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-white"
                   rows={4}
                   placeholder="Enter technical specifications..."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes" className="text-white">Notes</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => handleChange("notes", e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-white"
                   rows={3}
                   placeholder="Additional notes..."
                 />
