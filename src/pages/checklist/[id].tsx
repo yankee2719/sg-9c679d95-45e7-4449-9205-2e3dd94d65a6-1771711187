@@ -99,7 +99,15 @@ export default function ChecklistExecutionPage() {
 
             if (itemsError) throw itemsError;
 
-            setExecution(executionData as ChecklistExecution);
+            // Handle equipment data safely
+            const equipmentData = executionData.equipment && typeof executionData.equipment === 'object' && 'name' in executionData.equipment
+                ? { name: executionData.equipment.name, equipment_code: executionData.equipment.equipment_code }
+                : null;
+
+            setExecution({
+                ...executionData,
+                equipment: equipmentData
+            } as ChecklistExecution);
             setItems(itemsData || []);
 
             if (executionData.results && typeof executionData.results === "object") {
