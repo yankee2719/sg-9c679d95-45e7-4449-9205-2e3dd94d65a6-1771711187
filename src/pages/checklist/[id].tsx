@@ -107,9 +107,10 @@ export default function ChecklistExecutionPage() {
                 typeof equipmentRaw === 'object' && 
                 'name' in equipmentRaw &&
                 'equipment_code' in equipmentRaw) {
+                const equipment = equipmentRaw as { name: string; equipment_code: string };
                 equipmentData = {
-                    name: equipmentRaw.name,
-                    equipment_code: equipmentRaw.equipment_code
+                    name: equipment.name,
+                    equipment_code: equipment.equipment_code
                 };
             }
 
