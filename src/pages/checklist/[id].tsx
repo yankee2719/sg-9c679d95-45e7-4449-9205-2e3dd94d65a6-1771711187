@@ -33,7 +33,7 @@ interface ChecklistExecution {
         id: string;
         title: string;
         description: string | null;
-        input_type: string;
+        input_type?: string;
         order_index: number;
     }[];
 }
@@ -135,7 +135,9 @@ export default function ChecklistExecutionDetail() {
     const renderResponseValue = (item: any, value: any) => {
         if (value === undefined || value === null) return <span className="text-muted-foreground italic">No response</span>;
 
-        switch (item.input_type) {
+        const inputType = item.input_type || 'checkbox';
+        
+        switch (inputType) {
             case "checkbox":
                 return value ? (
                     <Badge className="bg-green-500 hover:bg-green-600">Pass</Badge>

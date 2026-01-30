@@ -85,6 +85,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          input_type: string | null
           is_required: boolean | null
           order_index: number
           title: string
@@ -94,6 +95,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          input_type?: string | null
           is_required?: boolean | null
           order_index?: number
           title: string
@@ -103,6 +105,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          input_type?: string | null
           is_required?: boolean | null
           order_index?: number
           title?: string
