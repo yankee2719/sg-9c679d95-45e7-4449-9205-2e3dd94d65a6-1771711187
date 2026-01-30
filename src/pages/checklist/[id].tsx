@@ -83,12 +83,20 @@ export default function ChecklistExecutionDetail() {
 
             const responsesData = executionData.results as Record<string, any> || {};
 
+            // Validate equipment data
+            const equipmentData = executionData.equipment && 
+                                  typeof executionData.equipment === 'object' && 
+                                  'name' in executionData.equipment && 
+                                  'equipment_code' in executionData.equipment
+                ? executionData.equipment as { name: string; equipment_code: string }
+                : null;
+
             setExecution({
                 ...executionData,
                 responses: responsesData,
                 checklist_items: itemsData || [],
                 executed_by_profile: executionData.executed_by_profile || { full_name: 'Unknown', email: '' },
-                equipment: executionData.equipment || null
+                equipment: equipmentData
             } as ChecklistExecution);
 
         } catch (error: any) {
