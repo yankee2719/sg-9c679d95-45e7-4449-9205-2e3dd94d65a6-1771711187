@@ -20,6 +20,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 export default function NewMaintenancePage() {
   const router = useRouter();
@@ -27,7 +28,6 @@ export default function NewMaintenancePage() {
   const [checklists, setChecklists] = useState<ChecklistWithItems[]>([]);
   const [loading, setLoading] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     equipment_id: "",
@@ -47,6 +47,7 @@ export default function NewMaintenancePage() {
   useEffect(() => {
     loadEquipment();
     loadChecklists();
+    loadTechnicians();
   }, []);
 
   const loadEquipment = async () => {
@@ -64,6 +65,21 @@ export default function NewMaintenancePage() {
       setChecklists(data);
     } catch (error) {
       console.error("Error loading checklists:", error);
+    }
+  };
+
+  const loadTechnicians = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("role", "technician")
+        .order("full_name");
+
+      if (error) throw error;
+      setTechnicians(data || []);
+    } catch (error) {
+      console.error("Error loading technicians:", error);
     }
   };
 
@@ -290,9 +306,9 @@ export default function NewMaintenancePage() {
                       <SelectValue placeholder="Seleziona template (opzionale)" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      {templates.map((template) => (
-                        <SelectItem key={template.id} value={template.id} className="text-slate-100">
-                          {template.name}
+                      {checklists.map((checklist) => (
+                        <SelectItem key={checklist.id} value={checklist.id} className="text-slate-100">
+                          {checklist.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
