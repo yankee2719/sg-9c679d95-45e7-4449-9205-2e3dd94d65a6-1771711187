@@ -51,16 +51,16 @@ export default function ExecuteChecklistPage() {
         return;
       }
 
-      // Check if checklist template exists
+      // Check if checklist exists
       const { data: checklistData, error: checklistError } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select("id, name")
         .eq("id", scheduleData.checklist_id)
         .single();
 
       if (checklistError || !checklistData) {
         console.error("Error loading checklist:", checklistError);
-        setError("Checklist template non trovato");
+        setError("Checklist non trovata");
         setLoading(false);
         return;
       }
@@ -70,7 +70,6 @@ export default function ExecuteChecklistPage() {
         .from("checklist_executions")
         .insert({
           checklist_id: scheduleData.checklist_id,
-          equipment_id: scheduleData.equipment_id || (equipment as string),
           executed_by: user.id,
           status: "in_progress",
           results: {},

@@ -29,7 +29,7 @@ export default function NewChecklistTemplate() {
         category: "",
         equipment_type: "",
     });
-    const [items, setItems] = useState < ChecklistItem[] > ([
+    const [items, setItems] = useState<ChecklistItem[]>([
         {
             id: crypto.randomUUID(),
             title: "",
@@ -112,7 +112,7 @@ export default function NewChecklistTemplate() {
             }
 
             const { data: template, error: templateError } = await supabase
-                .from("checklist_templates")
+                .from("checklists")
                 .insert({
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,
@@ -302,7 +302,7 @@ export default function NewChecklistTemplate() {
                                     variant="outline"
                                     onClick={() => router.push("/checklists")}
                                     disabled={loading}
-                                    className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    className="bg-transparent border-slate-600 text-white hover:bg-slate-800 hover:text-white"
                                 >
                                     Annulla
                                 </Button>

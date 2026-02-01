@@ -35,10 +35,6 @@ interface ChecklistExecution {
         name: string;
         description: string | null;
     } | null;
-    equipment: {
-        name: string;
-        equipment_code: string;
-    } | null;
     executed_by_profile: {
         full_name: string;
     } | null;
@@ -48,13 +44,13 @@ export default function ChecklistExecutionPage() {
     const router = useRouter();
     const { id } = router.query;
     const { toast } = useToast();
-    const canvasRef = useRef < HTMLCanvasElement > (null);
-    const [execution, setExecution] = useState < ChecklistExecution | null > (null);
-    const [items, setItems] = useState < ChecklistItem[] > ([]);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [execution, setExecution] = useState<ChecklistExecution | null>(null);
+    const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [responses, setResponses] = useState < Record < string, boolean>> ({});
-    const [itemNotes, setItemNotes] = useState < Record < string, string>> ({});
-    const [showNoteDialog, setShowNoteDialog] = useState < string | null > (null);
+    const [responses, setResponses] = useState<Record<string, boolean>>({});
+    const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
+    const [showNoteDialog, setShowNoteDialog] = useState<string | null>(null);
     const [showSignatureDialog, setShowSignatureDialog] = useState(false);
     const [isDrawing, setIsDrawing] = useState(false);
     const [signatureConfirmed, setSignatureConfirmed] = useState(false);
@@ -89,8 +85,7 @@ export default function ChecklistExecutionPage() {
                 .from("checklist_executions")
                 .select(`
                     *,
-                    checklist:checklist_templates!checklist_id(name, description),
-                    equipment(name, equipment_code),
+                    checklist:checklists!checklist_id(name, description),
                     executed_by_profile:profiles!checklist_executions_executed_by_fkey(full_name)
                 `)
                 .eq("id", executionId)
@@ -106,20 +101,8 @@ export default function ChecklistExecutionPage() {
 
             if (itemsError) throw itemsError;
 
-            let equipmentData = null;
-            if (executionData.equipment && typeof executionData.equipment === 'object') {
-                const eq = executionData.equipment as any;
-                if (eq.name && eq.equipment_code) {
-                    equipmentData = {
-                        name: eq.name,
-                        equipment_code: eq.equipment_code
-                    };
-                }
-            }
-
             setExecution({
                 ...executionData,
-                equipment: equipmentData,
                 checklist: executionData.checklist || { name: "N/A", description: null }
             } as ChecklistExecution);
             setItems(itemsData || []);
@@ -273,7 +256,11 @@ export default function ChecklistExecutionPage() {
         return (
             <MainLayout>
                 <div className="p-8 text-center">
-                    <h2 className="text-xl font-semibold">Checklist non trovata</h2>
+                    <h2 className="text-xl font-semibold text-white">Checklist non trovata</h2>
+                    <p className="text-muted-foreground mt-2">L'esecuzione della checklist richiesta non esiste.</p>
+                    <Button className="mt-4" onClick={() => router.back()}>
+                        Torna indietro
+                    </Button>
                 </div>
             </MainLayout>
         );
@@ -288,8 +275,8 @@ export default function ChecklistExecutionPage() {
                             <ChevronLeft className="h-5 w-5" />
                         </Button>
                         <div>
-                            <h1 className="text-xl font-bold">{execution.checklist?.name}</h1>
-                            <p className="text-sm text-muted-foreground">{execution.equipment?.name || "N/A"}</p>
+                            <h1 className="text-xl font-bold text-white">{execution.checklist?.name}</h1>
+                            <p className="text-sm text-muted-foreground">Esecuzione checklist</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-primary">
@@ -300,7 +287,7 @@ export default function ChecklistExecutionPage() {
 
                 <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">Progresso</span>
+                        <span className="font-medium text-white">Progresso</span>
                         <Badge variant="default" className="bg-green-600">
                             {progressPercentage}%
                         </Badge>
@@ -331,7 +318,7 @@ export default function ChecklistExecutionPage() {
                                         />
                                         <div className="flex-1">
                                             <div className="flex items-start justify-between gap-2">
-                                                <h3 className={`font-medium ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                                                <h3 className={`font-medium text-white ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                                                     {item.title}
                                                 </h3>
                                                 {item.is_required && !isCompleted && (
@@ -353,7 +340,7 @@ export default function ChecklistExecutionPage() {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 text-xs"
+                                            className="h-8 text-xs text-white"
                                             onClick={() => setShowNoteDialog(item.id)}
                                         >
                                             <Flag className="h-3 w-3 mr-1" />
@@ -362,7 +349,7 @@ export default function ChecklistExecutionPage() {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 text-xs"
+                                            className="h-8 text-xs text-white"
                                             onClick={() => setShowNoteDialog(item.id)}
                                         >
                                             <MessageSquare className="h-3 w-3 mr-1" />
@@ -388,7 +375,7 @@ export default function ChecklistExecutionPage() {
                 <Dialog open={showNoteDialog !== null} onOpenChange={() => setShowNoteDialog(null)}>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Aggiungi nota</DialogTitle>
+                            <DialogTitle className="text-white">Aggiungi nota</DialogTitle>
                         </DialogHeader>
                         <Textarea
                             placeholder="Inserisci le tue note qui..."
@@ -401,7 +388,7 @@ export default function ChecklistExecutionPage() {
                             rows={4}
                         />
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowNoteDialog(null)}>Annulla</Button>
+                            <Button variant="outline" className="text-white border-slate-600" onClick={() => setShowNoteDialog(null)}>Annulla</Button>
                             <Button onClick={handleSaveNote}>Salva</Button>
                         </DialogFooter>
                     </DialogContent>
@@ -410,7 +397,7 @@ export default function ChecklistExecutionPage() {
                 <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
                     <DialogContent className="max-w-lg">
                         <DialogHeader>
-                            <DialogTitle>Firma Digitale</DialogTitle>
+                            <DialogTitle className="text-white">Firma Digitale</DialogTitle>
                             <p className="text-sm text-muted-foreground">Conferma il completamento della checklist</p>
                         </DialogHeader>
 
@@ -418,31 +405,31 @@ export default function ChecklistExecutionPage() {
                             <div className="grid grid-cols-2 gap-3 text-sm">
                                 <div>
                                     <span className="text-muted-foreground">Tecnico</span>
-                                    <div className="font-medium">{execution.executed_by_profile?.full_name || "N/A"}</div>
+                                    <div className="font-medium text-white">{execution.executed_by_profile?.full_name || "N/A"}</div>
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">Data e Ora</span>
-                                    <div className="font-medium">{format(new Date(), "dd/MM/yyyy HH:mm")}</div>
+                                    <div className="font-medium text-white">{format(new Date(), "dd/MM/yyyy HH:mm")}</div>
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">Durata</span>
-                                    <div className="font-medium">{formatTime(elapsedTime)}</div>
+                                    <div className="font-medium text-white">{formatTime(elapsedTime)}</div>
                                 </div>
                                 <div>
-                                    <span className="text-muted-foreground">Equipaggiamento</span>
-                                    <div className="font-medium">{execution.equipment?.name || "N/A"}</div>
+                                    <span className="text-muted-foreground">Checklist</span>
+                                    <div className="font-medium text-white">{execution.checklist?.name || "N/A"}</div>
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Inserisci il tuo nome completo</label>
+                                <label className="text-sm font-medium text-white">Inserisci il tuo nome completo</label>
                                 <Input placeholder="Nome e Cognome" />
                             </div>
 
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium">Firma qui</label>
-                                    <Button variant="ghost" size="sm" onClick={clearSignature}>
+                                    <label className="text-sm font-medium text-white">Firma qui</label>
+                                    <Button variant="ghost" size="sm" className="text-white" onClick={clearSignature}>
                                         Cancella
                                     </Button>
                                 </div>
@@ -469,14 +456,14 @@ export default function ChecklistExecutionPage() {
                                     checked={signatureConfirmed}
                                     onCheckedChange={(checked) => setSignatureConfirmed(checked as boolean)}
                                 />
-                                <label htmlFor="confirm" className="text-sm cursor-pointer">
+                                <label htmlFor="confirm" className="text-sm cursor-pointer text-white">
                                     Confermo che tutte le attività sono state eseguite correttamente
                                 </label>
                             </div>
                         </div>
 
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowSignatureDialog(false)}>
+                            <Button variant="outline" className="text-white border-slate-600" onClick={() => setShowSignatureDialog(false)}>
                                 Annulla
                             </Button>
                             <Button onClick={handleFinalSubmit} disabled={!signatureConfirmed}>
@@ -488,7 +475,7 @@ export default function ChecklistExecutionPage() {
 
                 <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
                     <Button
-                        className="w-full bg-green-600 hover:bg-green-700"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white"
                         size="lg"
                         onClick={handleCompleteClick}
                     >
