@@ -24,6 +24,7 @@ export default function ChecklistsPage() {
   const loadChecklists = async () => {
     try {
       const data = await getChecklists();
+      console.log("Checklists loaded:", data);
       setChecklists(data);
     } catch (error) {
       console.error("Error loading checklists:", error);
