@@ -112,7 +112,7 @@ export default function NewChecklistTemplate() {
             }
 
             const { data: template, error: templateError } = await supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .insert({
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,

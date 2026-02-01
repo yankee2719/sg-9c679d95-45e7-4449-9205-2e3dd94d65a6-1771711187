@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type Checklist = Tables<"checklists">;
+export type Checklist = Tables<"checklist_templates">;
 export type ChecklistItem = Tables<"checklist_items">;
 
 export type ChecklistWithItems = Checklist & {
@@ -10,7 +10,7 @@ export type ChecklistWithItems = Checklist & {
 
 export async function getChecklists(): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .select(`
             *,
             items:checklist_items!checklist_id(*)
@@ -18,13 +18,14 @@ export async function getChecklists(): Promise<ChecklistWithItems[]> {
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
+    console.log("getChecklists result:", { data, error });
     if (error) throw error;
     return (data || []) as ChecklistWithItems[];
 }
 
 export async function getChecklistById(id: string): Promise<ChecklistWithItems | null> {
     const { data, error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .select(`
             *,
             items:checklist_items!checklist_id(*)
@@ -54,7 +55,7 @@ export async function createChecklist(
     }>
 ): Promise<ChecklistWithItems | null> {
     const { data: newChecklist, error: checklistError } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .insert({
             name: checklist.name,
             description: checklist.description || null,
@@ -106,7 +107,7 @@ export async function updateChecklist(
     }>
 ): Promise<ChecklistWithItems | null> {
     const { error: checklistError } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .update(checklist)
         .eq("id", id);
 
@@ -141,7 +142,7 @@ export async function updateChecklist(
 
 export async function deleteChecklist(id: string): Promise<void> {
     const { error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .delete()
         .eq("id", id);
 
@@ -150,7 +151,7 @@ export async function deleteChecklist(id: string): Promise<void> {
 
 export async function getChecklistsByCategory(category: string): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklists")
+        .from("checklist_templates")
         .select(`
             *,
             items:checklist_items!checklist_id(*)
