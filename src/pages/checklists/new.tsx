@@ -111,9 +111,8 @@ export default function NewChecklistTemplate() {
                 return;
             }
 
-            // 1. Create Checklist
             const { data: template, error: templateError } = await supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .insert({
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,
@@ -127,7 +126,6 @@ export default function NewChecklistTemplate() {
 
             if (templateError) throw templateError;
 
-            // 2. Create Checklist Items
             const itemsToInsert = validItems.map((item, index) => ({
                 checklist_id: template.id,
                 title: item.title.trim(),
@@ -183,25 +181,19 @@ export default function NewChecklistTemplate() {
                     <CardContent className="space-y-6">
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-2">
-                                <Label htmlFor="title" className="text-slate-200">
-                                    Titolo Template *
-                                </Label>
+                                <Label htmlFor="title" className="text-slate-200">Titolo Template *</Label>
                                 <Input
                                     id="title"
                                     value={formData.title}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, title: e.target.value })
-                                    }
+                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                     placeholder="Es: Checklist Manutenzione Motore"
                                     required
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
+                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                                 />
                             </div>
 
-                            <div>
-                                <Label htmlFor="category" className="text-slate-200">
-                                    Categoria *
-                                </Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="category" className="text-slate-200">Categoria *</Label>
                                 <Input
                                     id="category"
                                     value={formData.category}
@@ -213,33 +205,25 @@ export default function NewChecklistTemplate() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="equipment_type" className="text-slate-200">
-                                    Tipo Equipaggiamento
-                                </Label>
+                                <Label htmlFor="equipment_type" className="text-slate-200">Tipo Equipaggiamento</Label>
                                 <Input
                                     id="equipment_type"
                                     value={formData.equipment_type}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, equipment_type: e.target.value })
-                                    }
+                                    onChange={(e) => setFormData({ ...formData, equipment_type: e.target.value })}
                                     placeholder="Es: Motore Elettrico, Pompa Idraulica"
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
+                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="description" className="text-slate-200">
-                                    Descrizione
-                                </Label>
+                                <Label htmlFor="description" className="text-slate-200">Descrizione</Label>
                                 <Textarea
                                     id="description"
                                     value={formData.description}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, description: e.target.value })
-                                    }
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     placeholder="Descrizione opzionale del template"
                                     rows={3}
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
+                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                                 />
                             </div>
 
@@ -259,7 +243,7 @@ export default function NewChecklistTemplate() {
                                 </div>
 
                                 <div className="space-y-3">
-                                    {items.map((item, index) => (
+                                    {items.map((item) => (
                                         <div key={item.id} className="p-4 border border-slate-700 rounded-lg bg-slate-900/50 space-y-3">
                                             <div className="flex justify-between items-start gap-3">
                                                 <div className="flex-1 space-y-3">
@@ -270,7 +254,7 @@ export default function NewChecklistTemplate() {
                                                             value={item.title}
                                                             onChange={(e) => updateItem(item.id, "title", e.target.value)}
                                                             placeholder="Es: Controllare livello olio"
-                                                            className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500"
+                                                            className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                                                         />
                                                     </div>
                                                     <div>
@@ -280,11 +264,10 @@ export default function NewChecklistTemplate() {
                                                             value={item.description}
                                                             onChange={(e) => updateItem(item.id, "description", e.target.value)}
                                                             placeholder="Dettagli aggiuntivi..."
-                                                            className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-orange-500 text-sm"
+                                                            className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 text-sm"
                                                         />
                                                     </div>
                                                 </div>
-
                                                 {items.length > 1 && (
                                                     <Button
                                                         type="button"
@@ -297,20 +280,14 @@ export default function NewChecklistTemplate() {
                                                     </Button>
                                                 )}
                                             </div>
-
                                             <div className="flex items-center space-x-2">
                                                 <Checkbox
                                                     id={`required-${item.id}`}
                                                     checked={item.is_required}
-                                                    onCheckedChange={(checked) =>
-                                                        updateItem(item.id, "is_required", checked === true)
-                                                    }
+                                                    onCheckedChange={(checked) => updateItem(item.id, "is_required", checked === true)}
                                                     className="border-slate-500 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                                                 />
-                                                <Label
-                                                    htmlFor={`required-${item.id}`}
-                                                    className="text-sm font-normal cursor-pointer text-slate-300"
-                                                >
+                                                <Label htmlFor={`required-${item.id}`} className="text-sm font-normal cursor-pointer text-slate-300">
                                                     Campo Obbligatorio
                                                 </Label>
                                             </div>
