@@ -5,7 +5,7 @@ export interface ChecklistTemplate {
     name: string;
     description: string | null;
     category: string | null;
-    equipment_category: string | null;
+    is_active: boolean | null;
     created_by: string | null;
     created_at: string;
     updated_at: string;
@@ -16,9 +16,10 @@ export interface ChecklistItem {
     checklist_id: string;
     title: string;
     description: string | null;
-    is_required: boolean;
+    is_required: boolean | null;
     order_index: number;
-    input_type: string;
+    input_type: string | null;
+    created_at: string;
 }
 
 export type ChecklistWithItems = ChecklistTemplate & {
@@ -58,7 +59,7 @@ export async function createChecklist(
         name: string;
         description?: string | null;
         category?: string | null;
-        equipment_category?: string | null;
+        is_active?: boolean;
         created_by?: string | null;
     },
     items: Array<{
@@ -75,7 +76,7 @@ export async function createChecklist(
             name: checklist.name,
             description: checklist.description || null,
             category: checklist.category || null,
-            equipment_category: checklist.equipment_category || null,
+            is_active: checklist.is_active ?? true,
             created_by: checklist.created_by || null
         })
         .select()
@@ -109,7 +110,7 @@ export async function updateChecklist(
         name?: string;
         description?: string | null;
         category?: string | null;
-        equipment_category?: string | null;
+        is_active?: boolean;
     },
     items?: Array<{
         title: string;
