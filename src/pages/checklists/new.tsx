@@ -112,14 +112,13 @@ export default function NewChecklistTemplate() {
             }
 
             const { data: template, error: templateError } = await supabase
-                .from("checklist_templates")
+                .from("checklists")
                 .insert({
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,
                     category: formData.category,
                     equipment_category: formData.equipment_type.trim() || null,
-                    created_by: user.id,
-                    is_active: true,
+                    created_by: user.id
                 })
                 .select()
                 .single();
@@ -302,7 +301,7 @@ export default function NewChecklistTemplate() {
                                     variant="outline"
                                     onClick={() => router.push("/checklists")}
                                     disabled={loading}
-                                    className="bg-transparent border-slate-600 text-white hover:bg-slate-800 hover:text-white"
+                                    className="bg-transparent border-slate-600 text-white hover:bg-slate-700 hover:text-white"
                                 >
                                     Annulla
                                 </Button>

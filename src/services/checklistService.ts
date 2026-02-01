@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type Checklist = Tables<"checklist_templates">;
+export type Checklist = Tables<"checklists">;
 export type ChecklistItem = Tables<"checklist_items">;
 
 export type ChecklistWithItems = Checklist & {
@@ -10,12 +10,11 @@ export type ChecklistWithItems = Checklist & {
 
 export async function getChecklists(): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select(`
             *,
-            items:checklist_items!checklist_id(*)
+            items:checklist_items(*)
         `)
-        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
     console.log("getChecklists result:", { data, error });
@@ -25,10 +24,10 @@ export async function getChecklists(): Promise<ChecklistWithItems[]> {
 
 export async function getChecklistById(id: string): Promise<ChecklistWithItems | null> {
     const { data, error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select(`
             *,
-            items:checklist_items!checklist_id(*)
+            items:checklist_items(*)
         `)
         .eq("id", id)
         .single();
@@ -44,7 +43,6 @@ export async function createChecklist(
         category?: string | null;
         equipment_category?: string | null;
         created_by?: string | null;
-        is_active?: boolean;
     },
     items: Array<{
         title: string;
@@ -55,14 +53,13 @@ export async function createChecklist(
     }>
 ): Promise<ChecklistWithItems | null> {
     const { data: newChecklist, error: checklistError } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .insert({
             name: checklist.name,
             description: checklist.description || null,
             category: checklist.category || null,
             equipment_category: checklist.equipment_category || null,
-            created_by: checklist.created_by || null,
-            is_active: checklist.is_active ?? true
+            created_by: checklist.created_by || null
         })
         .select()
         .single();
@@ -96,7 +93,6 @@ export async function updateChecklist(
         description?: string | null;
         category?: string | null;
         equipment_category?: string | null;
-        is_active?: boolean;
     },
     items?: Array<{
         title: string;
@@ -107,7 +103,7 @@ export async function updateChecklist(
     }>
 ): Promise<ChecklistWithItems | null> {
     const { error: checklistError } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .update(checklist)
         .eq("id", id);
 
@@ -142,7 +138,7 @@ export async function updateChecklist(
 
 export async function deleteChecklist(id: string): Promise<void> {
     const { error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .delete()
         .eq("id", id);
 
@@ -151,13 +147,12 @@ export async function deleteChecklist(id: string): Promise<void> {
 
 export async function getChecklistsByCategory(category: string): Promise<ChecklistWithItems[]> {
     const { data, error } = await supabase
-        .from("checklist_templates")
+        .from("checklists")
         .select(`
             *,
-            items:checklist_items!checklist_id(*)
+            items:checklist_items(*)
         `)
         .eq("category", category)
-        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
     if (error) throw error;

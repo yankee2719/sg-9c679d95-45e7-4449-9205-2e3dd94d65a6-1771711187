@@ -32,7 +32,7 @@ export default function EditChecklist() {
     try {
       const data = await getChecklistById(checklistId);
       setChecklist(data);
-      if (data.items) {
+      if (data?.items) {
         setItems(data.items);
       }
     } catch (error) {
@@ -75,30 +75,30 @@ export default function EditChecklist() {
     }
   };
 
-  if (loading) return <MainLayout>Loading...</MainLayout>;
-  if (!checklist) return <MainLayout>Checklist not found</MainLayout>;
+  if (loading) return <MainLayout><div className="text-white">Loading...</div></MainLayout>;
+  if (!checklist) return <MainLayout><div className="text-white">Checklist not found</div></MainLayout>;
 
   return (
     <MainLayout>
       <SEO title={`Edit ${checklist.name}`} />
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-white hover:bg-slate-700">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold">Edit: {checklist.name}</h1>
+          <h1 className="text-2xl font-bold text-white">Edit: {checklist.name}</h1>
         </div>
 
-        <Card>
+        <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle>Checklist Details</CardTitle>
+            <CardTitle className="text-white">Checklist Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="name" className="text-white">Name</Label>
               <Input 
                 id="name"
-                value={checklist.name}
+                value={checklist.name || ""}
                 onChange={(e) => setChecklist({...checklist, name: e.target.value})}
                 className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
               />
@@ -126,10 +126,10 @@ export default function EditChecklist() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-slate-800 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Checklist Items</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
+            <CardTitle className="text-white">Checklist Items</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 bg-transparent">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>
@@ -167,8 +167,8 @@ export default function EditChecklist() {
         </Card>
 
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button type="button" variant="outline" onClick={() => router.back()} className="bg-transparent border-slate-600 text-white hover:bg-slate-700 hover:text-white">Cancel</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white">
             <Save className="mr-2 h-4 w-4" />
             {saving ? "Saving..." : "Save Changes"}
           </Button>
