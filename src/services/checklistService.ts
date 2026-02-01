@@ -1,10 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
 
-export type Checklist = Tables<"checklists">;
-export type ChecklistItem = Tables<"checklist_items">;
+export interface ChecklistTemplate {
+    id: string;
+    name: string;
+    description: string | null;
+    category: string | null;
+    equipment_category: string | null;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+}
 
-export type ChecklistWithItems = Checklist & {
+export interface ChecklistItem {
+    id: string;
+    checklist_id: string;
+    title: string;
+    description: string | null;
+    is_required: boolean;
+    order_index: number;
+    input_type: string;
+}
+
+export type ChecklistWithItems = ChecklistTemplate & {
     items?: ChecklistItem[];
 };
 
@@ -17,7 +34,7 @@ export async function getChecklists(): Promise<ChecklistWithItems[]> {
         `)
         .order("created_at", { ascending: false });
 
-    console.log("getChecklists result:", { data, error });
+    console.log("Checklists loaded:", { data, error });
     if (error) throw error;
     return (data || []) as ChecklistWithItems[];
 }

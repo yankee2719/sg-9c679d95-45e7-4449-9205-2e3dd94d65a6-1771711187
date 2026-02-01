@@ -29,7 +29,7 @@ export default function NewChecklistTemplate() {
         category: "",
         equipment_type: "",
     });
-    const [items, setItems] = useState<ChecklistItem[]>([
+    const [items, setItems] = useState < ChecklistItem[] > ([
         {
             id: crypto.randomUUID(),
             title: "",
@@ -111,9 +111,11 @@ export default function NewChecklistTemplate() {
                 return;
             }
 
-            const { data: template, error: templateError } = await supabase
+            // Inserisce nella tabella checklists
+            const { data: checklist, error: checklistError } = await supabase
                 .from("checklists")
                 .insert({
+                    title: formData.title.trim(),
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,
                     category: formData.category,
@@ -123,10 +125,11 @@ export default function NewChecklistTemplate() {
                 .select()
                 .single();
 
-            if (templateError) throw templateError;
+            if (checklistError) throw checklistError;
 
+            // Inserisce gli items collegati alla checklist
             const itemsToInsert = validItems.map((item, index) => ({
-                checklist_id: template.id,
+                checklist_id: checklist.id,
                 title: item.title.trim(),
                 description: item.description.trim() || null,
                 is_required: item.is_required,
