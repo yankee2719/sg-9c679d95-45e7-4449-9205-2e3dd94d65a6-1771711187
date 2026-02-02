@@ -197,7 +197,7 @@ export default function EquipmentDetailPage() {
           {/* Quick Actions Card */}
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
-              <CardTitle className="text-white">{t("equipment.quickActions")}</CardTitle>
+              <CardTitle className="text-white">{t("dashboard.quickActions")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Button
