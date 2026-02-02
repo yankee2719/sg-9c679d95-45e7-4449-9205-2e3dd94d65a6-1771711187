@@ -73,7 +73,8 @@ export default function ExecuteChecklistPage() {
           executed_by: user.id,
           status: "in_progress",
           results: {},
-          started_at: new Date().toISOString()
+          started_at: new Date().toISOString(),
+          schedule_id: schedule as string
         })
         .select("id")
         .single();
