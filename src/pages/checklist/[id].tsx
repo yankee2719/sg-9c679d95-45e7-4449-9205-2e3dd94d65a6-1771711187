@@ -252,7 +252,7 @@ export default function ChecklistExecutionPage() {
 
             if (updateError) throw updateError;
 
-            // If this execution is linked to a maintenance schedule, update it
+            // If this execution is linked to a maintenance schedule, update its status to completed
             if (execution?.schedule_id) {
                 const { error: maintenanceError } = await supabase
                     .from("maintenance_schedules")

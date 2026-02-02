@@ -35,6 +35,8 @@ interface MaintenanceTask {
     assigned_to: string | null;
     checklist_id: string | null;
     last_performed_at: string | null;
+    status: string;
+    priority: string | null;
     created_at: string;
     updated_at: string;
 }

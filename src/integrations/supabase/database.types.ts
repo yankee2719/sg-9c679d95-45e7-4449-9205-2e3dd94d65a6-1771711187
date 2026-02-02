@@ -350,6 +350,8 @@ export type Database = {
           id: string
           last_performed_at: string | null
           next_due_date: string | null
+          priority: string | null
+          status: string
           title: string
           updated_at: string | null
         }
@@ -363,6 +365,8 @@ export type Database = {
           id?: string
           last_performed_at?: string | null
           next_due_date?: string | null
+          priority?: string | null
+          status?: string
           title: string
           updated_at?: string | null
         }
@@ -376,6 +380,8 @@ export type Database = {
           id?: string
           last_performed_at?: string | null
           next_due_date?: string | null
+          priority?: string | null
+          status?: string
           title?: string
           updated_at?: string | null
         }
