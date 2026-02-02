@@ -308,7 +308,7 @@ export default function ChecklistExecutionPage() {
                         const isCompleted = responses[item.id] === true;
 
                         return (
-                            <Card key={item.id} className={`${isCompleted ? "border-green-600 bg-green-950/20" : ""}`}>
+                            <Card key={item.id} className={`bg-slate-800/50 border-slate-700 ${isCompleted ? "border-green-600 bg-green-950/20" : ""}`}>
                                 <CardContent className="p-4">
                                     <div className="flex items-start gap-3">
                                         <Checkbox
@@ -473,7 +473,7 @@ export default function ChecklistExecutionPage() {
                     </DialogContent>
                 </Dialog>
 
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900 border-t border-slate-700">
                     <Button
                         className="w-full bg-green-600 hover:bg-green-700 text-white"
                         size="lg"

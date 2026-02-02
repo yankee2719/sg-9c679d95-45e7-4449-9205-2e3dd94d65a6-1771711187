@@ -38,7 +38,7 @@ export default function NewMaintenancePage() {
     scheduled_date: "",
     due_date: "",
     assigned_to: "",
-    checklist_template_id: "",
+    checklist_id: "",
     estimated_duration_minutes: "",
     priority: "medium",
     recurrence_pattern: ""
@@ -90,27 +90,29 @@ export default function NewMaintenancePage() {
     try {
       const scheduleData = {
         equipment_id: formData.equipment_id,
-        maintenance_type: formData.maintenance_type,
         title: formData.title,
         description: formData.description || null,
-        frequency_days: formData.frequency_days ? parseInt(formData.frequency_days) : null,
-        scheduled_date: formData.scheduled_date,
-        due_date: formData.due_date || formData.scheduled_date,
+        frequency: formData.recurrence_pattern || "monthly",
+        next_due_date: formData.scheduled_date,
         assigned_to: formData.assigned_to || null,
-        checklist_template_id: formData.checklist_template_id || null,
-        estimated_duration_minutes: formData.estimated_duration_minutes ? parseInt(formData.estimated_duration_minutes) : null,
-        priority: formData.priority,
-        recurrence_pattern: formData.recurrence_pattern || null,
-        is_active: true,
-        status: "scheduled"
+        checklist_id: formData.checklist_id || null
       };
 
       await createMaintenanceSchedule(scheduleData as any);
 
+      toast({
+        title: "Successo",
+        description: "Manutenzione creata con successo"
+      });
+
       router.push("/maintenance");
     } catch (error) {
       console.error("Error creating maintenance:", error);
-      alert("Errore durante la creazione della manutenzione");
+      toast({
+        variant: "destructive",
+        title: "Errore",
+        description: "Errore durante la creazione della manutenzione"
+      });
     } finally {
       setLoading(false);
     }
@@ -297,13 +299,13 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="template" className="text-white">Template Checklist</Label>
+                  <Label htmlFor="template" className="text-white">Checklist Associata</Label>
                   <Select
-                    value={formData.checklist_template_id}
-                    onValueChange={(value) => handleChange("checklist_template_id", value)}
+                    value={formData.checklist_id}
+                    onValueChange={(value) => handleChange("checklist_id", value)}
                   >
                     <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona template (opzionale)" />
+                      <SelectValue placeholder="Seleziona checklist (opzionale)" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {checklists.map((checklist) => (
