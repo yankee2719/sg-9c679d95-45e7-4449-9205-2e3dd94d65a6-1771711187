@@ -110,8 +110,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             onClick={() => mobile && setMobileMenuOpen(false)}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
               active
-                ? "bg-[#FF6B35] text-white shadow-lg shadow-orange-500/25"
-                : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                ? "bg-primary text-primary-foreground shadow-lg"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
           >
             <item.icon className="w-5 h-5" />
@@ -123,9 +123,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       {(userRole === "admin" || userRole === "supervisor") && (
         <>
           <div className="my-3 px-4">
-            <div className="h-px bg-slate-700/50" />
+            <div className="h-px bg-border" />
           </div>
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             {t("nav.users")}
           </p>
           {adminNavigation.map((item) => {
@@ -137,8 +137,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 onClick={() => mobile && setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                   active
-                    ? "bg-[#FF6B35] text-white shadow-lg shadow-orange-500/25"
-                    : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                    ? "bg-primary text-primary-foreground shadow-lg"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
               >
                 <item.icon className="w-5 h-5" />
@@ -152,18 +152,18 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-slate-800/50 bg-slate-900/95 backdrop-blur-xl">
+      <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-border bg-card">
         {/* Logo */}
-        <div className="p-6 border-b border-slate-800/50">
+        <div className="p-6 border-b border-border">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#FF6B35] to-[#FF8C61] rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/25">
-              <Wrench className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg">
+              <Wrench className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-bold text-white text-lg">Maint Ops</h1>
-              <p className="text-xs text-slate-500">{t("nav.maintenance")}</p>
+              <h1 className="font-bold text-foreground text-lg">Maint Ops</h1>
+              <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
             </div>
           </Link>
         </div>
@@ -174,35 +174,35 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         </div>
 
         {/* User Section */}
-        <div className="p-4 border-t border-slate-800/50">
+        <div className="p-4 border-t border-border">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors">
-                <Avatar className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600">
-                  <AvatarFallback className="text-white font-semibold">
+              <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent transition-colors">
+                <Avatar className="w-10 h-10 bg-primary">
+                  <AvatarFallback className="text-primary-foreground font-semibold">
                     {getInitials(profile?.full_name || user?.email || "")}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {profile?.full_name || user?.email?.split("@")[0] || "User"}
                   </p>
-                  <p className="text-xs text-slate-500 capitalize">{profile?.role || userRole}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
                 </div>
-                <ChevronDown className="w-4 h-4 text-slate-500" />
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-slate-800 border-slate-700">
-              <DropdownMenuItem asChild className="text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer">
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem asChild className="cursor-pointer">
                 <Link href="/settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
                   {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-700" />
+              <DropdownMenuSeparator />
               <DropdownMenuItem 
                 onClick={handleLogout}
-                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                className="text-destructive focus:text-destructive cursor-pointer"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 {t("nav.logout")}
@@ -213,23 +213,23 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       </aside>
 
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 flex items-center justify-between px-4">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-card border-b border-border flex items-center justify-between px-4">
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-slate-300 hover:text-white hover:bg-slate-800">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
               <Menu className="w-6 h-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0 bg-slate-900 border-slate-800">
+          <SheetContent side="left" className="w-72 p-0 bg-card border-border">
             {/* Mobile Logo */}
-            <div className="p-6 border-b border-slate-800/50">
+            <div className="p-6 border-b border-border">
               <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
-                <div className="w-10 h-10 bg-gradient-to-br from-[#FF6B35] to-[#FF8C61] rounded-xl flex items-center justify-center">
-                  <Wrench className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+                  <Wrench className="w-5 h-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <h1 className="font-bold text-white text-lg">Maint Ops</h1>
-                  <p className="text-xs text-slate-500">{t("nav.maintenance")}</p>
+                  <h1 className="font-bold text-foreground text-lg">Maint Ops</h1>
+                  <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
                 </div>
               </Link>
             </div>
@@ -240,25 +240,25 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             {/* Mobile User Section */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800/50">
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
               <div className="flex items-center gap-3 mb-4">
-                <Avatar className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600">
-                  <AvatarFallback className="text-white font-semibold">
+                <Avatar className="w-10 h-10 bg-primary">
+                  <AvatarFallback className="text-primary-foreground font-semibold">
                     {getInitials(profile?.full_name || user?.email || "")}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {profile?.full_name || user?.email?.split("@")[0] || "User"}
                   </p>
-                  <p className="text-xs text-slate-500 capitalize">{profile?.role || userRole}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="flex-1"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     router.push("/settings");
@@ -270,7 +270,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 <Button 
                   variant="outline" 
                   size="sm"
-                  className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  className="text-destructive hover:text-destructive"
                   onClick={handleLogout}
                 >
                   <LogOut className="w-4 h-4" />
@@ -282,10 +282,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
         {/* Mobile Logo */}
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#FF6B35] to-[#FF8C61] rounded-lg flex items-center justify-center">
-            <Wrench className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+            <Wrench className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-bold text-white">Maint Ops</span>
+          <span className="font-bold text-foreground">Maint Ops</span>
         </Link>
 
         {/* Mobile Actions */}
@@ -294,12 +294,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
           <Button 
             variant="ghost" 
             size="icon" 
-            className="text-slate-300 hover:text-white hover:bg-slate-800 relative"
+            className="text-muted-foreground hover:text-foreground relative"
             onClick={() => router.push("/notifications")}
           >
             <Bell className="w-5 h-5" />
             {unreadNotifications > 0 && (
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
                 {unreadNotifications > 9 ? "9+" : unreadNotifications}
               </Badge>
             )}
@@ -310,17 +310,17 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       {/* Main Content */}
       <main className="lg:ml-64 min-h-screen">
         {/* Desktop Top Bar */}
-        <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-slate-800/50 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-30">
+        <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
           <ThemeSwitch />
           <Button 
             variant="ghost" 
             size="icon" 
-            className="text-slate-300 hover:text-white hover:bg-slate-800 relative"
+            className="text-muted-foreground hover:text-foreground relative"
             onClick={() => router.push("/notifications")}
           >
             <Bell className="w-5 h-5" />
             {unreadNotifications > 0 && (
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
                 {unreadNotifications > 9 ? "9+" : unreadNotifications}
               </Badge>
             )}
