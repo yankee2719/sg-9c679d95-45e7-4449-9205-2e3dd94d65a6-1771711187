@@ -188,23 +188,27 @@ export default function EquipmentDetailPage() {
           </Card>
 
           {/* QR Code Card - Now takes the right column */}
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-white">QR Code</CardTitle>
+              <CardTitle className="text-foreground">QR Code</CardTitle>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowQR(!showQR)}
-                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-700"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground border-primary"
               >
                 {showQR ? t("common.hide") : t("common.show")}
               </Button>
             </CardHeader>
             <CardContent className="flex justify-center">
               {showQR ? (
-                <QRCodeGenerator value={equipment.equipment_code || equipment.id} size={200} />
+                <QRCodeGenerator 
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/equipment/${equipment.id}`} 
+                  size={200}
+                  allowCustomLink={true}
+                />
               ) : (
-                <p className="text-slate-500 text-sm">{t("common.clickToShow")}</p>
+                <p className="text-muted-foreground text-sm">{t("common.clickToShow")}</p>
               )}
             </CardContent>
           </Card>
