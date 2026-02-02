@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -268,22 +268,21 @@ export default function ChecklistExecutionPage() {
 
     return (
         <MainLayout>
-            <div className="space-y-4 pb-24">
-                <div className="flex items-center justify-between bg-card p-4 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-                            <ChevronLeft className="h-5 w-5" />
-                        </Button>
-                        <div>
-                            <h1 className="text-xl font-bold text-white">{execution.checklist?.name}</h1>
-                            <p className="text-sm text-muted-foreground">Esecuzione checklist</p>
+            <SEO title={`Esegui Checklist - ${execution.checklist?.name || ""}`} />
+            <div className="max-w-4xl mx-auto space-y-6">
+                {/* Header Card */}
+                <Card className="bg-slate-800/50 border-slate-700">
+                    <CardHeader>
+                        <CardTitle className="text-2xl text-white">
+                            {execution.checklist?.name || "Checklist"}
+                        </CardTitle>
+                        <p className="text-slate-400">Esecuzione checklist</p>
+                        <div className="flex items-center gap-2 text-blue-400 mt-2">
+                            <Clock className="h-5 w-5" />
+                            <span className="text-lg font-semibold">{formatTime(elapsedTime)}</span>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-primary">
-                        <Clock className="h-4 w-4" />
-                        <span className="font-mono font-semibold">{formatTime(elapsedTime)}</span>
-                    </div>
-                </div>
+                    </CardHeader>
+                </Card>
 
                 <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
