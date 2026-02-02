@@ -11,10 +11,12 @@ import { ArrowLeft, Save } from "lucide-react";
 import { createEquipment } from "@/services/equipmentService";
 import { useToast } from "@/hooks/use-toast";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function NewEquipment() {
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [showQRGenerator, setShowQRGenerator] = useState(false);
 
@@ -37,7 +39,7 @@ export default function NewEquipment() {
     setLoading(true);
 
     try {
-      const newEquipment = await createEquipment({
+      await createEquipment({
         name: formData.name.trim(),
         equipment_code: formData.equipment_code.trim(),
         category: formData.category.trim() || null,
@@ -52,15 +54,15 @@ export default function NewEquipment() {
       });
 
       toast({
-        title: "Success",
-        description: "Equipment created successfully",
+        title: t("common.success"),
+        description: t("equipment.saveEquipment"),
       });
 
       router.push("/equipment");
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to create equipment";
+      const errorMessage = error instanceof Error ? error.message : t("common.error");
       toast({
-        title: "Error",
+        title: t("common.error"),
         description: errorMessage,
         variant: "destructive",
       });
@@ -81,17 +83,17 @@ export default function NewEquipment() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-3xl font-bold">New Equipment</h1>
+            <h1 className="text-3xl font-bold text-white">{t("equipment.new")}</h1>
           </div>
           <Button onClick={() => setShowQRGenerator(!showQRGenerator)}>
-            {showQRGenerator ? "Hide" : "Show"} QR Generator
+            {showQRGenerator ? t("equipment.hideQR") : t("equipment.showQR")}
           </Button>
         </div>
 
         {showQRGenerator && (
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
-              <CardTitle>QR Code Generator</CardTitle>
+              <CardTitle className="text-white">{t("equipment.qrGenerator")}</CardTitle>
             </CardHeader>
             <CardContent>
               <QRCodeGenerator value={formData.equipment_code || "new-equipment"} />
@@ -101,13 +103,13 @@ export default function NewEquipment() {
 
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">Equipment Information</CardTitle>
+            <CardTitle className="text-white">{t("equipment.information")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-white">Name *</Label>
+                  <Label htmlFor="name" className="text-white">{t("equipment.name")} *</Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -118,7 +120,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
+                  <Label htmlFor="equipment_code" className="text-white">{t("equipment.code")} *</Label>
                   <Input
                     id="equipment_code"
                     value={formData.equipment_code}
@@ -129,7 +131,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category" className="text-white">Category</Label>
+                  <Label htmlFor="category" className="text-white">{t("equipment.category")}</Label>
                   <Input
                     id="category"
                     value={formData.category}
@@ -139,7 +141,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
+                  <Label htmlFor="manufacturer" className="text-white">{t("equipment.manufacturer")}</Label>
                   <Input
                     id="manufacturer"
                     value={formData.manufacturer}
@@ -149,7 +151,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="model" className="text-white">Model</Label>
+                  <Label htmlFor="model" className="text-white">{t("equipment.model")}</Label>
                   <Input
                     id="model"
                     value={formData.model}
@@ -159,7 +161,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
+                  <Label htmlFor="serial_number" className="text-white">{t("equipment.serialNumber")}</Label>
                   <Input
                     id="serial_number"
                     value={formData.serial_number}
@@ -169,7 +171,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="purchase_date" className="text-white">Purchase Date</Label>
+                  <Label htmlFor="purchase_date" className="text-white">{t("equipment.purchaseDate")}</Label>
                   <Input
                     id="purchase_date"
                     type="date"
@@ -180,7 +182,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location" className="text-white">Location</Label>
+                  <Label htmlFor="location" className="text-white">{t("equipment.location")}</Label>
                   <Input
                     id="location"
                     value={formData.location}
@@ -190,7 +192,7 @@ export default function NewEquipment() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="status" className="text-white">Status</Label>
+                  <Label htmlFor="status" className="text-white">{t("equipment.status")}</Label>
                   <Select
                     value={formData.status}
                     onValueChange={(value: "active" | "inactive" | "under_maintenance" | "retired") =>
@@ -201,34 +203,34 @@ export default function NewEquipment() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="active" className="text-white">Active</SelectItem>
-                      <SelectItem value="inactive" className="text-white">Inactive</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-white">Under Maintenance</SelectItem>
-                      <SelectItem value="retired" className="text-white">Retired</SelectItem>
+                      <SelectItem value="active" className="text-white">{t("equipment.active")}</SelectItem>
+                      <SelectItem value="inactive" className="text-white">{t("equipment.inactive")}</SelectItem>
+                      <SelectItem value="under_maintenance" className="text-white">{t("equipment.maintenance")}</SelectItem>
+                      <SelectItem value="retired" className="text-white">{t("equipment.decommissioned")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
+                <Label htmlFor="technical_specs" className="text-white">{t("equipment.technicalSpecs")}</Label>
                 <Textarea
                   id="technical_specs"
                   value={formData.technical_specs}
                   onChange={(e) => setFormData({ ...formData, technical_specs: e.target.value })}
                   className="bg-slate-700 border-slate-600 text-white min-h-[100px]"
-                  placeholder="Enter technical specifications..."
+                  placeholder={t("equipment.technicalSpecsPlaceholder")}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes" className="text-white">Notes</Label>
+                <Label htmlFor="notes" className="text-white">{t("common.notes")}</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="bg-slate-700 border-slate-600 text-white min-h-[100px]"
-                  placeholder="Additional notes..."
+                  placeholder={t("equipment.notesPlaceholder")}
                 />
               </div>
 
@@ -239,11 +241,11 @@ export default function NewEquipment() {
                   onClick={() => router.push("/equipment")}
                   className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Save className="mr-2 h-4 w-4" />
-                  {loading ? "Saving..." : "Save Equipment"}
+                  {loading ? t("equipment.saving") : t("equipment.saveEquipment")}
                 </Button>
               </div>
             </form>
