@@ -101,58 +101,70 @@ export default function DashboardPage() {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
       
-      const { data: upcomingData } = await supabase
+      const upcomingResult = await supabase
         .from("maintenance_schedules")
-        .select(`
-          *,
-          equipment:equipment(id, name)
-        `)
-        .eq("is_active", true)
+        .select("id, title, next_due_date, equipment_id")
         .lte("next_due_date", futureDate.toISOString())
         .gte("next_due_date", new Date().toISOString())
         .order("next_due_date", { ascending: true })
         .limit(5);
 
       // Get overdue maintenance
-      const { data: overdueData } = await supabase
+      const overdueResult = await supabase
         .from("maintenance_schedules")
-        .select(`
-          *,
-          equipment:equipment(id, name)
-        `)
-        .eq("is_active", true)
+        .select("id, title, next_due_date, equipment_id")
         .lt("next_due_date", new Date().toISOString())
         .order("next_due_date", { ascending: true })
         .limit(5);
 
       // Get recent activities
-      const { data: activities } = await supabase
+      const activitiesResult = await supabase
         .from("checklist_executions")
-        .select(`
-          *,
-          checklist:checklists(name),
-          equipment:equipment(name),
-          technician:profiles(full_name)
-        `)
+        .select("id, status, created_at, checklist_id, equipment_id, technician_id")
         .order("created_at", { ascending: false })
         .limit(5);
 
       // Get equipment list
-      const { data: eqList } = await supabase
+      const eqListResult = await supabase
         .from("equipment")
-        .select("*")
+        .select("id, name, location, category, status, image_url")
         .order("created_at", { ascending: false })
         .limit(5);
+
+      // Fetch related data separately to avoid deep type instantiation
+      const activities = activitiesResult.data || [];
+      const activitiesWithRelations = await Promise.all(
+        activities.map(async (activity: any) => {
+          const [checklistRes, equipmentRes, technicianRes] = await Promise.all([
+            activity.checklist_id 
+              ? supabase.from("checklists").select("name").eq("id", activity.checklist_id).single()
+              : Promise.resolve({ data: null }),
+            activity.equipment_id
+              ? supabase.from("equipment").select("name").eq("id", activity.equipment_id).single()
+              : Promise.resolve({ data: null }),
+            activity.technician_id
+              ? supabase.from("profiles").select("full_name").eq("id", activity.technician_id).single()
+              : Promise.resolve({ data: null })
+          ]);
+          
+          return {
+            ...activity,
+            checklist: checklistRes.data,
+            equipment: equipmentRes.data,
+            technician: technicianRes.data
+          };
+        })
+      );
 
       setStats({
         totalEquipment: eqCount || 0,
         activeChecklists: checkCount || 0,
-        upcomingMaintenance: upcomingData?.length || 0,
-        overdueItems: overdueData?.length || 0
+        upcomingMaintenance: upcomingResult.data?.length || 0,
+        overdueItems: overdueResult.data?.length || 0
       });
 
-      setRecentActivity(activities || []);
-      setEquipmentList(eqList || []);
+      setRecentActivity(activitiesWithRelations);
+      setEquipmentList(eqListResult.data || []);
 
     } catch (error) {
       console.error("Error loading dashboard data:", error);

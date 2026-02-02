@@ -30,9 +30,11 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+type UserRole = "admin" | "supervisor" | "technician";
+
 interface MainLayoutProps {
   children: React.ReactNode;
-  userRole?: "admin" | "supervisor" | "technician";
+  userRole?: UserRole;
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {

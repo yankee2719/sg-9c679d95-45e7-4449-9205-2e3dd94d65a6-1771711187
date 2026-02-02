@@ -1,8 +1,40 @@
 import { supabase } from "@/integrations/supabase/client";
 
+interface MaintenanceSchedule {
+  id: string;
+  equipment_id: string;
+  title: string;
+  description: string | null;
+  frequency: string;
+  next_due_date: string | null;
+  last_performed_at: string | null;
+  assigned_to: string | null;
+  checklist_id: string | null;
+  created_at: string;
+  updated_at: string;
+  equipment?: { id: string; name: string; equipment_code?: string };
+  checklist?: { id: string; name: string };
+}
+
+interface MaintenanceLog {
+  id: string;
+  equipment_id: string;
+  performed_by: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  schedule_id: string | null;
+  notes: string | null;
+  created_at: string;
+  completed_at: string | null;
+  equipment?: { id: string; name: string };
+  performed_by_user?: { id: string; full_name: string };
+}
+
 export const maintenanceService = {
   // Get all maintenance schedules
-  async getSchedules() {
+  async getSchedules(): Promise<MaintenanceSchedule[]> {
     const { data, error } = await supabase
       .from("maintenance_schedules")
       .select(`
@@ -17,11 +49,11 @@ export const maintenanceService = {
       throw error;
     }
 
-    return data || [];
+    return (data || []) as MaintenanceSchedule[];
   },
 
   // Get schedule by ID
-  async getScheduleById(id: string) {
+  async getScheduleById(id: string): Promise<MaintenanceSchedule> {
     const { data, error } = await supabase
       .from("maintenance_schedules")
       .select(`
@@ -37,7 +69,7 @@ export const maintenanceService = {
       throw error;
     }
 
-    return data;
+    return data as MaintenanceSchedule;
   },
 
   // Create maintenance schedule
@@ -59,8 +91,7 @@ export const maintenanceService = {
         frequency: scheduleData.frequency,
         next_due_date: scheduleData.next_due_date,
         assigned_to: scheduleData.assigned_to || null,
-        checklist_id: scheduleData.checklist_id || null,
-        is_active: true
+        checklist_id: scheduleData.checklist_id || null
       })
       .select()
       .single();
@@ -82,7 +113,7 @@ export const maintenanceService = {
     next_due_date?: string;
     assigned_to?: string | null;
     checklist_id?: string | null;
-    is_active?: boolean;
+    last_performed_at?: string;
   }) {
     const { data, error } = await supabase
       .from("maintenance_schedules")
@@ -113,13 +144,13 @@ export const maintenanceService = {
   },
 
   // Get maintenance logs
-  async getLogs(equipmentId?: string) {
+  async getLogs(equipmentId?: string): Promise<MaintenanceLog[]> {
     let query = supabase
       .from("maintenance_logs")
       .select(`
         *,
         equipment:equipment(id, name),
-        performed_by_user:profiles!maintenance_logs_performed_by_fkey(id, full_name)
+        performed_by_user:profiles(id, full_name)
       `)
       .order("created_at", { ascending: false });
 
@@ -134,7 +165,7 @@ export const maintenanceService = {
       throw error;
     }
 
-    return data || [];
+    return (data || []) as MaintenanceLog[];
   },
 
   // Create maintenance log
@@ -196,7 +227,7 @@ export const maintenanceService = {
   },
 
   // Get upcoming maintenance
-  async getUpcoming(days: number = 7) {
+  async getUpcoming(days: number = 7): Promise<MaintenanceSchedule[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
 
@@ -206,7 +237,6 @@ export const maintenanceService = {
         *,
         equipment:equipment(id, name, equipment_code)
       `)
-      .eq("is_active", true)
       .lte("next_due_date", futureDate.toISOString())
       .order("next_due_date", { ascending: true });
 
@@ -215,7 +245,7 @@ export const maintenanceService = {
       throw error;
     }
 
-    return data || [];
+    return (data || []) as MaintenanceSchedule[];
   }
 };
 
