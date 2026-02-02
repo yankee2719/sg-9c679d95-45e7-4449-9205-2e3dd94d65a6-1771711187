@@ -40,29 +40,33 @@ interface MainLayoutProps {
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
   const router = useRouter();
   const { t } = useLanguage();
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
+  const [profile, setProfile] = useState<{ full_name?: string; role?: string } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      
-      if (user) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        setUser({ id: authUser.id, email: authUser.email });
+        
+        // Fetch profile separately with explicit typing
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("*")
-          .eq("id", user.id)
+          .select("full_name, role")
+          .eq("id", authUser.id)
           .single();
-        setProfile(profileData);
+        
+        if (profileData) {
+          setProfile(profileData as { full_name?: string; role?: string });
+        }
 
         // Get unread notifications count
         const { count } = await supabase
           .from("notifications")
           .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
+          .eq("user_id", authUser.id)
           .eq("read", false);
         
         setUnreadNotifications(count || 0);
@@ -180,12 +184,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
               <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors">
                 <Avatar className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600">
                   <AvatarFallback className="text-white font-semibold">
-                    {getInitials(profile?.full_name || user?.email)}
+                    {getInitials(profile?.full_name || user?.email || "")}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left min-w-0">
                   <p className="text-sm font-medium text-white truncate">
-                    {profile?.full_name || user?.email?.split("@")[0]}
+                    {profile?.full_name || user?.email?.split("@")[0] || "User"}
                   </p>
                   <p className="text-xs text-slate-500 capitalize">{profile?.role || userRole}</p>
                 </div>
@@ -244,12 +248,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
               <div className="flex items-center gap-3 mb-4">
                 <Avatar className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600">
                   <AvatarFallback className="text-white font-semibold">
-                    {getInitials(profile?.full_name || user?.email)}
+                    {getInitials(profile?.full_name || user?.email || "")}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">
-                    {profile?.full_name || user?.email?.split("@")[0]}
+                    {profile?.full_name || user?.email?.split("@")[0] || "User"}
                   </p>
                   <p className="text-xs text-slate-500 capitalize">{profile?.role || userRole}</p>
                 </div>
