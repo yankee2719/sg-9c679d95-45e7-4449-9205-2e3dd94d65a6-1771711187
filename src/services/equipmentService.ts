@@ -5,6 +5,20 @@ export type Equipment = Database["public"]["Tables"]["equipment"]["Row"];
 export type EquipmentInsert = Database["public"]["Tables"]["equipment"]["Insert"];
 export type EquipmentUpdate = Database["public"]["Tables"]["equipment"]["Update"];
 
+// Campi di tipo date nel database
+const DATE_FIELDS = ["purchase_date", "warranty_expiry", "last_maintenance", "next_maintenance"];
+
+// Funzione helper per pulire i campi data vuoti (converte "" in null)
+function cleanDateFields<T extends Record<string, unknown>>(data: T): T {
+  const cleaned = { ...data };
+  for (const field of DATE_FIELDS) {
+    if (field in cleaned && cleaned[field] === "") {
+      (cleaned as Record<string, unknown>)[field] = null;
+    }
+  }
+  return cleaned;
+}
+
 export async function getAllEquipment() {
   const { data, error } = await supabase
     .from("equipment")
@@ -27,9 +41,12 @@ export async function getEquipmentById(id: string) {
 }
 
 export async function createEquipment(equipment: EquipmentInsert) {
+  // Pulisci i campi data vuoti prima dell'inserimento
+  const cleanedEquipment = cleanDateFields(equipment);
+
   const { data, error } = await supabase
     .from("equipment")
-    .insert(equipment)
+    .insert(cleanedEquipment)
     .select()
     .single();
 
@@ -38,9 +55,12 @@ export async function createEquipment(equipment: EquipmentInsert) {
 }
 
 export async function updateEquipment(id: string, equipment: EquipmentUpdate) {
+  // Pulisci i campi data vuoti prima dell'aggiornamento
+  const cleanedEquipment = cleanDateFields(equipment);
+
   const { data, error } = await supabase
     .from("equipment")
-    .update(equipment)
+    .update(cleanedEquipment)
     .eq("id", id)
     .select()
     .single();
@@ -74,7 +94,7 @@ export async function generateEquipmentQrCode(id: string) {
   // Usa equipment_code se disponibile, altrimenti usa l'ID o un fallback
   const codePart = equipment.equipment_code || equipment.id.substring(0, 8);
   const qrCode = `EQ-${codePart}-${Date.now()}`;
-  
+
   await updateEquipment(id, { qr_code: qrCode });
   return qrCode;
 }

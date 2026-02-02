@@ -13,6 +13,7 @@ import { Loader2, ChevronLeft, Clock, Flag, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import SignatureCanvas from "react-signature-canvas";
 
 interface ChecklistItem {
     id: string;
@@ -423,7 +424,7 @@ export default function ChecklistExecutionPage() {
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-white">Inserisci il tuo nome completo</label>
-                                <Input placeholder="Nome e Cognome" />
+                                <Input placeholder="Nome e Cognome" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400" />
                             </div>
 
                             <div className="space-y-2">
@@ -433,7 +434,7 @@ export default function ChecklistExecutionPage() {
                                         Cancella
                                     </Button>
                                 </div>
-                                <div className="border-2 border-dashed rounded-lg overflow-hidden bg-muted/20">
+                                <div className="border-2 border-dashed rounded-lg overflow-hidden bg-slate-700 border-slate-600">
                                     <canvas
                                         ref={canvasRef}
                                         width={460}
@@ -455,6 +456,7 @@ export default function ChecklistExecutionPage() {
                                     id="confirm"
                                     checked={signatureConfirmed}
                                     onCheckedChange={(checked) => setSignatureConfirmed(checked as boolean)}
+                                    className="border-slate-600"
                                 />
                                 <label htmlFor="confirm" className="text-sm cursor-pointer text-white">
                                     Confermo che tutte le attività sono state eseguite correttamente
@@ -463,7 +465,7 @@ export default function ChecklistExecutionPage() {
                         </div>
 
                         <DialogFooter>
-                            <Button variant="outline" className="text-white border-slate-600" onClick={() => setShowSignatureDialog(false)}>
+                            <Button variant="outline" className="text-white border-slate-600 hover:bg-slate-700" onClick={() => setShowSignatureDialog(false)}>
                                 Annulla
                             </Button>
                             <Button onClick={handleFinalSubmit} disabled={!signatureConfirmed}>
