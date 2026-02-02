@@ -51,25 +51,28 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       if (authUser) {
         setUser({ id: authUser.id, email: authUser.email });
         
-        // Fetch profile separately with explicit typing
-        const { data: profileData } = await supabase
+        // Fetch profile with simple query to avoid deep type instantiation
+        const profileResult = await supabase
           .from("profiles")
           .select("full_name, role")
           .eq("id", authUser.id)
-          .single();
+          .maybeSingle();
         
-        if (profileData) {
-          setProfile(profileData as { full_name?: string; role?: string });
+        if (profileResult.data) {
+          setProfile({
+            full_name: profileResult.data.full_name ?? undefined,
+            role: profileResult.data.role ?? undefined
+          });
         }
 
         // Get unread notifications count
-        const { count } = await supabase
+        const notifResult = await supabase
           .from("notifications")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact", head: true })
           .eq("user_id", authUser.id)
           .eq("read", false);
         
-        setUnreadNotifications(count || 0);
+        setUnreadNotifications(notifResult.count || 0);
       }
     };
     getUser();
