@@ -19,11 +19,12 @@ export async function getProfileData(userId: string): Promise<ProfileData | null
 
 // Helper function to fetch notification count - isolated to avoid deep type instantiation
 export async function getNotificationCount(userId: string): Promise<number> {
-  const { count } = await supabase
+  const query = supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("read", false);
+    .eq("read", false) as unknown as Promise<{ count: number | null }>;
   
-  return count || 0;
+  const result = await query;
+  return result.count || 0;
 }
