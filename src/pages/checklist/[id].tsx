@@ -16,152 +16,148 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 interface ChecklistItem {
     id: string;
-    title: string;
-    description: string | null;
-    is_required: boolean;
-    order_index: number;
+    description: string;
+    priority: "high" | "medium" | "low";
+    checked: boolean;
+    notes?: string;
 }
 
 interface ChecklistExecution {
     id: string;
     checklist_id: string;
-    executed_by: string;
-    status: string;
-    results: Record<string, any>;
-    notes: string | null;
-    signature: string | null;
-    started_at: string;
-    completed_at: string | null;
-    checklist: {
+    technician_id: string;
+    start_time: string;
+    end_time?: string;
+    status: "in_progress" | "completed" | "cancelled";
+    signature?: string;
+    technician_name?: string;
+    checklist?: {
+        id: string;
         name: string;
-        description: string | null;
-    } | null;
-    executed_by_profile: {
-        full_name: string;
-    } | null;
+        items: ChecklistItem[];
+    };
 }
 
 export default function ChecklistExecutionPage() {
     const router = useRouter();
     const { id } = router.query;
     const { toast } = useToast();
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+
     const [execution, setExecution] = useState<ChecklistExecution | null>(null);
+    const [checklist, setChecklist] = useState<any>(null);
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [responses, setResponses] = useState<Record<string, boolean>>({});
-    const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
-    const [showNoteDialog, setShowNoteDialog] = useState<string | null>(null);
+    const [completing, setCompleting] = useState(false);
     const [showSignatureDialog, setShowSignatureDialog] = useState(false);
+    const [technicianName, setTechnicianName] = useState("");
+    const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+    const [saveSignature, setSaveSignature] = useState(false);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [signatureConfirmed, setSignatureConfirmed] = useState(false);
-    const [finalNotes, setFinalNotes] = useState("");
-    const [startTime] = useState(new Date());
-    const [elapsedTime, setElapsedTime] = useState(0);
 
     useEffect(() => {
-        if (id && typeof id === "string" && id !== "execute") {
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(id)) {
-                loadExecution(id);
-            } else {
-                setLoading(false);
-            }
-        } else {
-            setLoading(false);
+        if (id) {
+            loadExecution();
         }
     }, [id]);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
-            setElapsedTime(elapsed);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [startTime]);
-
-    const loadExecution = async (executionId: string) => {
+    const loadExecution = async () => {
         try {
+            setLoading(true);
+
+            const executionId = Array.isArray(id) ? id[0] : id;
+            if (!executionId) return;
+
             const { data: executionData, error: executionError } = await supabase
                 .from("checklist_executions")
                 .select(`
                     *,
-                    checklist:checklists!checklist_id(name, description),
-                    executed_by_profile:profiles!checklist_executions_executed_by_fkey(full_name)
+                    checklist:checklists!inner(
+                        id,
+                        name,
+                        items
+                    )
                 `)
                 .eq("id", executionId)
                 .single();
 
             if (executionError) throw executionError;
 
-            const { data: itemsData, error: itemsError } = await supabase
-                .from("checklist_items")
-                .select("*")
-                .eq("checklist_id", executionData.checklist_id)
-                .order("order_index");
+            setExecution(executionData as any);
+            setChecklist(executionData.checklist);
 
-            if (itemsError) throw itemsError;
+            const checklistItems = (executionData.checklist as any)?.items || [];
+            setItems(checklistItems.map((item: any) => ({
+                ...item,
+                checked: false,
+                notes: ""
+            })));
 
-            setExecution({
-                ...executionData,
-                checklist: executionData.checklist || { name: "N/A", description: null }
-            } as ChecklistExecution);
-            setItems(itemsData || []);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("full_name")
+                    .eq("id", user.id)
+                    .single();
 
-            if (executionData.results && typeof executionData.results === "object") {
-                setResponses(executionData.results as Record<string, boolean>);
+                if (profile?.full_name) {
+                    setTechnicianName(profile.full_name);
+                }
             }
         } catch (error: any) {
             console.error("Error loading execution:", error);
             toast({
-                variant: "destructive",
                 title: "Errore",
-                description: "Impossibile caricare la checklist"
+                description: "Impossibile caricare l'esecuzione della checklist",
+                variant: "destructive"
             });
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCheckboxChange = (itemId: string, checked: boolean) => {
-        setResponses(prev => ({ ...prev, [itemId]: checked }));
+    const handleItemCheck = (index: number) => {
+        const newItems = [...items];
+        newItems[index].checked = !newItems[index].checked;
+        setItems(newItems);
     };
 
-    const handleSkipItem = (itemId: string) => {
-        setResponses(prev => {
-            const newResponses = { ...prev };
-            delete newResponses[itemId];
-            return newResponses;
-        });
+    const handleNoteChange = (index: number, notes: string) => {
+        const newItems = [...items];
+        newItems[index].notes = notes;
+        setItems(newItems);
     };
 
-    const handleSaveNote = () => {
-        if (showNoteDialog) {
-            setShowNoteDialog(null);
+    const calculateProgress = () => {
+        if (items.length === 0) return 0;
+        const checkedItems = items.filter(item => item.checked).length;
+        return Math.round((checkedItems / items.length) * 100);
+    };
+
+    const handleComplete = () => {
+        const allChecked = items.every(item => item.checked);
+        if (!allChecked) {
+            toast({
+                title: "Attenzione",
+                description: "Completa tutti gli item prima di finalizzare",
+                variant: "destructive"
+            });
+            return;
         }
-    };
 
-    const completedCount = Object.keys(responses).length;
-    const totalCount = items.length;
-    const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, "0")}`;
-    };
-
-    const handleCompleteClick = () => {
         setShowSignatureDialog(true);
     };
 
     const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+        setIsDrawing(true);
         const canvas = canvasRef.current;
         if (!canvas) return;
-        setIsDrawing(true);
+
         const rect = canvas.getBoundingClientRect();
         const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
         const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
         const ctx = canvas.getContext("2d");
         if (ctx) {
             ctx.beginPath();
@@ -171,15 +167,18 @@ export default function ChecklistExecutionPage() {
 
     const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
         if (!isDrawing) return;
+
         const canvas = canvasRef.current;
         if (!canvas) return;
+
         const rect = canvas.getBoundingClientRect();
         const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
         const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
         const ctx = canvas.getContext("2d");
         if (ctx) {
             ctx.lineTo(x, y);
-            ctx.strokeStyle = "#fff";
+            ctx.strokeStyle = "#ffffff";
             ctx.lineWidth = 2;
             ctx.stroke();
         }
@@ -191,299 +190,303 @@ export default function ChecklistExecutionPage() {
 
     const clearSignature = () => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (canvas) {
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         }
+        setSignatureDataUrl(null);
     };
 
-    const handleFinalSubmit = async () => {
-        if (!signatureConfirmed) {
-            toast({
-                variant: "destructive",
-                title: "Conferma richiesta",
-                description: "Conferma che tutte le attività sono state eseguite correttamente"
-            });
-            return;
-        }
-
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const signatureDataUrl = canvas.toDataURL();
-
+    const confirmComplete = async () => {
         try {
-            const { error } = await supabase
+            setCompleting(true);
+
+            const canvas = canvasRef.current;
+            if (!canvas) {
+                toast({
+                    title: "Errore",
+                    description: "Firma mancante",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            const signatureData = canvas.toDataURL();
+            setSignatureDataUrl(signatureData);
+
+            const executionId = Array.isArray(id) ? id[0] : id;
+
+            const { error: updateError } = await supabase
                 .from("checklist_executions")
                 .update({
-                    results: responses,
-                    signature: signatureDataUrl,
-                    notes: finalNotes || null,
                     status: "completed",
-                    completed_at: new Date().toISOString()
+                    end_time: new Date().toISOString(),
+                    signature: signatureData,
+                    technician_name: technicianName,
+                    items: items
                 })
-                .eq("id", execution?.id);
+                .eq("id", executionId);
 
-            if (error) throw error;
+            if (updateError) throw updateError;
 
             toast({
-                title: "Completato!",
-                description: "La checklist è stata completata con successo"
+                title: "Successo",
+                description: "Checklist completata con successo"
             });
 
-            router.push("/maintenance");
-        } catch (error) {
+            router.push("/dashboard");
+        } catch (error: any) {
             console.error("Error completing checklist:", error);
             toast({
-                variant: "destructive",
                 title: "Errore",
-                description: "Impossibile completare la checklist"
+                description: "Impossibile completare la checklist",
+                variant: "destructive"
             });
+        } finally {
+            setCompleting(false);
         }
     };
 
     if (loading) {
         return (
             <MainLayout>
-                <div className="flex items-center justify-center h-[calc(100vh-100px)]">
+                <div className="flex items-center justify-center min-h-screen">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
             </MainLayout>
         );
     }
 
-    if (!execution) {
+    if (!execution || !checklist) {
         return (
             <MainLayout>
-                <div className="p-8 text-center">
-                    <h2 className="text-xl font-semibold text-white">Checklist non trovata</h2>
-                    <p className="text-muted-foreground mt-2">L'esecuzione della checklist richiesta non esiste.</p>
-                    <Button className="mt-4" onClick={() => router.back()}>
-                        Torna indietro
+                <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+                    <p className="text-muted-foreground">Esecuzione non trovata</p>
+                    <Button onClick={() => router.push("/dashboard")}>
+                        <ChevronLeft className="h-4 w-4 mr-2" />
+                        Torna alla Dashboard
                     </Button>
                 </div>
             </MainLayout>
         );
     }
 
+    const progress = calculateProgress();
+    const startTime = execution.start_time ? new Date(execution.start_time) : new Date();
+
     return (
         <MainLayout>
-            <SEO title={`Esegui Checklist - ${execution.checklist?.name || ""}`} />
-            <div className="max-w-4xl mx-auto space-y-6">
-                {/* Header Card */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                    <CardHeader>
-                        <CardTitle className="text-2xl text-white">
-                            {execution.checklist?.name || "Checklist"}
-                        </CardTitle>
-                        <p className="text-slate-400">Esecuzione checklist</p>
-                        <div className="flex items-center gap-2 text-blue-400 mt-2">
-                            <Clock className="h-5 w-5" />
-                            <span className="text-lg font-semibold">{formatTime(elapsedTime)}</span>
+            <SEO title={`Esegui Checklist - ${checklist?.name || ""}`} />
+
+            <div className="space-y-6 pb-24">
+                <Card className="bg-gray-800 border-gray-700">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                                <CardTitle className="text-2xl text-white">{checklist.name}</CardTitle>
+                                <p className="text-sm text-gray-400">Esecuzione checklist</p>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-400">
+                                <Clock className="h-4 w-4" />
+                                <span>Inizio: {format(startTime, "dd/MM/yyyy HH:mm")}</span>
+                            </div>
                         </div>
                     </CardHeader>
                 </Card>
 
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-white">Progresso</span>
-                        <Badge variant="default" className="bg-green-600">
-                            {progressPercentage}%
-                        </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                        {completedCount} di {totalCount} completati
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-green-600 transition-all duration-300"
-                            style={{ width: `${progressPercentage}%` }}
-                        />
-                    </div>
-                </div>
+                <Card className="bg-gray-800 border-gray-700">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-white">Progresso</CardTitle>
+                            <Badge variant={progress === 100 ? "default" : "secondary"} className="text-lg px-3 py-1">
+                                {progress}%
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="w-full bg-gray-700 rounded-full h-3">
+                            <div
+                                className="bg-primary h-3 rounded-full transition-all duration-300"
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
-                <div className="space-y-3">
-                    {items.map((item) => {
-                        const isCompleted = responses[item.id] === true;
-
-                        return (
-                            <Card key={item.id} className={`bg-slate-800/50 border-slate-700 ${isCompleted ? "border-green-600 bg-green-950/20" : ""}`}>
-                                <CardContent className="p-4">
+                <div className="space-y-4">
+                    {items.map((item, index) => (
+                        <Card key={item.id} className="bg-gray-800 border-gray-700">
+                            <CardContent className="pt-6">
+                                <div className="space-y-4">
                                     <div className="flex items-start gap-3">
                                         <Checkbox
-                                            checked={isCompleted}
-                                            onCheckedChange={(checked) => handleCheckboxChange(item.id, checked as boolean)}
+                                            checked={item.checked}
+                                            onCheckedChange={() => handleItemCheck(index)}
                                             className="mt-1"
                                         />
-                                        <div className="flex-1">
+                                        <div className="flex-1 space-y-2">
                                             <div className="flex items-start justify-between gap-2">
-                                                <h3 className={`font-medium text-white ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
-                                                    {item.title}
-                                                </h3>
-                                                {item.is_required && !isCompleted && (
-                                                    <Badge variant="destructive" className="text-xs">Richiesto</Badge>
-                                                )}
+                                                <p className="text-white font-medium">{item.description}</p>
+                                                <Badge
+                                                    variant={
+                                                        item.priority === "high"
+                                                            ? "destructive"
+                                                            : item.priority === "medium"
+                                                            ? "default"
+                                                            : "secondary"
+                                                    }
+                                                >
+                                                    <Flag className="h-3 w-3 mr-1" />
+                                                    {item.priority === "high" ? "Alta" : item.priority === "medium" ? "Media" : "Bassa"}
+                                                </Badge>
                                             </div>
-                                            {item.description && (
-                                                <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-                                            )}
-                                            {isCompleted && (
-                                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                                                    <span>✓</span> Completato alle {format(new Date(), "HH:mm")}
-                                                </p>
-                                            )}
+
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2 text-sm text-gray-400">
+                                                    <MessageSquare className="h-4 w-4" />
+                                                    <span>Note</span>
+                                                </div>
+                                                <Textarea
+                                                    value={item.notes || ""}
+                                                    onChange={(e) => handleNoteChange(index, e.target.value)}
+                                                    placeholder="Aggiungi note..."
+                                                    className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500"
+                                                    rows={2}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-
-                                    <div className="flex items-center gap-2 mt-3 ml-8">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 text-xs text-white"
-                                            onClick={() => setShowNoteDialog(item.id)}
-                                        >
-                                            <Flag className="h-3 w-3 mr-1" />
-                                            Segnala
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 text-xs text-white"
-                                            onClick={() => setShowNoteDialog(item.id)}
-                                        >
-                                            <MessageSquare className="h-3 w-3 mr-1" />
-                                            Aggiungi nota
-                                        </Button>
-                                        {!item.is_required && !isCompleted && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 text-xs text-muted-foreground"
-                                                onClick={() => handleSkipItem(item.id)}
-                                            >
-                                                Salta
-                                            </Button>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
+            </div>
 
-                <Dialog open={showNoteDialog !== null} onOpenChange={() => setShowNoteDialog(null)}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle className="text-white">Aggiungi nota</DialogTitle>
-                        </DialogHeader>
-                        <Textarea
-                            placeholder="Inserisci le tue note qui..."
-                            value={showNoteDialog ? (itemNotes[showNoteDialog] || "") : ""}
-                            onChange={(e) => {
-                                if (showNoteDialog) {
-                                    setItemNotes(prev => ({ ...prev, [showNoteDialog]: e.target.value }));
-                                }
-                            }}
-                            rows={4}
-                        />
-                        <DialogFooter>
-                            <Button variant="outline" className="text-white border-slate-600" onClick={() => setShowNoteDialog(null)}>Annulla</Button>
-                            <Button onClick={handleSaveNote}>Salva</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
-                    <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle className="text-white">Firma Digitale</DialogTitle>
-                            <p className="text-sm text-muted-foreground">Conferma il completamento della checklist</p>
-                        </DialogHeader>
-
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                                <div>
-                                    <span className="text-muted-foreground">Tecnico</span>
-                                    <div className="font-medium text-white">{execution.executed_by_profile?.full_name || "N/A"}</div>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Data e Ora</span>
-                                    <div className="font-medium text-white">{format(new Date(), "dd/MM/yyyy HH:mm")}</div>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Durata</span>
-                                    <div className="font-medium text-white">{formatTime(elapsedTime)}</div>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Checklist</span>
-                                    <div className="font-medium text-white">{execution.checklist?.name || "N/A"}</div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-white">Inserisci il tuo nome completo</label>
-                                <Input placeholder="Nome e Cognome" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400" />
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium text-white">Firma qui</label>
-                                    <Button variant="ghost" size="sm" className="text-white" onClick={clearSignature}>
-                                        Cancella
-                                    </Button>
-                                </div>
-                                <div className="border-2 border-dashed rounded-lg overflow-hidden bg-slate-700 border-slate-600">
-                                    <canvas
-                                        ref={canvasRef}
-                                        width={460}
-                                        height={200}
-                                        className="cursor-crosshair w-full"
-                                        onMouseDown={startDrawing}
-                                        onMouseMove={draw}
-                                        onMouseUp={stopDrawing}
-                                        onMouseLeave={stopDrawing}
-                                        onTouchStart={startDrawing}
-                                        onTouchMove={draw}
-                                        onTouchEnd={stopDrawing}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="confirm"
-                                    checked={signatureConfirmed}
-                                    onCheckedChange={(checked) => setSignatureConfirmed(checked as boolean)}
-                                    className="border-slate-600"
-                                />
-                                <label htmlFor="confirm" className="text-sm cursor-pointer text-white">
-                                    Confermo che tutte le attività sono state eseguite correttamente
-                                </label>
-                            </div>
-                        </div>
-
-                        <DialogFooter>
-                            <Button variant="outline" className="text-white border-slate-600 hover:bg-slate-700" onClick={() => setShowSignatureDialog(false)}>
-                                Annulla
-                            </Button>
-                            <Button onClick={handleFinalSubmit} disabled={!signatureConfirmed}>
-                                Conferma e Invia
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-900 border-t border-slate-700">
+            <div className="fixed bottom-0 left-0 right-0 border-t bg-gray-900 border-gray-800 p-4 safe-area-bottom">
+                <div className="max-w-7xl mx-auto flex gap-3">
                     <Button
-                        className="w-full bg-green-600 hover:bg-green-700 text-white"
-                        size="lg"
-                        onClick={handleCompleteClick}
+                        variant="outline"
+                        onClick={() => router.push("/dashboard")}
+                        className="flex-1 bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
                     >
-                        Completa e Firma
+                        <ChevronLeft className="h-4 w-4 mr-2" />
+                        Annulla
+                    </Button>
+                    <Button
+                        onClick={handleComplete}
+                        disabled={progress < 100 || completing}
+                        className="flex-1 bg-primary hover:bg-primary/90"
+                    >
+                        {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Completa
                     </Button>
                 </div>
             </div>
+
+            <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
+                <DialogContent className="bg-gray-800 border-gray-700 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-white">Conferma il completamento della checklist</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-gray-400">Tecnico</p>
+                                <p className="font-medium text-white">{technicianName}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400">Data e Ora</p>
+                                <p className="font-medium text-white">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400">Durata</p>
+                                <p className="font-medium text-white">
+                                    {Math.round((new Date().getTime() - startTime.getTime()) / 1000 / 60)} minuti
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-gray-400">Checklist</p>
+                                <p className="font-medium text-white">{checklist.name}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm text-gray-400">Nome Tecnico</label>
+                            <Input
+                                value={technicianName}
+                                onChange={(e) => setTechnicianName(e.target.value)}
+                                placeholder="Inserisci il tuo nome"
+                                className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm text-gray-400">Firma</label>
+                            <div className="border-2 border-dashed border-gray-600 rounded-lg p-2 bg-gray-900">
+                                <canvas
+                                    ref={canvasRef}
+                                    width={600}
+                                    height={200}
+                                    className="w-full touch-none cursor-crosshair bg-gray-900"
+                                    onMouseDown={startDrawing}
+                                    onMouseMove={draw}
+                                    onMouseUp={stopDrawing}
+                                    onMouseLeave={stopDrawing}
+                                    onTouchStart={startDrawing}
+                                    onTouchMove={draw}
+                                    onTouchEnd={stopDrawing}
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={clearSignature}
+                                className="w-full bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+                            >
+                                Cancella Firma
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="saveSignature"
+                                checked={saveSignature}
+                                onCheckedChange={(checked) => setSaveSignature(checked as boolean)}
+                            />
+                            <label
+                                htmlFor="saveSignature"
+                                className="text-sm text-gray-300 cursor-pointer"
+                            >
+                                Salva la firma per utilizzi futuri
+                            </label>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setShowSignatureDialog(false)}
+                            className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+                        >
+                            Annulla
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={confirmComplete}
+                            disabled={completing || !technicianName.trim()}
+                            className="bg-primary hover:bg-primary/90"
+                        >
+                            {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Conferma e Invia
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </MainLayout>
     );
 }
