@@ -1,162 +1,235 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Search, Settings, FileText } from "lucide-react";
-import { getChecklists, deleteChecklist, type ChecklistWithItems } from "@/services/checklistService";
-import { useToast } from "@/hooks/use-toast";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
+import { checklistService } from "@/services/checklistService";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  Search,
+  ClipboardList,
+  CheckCircle,
+  Edit,
+  Trash2,
+  Play
+} from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useToast } from "@/hooks/use-toast";
+
+interface Checklist {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  items: any[];
+  created_at: string;
+}
 
 export default function ChecklistsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { toast } = useToast();
-  const [checklists, setChecklists] = useState<ChecklistWithItems[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
+  const [filteredChecklists, setFilteredChecklists] = useState<Checklist[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    loadChecklists();
-  }, []);
+    const loadData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
+          return;
+        }
 
-  const loadChecklists = async () => {
-    try {
-      const data = await getChecklists();
-      console.log("Checklists loaded:", data);
-      setChecklists(data);
-    } catch (error) {
-      console.error("Error loading checklists:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this checklist?")) return;
+        if (profile) {
+          setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        }
 
-    try {
-      await deleteChecklist(id);
-      loadChecklists();
-    } catch (error) {
-      console.error("Error deleting checklist:", error);
-    }
-  };
-
-  const handleStartInspection = async (checklistId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({
-          title: "Error",
-          description: "You must be logged in to start an inspection",
-          variant: "destructive"
-        });
-        return;
+        const data = await checklistService.getAllChecklists();
+        setChecklists(data);
+        setFilteredChecklists(data);
+      } catch (error) {
+        console.error("Error loading checklists:", error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const { data: execution, error } = await supabase
-        .from("checklist_executions")
-        .insert({
-          checklist_id: checklistId,
-          executed_by: user.id,
-          status: "in_progress",
-          results: {}
-        })
-        .select()
-        .single();
+    loadData();
+  }, [router]);
 
-      if (error) throw error;
+  useEffect(() => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      setFilteredChecklists(
+        checklists.filter(
+          (item) =>
+            item.name.toLowerCase().includes(query) ||
+            item.description?.toLowerCase().includes(query)
+        )
+      );
+    } else {
+      setFilteredChecklists(checklists);
+    }
+  }, [searchQuery, checklists]);
 
-      router.push(`/checklist/${execution.id}`);
-    } catch (error) {
-      console.error("Error starting inspection:", error);
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(t("checklists.confirmDelete"))) return;
+
+    try {
+      await checklistService.deleteChecklist(id);
+      setChecklists(checklists.filter(c => c.id !== id));
       toast({
-        title: "Error",
-        description: "Failed to start inspection",
-        variant: "destructive"
+        title: t("common.success"),
+        description: t("checklists.deleteSuccess"),
+      });
+    } catch (error) {
+      toast({
+        title: t("common.error"),
+        description: t("checklists.deleteError"),
+        variant: "destructive",
       });
     }
   };
 
-  const filteredChecklists = checklists.filter(c => 
-    c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  if (loading) return null;
 
   return (
-    <MainLayout>
-      <SEO title="Checklists" />
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
+    <MainLayout userRole={userRole}>
+      <SEO title={`${t("checklists.title")} - Maint Ops`} />
+
+      <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Checklists</h1>
-            <p className="text-gray-400">Manage inspection templates and forms</p>
+            <h1 className="text-2xl font-bold text-white">{t("checklists.title")}</h1>
+            <p className="text-slate-400 mt-1">{t("checklists.subtitle")}</p>
           </div>
-          <Button onClick={() => router.push("/checklists/new")} className="bg-orange-600 hover:bg-orange-700 text-white">
-            <Plus className="mr-2 h-4 w-4" />
-            New Template
-          </Button>
+          {(userRole === "admin" || userRole === "supervisor") && (
+            <Button 
+              className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+              onClick={() => router.push("/checklists/new")}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {t("checklists.addChecklist")}
+            </Button>
+          )}
         </div>
 
-        <div className="flex gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input 
-              placeholder="Search templates..." 
-              className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
+        {/* Search */}
+        <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <CardContent className="p-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder={t("common.search")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-        {loading ? (
-          <div className="text-center text-white py-8">Caricamento...</div>
-        ) : filteredChecklists.length === 0 ? (
-          <div className="text-center text-gray-400 py-8">
-            Nessuna checklist trovata. Crea la tua prima checklist!
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredChecklists.map((checklist) => (
-              <Card key={checklist.id} className="hover:shadow-lg transition-shadow bg-slate-800 border-slate-700">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-lg font-medium text-white">
-                    {checklist.name}
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => router.push(`/checklists/edit/${checklist.id}`)} className="text-gray-400 hover:text-white hover:bg-slate-700">
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(checklist.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+        {/* Checklists Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredChecklists.map((checklist) => (
+            <Card
+              key={checklist.id}
+              className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
+              onClick={() => router.push(`/checklists/edit/${checklist.id}`)}
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                    <ClipboardList className="w-6 h-6 text-blue-400" />
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex items-center text-sm text-gray-400">
-                      <FileText className="mr-2 h-4 w-4" />
-                      {checklist.items?.length || 0} items
-                    </div>
-                    <div className="text-sm text-gray-300">
-                      <span className="font-semibold">Category:</span> {checklist.category || "N/A"}
-                    </div>
-                    {checklist.description && (
-                      <p className="text-sm text-gray-400 truncate">{checklist.description}</p>
-                    )}
-                    <div className="pt-4">
-                      <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white border-slate-600" variant="outline" onClick={() => handleStartInspection(checklist.id)}>
-                        Start Inspection
+                  <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${
+                    checklist.is_active
+                      ? "bg-green-500/20 text-green-400 border-green-500/30"
+                      : "bg-slate-500/20 text-slate-400 border-slate-500/30"
+                  }`}>
+                    {checklist.is_active ? t("checklists.active") : t("checklists.inactive")}
+                  </Badge>
+                </div>
+
+                <h3 className="font-bold text-white text-lg mb-2">{checklist.name}</h3>
+                {checklist.description && (
+                  <p className="text-slate-400 text-sm mb-4 line-clamp-2">{checklist.description}</p>
+                )}
+
+                <div className="flex items-center justify-between text-sm text-slate-400 mb-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{checklist.items?.length || 0} {t("checklists.items")}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                    onClick={() => router.push(`/checklist/execute?checklistId=${checklist.id}`)}
+                  >
+                    <Play className="w-4 h-4 mr-1" />
+                    {t("checklists.execute")}
+                  </Button>
+                  {(userRole === "admin" || userRole === "supervisor") && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                        onClick={() => router.push(`/checklists/edit/${checklist.id}`)}
+                      >
+                        <Edit className="w-4 h-4" />
                       </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                        onClick={(e) => handleDelete(checklist.id, e)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {filteredChecklists.length === 0 && (
+          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center">
+            <ClipboardList className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">{t("checklists.noChecklists")}</h3>
+            <p className="text-slate-400 mb-6">{t("checklists.noChecklistsDesc")}</p>
+            {(userRole === "admin" || userRole === "supervisor") && (
+              <Button 
+                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                onClick={() => router.push("/checklists/new")}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                {t("checklists.addFirst")}
+              </Button>
+            )}
+          </Card>
         )}
       </div>
     </MainLayout>

@@ -10,25 +10,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { maintenanceService } from "@/services/maintenanceService";
 import { getAllEquipment } from "@/services/equipmentService";
-import { getChecklists, type ChecklistWithItems } from "@/services/checklistService";
+import { checklistService } from "@/services/checklistService";
 import { ArrowLeft, Save } from "lucide-react";
 import { SEO } from "@/components/SEO";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function EditMaintenanceSchedule() {
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
+  const { t } = useLanguage();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
-  const [checklists, setChecklists] = useState<ChecklistWithItems[]>([]);
+  const [checklists, setChecklists] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     equipment_id: "",
     title: "",
     description: "",
-    frequency: "monthly" as "daily" | "weekly" | "monthly" | "quarterly" | "yearly",
+    frequency: "monthly",
     next_due_date: "",
     assigned_to: "",
     checklist_id: ""
@@ -37,8 +39,8 @@ export default function EditMaintenanceSchedule() {
   useEffect(() => {
     loadEquipment();
     loadChecklists();
-    if (id) {
-      loadSchedule();
+    if (id && typeof id === "string") {
+      loadSchedule(id);
     }
   }, [id]);
 
@@ -53,30 +55,33 @@ export default function EditMaintenanceSchedule() {
 
   const loadChecklists = async () => {
     try {
-      const data = await getChecklists();
+      const data = await checklistService.getAllChecklists();
       setChecklists(data);
     } catch (error) {
       console.error("Error loading checklists:", error);
     }
   };
 
-  const loadSchedule = async () => {
+  const loadSchedule = async (scheduleId: string) => {
     try {
-      const data = await maintenanceService.getSchedule(id as string);
-      setFormData({
-        equipment_id: data.equipment_id,
-        title: data.title,
-        description: data.description || "",
-        frequency: data.frequency as "daily" | "weekly" | "monthly" | "quarterly" | "yearly",
-        next_due_date: data.next_due_date ? new Date(data.next_due_date).toISOString().split('T')[0] : "",
-        assigned_to: data.assigned_to || "",
-        checklist_id: data.checklist_id || ""
-      });
+      const schedules = await maintenanceService.getSchedules();
+      const data = schedules.find((s: any) => s.id === scheduleId);
+      if (data) {
+        setFormData({
+          equipment_id: data.equipment_id,
+          title: data.title,
+          description: data.description || "",
+          frequency: data.frequency,
+          next_due_date: data.next_due_date ? new Date(data.next_due_date).toISOString().split("T")[0] : "",
+          assigned_to: data.assigned_to || "",
+          checklist_id: data.checklist_id || ""
+        });
+      }
     } catch (error) {
       console.error("Error loading schedule:", error);
       toast({
-        title: "Errore",
-        description: "Impossibile caricare la programmazione",
+        title: t("common.error"),
+        description: t("maintenance.loadError"),
         variant: "destructive",
       });
     } finally {
@@ -93,15 +98,15 @@ export default function EditMaintenanceSchedule() {
         checklist_id: formData.checklist_id || null
       });
       toast({
-        title: "Successo",
-        description: "Programmazione aggiornata con successo",
+        title: t("common.success"),
+        description: t("maintenance.updateSuccess"),
       });
       router.push("/maintenance");
     } catch (error) {
       console.error(error);
       toast({
-        title: "Errore",
-        description: "Impossibile aggiornare la programmazione",
+        title: t("common.error"),
+        description: t("maintenance.updateError"),
         variant: "destructive",
       });
     } finally {
@@ -109,33 +114,33 @@ export default function EditMaintenanceSchedule() {
     }
   };
 
-  if (loading) return <MainLayout><div className="text-white">Caricamento...</div></MainLayout>;
+  if (loading) return <MainLayout><div className="text-white">{t("common.loading")}</div></MainLayout>;
 
   return (
     <MainLayout>
-      <SEO title="Modifica Manutenzione Programmata" />
+      <SEO title={`${t("maintenance.editMaintenance")} - Maint Ops`} />
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-slate-400 hover:text-white">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold text-white">Modifica Manutenzione Programmata</h1>
+          <h1 className="text-2xl font-bold text-white">{t("maintenance.editMaintenance")}</h1>
         </div>
 
         <form onSubmit={handleSubmit}>
           <Card className="bg-slate-800/50 border-slate-700">
             <CardHeader>
-              <CardTitle className="text-white">Dettagli Programmazione</CardTitle>
+              <CardTitle className="text-white">{t("maintenance.details")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="equipment" className="text-white">Macchina</Label>
+                <Label htmlFor="equipment" className="text-white">{t("equipment.title")}</Label>
                 <Select 
                   value={formData.equipment_id} 
                   onValueChange={(value) => setFormData({...formData, equipment_id: value})}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue placeholder="Seleziona macchina" />
+                    <SelectValue placeholder={t("maintenance.selectEquipment")} />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
                     {equipmentList.map((eq) => (
@@ -148,18 +153,18 @@ export default function EditMaintenanceSchedule() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="title" className="text-white">Titolo</Label>
+                <Label htmlFor="title" className="text-white">{t("common.title")}</Label>
                 <Input 
                   id="title"
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  placeholder="Es. Ispezione Mensile"
+                  placeholder={t("maintenance.titlePlaceholder")}
                   className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description" className="text-white">Descrizione</Label>
+                <Label htmlFor="description" className="text-white">{t("common.description")}</Label>
                 <Textarea 
                   id="description"
                   value={formData.description}
@@ -169,26 +174,26 @@ export default function EditMaintenanceSchedule() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="frequency" className="text-white">Frequenza</Label>
+                <Label htmlFor="frequency" className="text-white">{t("maintenance.frequency")}</Label>
                 <Select 
                   value={formData.frequency} 
-                  onValueChange={(value) => setFormData({...formData, frequency: value as "daily" | "weekly" | "monthly" | "quarterly" | "yearly"})}
+                  onValueChange={(value) => setFormData({...formData, frequency: value})}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="daily" className="text-white">Giornaliera</SelectItem>
-                    <SelectItem value="weekly" className="text-white">Settimanale</SelectItem>
-                    <SelectItem value="monthly" className="text-white">Mensile</SelectItem>
-                    <SelectItem value="quarterly" className="text-white">Trimestrale</SelectItem>
-                    <SelectItem value="yearly" className="text-white">Annuale</SelectItem>
+                    <SelectItem value="daily" className="text-white">{t("maintenance.daily")}</SelectItem>
+                    <SelectItem value="weekly" className="text-white">{t("maintenance.weekly")}</SelectItem>
+                    <SelectItem value="monthly" className="text-white">{t("maintenance.monthly")}</SelectItem>
+                    <SelectItem value="quarterly" className="text-white">{t("maintenance.quarterly")}</SelectItem>
+                    <SelectItem value="yearly" className="text-white">{t("maintenance.yearly")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="date" className="text-white">Prossima Scadenza</Label>
+                <Label htmlFor="date" className="text-white">{t("maintenance.nextDue")}</Label>
                 <Input 
                   id="date"
                   type="date"
@@ -199,13 +204,13 @@ export default function EditMaintenanceSchedule() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="checklist" className="text-white">Checklist Associata</Label>
+                <Label htmlFor="checklist" className="text-white">{t("checklists.associatedChecklist")}</Label>
                 <Select 
                   value={formData.checklist_id} 
                   onValueChange={(value) => setFormData({...formData, checklist_id: value})}
                 >
                   <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                    <SelectValue placeholder="Seleziona checklist (opzionale)" />
+                    <SelectValue placeholder={t("checklists.selectChecklist")} />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700">
                     {checklists.map((checklist) => (
@@ -220,10 +225,10 @@ export default function EditMaintenanceSchedule() {
           </Card>
 
           <div className="flex justify-end gap-4 mt-6">
-            <Button type="button" variant="outline" onClick={() => router.back()} className="border-slate-600 text-slate-300 hover:bg-slate-700">Annulla</Button>
-            <Button type="submit" disabled={saving} className="bg-[#fb923c] hover:bg-[#f97316] text-white">
+            <Button type="button" variant="outline" onClick={() => router.back()} className="border-slate-600 text-slate-300 hover:bg-slate-700">{t("common.cancel")}</Button>
+            <Button type="submit" disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
               <Save className="mr-2 h-4 w-4" />
-              {saving ? "Salvataggio..." : "Salva Modifiche"}
+              {saving ? t("common.saving") : t("common.save")}
             </Button>
           </div>
         </form>

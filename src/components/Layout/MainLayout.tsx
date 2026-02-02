@@ -1,326 +1,332 @@
-import { ReactNode, useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { authService } from "@/services/authService";
-import { userService } from "@/services/userService";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import {
   LayoutDashboard,
-  Settings as SettingsIcon,
   Wrench,
-  ClipboardCheck,
-  BarChart3,
-  Users2,
-  Bell,
-  Settings2,
-  ChevronLeft,
-  ChevronRight,
+  ClipboardList,
+  Settings,
   LogOut,
   Menu,
-  X,
-  Home,
-  Package,
-  ClipboardList,
-  QrCode,
-  Settings,
+  Bell,
   Users,
+  QrCode,
+  ChevronDown,
+  BarChart3,
+  CalendarClock
 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MainLayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
   userRole?: "admin" | "supervisor" | "technician";
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { t } = useLanguage();
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userName, setUserName] = useState<string>("");
-  const [userInitials, setUserInitials] = useState<string>("U");
-  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
-  const [notificationCount, setNotificationCount] = useState<number>(0);
-  const [maintenanceCount, setMaintenanceCount] = useState<number>(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
-    const loadUserProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const profile = await userService.getUserById(user.id);
-          setUserName(profile.full_name || profile.email || "User");
-          setUserInitials(getInitials(profile.full_name || profile.email || "U"));
-          setUserRole(profile.role as "admin" | "supervisor" | "technician");
-          
-          // Load notification count
-          await loadNotificationCount();
-          
-          // Load maintenance count
-          await loadMaintenanceCount();
-        }
-      } catch (error) {
-        console.error("Error loading user profile:", error);
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      
+      if (user) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        setProfile(profileData);
+
+        // Get unread notifications count
+        const { count } = await supabase
+          .from("notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("read", false);
+        
+        setUnreadNotifications(count || 0);
       }
     };
-
-    loadUserProfile();
+    getUser();
   }, []);
 
-  const loadNotificationCount = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("id", { count: "exact" })
-        .eq("is_read", false);
-      
-      if (!error && data) {
-        setNotificationCount(data.length);
-      }
-    } catch (error) {
-      console.error("Error loading notification count:", error);
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
   };
-
-  const loadMaintenanceCount = async () => {
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const { data, error } = await supabase
-        .from("maintenance_schedules")
-        .select("id", { count: "exact" })
-        .eq("status", "pending")
-        .lte("next_due_date", today);
-      
-      if (!error && data) {
-        setMaintenanceCount(data.length);
-      }
-    } catch (error) {
-      console.error("Error loading maintenance count:", error);
-    }
-  };
-
-  const menuItems = [
-    { href: "/dashboard", label: "Dashboard", icon: Home },
-    { href: "/equipment", label: "Equipaggiamenti", icon: Package },
-    { href: "/maintenance", label: "Manutenzioni", icon: Wrench },
-    { href: "/checklists", label: "Checklist", icon: ClipboardList },
-    { href: "/scanner", label: "Scanner QR", icon: QrCode },
-    { href: "/notifications", label: "Notifiche", icon: Bell },
-    { href: "/settings", label: "Impostazioni", icon: Settings },
-  ];
-
-  const adminMenuItems = [
-    { href: "/admin/users", label: "Utenti", icon: Users },
-    { href: "/analytics/checklist-executions", label: "Analitiche", icon: BarChart3 },
-  ];
-
-  const navigation = useMemo(() => {
-    const items = [
-      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Equipaggiamenti", href: "/equipment", icon: SettingsIcon },
-      { name: "Manutenzioni", href: "/maintenance", icon: Wrench, badge: maintenanceCount > 0 ? maintenanceCount : undefined },
-      { name: "Checklist", href: "/checklists", icon: ClipboardCheck },
-      { name: "Analitiche", href: "/analytics/checklist-executions", icon: BarChart3 },
-    ];
-
-    // Add Users menu for admin only
-    if (userRole === "admin") {
-      items.push({
-        name: "Utenti",
-        href: "/admin/users",
-        icon: Users2,
-      });
-    }
-
-    // Add Notifications for all users
-    items.push({
-      name: "Notifiche",
-      href: "/notifications",
-      icon: Bell,
-      badge: notificationCount > 0 ? notificationCount : undefined,
-    });
-
-    // Add Settings menu for admin only
-    if (userRole === "admin") {
-      items.push({
-        name: "Impostazioni",
-        href: "/settings",
-        icon: Settings2,
-      });
-    }
-
-    return items;
-  }, [userRole, notificationCount, maintenanceCount]);
 
   const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    if (!name) return "U";
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
-  const handleLogout = async () => {
-    try {
-      await authService.signOut();
-      router.push("/login");
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
-  };
+  const navigation = [
+    { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard },
+    { name: t("nav.equipment"), href: "/equipment", icon: Wrench },
+    { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock },
+    { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList },
+    { name: t("nav.scanner"), href: "/scanner", icon: QrCode },
+    { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3 },
+  ];
+
+  const adminNavigation = [
+    { name: t("nav.users"), href: "/admin/users", icon: Users },
+  ];
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return router.pathname === href;
-    // Handle Analytics sub-paths matching
-    if (href === "/analytics/checklist-executions" && router.pathname.startsWith("/analytics")) return true;
+    if (href === "/dashboard") return router.pathname === "/dashboard";
     return router.pathname.startsWith(href);
   };
 
-  const getRoleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      admin: "Admin",
-      supervisor: "Supervisor",
-      technician: "Technician",
-    };
-    return labels[role] || role;
-  };
+  const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
+    <nav className={`flex ${mobile ? "flex-col" : "flex-col"} gap-1`}>
+      {navigation.map((item) => {
+        const active = isActive(item.href);
+        return (
+          <Link
+            key={item.name}
+            href={item.href}
+            onClick={() => mobile && setMobileMenuOpen(false)}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              active
+                ? "bg-[#FF6B35] text-white shadow-lg shadow-orange-500/25"
+                : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+            }`}
+          >
+            <item.icon className="w-5 h-5" />
+            {item.name}
+          </Link>
+        );
+      })}
+
+      {(userRole === "admin" || userRole === "supervisor") && (
+        <>
+          <div className="my-3 px-4">
+            <div className="h-px bg-slate-700/50" />
+          </div>
+          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            {t("nav.users")}
+          </p>
+          {adminNavigation.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={() => mobile && setMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                  active
+                    ? "bg-[#FF6B35] text-white shadow-lg shadow-orange-500/25"
+                    : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                {item.name}
+              </Link>
+            );
+          })}
+        </>
+      )}
+    </nav>
+  );
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-white">
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[#0F172A] border-b border-slate-800 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-[#FF6B35] rounded-lg flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Desktop Sidebar */}
+      <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-slate-800/50 bg-slate-900/95 backdrop-blur-xl">
+        {/* Logo */}
+        <div className="p-6 border-b border-slate-800/50">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#FF6B35] to-[#FF8C61] rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/25">
               <Wrench className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white">MaintPro</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-white"
-          >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
-        </div>
-      </div>
-
-      {/* Mobile Menu Overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 z-40 h-screen transition-all duration-300 bg-[#0F172A] border-r border-slate-800
-          ${sidebarCollapsed ? "w-20" : "w-64"}
-          ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-        `}
-      >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-800">
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-[#FF6B35] rounded-lg flex items-center justify-center">
-                  <Wrench className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-lg font-bold text-white">MaintPro</span>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden lg:flex text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
-            >
-              {sidebarCollapsed ? (
-                <ChevronRight className="h-5 w-5" />
-              ) : (
-                <ChevronLeft className="h-5 w-5" />
-              )}
-            </Button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto py-4 px-3">
-            <ul className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
-
-                return (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-                        active
-                          ? "bg-[#FF6B35]/15 text-[#FF6B35] font-medium"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800"
-                      }`}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Icon className={`h-5 w-5 flex-shrink-0 ${active ? "text-[#FF6B35]" : ""}`} />
-                      {!sidebarCollapsed && (
-                        <>
-                          <span className="flex-1">{item.name}</span>
-                          {item.badge && (
-                            <Badge className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                              {item.badge}
-                            </Badge>
-                          )}
-                        </>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-
-          {/* User Profile */}
-          <div className="border-t border-slate-800 p-4">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 bg-[#FF6B35] text-white">
-                <AvatarFallback className="bg-[#FF6B35] text-white font-semibold">
-                  {userInitials}
-                </AvatarFallback>
-              </Avatar>
-              {!sidebarCollapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{userName}</p>
-                  <p className="text-xs text-slate-400">{getRoleLabel(userRole)}</p>
-                </div>
-              )}
+            <div>
+              <h1 className="font-bold text-white text-lg">Maint Ops</h1>
+              <p className="text-xs text-slate-500">{t("nav.maintenance")}</p>
             </div>
-            {!sidebarCollapsed && (
-              <Button
-                variant="ghost"
+          </Link>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex-1 p-4 overflow-y-auto">
+          <NavLinks />
+        </div>
+
+        {/* User Section */}
+        <div className="p-4 border-t border-slate-800/50">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors">
+                <Avatar className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600">
+                  <AvatarFallback className="text-white font-semibold">
+                    {getInitials(profile?.full_name || user?.email)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {profile?.full_name || user?.email?.split("@")[0]}
+                  </p>
+                  <p className="text-xs text-slate-500 capitalize">{profile?.role || userRole}</p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-slate-500" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-slate-800 border-slate-700">
+              <DropdownMenuItem asChild className="text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer">
+                <Link href="/settings" className="flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  {t("nav.settings")}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-slate-700" />
+              <DropdownMenuItem 
                 onClick={handleLogout}
-                className="w-full mt-3 justify-start gap-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
               >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
-            )}
-          </div>
+                <LogOut className="w-4 h-4 mr-2" />
+                {t("nav.logout")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
+      {/* Mobile Header */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 flex items-center justify-between px-4">
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-slate-300 hover:text-white hover:bg-slate-800">
+              <Menu className="w-6 h-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 p-0 bg-slate-900 border-slate-800">
+            {/* Mobile Logo */}
+            <div className="p-6 border-b border-slate-800/50">
+              <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
+                <div className="w-10 h-10 bg-gradient-to-br from-[#FF6B35] to-[#FF8C61] rounded-xl flex items-center justify-center">
+                  <Wrench className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="font-bold text-white text-lg">Maint Ops</h1>
+                  <p className="text-xs text-slate-500">{t("nav.maintenance")}</p>
+                </div>
+              </Link>
+            </div>
+
+            {/* Mobile Navigation */}
+            <div className="p-4">
+              <NavLinks mobile />
+            </div>
+
+            {/* Mobile User Section */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800/50">
+              <div className="flex items-center gap-3 mb-4">
+                <Avatar className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600">
+                  <AvatarFallback className="text-white font-semibold">
+                    {getInitials(profile?.full_name || user?.email)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {profile?.full_name || user?.email?.split("@")[0]}
+                  </p>
+                  <p className="text-xs text-slate-500 capitalize">{profile?.role || userRole}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    router.push("/settings");
+                  }}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {t("nav.settings")}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Mobile Logo */}
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-gradient-to-br from-[#FF6B35] to-[#FF8C61] rounded-lg flex items-center justify-center">
+            <Wrench className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-white">Maint Ops</span>
+        </Link>
+
+        {/* Mobile Actions */}
+        <div className="flex items-center gap-2">
+          <ThemeSwitch />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-slate-300 hover:text-white hover:bg-slate-800 relative"
+            onClick={() => router.push("/notifications")}
+          >
+            <Bell className="w-5 h-5" />
+            {unreadNotifications > 0 && (
+              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                {unreadNotifications > 9 ? "9+" : unreadNotifications}
+              </Badge>
+            )}
+          </Button>
+        </div>
+      </header>
+
       {/* Main Content */}
-      <main
-        className={`transition-all duration-300 ${
-          sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
-        } pt-16 lg:pt-0`}
-      >
-        <div className="p-6" style={{ minHeight: "100vh", paddingBottom: "2rem" }}>
+      <main className="lg:ml-64 min-h-screen">
+        {/* Desktop Top Bar */}
+        <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-slate-800/50 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-30">
+          <ThemeSwitch />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-slate-300 hover:text-white hover:bg-slate-800 relative"
+            onClick={() => router.push("/notifications")}
+          >
+            <Bell className="w-5 h-5" />
+            {unreadNotifications > 0 && (
+              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                {unreadNotifications > 9 ? "9+" : unreadNotifications}
+              </Badge>
+            )}
+          </Button>
+        </header>
+
+        {/* Page Content */}
+        <div className="p-4 lg:p-8 pt-20 lg:pt-8">
           {children}
         </div>
       </main>

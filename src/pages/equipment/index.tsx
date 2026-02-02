@@ -1,36 +1,58 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { getAllEquipment } from "@/services/equipmentService";
-import { userService } from "@/services/userService";
-import { authService } from "@/services/authService";
 import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Plus, Search, QrCode, FileText, Settings, Loader2, Wrench } from "lucide-react";
-import { useRouter } from "next/router";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Search,
+  Wrench,
+  MapPin,
+  Filter,
+  ChevronRight,
+  QrCode
+} from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-export default function EquipmentListPage() {
+interface Equipment {
+  id: string;
+  name: string;
+  equipment_code: string;
+  category: string;
+  serial_number: string | null;
+  model: string | null;
+  manufacturer: string | null;
+  location: string | null;
+  status: string;
+  qr_code: string | null;
+}
+
+export default function EquipmentPage() {
   const router = useRouter();
-  const [equipment, setEquipment] = useState<any[]>([]);
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
   const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
-  const [userName, setUserName] = useState("");
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [filteredEquipment, setFilteredEquipment] = useState<Equipment[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categories, setCategories] = useState<string[]>([]);
 
   useEffect(() => {
-    const initPage = async () => {
+    const loadData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
@@ -38,243 +60,209 @@ export default function EquipmentListPage() {
           return;
         }
 
-        const profile = await userService.getUserById(user.id);
-        setUserRole(profile.role as "admin" | "supervisor" | "technician");
-        await loadEquipment();
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+
+        if (profile) {
+          setUserRole(profile.role as "admin" | "supervisor" | "technician");
+        }
+
+        const { data: equipmentData } = await supabase
+          .from("equipment")
+          .select("*")
+          .order("name");
+
+        if (equipmentData) {
+          setEquipment(equipmentData);
+          setFilteredEquipment(equipmentData);
+          
+          // Extract unique categories
+          const uniqueCategories = [...new Set(equipmentData.map(e => e.category).filter(Boolean))];
+          setCategories(uniqueCategories);
+        }
       } catch (error) {
-        console.error("Error initializing page:", error);
+        console.error("Error loading equipment:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    initPage();
+    loadData();
   }, [router]);
 
-  const loadEquipment = async () => {
-    try {
-      const data = await getAllEquipment();
-      setEquipment(data);
-    } catch (error) {
-      console.error("Error loading equipment:", error);
+  useEffect(() => {
+    let filtered = equipment;
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (item) =>
+          item.name.toLowerCase().includes(query) ||
+          item.serial_number?.toLowerCase().includes(query) ||
+          item.location?.toLowerCase().includes(query) ||
+          item.manufacturer?.toLowerCase().includes(query)
+      );
     }
-  };
 
-  const filteredEquipment = equipment.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((item) => item.status === statusFilter);
+    }
 
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; className: string }> = {
-      active: { label: "Attiva", className: "bg-green-500/10 text-green-400 border-green-500/20" },
-      under_maintenance: { label: "In Manutenzione", className: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
-      inactive: { label: "Inattiva", className: "bg-slate-500/10 text-slate-400 border-slate-500/20" },
-      decommissioned: { label: "Dismessa", className: "bg-red-500/10 text-red-400 border-red-500/20" }
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter((item) => item.category === categoryFilter);
+    }
+
+    setFilteredEquipment(filtered);
+  }, [searchQuery, statusFilter, categoryFilter, equipment]);
+
+  const getStatusConfig = (status: string) => {
+    const configs: Record<string, { label: string; color: string }> = {
+      active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
+      under_maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+      inactive: { label: t("equipment.inactive"), color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
+      retired: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" }
     };
-    return config[status] || config.active;
+    return configs[status] || configs.active;
   };
 
-  const canModify = userRole === "admin" || userRole === "supervisor";
-
-  if (loading) {
-    return (
-      <MainLayout userRole="admin">
-        <SEO title="Caricamento..." />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
-      </MainLayout>
-    );
-  }
+  if (loading) return null;
 
   return (
-    <MainLayout userRole="admin">
-      <SEO title="Equipment - Industrial Maintenance" />
-      
-      <div className="space-y-6">
+    <MainLayout userRole={userRole}>
+      <SEO title={`${t("equipment.title")} - Maint Ops`} />
+
+      <div className="space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Anagrafica Macchine</h1>
-            <p className="text-slate-400">Gestisci il parco macchine e attrezzature</p>
+            <h1 className="text-2xl font-bold text-white">{t("equipment.title")}</h1>
+            <p className="text-slate-400 mt-1">{t("equipment.subtitle")}</p>
           </div>
-          {canModify && (
+          {(userRole === "admin" || userRole === "supervisor") && (
             <Button 
-              asChild
-              className="bg-[#FF6B35] hover:bg-[#FF8C61] text-white rounded-xl px-6"
+              className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+              onClick={() => router.push("/equipment/new")}
             >
-              <Link href="/equipment/new">
-                <Plus className="mr-2 h-5 w-5" />
-                Nuova Macchina
-              </Link>
+              <Plus className="w-4 h-4 mr-2" />
+              {t("equipment.addEquipment")}
             </Button>
           )}
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Totale</p>
-                  <p className="text-3xl font-bold text-white">{equipment.length}</p>
-                </div>
-                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                  <Wrench className="w-6 h-6 text-blue-400" />
-                </div>
+        {/* Filters */}
+        <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <CardContent className="p-4">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  placeholder={t("common.search")}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Attive</p>
-                  <p className="text-3xl font-bold text-white">
-                    {equipment.filter(e => e.status === 'active').length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
-                  <Settings className="w-6 h-6 text-green-400" />
-                </div>
+              <div className="flex gap-3">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[160px] bg-slate-700/50 border-slate-600 text-white">
+                    <Filter className="w-4 h-4 mr-2 text-slate-400" />
+                    <SelectValue placeholder={t("common.status")} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all" className="text-white hover:bg-slate-700">{t("common.all")}</SelectItem>
+                    <SelectItem value="active" className="text-white hover:bg-slate-700">{t("equipment.active")}</SelectItem>
+                    <SelectItem value="under_maintenance" className="text-white hover:bg-slate-700">{t("equipment.maintenance")}</SelectItem>
+                    <SelectItem value="inactive" className="text-white hover:bg-slate-700">{t("equipment.inactive")}</SelectItem>
+                    <SelectItem value="retired" className="text-white hover:bg-slate-700">{t("equipment.decommissioned")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-[160px] bg-slate-700/50 border-slate-600 text-white">
+                    <SelectValue placeholder={t("equipment.category")} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all" className="text-white hover:bg-slate-700">{t("common.all")}</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat} className="text-white hover:bg-slate-700">
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">In Manutenzione</p>
-                  <p className="text-3xl font-bold text-white">
-                    {equipment.filter(e => e.status === 'under_maintenance').length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center">
-                  <Wrench className="w-6 h-6 text-[#FF6B35]" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400 mb-1">Inattive</p>
-                  <p className="text-3xl font-bold text-white">
-                    {equipment.filter(e => e.status === 'inactive' || e.status === 'decommissioned').length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-slate-500/10 rounded-xl flex items-center justify-center">
-                  <Settings className="w-6 h-6 text-slate-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Equipment List */}
-        <Card className="rounded-2xl border-slate-700/50 bg-slate-800/50">
-          <CardHeader className="border-b border-slate-700/50">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-500" />
-              <Input
-                placeholder="Cerca per nome, codice o seriale..."
-                className="pl-11 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {filteredEquipment.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <Wrench className="w-12 h-12 mx-auto mb-3 text-slate-600" />
-                <p>Nessuna macchina trovata</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-700/50 hover:bg-slate-800/30">
-                      <TableHead className="text-slate-400 font-semibold">Codice</TableHead>
-                      <TableHead className="text-slate-400 font-semibold">Nome</TableHead>
-                      <TableHead className="text-slate-400 font-semibold">Categoria</TableHead>
-                      <TableHead className="text-slate-400 font-semibold">Stato</TableHead>
-                      <TableHead className="text-slate-400 font-semibold text-right">Azioni</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredEquipment.map((item) => {
-                      const statusConfig = getStatusBadge(item.status);
-                      return (
-                        <TableRow 
-                          key={item.id}
-                          className="border-slate-700/50 hover:bg-slate-800/30 cursor-pointer"
-                          onClick={() => router.push(`/equipment/${item.id}`)}
-                        >
-                          <TableCell className="font-mono font-semibold text-white">
-                            {item.code}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-semibold text-white">{item.name}</div>
-                              <div className="text-xs text-slate-400">
-                                {item.manufacturer} {item.model}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="rounded-full bg-blue-500/10 text-blue-400 border-blue-500/20">
-                              {item.equipment_categories?.name || "N/A"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={`rounded-full border ${statusConfig.className}`}>
-                              {statusConfig.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(`/equipment/${item.id}`);
-                                }}
-                                className="h-9 w-9 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
-                                title="Dettagli"
-                              >
-                                <FileText className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                }}
-                                className="h-9 w-9 rounded-lg text-slate-400 hover:text-[#FF6B35] hover:bg-orange-500/10"
-                                title="QR Code"
-                              >
-                                <QrCode className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
           </CardContent>
         </Card>
+
+        {/* Equipment Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredEquipment.map((item) => {
+            const status = getStatusConfig(item.status);
+            return (
+              <Card
+                key={item.id}
+                className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
+                onClick={() => router.push(`/equipment/${item.id}`)}
+              >
+                {/* Image placeholder */}
+                <div className="h-40 bg-slate-700/50 relative overflow-hidden">
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Wrench className="w-12 h-12 text-slate-600" />
+                  </div>
+                  {item.qr_code && (
+                    <div className="absolute top-3 right-3 bg-white/90 p-1.5 rounded-lg">
+                      <QrCode className="w-4 h-4 text-slate-800" />
+                    </div>
+                  )}
+                </div>
+
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-bold text-white text-lg truncate flex-1">{item.name}</h3>
+                    <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+                  </div>
+
+                  {item.location && (
+                    <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
+                      <MapPin className="w-4 h-4" />
+                      <span className="truncate">{item.location}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      {item.category || t("equipment.generic")}
+                    </span>
+                    <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
+                      {status.label}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Empty State */}
+        {filteredEquipment.length === 0 && (
+          <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center">
+            <Wrench className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">{t("equipment.noEquipment")}</h3>
+            <p className="text-slate-400 mb-6">{t("equipment.noEquipmentDesc")}</p>
+            {(userRole === "admin" || userRole === "supervisor") && (
+              <Button 
+                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                onClick={() => router.push("/equipment/new")}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                {t("equipment.addFirst")}
+              </Button>
+            )}
+          </Card>
+        )}
       </div>
     </MainLayout>
   );

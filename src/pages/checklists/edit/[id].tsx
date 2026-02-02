@@ -8,19 +8,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
-import { getChecklistById, updateChecklist, type ChecklistWithItems } from "@/services/checklistService";
-import type { Database } from "@/integrations/supabase/types";
+import { checklistService } from "@/services/checklistService";
 import { SEO } from "@/components/SEO";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-type ChecklistItem = Database["public"]["Tables"]["checklist_items"]["Row"];
+interface ChecklistItem {
+  id?: string;
+  title: string;
+  description?: string;
+  is_required?: boolean;
+}
 
 export default function EditChecklist() {
   const router = useRouter();
   const { id } = router.query;
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [checklist, setChecklist] = useState<ChecklistWithItems | null>(null);
-  const [items, setItems] = useState<Partial<ChecklistItem>[]>([]);
+  const [checklist, setChecklist] = useState<any>(null);
+  const [items, setItems] = useState<ChecklistItem[]>([]);
 
   useEffect(() => {
     if (id && typeof id === "string") {
@@ -30,7 +36,7 @@ export default function EditChecklist() {
 
   const loadChecklist = async (checklistId: string) => {
     try {
-      const data = await getChecklistById(checklistId);
+      const data = await checklistService.getChecklistById(checklistId);
       setChecklist(data);
       if (data?.items) {
         setItems(data.items);
@@ -61,66 +67,56 @@ export default function EditChecklist() {
 
     try {
       setSaving(true);
-      await updateChecklist(checklist.id, {
+      await checklistService.updateChecklist(checklist.id, {
         name: checklist.name,
         description: checklist.description,
-        category: checklist.category
+        is_active: checklist.is_active
       });
       router.push("/checklists");
     } catch (error) {
       console.error("Error updating checklist:", error);
-      alert("Failed to update checklist");
+      alert(t("common.error"));
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <MainLayout><div className="text-white">Loading...</div></MainLayout>;
-  if (!checklist) return <MainLayout><div className="text-white">Checklist not found</div></MainLayout>;
+  if (loading) return <MainLayout><div className="text-white">{t("common.loading")}</div></MainLayout>;
+  if (!checklist) return <MainLayout><div className="text-white">{t("checklists.notFound")}</div></MainLayout>;
 
   return (
     <MainLayout>
-      <SEO title={`Edit ${checklist.name}`} />
+      <SEO title={`${t("common.edit")} ${checklist.name}`} />
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-white hover:bg-slate-700">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold text-white">Edit: {checklist.name}</h1>
+          <h1 className="text-2xl font-bold text-white">{t("common.edit")}: {checklist.name}</h1>
         </div>
 
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">Checklist Details</CardTitle>
+            <CardTitle className="text-white">{t("checklists.details")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="name" className="text-white">Name</Label>
+              <Label htmlFor="name" className="text-white">{t("common.name")}</Label>
               <Input 
                 id="name"
                 value={checklist.name || ""}
                 onChange={(e) => setChecklist({...checklist, name: e.target.value})}
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="category" className="text-white">Category</Label>
-              <Input 
-                id="category"
-                value={checklist.category || ""}
-                onChange={(e) => setChecklist({...checklist, category: e.target.value})}
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="description" className="text-white">Description</Label>
+              <Label htmlFor="description" className="text-white">{t("common.description")}</Label>
               <Textarea 
                 id="description"
                 value={checklist.description || ""}
                 onChange={(e) => setChecklist({...checklist, description: e.target.value})}
-                className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
           </CardContent>
@@ -128,34 +124,34 @@ export default function EditChecklist() {
 
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-white">Checklist Items</CardTitle>
+            <CardTitle className="text-white">{t("checklists.items")}</CardTitle>
             <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 bg-transparent">
               <Plus className="h-4 w-4 mr-2" />
-              Add Item
+              {t("checklists.addItem")}
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             {items.map((item, index) => (
-              <div key={index} className="flex gap-4 items-start p-4 border border-gray-600 rounded-lg bg-gray-800/50">
+              <div key={index} className="flex gap-4 items-start p-4 border border-slate-600 rounded-lg bg-slate-700/50">
                 <div className="flex-1 space-y-4">
                   <Input 
-                    placeholder="Item title"
+                    placeholder={t("checklists.itemTitle")}
                     value={item.title || ""}
                     onChange={(e) => handleItemChange(index, "title", e.target.value)}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                   <Input 
-                    placeholder="Item description (optional)"
+                    placeholder={t("checklists.itemDescription")}
                     value={item.description || ""}
                     onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                    className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                   <div className="flex items-center space-x-2">
                     <Checkbox 
                       checked={item.is_required || false}
                       onCheckedChange={(checked) => handleItemChange(index, "is_required", checked)}
                     />
-                    <Label className="text-gray-300">Required</Label>
+                    <Label className="text-slate-300">{t("checklists.required")}</Label>
                   </div>
                 </div>
                 <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
@@ -167,10 +163,10 @@ export default function EditChecklist() {
         </Card>
 
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()} className="bg-transparent border-slate-600 text-white hover:bg-slate-700 hover:text-white">Cancel</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white">
+          <Button type="button" variant="outline" onClick={() => router.back()} className="bg-transparent border-slate-600 text-white hover:bg-slate-700 hover:text-white">{t("common.cancel")}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
             <Save className="mr-2 h-4 w-4" />
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? t("common.saving") : t("common.save")}
           </Button>
         </div>
       </div>

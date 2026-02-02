@@ -1,174 +1,219 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Campi di tipo UUID nel database
-const UUID_FIELDS = ["equipment_id", "assigned_to", "checklist_id", "performed_by"];
-
-// Campi di tipo date nel database
-const DATE_FIELDS = ["next_due_date", "next_maintenance_date", "scheduled_date", "due_date", "performed_at"];
-
-// Funzione helper per pulire i campi vuoti (converte "" in null)
-function cleanEmptyFields<T extends Record<string, unknown>>(data: T): T {
-    const cleaned = { ...data };
-    const allFieldsToClean = [...UUID_FIELDS, ...DATE_FIELDS];
-
-    for (const field of allFieldsToClean) {
-        if (field in cleaned && cleaned[field] === "") {
-            (cleaned as Record<string, unknown>)[field] = null;
-        }
-    }
-    return cleaned;
-}
-
-export async function createMaintenanceSchedule(schedule: any) {
-    const cleanedSchedule = cleanEmptyFields(schedule);
-
-    const { data, error } = await supabase
-        .from("maintenance_schedules")
-        .insert(cleanedSchedule)
-        .select()
-        .single();
-
-    if (error) throw error;
-    return data;
-}
-
 export const maintenanceService = {
-    async getSchedules() {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(`
-        *,
-        equipment:equipment_id(name, equipment_code),
-        assigned_user:assigned_to(full_name)
-      `)
-            .order("next_maintenance_date", { ascending: true });
-
-        if (error) throw error;
-        return data;
-    },
-
-    async getSchedule(id: string) {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(`
-        *,
-        equipment:equipment_id(name, equipment_code),
-        assigned_user:assigned_to(full_name)
-      `)
-            .eq("id", id)
-            .single();
-
-        if (error) throw error;
-        return data;
-    },
-
-    async createSchedule(schedule: any) {
-        const cleanedSchedule = cleanEmptyFields(schedule);
-
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .insert(cleanedSchedule)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    },
-
-    async updateSchedule(id: string, updates: any) {
-        const cleanedUpdates = cleanEmptyFields(updates);
-
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .update(cleanedUpdates)
-            .eq("id", id)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    },
-
-    async getLogs() {
-        const { data, error } = await supabase
-            .from("maintenance_logs")
-            .select(`
-        *,
-        equipment:equipment_id(name, equipment_code),
-        performer:performed_by(full_name)
-      `)
-            .order("performed_at", { ascending: false });
-
-        if (error) throw error;
-        return data;
-    },
-
-    async createLog(log: any) {
-        const cleanedLog = cleanEmptyFields(log);
-
-        const { data, error } = await supabase
-            .from("maintenance_logs")
-            .insert(cleanedLog)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    },
-
-    async getUpcomingMaintenance() {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(`
-        *,
-        equipment:equipment_id(name, equipment_code),
-        assigned_user:assigned_to(full_name)
-      `)
-            .gte('next_maintenance_date', new Date().toISOString())
-            .order("next_maintenance_date", { ascending: true })
-            .limit(5);
-
-        if (error) throw error;
-        return data;
-    },
-
-    async getOverdueMaintenance() {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(`
-        *,
-        equipment:equipment_id(name, equipment_code),
-        assigned_user:assigned_to(full_name)
-      `)
-            .lt('next_maintenance_date', new Date().toISOString())
-            .order("next_maintenance_date", { ascending: true });
-
-        if (error) throw error;
-        return data;
-    },
-
-    async deleteSchedule(id: string) {
-        const { error } = await supabase
-            .from("maintenance_schedules")
-            .delete()
-            .eq("id", id);
-
-        if (error) throw error;
-        return true;
-    },
-
-    async getScheduleChecklists(scheduleId: string) {
-        return [];
-    }
-};
-
-export const getMaintenanceByEquipment = async (equipmentId: string) => {
+  async getSchedules() {
     const { data, error } = await supabase
-        .from("maintenance_schedules")
-        .select("*")
-        .eq("equipment_id", equipmentId)
-        .order("next_maintenance_date", { ascending: true });
+      .from("maintenance_schedules")
+      .select(`
+        *,
+        equipment:equipment(id, name),
+        assigned_user:profiles(id, full_name)
+      `)
+      .order("next_due_date", { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error fetching schedules:", error);
+      throw error;
+    }
+
     return data || [];
+  },
+
+  async getAllMaintenance() {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .select(`
+        *,
+        equipment:equipment(id, name),
+        assigned_to:profiles(id, full_name)
+      `)
+      .order("scheduled_date", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching maintenance:", error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
+  async getMaintenanceById(id: string) {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .select(`
+        *,
+        equipment:equipment(id, name),
+        assigned_to:profiles(id, full_name)
+      `)
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching maintenance:", error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async createMaintenance(maintenance: {
+    title: string;
+    description?: string;
+    equipment_id: string;
+    assigned_to?: string;
+    priority: string;
+    status: string;
+    scheduled_date: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .insert(maintenance)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating maintenance:", error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async updateMaintenance(id: string, updates: {
+    title?: string;
+    description?: string;
+    equipment_id?: string;
+    assigned_to?: string;
+    priority?: string;
+    status?: string;
+    scheduled_date?: string;
+    completed_date?: string;
+    notes?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating maintenance:", error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async deleteMaintenance(id: string) {
+    const { error } = await supabase
+      .from("maintenance_logs")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error deleting maintenance:", error);
+      throw error;
+    }
+  },
+
+  async getUpcomingMaintenance(days: number = 7) {
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(today.getDate() + days);
+
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .select(`
+        *,
+        equipment:equipment(id, name),
+        assigned_to:profiles(id, full_name)
+      `)
+      .gte("scheduled_date", today.toISOString())
+      .lte("scheduled_date", futureDate.toISOString())
+      .in("status", ["pending", "in_progress"])
+      .order("scheduled_date", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching upcoming maintenance:", error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
+  async getOverdueMaintenance() {
+    const today = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .select(`
+        *,
+        equipment:equipment(id, name),
+        assigned_to:profiles(id, full_name)
+      `)
+      .lt("scheduled_date", today)
+      .in("status", ["pending", "in_progress"])
+      .order("scheduled_date", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching overdue maintenance:", error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
+  async createSchedule(schedule: {
+    title: string;
+    description?: string;
+    equipment_id: string;
+    assigned_to?: string;
+    frequency: string;
+    next_due_date: string;
+    checklist_id?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .insert(schedule)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating schedule:", error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async updateSchedule(id: string, updates: any) {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating schedule:", error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async deleteSchedule(id: string) {
+    const { error } = await supabase
+      .from("maintenance_schedules")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error deleting schedule:", error);
+      throw error;
+    }
+  }
 };
+
+export default maintenanceService;

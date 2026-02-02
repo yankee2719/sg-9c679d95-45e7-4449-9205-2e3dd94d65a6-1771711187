@@ -3,9 +3,8 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { getAllEquipment } from "@/services/equipmentService";
-import { getChecklists, type ChecklistWithItems } from "@/services/checklistService";
-import { createMaintenanceSchedule } from "@/services/maintenanceService";
-import { userService } from "@/services/userService";
+import { checklistService } from "@/services/checklistService";
+import { maintenanceService } from "@/services/maintenanceService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,27 +20,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function NewMaintenancePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [checklists, setChecklists] = useState<ChecklistWithItems[]>([]);
+  const { t } = useLanguage();
+  const [checklists, setChecklists] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [equipment, setEquipment] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     equipment_id: "",
-    maintenance_type: "",
     title: "",
     description: "",
-    frequency_days: "",
-    scheduled_date: "",
-    due_date: "",
+    frequency: "monthly",
+    next_due_date: "",
     assigned_to: "",
-    checklist_id: "",
-    estimated_duration_minutes: "",
-    priority: "medium",
-    recurrence_pattern: ""
+    checklist_id: ""
   });
 
   useEffect(() => {
@@ -61,7 +57,7 @@ export default function NewMaintenancePage() {
 
   const loadChecklists = async () => {
     try {
-      const data = await getChecklists();
+      const data = await checklistService.getAllChecklists();
       setChecklists(data);
     } catch (error) {
       console.error("Error loading checklists:", error);
@@ -88,21 +84,19 @@ export default function NewMaintenancePage() {
     setLoading(true);
 
     try {
-      const scheduleData = {
+      await maintenanceService.createSchedule({
         equipment_id: formData.equipment_id,
         title: formData.title,
-        description: formData.description || null,
-        frequency: formData.recurrence_pattern || "monthly",
-        next_due_date: formData.scheduled_date,
-        assigned_to: formData.assigned_to || null,
-        checklist_id: formData.checklist_id || null
-      };
-
-      await createMaintenanceSchedule(scheduleData as any);
+        description: formData.description || undefined,
+        frequency: formData.frequency,
+        next_due_date: formData.next_due_date,
+        assigned_to: formData.assigned_to || undefined,
+        checklist_id: formData.checklist_id || undefined
+      });
 
       toast({
-        title: "Successo",
-        description: "Manutenzione creata con successo"
+        title: t("common.success"),
+        description: t("maintenance.createSuccess")
       });
 
       router.push("/maintenance");
@@ -110,8 +104,8 @@ export default function NewMaintenancePage() {
       console.error("Error creating maintenance:", error);
       toast({
         variant: "destructive",
-        title: "Errore",
-        description: "Errore durante la creazione della manutenzione"
+        title: t("common.error"),
+        description: t("maintenance.createError")
       });
     } finally {
       setLoading(false);
@@ -124,33 +118,33 @@ export default function NewMaintenancePage() {
 
   return (
     <MainLayout userRole="admin">
-      <SEO title="Nuova Manutenzione - Industrial Maintenance" />
+      <SEO title={`${t("maintenance.newMaintenance")} - Maint Ops`} />
       
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.back()} className="text-slate-400 hover:text-white">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Indietro
+            {t("common.back")}
           </Button>
-          <h1 className="text-2xl font-bold text-white">Nuova Manutenzione Programmata</h1>
+          <h1 className="text-2xl font-bold text-white">{t("maintenance.newMaintenance")}</h1>
         </div>
 
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">Dati Manutenzione</CardTitle>
+            <CardTitle className="text-white">{t("maintenance.details")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="equipment" className="text-white">Macchina *</Label>
+                  <Label htmlFor="equipment" className="text-white">{t("equipment.title")} *</Label>
                   <Select
                     value={formData.equipment_id}
                     onValueChange={(value) => handleChange("equipment_id", value)}
                     required
                   >
                     <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona macchina" />
+                      <SelectValue placeholder={t("maintenance.selectEquipment")} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {equipment.map((eq) => (
@@ -163,130 +157,58 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="type" className="text-white">Tipo Manutenzione *</Label>
+                  <Label htmlFor="frequency" className="text-white">{t("maintenance.frequency")} *</Label>
                   <Select
-                    value={formData.maintenance_type}
-                    onValueChange={(value) => handleChange("maintenance_type", value)}
+                    value={formData.frequency}
+                    onValueChange={(value) => handleChange("frequency", value)}
                     required
                   >
                     <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona tipo" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="preventive" className="text-white">Preventiva</SelectItem>
-                      <SelectItem value="predictive" className="text-white">Predittiva</SelectItem>
-                      <SelectItem value="corrective" className="text-white">Correttiva</SelectItem>
-                      <SelectItem value="extraordinary" className="text-white">Straordinaria</SelectItem>
+                      <SelectItem value="daily" className="text-white">{t("maintenance.daily")}</SelectItem>
+                      <SelectItem value="weekly" className="text-white">{t("maintenance.weekly")}</SelectItem>
+                      <SelectItem value="monthly" className="text-white">{t("maintenance.monthly")}</SelectItem>
+                      <SelectItem value="quarterly" className="text-white">{t("maintenance.quarterly")}</SelectItem>
+                      <SelectItem value="yearly" className="text-white">{t("maintenance.yearly")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="title" className="text-white">Titolo *</Label>
+                  <Label htmlFor="title" className="text-white">{t("common.title")} *</Label>
                   <Input
                     id="title"
                     type="text"
                     value={formData.title}
                     onChange={(e) => handleChange("title", e.target.value)}
-                    placeholder="Es. Manutenzione Preventiva Mensile"
+                    placeholder={t("maintenance.titlePlaceholder")}
                     required
                     className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="scheduled_date" className="text-white">Data Pianificata *</Label>
+                  <Label htmlFor="next_due_date" className="text-white">{t("maintenance.nextDue")} *</Label>
                   <Input
-                    id="scheduled_date"
+                    id="next_due_date"
                     type="date"
-                    value={formData.scheduled_date}
-                    onChange={(e) => handleChange("scheduled_date", e.target.value)}
+                    value={formData.next_due_date}
+                    onChange={(e) => handleChange("next_due_date", e.target.value)}
                     required
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="due_date" className="text-white">Data Scadenza</Label>
-                  <Input
-                    id="due_date"
-                    type="date"
-                    value={formData.due_date}
-                    onChange={(e) => handleChange("due_date", e.target.value)}
-                    placeholder="Opzionale"
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="priority" className="text-white">Priorità *</Label>
-                  <Select
-                    value={formData.priority}
-                    onValueChange={(value) => handleChange("priority", value)}
-                    required
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona priorità" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="low" className="text-white">Bassa</SelectItem>
-                      <SelectItem value="medium" className="text-white">Media</SelectItem>
-                      <SelectItem value="high" className="text-white">Alta</SelectItem>
-                      <SelectItem value="critical" className="text-white">Critica</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-white">Durata Stimata (minuti)</Label>
-                  <Input
-                    id="duration"
-                    type="number"
-                    value={formData.estimated_duration_minutes}
-                    onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)}
-                    placeholder="Es. 60"
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="frequency" className="text-white">Frequenza (giorni)</Label>
-                  <Input
-                    id="frequency"
-                    type="number"
-                    value={formData.frequency_days}
-                    onChange={(e) => handleChange("frequency_days", e.target.value)}
-                    placeholder="Es. 30 per mensile"
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="recurrence" className="text-white">Pattern Ricorrenza</Label>
-                  <Select
-                    value={formData.recurrence_pattern}
-                    onValueChange={(value) => handleChange("recurrence_pattern", value)}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Nessuna ricorrenza" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="daily" className="text-white">Giornaliera</SelectItem>
-                      <SelectItem value="weekly" className="text-white">Settimanale</SelectItem>
-                      <SelectItem value="monthly" className="text-white">Mensile</SelectItem>
-                      <SelectItem value="yearly" className="text-white">Annuale</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="technician" className="text-white">Assegna a Tecnico</Label>
+                  <Label htmlFor="technician" className="text-white">{t("maintenance.assignTo")}</Label>
                   <Select
                     value={formData.assigned_to}
                     onValueChange={(value) => handleChange("assigned_to", value)}
                   >
                     <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona tecnico" />
+                      <SelectValue placeholder={t("maintenance.selectTechnician")} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {technicians.map((tech) => (
@@ -299,13 +221,13 @@ export default function NewMaintenancePage() {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="template" className="text-white">Checklist Associata</Label>
+                  <Label htmlFor="checklist" className="text-white">{t("checklists.associatedChecklist")}</Label>
                   <Select
                     value={formData.checklist_id}
                     onValueChange={(value) => handleChange("checklist_id", value)}
                   >
                     <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue placeholder="Seleziona checklist (opzionale)" />
+                      <SelectValue placeholder={t("checklists.selectChecklist")} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700">
                       {checklists.map((checklist) => (
@@ -319,13 +241,13 @@ export default function NewMaintenancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-white">Descrizione / Note</Label>
+                <Label htmlFor="description" className="text-white">{t("common.description")}</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => handleChange("description", e.target.value)}
                   rows={4}
-                  placeholder="Dettagli sull'intervento di manutenzione..."
+                  placeholder={t("maintenance.descriptionPlaceholder")}
                   className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                 />
               </div>
@@ -337,22 +259,22 @@ export default function NewMaintenancePage() {
                   onClick={() => router.back()}
                   className="border-slate-600 text-slate-300 hover:bg-slate-700"
                 >
-                  Annulla
+                  {t("common.cancel")}
                 </Button>
                 <Button 
                   type="submit" 
-                  className="bg-[#fb923c] hover:bg-[#f97316] text-white"
+                  className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
                   disabled={loading}
                 >
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Salvataggio...
+                      {t("common.saving")}
                     </>
                   ) : (
                     <>
                       <Save className="mr-2 h-4 w-4" />
-                      Crea Manutenzione
+                      {t("common.create")}
                     </>
                   )}
                 </Button>
