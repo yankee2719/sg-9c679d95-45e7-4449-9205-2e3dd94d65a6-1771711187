@@ -16,26 +16,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 interface ChecklistItem {
     id: string;
-    description: string;
-    priority: "high" | "medium" | "low";
-    checked: boolean;
+    title: string;
+    description: string | null;
+    is_required: boolean;
+    order_index: number;
+    checked?: boolean;
     notes?: string;
 }
 
 interface ChecklistExecution {
     id: string;
     checklist_id: string;
-    technician_id: string;
-    start_time: string;
-    end_time?: string;
-    status: "in_progress" | "completed" | "cancelled";
+    executed_by: string;
+    started_at: string;
+    completed_at?: string;
+    status: string;
     signature?: string;
-    technician_name?: string;
-    checklist?: {
-        id: string;
-        name: string;
-        items: ChecklistItem[];
-    };
+    results?: any;
+}
+
+interface Checklist {
+    id: string;
+    name: string;
+    description: string | null;
 }
 
 export default function ChecklistExecutionPage() {
@@ -43,20 +46,20 @@ export default function ChecklistExecutionPage() {
     const { id } = router.query;
     const { toast } = useToast();
 
-    const [execution, setExecution] = useState<ChecklistExecution | null>(null);
-    const [checklist, setChecklist] = useState<any>(null);
-    const [items, setItems] = useState<ChecklistItem[]>([]);
+    const [execution, setExecution] = useState < ChecklistExecution | null > (null);
+    const [checklist, setChecklist] = useState < Checklist | null > (null);
+    const [items, setItems] = useState < ChecklistItem[] > ([]);
     const [loading, setLoading] = useState(true);
     const [completing, setCompleting] = useState(false);
     const [showSignatureDialog, setShowSignatureDialog] = useState(false);
     const [technicianName, setTechnicianName] = useState("");
-    const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+    const [signatureDataUrl, setSignatureDataUrl] = useState < string | null > (null);
     const [saveSignature, setSaveSignature] = useState(false);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const canvasRef = useRef < HTMLCanvasElement > (null);
     const [isDrawing, setIsDrawing] = useState(false);
 
     useEffect(() => {
-        if (id) {
+        if (id && typeof id === "string") {
             loadExecution();
         }
     }, [id]);
@@ -68,31 +71,47 @@ export default function ChecklistExecutionPage() {
             const executionId = Array.isArray(id) ? id[0] : id;
             if (!executionId) return;
 
+            // Carica l'esecuzione
             const { data: executionData, error: executionError } = await supabase
                 .from("checklist_executions")
-                .select(`
-                    *,
-                    checklist:checklists!inner(
-                        id,
-                        name,
-                        items
-                    )
-                `)
+                .select("*")
                 .eq("id", executionId)
                 .single();
 
             if (executionError) throw executionError;
 
-            setExecution(executionData as any);
-            setChecklist(executionData.checklist);
+            setExecution(executionData);
 
-            const checklistItems = (executionData.checklist as any)?.items || [];
-            setItems(checklistItems.map((item: any) => ({
-                ...item,
-                checked: false,
-                notes: ""
-            })));
+            // Carica la checklist
+            if (executionData.checklist_id) {
+                const { data: checklistData, error: checklistError } = await supabase
+                    .from("checklists")
+                    .select("id, name, description")
+                    .eq("id", executionData.checklist_id)
+                    .single();
 
+                if (checklistError) throw checklistError;
+                setChecklist(checklistData);
+
+                // Carica gli items della checklist
+                const { data: itemsData, error: itemsError } = await supabase
+                    .from("checklist_items")
+                    .select("*")
+                    .eq("checklist_id", executionData.checklist_id)
+                    .order("order_index");
+
+                if (itemsError) throw itemsError;
+
+                // Inizializza gli items con checked = false
+                const initializedItems = (itemsData || []).map((item: any) => ({
+                    ...item,
+                    checked: false,
+                    notes: ""
+                }));
+                setItems(initializedItems);
+            }
+
+            // Carica il nome del tecnico
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const { data: profile } = await supabase
@@ -218,18 +237,34 @@ export default function ChecklistExecutionPage() {
 
             const executionId = Array.isArray(id) ? id[0] : id;
 
+            // Update checklist execution
             const { error: updateError } = await supabase
                 .from("checklist_executions")
                 .update({
                     status: "completed",
-                    end_time: new Date().toISOString(),
+                    completed_at: new Date().toISOString(),
                     signature: signatureData,
-                    technician_name: technicianName,
-                    items: items
+                    results: items
                 })
                 .eq("id", executionId);
 
             if (updateError) throw updateError;
+
+            // If this execution is linked to a maintenance schedule, update it
+            if (execution?.schedule_id) {
+                const { error: maintenanceError } = await supabase
+                    .from("maintenance_schedules")
+                    .update({
+                        status: "completed",
+                        last_performed_at: new Date().toISOString()
+                    })
+                    .eq("id", execution.schedule_id);
+
+                if (maintenanceError) {
+                    console.error("Error updating maintenance schedule:", maintenanceError);
+                    // Don't throw - checklist is still completed even if maintenance update fails
+                }
+            }
 
             toast({
                 title: "Successo",
@@ -274,7 +309,7 @@ export default function ChecklistExecutionPage() {
     }
 
     const progress = calculateProgress();
-    const startTime = execution.start_time ? new Date(execution.start_time) : new Date();
+    const startTime = execution.started_at ? new Date(execution.started_at) : new Date();
 
     return (
         <MainLayout>
@@ -328,20 +363,18 @@ export default function ChecklistExecutionPage() {
                                         />
                                         <div className="flex-1 space-y-2">
                                             <div className="flex items-start justify-between gap-2">
-                                                <p className="text-white font-medium">{item.description}</p>
-                                                <Badge
-                                                    variant={
-                                                        item.priority === "high"
-                                                            ? "destructive"
-                                                            : item.priority === "medium"
-                                                            ? "default"
-                                                            : "secondary"
-                                                    }
-                                                >
-                                                    <Flag className="h-3 w-3 mr-1" />
-                                                    {item.priority === "high" ? "Alta" : item.priority === "medium" ? "Media" : "Bassa"}
-                                                </Badge>
+                                                <p className="text-white font-medium">{item.title}</p>
+                                                {item.is_required && (
+                                                    <Badge variant="destructive">
+                                                        <Flag className="h-3 w-3 mr-1" />
+                                                        Richiesto
+                                                    </Badge>
+                                                )}
                                             </div>
+
+                                            {item.description && (
+                                                <p className="text-sm text-gray-400">{item.description}</p>
+                                            )}
 
                                             <div className="space-y-2">
                                                 <div className="flex items-center gap-2 text-sm text-gray-400">
