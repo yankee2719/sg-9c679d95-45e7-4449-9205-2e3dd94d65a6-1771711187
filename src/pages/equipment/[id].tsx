@@ -124,13 +124,6 @@ export default function EquipmentDetailPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={() => setShowQR(!showQR)}
-              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-700"
-            >
-              {showQR ? t("common.hide") : t("common.show")} QR
-            </Button>
-            <Button
-              variant="outline"
               onClick={() => router.push(`/equipment/edit/${equipment.id}`)}
               className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
             >
@@ -194,42 +187,27 @@ export default function EquipmentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions Card */}
+          {/* QR Code Card - Now takes the right column */}
           <Card className="bg-slate-800 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-white">{t("dashboard.quickActions")}</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-white">QR Code</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowQR(!showQR)}
+                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-700"
+              >
+                {showQR ? t("common.hide") : t("common.show")}
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
-                onClick={() => router.push(`/maintenance/new?equipment=${equipment.id}`)}
-              >
-                <Activity className="h-4 w-4 mr-2" />
-                {t("equipment.reportIssue")}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
-                onClick={() => router.push(`/checklist/execute?equipment=${equipment.id}`)}
-              >
-                <ClipboardList className="h-4 w-4 mr-2" />
-                {t("equipment.startInspection")}
-              </Button>
+            <CardContent className="flex justify-center">
+              {showQR ? (
+                <QRCodeGenerator value={equipment.equipment_code || equipment.id} size={200} />
+              ) : (
+                <p className="text-slate-500 text-sm">{t("common.clickToShow")}</p>
+              )}
             </CardContent>
           </Card>
-
-          {/* QR Code Card */}
-          {showQR && (
-            <Card className="lg:col-span-3 bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white">QR Code</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center">
-                <QRCodeGenerator value={equipment.equipment_code || equipment.id} size={256} />
-              </CardContent>
-            </Card>
-          )}
 
           {/* Notes Card */}
           <Card className="lg:col-span-3 bg-slate-800 border-slate-700">
