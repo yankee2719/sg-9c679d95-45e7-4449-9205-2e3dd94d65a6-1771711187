@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
+import { getProfileData, getNotificationCount } from "@/lib/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -35,21 +36,6 @@ type UserRole = "admin" | "supervisor" | "technician";
 interface MainLayoutProps {
   children: React.ReactNode;
   userRole?: UserRole;
-}
-
-// Helper function to fetch profile data avoiding deep type instantiation
-async function getProfileData(userId: string) {
-  const client = supabase;
-  const result = await client.from("profiles").select("full_name, role").eq("id", userId).maybeSingle();
-  if (result.error || !result.data) return null;
-  return { full_name: result.data.full_name, role: result.data.role };
-}
-
-// Helper function to fetch notification count avoiding deep type instantiation
-async function getNotificationCount(userId: string) {
-  const client = supabase;
-  const result = await client.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", userId).eq("read", false);
-  return result.count || 0;
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
