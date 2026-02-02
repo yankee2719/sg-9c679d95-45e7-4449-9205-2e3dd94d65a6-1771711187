@@ -5,8 +5,6 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
 import { userService } from "@/services/userService";
-import { getAllEquipment } from "@/services/equipmentService";
-import { maintenanceService } from "@/services/maintenanceService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,13 +41,9 @@ export default function DashboardPage() {
   // Real data state
   const [stats, setStats] = useState({
     totalEquipment: 0,
-    activeEquipment: 0,
-    maintenanceEquipment: 0,
-    inactiveEquipment: 0,
-    pendingTasks: 0,
-    overdueTasks: 0,
-    completedToday: 0,
-    avgTime: "2.5h"
+    activeChecklists: 0,
+    upcomingMaintenance: 0,
+    overdueItems: 0
   });
   
   // User stats for admin
@@ -92,31 +86,76 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      const [equipment, upcoming, overdue] = await Promise.all([
-        getAllEquipment(),
-        maintenanceService.getUpcomingMaintenance(),
-        maintenanceService.getOverdueMaintenance()
-      ]);
+      // Get equipment count
+      const { count: eqCount } = await supabase
+        .from("equipment")
+        .select("*", { count: "exact", head: true });
+      
+      // Get active checklists count
+      const { count: checkCount } = await supabase
+        .from("checklists")
+        .select("*", { count: "exact", head: true })
+        .eq("is_active", true);
+
+      // Get upcoming maintenance (next 7 days)
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      
+      const { data: upcomingData } = await supabase
+        .from("maintenance_schedules")
+        .select(`
+          *,
+          equipment:equipment(id, name)
+        `)
+        .eq("is_active", true)
+        .lte("next_due_date", futureDate.toISOString())
+        .gte("next_due_date", new Date().toISOString())
+        .order("next_due_date", { ascending: true })
+        .limit(5);
+
+      // Get overdue maintenance
+      const { data: overdueData } = await supabase
+        .from("maintenance_schedules")
+        .select(`
+          *,
+          equipment:equipment(id, name)
+        `)
+        .eq("is_active", true)
+        .lt("next_due_date", new Date().toISOString())
+        .order("next_due_date", { ascending: true })
+        .limit(5);
+
+      // Get recent activities
+      const { data: activities } = await supabase
+        .from("checklist_executions")
+        .select(`
+          *,
+          checklist:checklists(name),
+          equipment:equipment(name),
+          technician:profiles(full_name)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      // Get equipment list
+      const { data: eqList } = await supabase
+        .from("equipment")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5);
 
       setStats({
-        totalEquipment: equipment.length,
-        activeEquipment: equipment.filter(e => e.status === "active").length,
-        maintenanceEquipment: equipment.filter(e => e.status === "under_maintenance").length,
-        inactiveEquipment: equipment.filter(e => e.status !== "active" && e.status !== "under_maintenance").length,
-        pendingTasks: upcoming.length + overdue.length,
-        overdueTasks: overdue.length,
-        completedToday: 8,
-        avgTime: "2.5h"
+        totalEquipment: eqCount || 0,
+        activeChecklists: checkCount || 0,
+        upcomingMaintenance: upcomingData?.length || 0,
+        overdueItems: overdueData?.length || 0
       });
 
-      setEquipmentList(equipment.slice(0, 5));
-      
-      // Combine upcoming and overdue for activity feed
-      const activity = [...overdue, ...upcoming].slice(0, 5);
-      setRecentActivity(activity);
+      setRecentActivity(activities || []);
+      setEquipmentList(eqList || []);
 
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("Error loading dashboard data:", error);
     }
   };
 
@@ -158,10 +197,6 @@ export default function DashboardPage() {
 
   const getInitials = (name: string) => {
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-  };
-
-  const isOverdue = (scheduledDate: string) => {
-    return new Date(scheduledDate) < new Date();
   };
 
   const getRoleLabel = (role: string) => {
@@ -305,79 +340,49 @@ export default function DashboardPage() {
               <div className="space-y-1">
                 <h3 className="text-4xl font-bold text-white">{stats.totalEquipment}</h3>
                 <p className="font-medium text-slate-300 text-sm">{t("dashboard.totalEquipment")}</p>
-                <p className="text-xs text-blue-400 font-medium">{stats.activeEquipment} {t("equipment.active").toLowerCase()}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Tasks Stat */}
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
-            <CardContent className="p-6">
-              <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
-                <ClipboardList className="w-6 h-6 text-[#FF6B35]" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-4xl font-bold text-white">{stats.pendingTasks}</h3>
-                <p className="font-medium text-slate-300 text-sm">{t("dashboard.pendingMaintenance")}</p>
-                <p className="text-xs text-orange-400 font-medium">{stats.overdueTasks} {language === "it" ? "scadute" : language === "fr" ? "en retard" : language === "es" ? "vencidas" : "overdue"}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Completed Stat */}
+          {/* Checklists Stat */}
           <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
             <CardContent className="p-6">
               <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
-                <CheckCircle className="w-6 h-6 text-green-400" />
+                <ClipboardList className="w-6 h-6 text-green-400" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-4xl font-bold text-white">{stats.completedToday}</h3>
-                <p className="font-medium text-slate-300 text-sm">{t("dashboard.completedToday")}</p>
+                <h3 className="text-4xl font-bold text-white">{stats.activeChecklists}</h3>
+                <p className="font-medium text-slate-300 text-sm">{t("checklists.active")}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Time Stat */}
+          {/* Upcoming Maintenance */}
           <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
             <CardContent className="p-6">
-              <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center mb-4">
-                <Clock className="w-6 h-6 text-cyan-400" />
+              <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
+                <Clock className="w-6 h-6 text-[#FF6B35]" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-4xl font-bold text-white">{stats.avgTime}</h3>
-                <p className="font-medium text-slate-300 text-sm">{language === "it" ? "Tempo Medio" : language === "fr" ? "Temps Moyen" : language === "es" ? "Tiempo Promedio" : "Avg Time"}</p>
+                <h3 className="text-4xl font-bold text-white">{stats.upcomingMaintenance}</h3>
+                <p className="font-medium text-slate-300 text-sm">{t("dashboard.upcomingMaintenance")}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Overdue Items */}
+          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
+            <CardContent className="p-6">
+              <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center mb-4">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-4xl font-bold text-white">{stats.overdueItems}</h3>
+                <p className="font-medium text-slate-300 text-sm">{t("dashboard.overdueItems")}</p>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* EQUIPMENT STATUS PROGRESS */}
-        <Card className="rounded-3xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg p-6">
-          <h3 className="text-lg font-bold text-white mb-6">{t("analytics.equipmentStatus")}</h3>
-          
-          {/* Progress Bar Container */}
-          <div className="h-4 w-full bg-slate-700/50 rounded-full overflow-hidden flex mb-4">
-            <div className="h-full bg-green-500" style={{ width: `${(stats.activeEquipment / stats.totalEquipment) * 100}%` }} />
-            <div className="h-full bg-amber-500" style={{ width: `${(stats.maintenanceEquipment / stats.totalEquipment) * 100}%` }} />
-            <div className="h-full bg-slate-500" style={{ width: `${(stats.inactiveEquipment / stats.totalEquipment) * 100}%` }} />
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="font-medium text-slate-300">{t("equipment.active")} ({stats.activeEquipment})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-amber-500" />
-              <span className="font-medium text-slate-300">{t("equipment.maintenance")} ({stats.maintenanceEquipment})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-slate-500" />
-              <span className="font-medium text-slate-300">{t("equipment.inactive")} ({stats.inactiveEquipment})</span>
-            </div>
-          </div>
-        </Card>
 
         {/* BOTTOM SECTIONS GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -392,70 +397,51 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {recentActivity.map((task) => {
-                const overdue = isOverdue(task.scheduled_date);
-                const isCritical = task.priority === "high";
-                
-                return (
-                  <Card 
-                    key={task.id} 
-                    className={`rounded-2xl backdrop-blur-sm shadow-lg hover:shadow-xl transition-all overflow-hidden group cursor-pointer ${
-                      isCritical 
-                        ? "border-red-500/30 bg-red-950/20 hover:border-red-500/50" 
-                        : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
-                    }`}
-                    onClick={() => router.push(`/maintenance`)}
-                  >
-                    <div className="p-4">
-                      {/* Header with badges */}
-                      <div className="flex items-center justify-between mb-3">
-                        <Badge 
-                          className={`rounded-lg px-3 py-1 text-xs font-bold border-0 ${
-                            isCritical 
-                              ? "bg-red-500/20 text-red-400" 
-                              : "bg-amber-500/20 text-amber-400"
-                          }`}
-                        >
-                          {isCritical ? `! ${t("common.high")}` : `↑ ${t("common.medium")}`}
-                        </Badge>
-                        {overdue && (
-                          <Badge className="rounded-lg px-3 py-1 text-xs font-bold bg-red-500/20 text-red-400 border-0 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            {language === "it" ? "Scaduto" : language === "fr" ? "En retard" : language === "es" ? "Vencido" : "Overdue"}
-                          </Badge>
-                        )}
+              {recentActivity.map((activity) => (
+                <Card 
+                  key={activity.id} 
+                  className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all overflow-hidden group cursor-pointer hover:border-slate-600"
+                  onClick={() => router.push(`/checklist/${activity.id}`)}
+                >
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <Badge className={`rounded-lg px-3 py-1 text-xs font-bold border-0 ${
+                        activity.status === "completed" 
+                          ? "bg-green-500/20 text-green-400" 
+                          : "bg-amber-500/20 text-amber-400"
+                      }`}>
+                        {activity.status === "completed" ? t("common.completed") : t("common.inProgress")}
+                      </Badge>
+                    </div>
+
+                    <h4 className="font-bold text-white text-base mb-2">
+                      {activity.checklist?.name || t("checklists.title")}
+                    </h4>
+
+                    <div className="flex items-center gap-2 mb-3 text-slate-400">
+                      <Wrench className="w-4 h-4" />
+                      <span className="text-sm font-medium">{activity.equipment?.name || "N/A"}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="w-6 h-6 bg-blue-500/20">
+                          <AvatarFallback className="text-blue-400 text-xs font-semibold">
+                            {getInitials(activity.technician?.full_name || "NA")}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs text-slate-400 font-medium">
+                          {activity.technician?.full_name || t("common.unassigned")}
+                        </span>
                       </div>
-
-                      {/* Title */}
-                      <h4 className="font-bold text-white text-base mb-2">{task.title}</h4>
-
-                      {/* Equipment */}
-                      <div className="flex items-center gap-2 mb-3 text-slate-400">
-                        <Wrench className="w-4 h-4" />
-                        <span className="text-sm font-medium">{task.equipment?.name || "N/A"}</span>
-                      </div>
-
-                      {/* Footer with user and time */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="w-6 h-6 bg-blue-500/20">
-                            <AvatarFallback className="text-blue-400 text-xs font-semibold">
-                              {getInitials(task.assigned_to?.full_name || "NA")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs text-slate-400 font-medium">
-                            {task.assigned_to?.full_name || (language === "it" ? "Non assegnato" : language === "fr" ? "Non assigné" : language === "es" ? "Sin asignar" : "Unassigned")}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <Clock className="w-3 h-3" />
-                          <span className="text-xs font-medium">{formatRelativeTime(task.scheduled_date)}</span>
-                        </div>
+                      <div className="flex items-center gap-1 text-slate-400">
+                        <Clock className="w-3 h-3" />
+                        <span className="text-xs font-medium">{formatRelativeTime(activity.created_at)}</span>
                       </div>
                     </div>
-                  </Card>
-                );
-              })}
+                  </div>
+                </Card>
+              ))}
 
               {recentActivity.length === 0 && (
                 <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-8 text-center">
@@ -477,14 +463,14 @@ export default function DashboardPage() {
 
             <div className="space-y-3">
               {equipmentList.map((item) => {
-                const statusConfig = {
+                const statusConfig: Record<string, { label: string; color: string }> = {
                   active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
                   under_maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
                   inactive: { label: t("equipment.inactive"), color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-                  decommissioned: { label: language === "it" ? "Dismesso" : language === "fr" ? "Déclassé" : language === "es" ? "Dado de baja" : "Decommissioned", color: "bg-red-500/20 text-red-400 border-red-500/30" }
+                  decommissioned: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" }
                 };
 
-                const status = statusConfig[item.status as keyof typeof statusConfig] || statusConfig.active;
+                const status = statusConfig[item.status] || statusConfig.active;
 
                 return (
                   <Card 
@@ -493,7 +479,6 @@ export default function DashboardPage() {
                     onClick={() => router.push(`/equipment/${item.id}`)}
                   >
                     <div className="p-4 flex items-center gap-4">
-                      {/* Thumbnail */}
                       <div className="w-16 h-16 bg-slate-700/50 rounded-xl flex-shrink-0 overflow-hidden relative">
                         {item.image_url ? (
                           <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
@@ -504,15 +489,14 @@ export default function DashboardPage() {
                         )}
                       </div>
                       
-                      {/* Content */}
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-white text-base mb-1 truncate">{item.name}</h4>
                         <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
-                          <span className="truncate">{item.location || (language === "it" ? "Nessuna posizione" : language === "fr" ? "Aucun emplacement" : language === "es" ? "Sin ubicación" : "No location")}</span>
+                          <span className="truncate">{item.location || t("equipment.noLocation")}</span>
                           <ChevronRight className="w-4 h-4 flex-shrink-0 text-slate-600 group-hover:text-blue-400 transition-colors" />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-medium">{item.equipment_categories?.name || (language === "it" ? "Generico" : language === "fr" ? "Générique" : language === "es" ? "Genérico" : "Generic")}</span>
+                          <span className="text-xs text-slate-500 font-medium">{item.category || t("equipment.generic")}</span>
                           <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
                             {status.label}
                           </Badge>
