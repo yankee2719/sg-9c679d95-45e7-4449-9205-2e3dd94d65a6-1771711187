@@ -37,6 +37,21 @@ interface MainLayoutProps {
   userRole?: UserRole;
 }
 
+// Helper function to fetch profile data avoiding deep type instantiation
+async function getProfileData(userId: string) {
+  const client = supabase;
+  const result = await client.from("profiles").select("full_name, role").eq("id", userId).maybeSingle();
+  if (result.error || !result.data) return null;
+  return { full_name: result.data.full_name, role: result.data.role };
+}
+
+// Helper function to fetch notification count avoiding deep type instantiation
+async function getNotificationCount(userId: string) {
+  const client = supabase;
+  const result = await client.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", userId).eq("read", false);
+  return result.count || 0;
+}
+
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
   const router = useRouter();
   const { t } = useLanguage();
@@ -53,31 +68,16 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         
         setUser({ id: authUser.id, email: authUser.email });
         
-        // Fetch profile using rpc or direct fetch to avoid type recursion
-        const profileQuery = supabase
-          .from("profiles")
-          .select("full_name, role")
-          .eq("id", authUser.id)
-          .maybeSingle();
-        
-        const profileResult: { data: { full_name: string | null; role: string | null } | null; error: unknown } = await profileQuery as never;
-        
-        if (profileResult.data) {
+        const profileData = await getProfileData(authUser.id);
+        if (profileData) {
           setProfile({
-            full_name: profileResult.data.full_name || undefined,
-            role: profileResult.data.role || undefined
+            full_name: profileData.full_name || undefined,
+            role: profileData.role || undefined
           });
         }
 
-        // Get unread notifications count
-        const notifQuery = supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", authUser.id)
-          .eq("read", false);
-        
-        const notifResult: { count: number | null } = await notifQuery as never;
-        setUnreadNotifications(notifResult.count || 0);
+        const count = await getNotificationCount(authUser.id);
+        setUnreadNotifications(count);
       } catch (error) {
         console.error("Error loading user:", error);
       }
