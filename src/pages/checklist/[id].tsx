@@ -22,6 +22,7 @@ interface ChecklistItem {
     order_index: number;
     checked?: boolean;
     notes?: string;
+    [key: string]: string | boolean | number | null | undefined;
 }
 
 interface ChecklistExecution {
@@ -33,6 +34,7 @@ interface ChecklistExecution {
     status: string;
     signature?: string;
     results?: any;
+    schedule_id?: string;
 }
 
 interface Checklist {

@@ -29,12 +29,14 @@ interface MaintenanceTask {
     id: string;
     title: string;
     description: string | null;
-    priority: string;
-    status: string;
     next_due_date: string | null;
     frequency: string | null;
     equipment_id: string | null;
     assigned_to: string | null;
+    checklist_id: string | null;
+    last_performed_at: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
 export default function MaintenancePage() {
@@ -74,8 +76,8 @@ export default function MaintenancePage() {
                 console.log("Maintenance data:", data, error);
 
                 if (data) {
-                    setTasks(data as MaintenanceTask[]);
-                    setFilteredTasks(data as MaintenanceTask[]);
+                    setTasks(data as unknown as MaintenanceTask[]);
+                    setFilteredTasks(data as unknown as MaintenanceTask[]);
                 }
             } catch (error) {
                 console.error("Error loading maintenance:", error);
