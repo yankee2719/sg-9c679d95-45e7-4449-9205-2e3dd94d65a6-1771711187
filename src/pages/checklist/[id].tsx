@@ -82,6 +82,9 @@ export default function ChecklistExecutionPage() {
 
             if (executionError) throw executionError;
 
+            console.log("Loaded execution data:", executionData);
+            console.log("Schedule ID from execution:", executionData?.schedule_id);
+
             setExecution(executionData);
 
             // Carica la checklist
@@ -239,6 +242,10 @@ export default function ChecklistExecutionPage() {
 
             const executionId = Array.isArray(id) ? id[0] : id;
 
+            console.log("Completing checklist execution:", executionId);
+            console.log("Current execution object:", execution);
+            console.log("Schedule ID to update:", execution?.schedule_id);
+
             // Update checklist execution
             const { error: updateError } = await supabase
                 .from("checklist_executions")
@@ -250,22 +257,34 @@ export default function ChecklistExecutionPage() {
                 })
                 .eq("id", executionId);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error("Error updating checklist execution:", updateError);
+                throw updateError;
+            }
+
+            console.log("Checklist execution updated successfully");
 
             // If this execution is linked to a maintenance schedule, update its status to completed
             if (execution?.schedule_id) {
-                const { error: maintenanceError } = await supabase
+                console.log("Updating maintenance schedule:", execution.schedule_id);
+                
+                const { data: maintenanceData, error: maintenanceError } = await supabase
                     .from("maintenance_schedules")
                     .update({
                         status: "completed",
                         last_performed_at: new Date().toISOString()
                     })
-                    .eq("id", execution.schedule_id);
+                    .eq("id", execution.schedule_id)
+                    .select();
 
                 if (maintenanceError) {
                     console.error("Error updating maintenance schedule:", maintenanceError);
                     // Don't throw - checklist is still completed even if maintenance update fails
+                } else {
+                    console.log("Maintenance schedule updated successfully:", maintenanceData);
                 }
+            } else {
+                console.log("No schedule_id found, skipping maintenance update");
             }
 
             toast({
