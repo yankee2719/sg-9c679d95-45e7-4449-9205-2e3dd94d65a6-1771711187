@@ -106,18 +106,31 @@ export default function ChecklistsPage() {
     }
   };
 
+  // Get translated texts
+  const pageTitle = t("checklists.title");
+  const pageSubtitle = t("checklists.subtitle");
+  const addChecklistText = t("checklists.addChecklist");
+  const searchPlaceholder = t("common.search");
+  const activeText = t("checklists.active");
+  const inactiveText = t("checklists.inactive");
+  const itemsText = t("checklists.items");
+  const executeText = t("checklists.execute");
+  const noChecklistsText = t("checklists.noChecklists");
+  const noChecklistsDescText = t("checklists.noChecklistsDesc");
+  const addFirstText = t("checklists.addFirst");
+
   if (loading) return null;
 
   return (
     <MainLayout userRole={userRole}>
-      <SEO title={`${t("checklists.title")} - Maint Ops`} />
+      <SEO title={`${pageTitle} - Maint Ops`} />
 
       <div className="space-y-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">{t("checklists.title")}</h1>
-            <p className="text-slate-400 mt-1">{t("checklists.subtitle")}</p>
+            <h1 className="text-2xl font-bold text-white">{pageTitle}</h1>
+            <p className="text-slate-400 mt-1">{pageSubtitle}</p>
           </div>
           {(userRole === "admin" || userRole === "supervisor") && (
             <Button 
@@ -125,7 +138,7 @@ export default function ChecklistsPage() {
               onClick={() => router.push("/checklists/new")}
             >
               <Plus className="w-4 h-4 mr-2" />
-              {t("checklists.addChecklist")}
+              {addChecklistText}
             </Button>
           )}
         </div>
@@ -136,7 +149,7 @@ export default function ChecklistsPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
-                placeholder={t("common.search")}
+                placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
@@ -163,7 +176,7 @@ export default function ChecklistsPage() {
                       ? "bg-green-500/20 text-green-400 border-green-500/30"
                       : "bg-slate-500/20 text-slate-400 border-slate-500/30"
                   }`}>
-                    {checklist.is_active ? t("checklists.active") : t("checklists.inactive")}
+                    {checklist.is_active ? activeText : inactiveText}
                   </Badge>
                 </div>
 
@@ -175,7 +188,7 @@ export default function ChecklistsPage() {
                 <div className="flex items-center justify-between text-sm text-slate-400 mb-4">
                   <div className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4" />
-                    <span>{checklist.items?.length || 0} {t("checklists.items")}</span>
+                    <span>{checklist.items?.length || 0} {itemsText}</span>
                   </div>
                 </div>
 
@@ -186,7 +199,7 @@ export default function ChecklistsPage() {
                     onClick={() => router.push(`/checklist/execute?checklistId=${checklist.id}`)}
                   >
                     <Play className="w-4 h-4 mr-1" />
-                    {t("checklists.execute")}
+                    {executeText}
                   </Button>
                   {(userRole === "admin" || userRole === "supervisor") && (
                     <>
@@ -218,15 +231,15 @@ export default function ChecklistsPage() {
         {filteredChecklists.length === 0 && (
           <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center">
             <ClipboardList className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">{t("checklists.noChecklists")}</h3>
-            <p className="text-slate-400 mb-6">{t("checklists.noChecklistsDesc")}</p>
+            <h3 className="text-xl font-bold text-white mb-2">{noChecklistsText}</h3>
+            <p className="text-slate-400 mb-6">{noChecklistsDescText}</p>
             {(userRole === "admin" || userRole === "supervisor") && (
               <Button 
                 className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
                 onClick={() => router.push("/checklists/new")}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                {t("checklists.addFirst")}
+                {addFirstText}
               </Button>
             )}
           </Card>

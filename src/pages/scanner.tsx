@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   ArrowLeft,
   QrCode,
@@ -24,6 +25,7 @@ interface ScanHistory {
 
 export default function ScannerPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<"scanner" | "manual">("scanner");
   const [manualCode, setManualCode] = useState("");
   const [scanHistory, setScanHistory] = useState<ScanHistory[]>([
@@ -50,7 +52,6 @@ export default function ScannerPage() {
   const handleScan = (code: string) => {
     console.log("QR Code scanned:", code);
     
-    // Add to history
     const newScan: ScanHistory = {
       id: Date.now().toString(),
       code,
@@ -60,8 +61,6 @@ export default function ScannerPage() {
     
     setScanHistory(prev => [newScan, ...prev.slice(0, 9)]);
     
-    // Redirect to equipment detail page
-    // Assuming code format is "EQ-XXX" and we extract the ID
     const equipmentId = code.replace("EQ-", "");
     router.push(`/equipment/${equipmentId}`);
   };
@@ -80,23 +79,44 @@ export default function ScannerPage() {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
-    if (diffMins < 1) return "Ora";
-    if (diffMins < 60) return `${diffMins}m fa`;
-    if (diffHours < 24) return `${diffHours}h fa`;
-    return past.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
+    if (diffMins < 1) return t("scanner.now");
+    if (diffMins < 60) return `${diffMins}m ${t("common.ago")}`;
+    if (diffHours < 24) return `${diffHours}h ${t("common.ago")}`;
+    return past.toLocaleDateString();
   };
+
+  // Get translated texts
+  const pageTitle = t("scanner.title");
+  const pageSubtitle = t("scanner.subtitle");
+  const scanQRText = t("scanner.scanQR");
+  const manualEntryText = t("scanner.manualEntry");
+  const frameQRText = t("scanner.frameQR");
+  const positionQRText = t("scanner.positionQR");
+  const frameWellText = t("scanner.frameWell");
+  const keepCenteredText = t("scanner.keepCentered");
+  const goodLightText = t("scanner.goodLight");
+  const ensureLightText = t("scanner.ensureLight");
+  const rightDistanceText = t("scanner.rightDistance");
+  const notTooCloseText = t("scanner.notTooClose");
+  const manualEntryTitle = t("scanner.manualEntryTitle");
+  const manualEntryDesc = t("scanner.manualEntryDesc");
+  const equipmentCodeLabel = t("scanner.equipmentCode");
+  const searchEquipmentText = t("scanner.searchEquipment");
+  const acceptedFormatsText = t("scanner.acceptedFormats");
+  const recentScansText = t("scanner.recentScans");
+  const noRecentScansText = t("scanner.noRecentScans");
 
   return (
     <>
-      <SEO title="Scanner QR - Maint Ops" />
+      <SEO title={`${pageTitle} - Maint Ops`} />
       
       <div className="min-h-screen bg-slate-900">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 px-6 pt-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">QR Code Scanner</h1>
-              <p className="text-slate-400">Scan equipment QR codes for quick access</p>
+              <h1 className="text-3xl font-bold text-white mb-2">{pageTitle}</h1>
+              <p className="text-slate-400">{pageSubtitle}</p>
             </div>
           </div>
         </div>
@@ -115,7 +135,7 @@ export default function ScannerPage() {
               }`}
             >
               <QrCode className="h-5 w-5 mr-2" />
-              Scansiona QR
+              {scanQRText}
             </Button>
             
             <Button
@@ -127,7 +147,7 @@ export default function ScannerPage() {
               }`}
             >
               <Keyboard className="h-5 w-5 mr-2" />
-              Inserimento Manuale
+              {manualEntryText}
             </Button>
           </div>
 
@@ -147,10 +167,10 @@ export default function ScannerPage() {
                   {/* Instructions */}
                   <div className="text-center space-y-2">
                     <p className="text-lg font-semibold text-white">
-                      Inquadra il QR Code del macchinario
+                      {frameQRText}
                     </p>
                     <p className="text-sm text-slate-400">
-                      Posiziona il QR code all'interno del riquadro per scansionare automaticamente
+                      {positionQRText}
                     </p>
                   </div>
 
@@ -160,24 +180,24 @@ export default function ScannerPage() {
                       <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
                         <Camera className="w-6 h-6 text-blue-400" />
                       </div>
-                      <p className="text-sm font-medium text-white mb-1">Inquadra bene</p>
-                      <p className="text-xs text-slate-400">Mantieni il QR code centrato</p>
+                      <p className="text-sm font-medium text-white mb-1">{frameWellText}</p>
+                      <p className="text-xs text-slate-400">{keepCenteredText}</p>
                     </div>
                     
                     <div className="bg-slate-700/30 rounded-xl p-4 text-center">
                       <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
                         <QrCode className="w-6 h-6 text-amber-400" />
                       </div>
-                      <p className="text-sm font-medium text-white mb-1">Buona luce</p>
-                      <p className="text-xs text-slate-400">Assicurati di avere luce sufficiente</p>
+                      <p className="text-sm font-medium text-white mb-1">{goodLightText}</p>
+                      <p className="text-xs text-slate-400">{ensureLightText}</p>
                     </div>
                     
                     <div className="bg-slate-700/30 rounded-xl p-4 text-center">
                       <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
                         <Search className="w-6 h-6 text-green-400" />
                       </div>
-                      <p className="text-sm font-medium text-white mb-1">Distanza giusta</p>
-                      <p className="text-xs text-slate-400">Non troppo vicino o lontano</p>
+                      <p className="text-sm font-medium text-white mb-1">{rightDistanceText}</p>
+                      <p className="text-xs text-slate-400">{notTooCloseText}</p>
                     </div>
                   </div>
                 </div>
@@ -194,16 +214,16 @@ export default function ScannerPage() {
                     <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                       <Keyboard className="w-8 h-8 text-blue-400" />
                     </div>
-                    <h3 className="text-xl font-bold text-white">Inserimento Manuale</h3>
+                    <h3 className="text-xl font-bold text-white">{manualEntryTitle}</h3>
                     <p className="text-sm text-slate-400">
-                      Digita il codice del macchinario che trovi sull'etichetta
+                      {manualEntryDesc}
                     </p>
                   </div>
 
                   <form onSubmit={handleManualSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-300">
-                        Codice Equipaggiamento
+                        {equipmentCodeLabel}
                       </label>
                       <Input
                         value={manualCode}
@@ -220,13 +240,13 @@ export default function ScannerPage() {
                       className="w-full h-14 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Search className="h-5 w-5 mr-2" />
-                      Cerca Equipaggiamento
+                      {searchEquipmentText}
                     </Button>
                   </form>
 
                   {/* Format Examples */}
                   <div className="bg-slate-700/30 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-slate-300 mb-2">Formati accettati:</p>
+                    <p className="text-xs font-semibold text-slate-300 mb-2">{acceptedFormatsText}:</p>
                     <div className="flex flex-wrap gap-2">
                       <Badge className="bg-slate-700 text-slate-300 border-slate-600 font-mono">
                         EQ-001
@@ -248,7 +268,7 @@ export default function ScannerPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 px-2">
               <History className="h-5 w-5 text-slate-400" />
-              <h3 className="text-lg font-bold text-white">Scansioni Recenti</h3>
+              <h3 className="text-lg font-bold text-white">{recentScansText}</h3>
             </div>
 
             {scanHistory.length > 0 ? (
@@ -288,7 +308,7 @@ export default function ScannerPage() {
             ) : (
               <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-8 text-center">
                 <History className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400 font-medium">Nessuna scansione recente</p>
+                <p className="text-slate-400 font-medium">{noRecentScansText}</p>
               </Card>
             )}
           </div>
