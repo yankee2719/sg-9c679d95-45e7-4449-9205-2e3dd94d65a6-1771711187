@@ -23,7 +23,7 @@
     --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
+    --border: 214 32% 85%;
     --input: 214 32% 91%;
     --ring: 217 91% 60%;
     --radius: 0.5rem;
@@ -72,7 +72,7 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 
-  /* Professional Form Styling */
+  /* Professional Form Styling - Using CSS Variables */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -81,14 +81,14 @@
   input[type="time"],
   textarea,
   select {
-    @apply bg-slate-700 dark:bg-slate-700 text-slate-100 dark:text-slate-100 border-slate-600 dark:border-slate-600;
+    @apply bg-input text-foreground border-border;
     @apply focus:border-primary focus:ring-primary focus:ring-2 focus:ring-opacity-20;
-    @apply placeholder:text-slate-400 dark:placeholder:text-slate-400;
+    @apply placeholder:text-muted-foreground;
   }
 
   /* Card Styling */
   .card-professional {
-    @apply bg-slate-800 dark:bg-slate-800 border-slate-700 dark:border-slate-700 rounded-lg;
+    @apply bg-card border-border rounded-lg;
   }
 
   /* Button Variants */
@@ -97,7 +97,7 @@
   }
 
   .btn-secondary {
-    @apply bg-slate-600 hover:bg-slate-500 text-white;
+    @apply bg-secondary hover:bg-secondary/80 text-secondary-foreground;
   }
 
   /* Table Styling */
@@ -106,11 +106,19 @@
   }
 
   thead {
-    @apply bg-slate-800 dark:bg-slate-800;
+    @apply bg-muted;
   }
 
   tbody tr {
-    @apply border-b border-slate-700 dark:border-slate-700 hover:bg-slate-700/50 dark:hover:bg-slate-700/50;
+    @apply border-b border-border hover:bg-muted/50;
+  }
+
+  th {
+    @apply text-foreground;
+  }
+
+  td {
+    @apply text-foreground;
   }
 
   /* Custom Scrollbar */
@@ -119,14 +127,14 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-slate-800 dark:bg-slate-800;
+    @apply bg-muted;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-600 dark:bg-slate-600 rounded-full;
+    @apply bg-muted-foreground/30 rounded-full;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500 dark:bg-slate-500;
+    @apply bg-muted-foreground/50;
   }
 }
