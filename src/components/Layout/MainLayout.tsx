@@ -37,6 +37,11 @@ interface MainLayoutProps {
   userRole?: UserRole;
 }
 
+interface ProfileData {
+  full_name: string | null;
+  role: string | null;
+}
+
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
   const router = useRouter();
   const { t } = useLanguage();
@@ -46,36 +51,40 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
+    const loadUser = async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return;
+        
         setUser({ id: authUser.id, email: authUser.email });
         
-        // Fetch profile with simple query to avoid deep type instantiation
+        // Use raw query with explicit type casting to avoid deep type instantiation
         const profileResult = await supabase
           .from("profiles")
           .select("full_name, role")
           .eq("id", authUser.id)
-          .maybeSingle();
+          .maybeSingle() as unknown as { data: ProfileData | null; error: Error | null };
         
-        if (profileResult.data) {
+        if (!profileResult.error && profileResult.data) {
           setProfile({
-            full_name: profileResult.data.full_name ?? undefined,
-            role: profileResult.data.role ?? undefined
+            full_name: profileResult.data.full_name || undefined,
+            role: profileResult.data.role || undefined
           });
         }
 
-        // Get unread notifications count
+        // Get unread notifications count with explicit type casting
         const notifResult = await supabase
           .from("notifications")
           .select("id", { count: "exact", head: true })
           .eq("user_id", authUser.id)
-          .eq("read", false);
+          .eq("read", false) as unknown as { count: number | null };
         
         setUnreadNotifications(notifResult.count || 0);
+      } catch (error) {
+        console.error("Error loading user:", error);
       }
     };
-    getUser();
+    loadUser();
   }, []);
 
   const handleLogout = async () => {
