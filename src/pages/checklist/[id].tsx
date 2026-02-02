@@ -13,7 +13,6 @@ import { Loader2, ChevronLeft, Clock, Flag, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import SignatureCanvas from "react-signature-canvas";
 
 interface ChecklistItem {
     id: string;
