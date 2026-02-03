@@ -246,7 +246,7 @@ export default function ChecklistExecutionPage() {
                     status: "completed",
                     completed_at: new Date().toISOString(),
                     signature: signatureData,
-                    results: items
+                    results: JSON.stringify(items)
                 })
                 .eq("id", executionId);
 
