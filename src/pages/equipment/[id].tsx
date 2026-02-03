@@ -19,6 +19,7 @@ export default function EquipmentDetailPage() {
   const { t } = useLanguage();
   const [equipment, setEquipment] = useState<Equipment | null>(null);
   const [maintenance, setMaintenance] = useState<any[]>([]);
+  const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showQR, setShowQR] = useState(false);
 
@@ -26,6 +27,7 @@ export default function EquipmentDetailPage() {
     if (id && typeof id === "string") {
       loadEquipment(id);
       loadMaintenance(id);
+      loadMaintenanceHistory(id);
     }
   }, [id]);
 
@@ -53,6 +55,26 @@ export default function EquipmentDetailPage() {
       }
     } catch (error) {
       console.error("Error loading maintenance:", error);
+    }
+  };
+
+  const loadMaintenanceHistory = async (equipmentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("maintenance_logs")
+        .select(`
+          *,
+          profiles:performed_by(full_name)
+        `)
+        .eq("equipment_id", equipmentId)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false });
+
+      if (!error && data) {
+        setMaintenanceHistory(data);
+      }
+    } catch (error) {
+      console.error("Error loading maintenance history:", error);
     }
   };
 
@@ -300,7 +322,85 @@ export default function EquipmentDetailPage() {
                 <CardTitle className="text-white">{t("equipment.maintenanceHistory")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-slate-500 text-center py-8">{t("equipment.noHistory")}</p>
+                {maintenanceHistory.length === 0 ? (
+                  <p className="text-slate-500 text-center py-8">{t("equipment.noHistory")}</p>
+                ) : (
+                  <div className="space-y-4">
+                    {maintenanceHistory.map((log) => (
+                      <div
+                        key={log.id}
+                        className="p-4 bg-slate-700/50 rounded-lg border border-slate-600 hover:border-slate-500 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-white text-lg mb-1">
+                              {log.title}
+                            </h4>
+                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                              <span>
+                                {log.completed_at
+                                  ? new Date(log.completed_at).toLocaleDateString("it-IT", {
+                                      year: "numeric",
+                                      month: "long",
+                                      day: "numeric",
+                                    })
+                                  : "N/A"}
+                              </span>
+                              {log.profiles?.full_name && (
+                                <>
+                                  <span>•</span>
+                                  <span>{t("maintenance.technician")}: {log.profiles.full_name}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {log.priority && (
+                            <Badge
+                              variant={
+                                log.priority === "high"
+                                  ? "destructive"
+                                  : log.priority === "medium"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className="capitalize"
+                            >
+                              {log.priority === "high"
+                                ? t("maintenance.priorityHigh")
+                                : log.priority === "medium"
+                                ? t("maintenance.priorityMedium")
+                                : t("maintenance.priorityLow")}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {log.description && (
+                          <p className="text-slate-300 text-sm mb-3 whitespace-pre-wrap">
+                            {log.description}
+                          </p>
+                        )}
+
+                        {log.time_spent_minutes && (
+                          <div className="flex items-center gap-2 text-sm text-slate-400">
+                            <Activity className="h-4 w-4" />
+                            <span>
+                              {t("maintenance.timeSpent")}: {log.time_spent_minutes} {t("maintenance.minutes")}
+                            </span>
+                          </div>
+                        )}
+
+                        {log.notes && (
+                          <div className="mt-3 pt-3 border-t border-slate-600">
+                            <p className="text-sm text-slate-400">
+                              <span className="font-medium text-slate-300">{t("common.notes")}:</span>{" "}
+                              {log.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
