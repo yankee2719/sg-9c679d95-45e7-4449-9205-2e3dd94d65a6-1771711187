@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, Copy, Check, Download } from "lucide-react";
+import QRCode from "qrcode";
 
 interface QRCodeGeneratorProps {
   value: string;
@@ -28,48 +29,18 @@ export function QRCodeGenerator({
   useEffect(() => {
     if (!canvasRef.current || !displayValue) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, size, size);
-
-    // Draw QR-like pattern
-    const moduleSize = size / 25;
-    ctx.fillStyle = "#000000";
-
-    // Draw finder patterns (corners)
-    const drawFinderPattern = (x: number, y: number) => {
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(x, y, moduleSize * 7, moduleSize * 7);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(x + moduleSize, y + moduleSize, moduleSize * 5, moduleSize * 5);
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(x + moduleSize * 2, y + moduleSize * 2, moduleSize * 3, moduleSize * 3);
-    };
-
-    drawFinderPattern(0, 0);
-    drawFinderPattern(size - moduleSize * 7, 0);
-    drawFinderPattern(0, size - moduleSize * 7);
-
-    // Draw data modules based on value
-    ctx.fillStyle = "#000000";
-    const hash = displayValue.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    for (let i = 0; i < 15; i++) {
-      for (let j = 0; j < 15; j++) {
-        if ((hash + i * j) % 3 === 0) {
-          ctx.fillRect(
-            (i + 5) * moduleSize,
-            (j + 5) * moduleSize,
-            moduleSize,
-            moduleSize
-          );
-        }
-      }
-    }
+    // Generate real QR code using qrcode library
+    QRCode.toCanvas(canvasRef.current, displayValue, {
+      width: size,
+      margin: 2,
+      color: {
+        dark: "#000000",
+        light: "#ffffff",
+      },
+      errorCorrectionLevel: "M",
+    }).catch((err) => {
+      console.error("Error generating QR code:", err);
+    });
 
   }, [displayValue, size]);
 
