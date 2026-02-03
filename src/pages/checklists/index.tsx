@@ -14,8 +14,7 @@ import {
   ClipboardList,
   CheckCircle,
   Edit,
-  Trash2,
-  Play
+  Trash2
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -193,14 +192,6 @@ export default function ChecklistsPage() {
                 </div>
 
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Button
-                    size="sm"
-                    className="flex-1 bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                    onClick={() => router.push(`/checklist/execute?checklistId=${checklist.id}`)}
-                  >
-                    <Play className="w-4 h-4 mr-1" />
-                    {executeText}
-                  </Button>
                   {(userRole === "admin" || userRole === "supervisor") && (
                     <>
                       <Button

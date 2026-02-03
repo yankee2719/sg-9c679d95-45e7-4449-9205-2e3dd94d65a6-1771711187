@@ -22,7 +22,6 @@ interface ChecklistItem {
     order_index: number;
     checked?: boolean;
     notes?: string;
-    [key: string]: string | boolean | number | null | undefined;
 }
 
 interface ChecklistExecution {
@@ -73,7 +72,6 @@ export default function ChecklistExecutionPage() {
             const executionId = Array.isArray(id) ? id[0] : id;
             if (!executionId) return;
 
-            // Carica l'esecuzione
             const { data: executionData, error: executionError } = await supabase
                 .from("checklist_executions")
                 .select("*")
@@ -87,7 +85,6 @@ export default function ChecklistExecutionPage() {
 
             setExecution(executionData);
 
-            // Carica la checklist
             if (executionData.checklist_id) {
                 const { data: checklistData, error: checklistError } = await supabase
                     .from("checklists")
@@ -98,7 +95,6 @@ export default function ChecklistExecutionPage() {
                 if (checklistError) throw checklistError;
                 setChecklist(checklistData);
 
-                // Carica gli items della checklist
                 const { data: itemsData, error: itemsError } = await supabase
                     .from("checklist_items")
                     .select("*")
@@ -107,7 +103,6 @@ export default function ChecklistExecutionPage() {
 
                 if (itemsError) throw itemsError;
 
-                // Inizializza gli items con checked = false
                 const initializedItems = (itemsData || []).map((item: any) => ({
                     ...item,
                     checked: false,
@@ -116,7 +111,6 @@ export default function ChecklistExecutionPage() {
                 setItems(initializedItems);
             }
 
-            // Carica il nome del tecnico
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const { data: profile } = await supabase
@@ -169,7 +163,6 @@ export default function ChecklistExecutionPage() {
             });
             return;
         }
-
         setShowSignatureDialog(true);
     };
 
@@ -246,7 +239,7 @@ export default function ChecklistExecutionPage() {
             console.log("Current execution object:", execution);
             console.log("Schedule ID to update:", execution?.schedule_id);
 
-            // Update checklist execution
+            // Aggiorna l'esecuzione della checklist
             const { error: updateError } = await supabase
                 .from("checklist_executions")
                 .update({
@@ -264,22 +257,21 @@ export default function ChecklistExecutionPage() {
 
             console.log("Checklist execution updated successfully");
 
-            // If this execution is linked to a maintenance schedule, update its status to completed
+            // Se c'è una manutenzione collegata, aggiorna anche quella
             if (execution?.schedule_id) {
                 console.log("Updating maintenance schedule:", execution.schedule_id);
-                
+
                 const { data: maintenanceData, error: maintenanceError } = await supabase
                     .from("maintenance_schedules")
                     .update({
                         status: "completed",
-                        last_performed_at: new Date().toISOString()
+                        last_completed_date: new Date().toISOString()
                     })
                     .eq("id", execution.schedule_id)
                     .select();
 
                 if (maintenanceError) {
                     console.error("Error updating maintenance schedule:", maintenanceError);
-                    // Don't throw - checklist is still completed even if maintenance update fails
                 } else {
                     console.log("Maintenance schedule updated successfully:", maintenanceData);
                 }
@@ -292,7 +284,7 @@ export default function ChecklistExecutionPage() {
                 description: "Checklist completata con successo"
             });
 
-            router.push("/dashboard");
+            router.push("/maintenance");
         } catch (error: any) {
             console.error("Error completing checklist:", error);
             toast({
