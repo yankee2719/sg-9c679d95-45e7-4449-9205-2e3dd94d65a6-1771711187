@@ -8,7 +8,6 @@ import { userService } from "@/services/userService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -21,7 +20,6 @@ import {
   ArrowRight,
   Wrench,
   ClipboardList,
-  CheckCircle,
   Clock,
   ChevronRight,
   AlertTriangle,
@@ -54,7 +52,6 @@ export default function DashboardPage() {
     technicians: 0
   });
   
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
 
   useEffect(() => {
@@ -117,44 +114,12 @@ export default function DashboardPage() {
         .order("next_due_date", { ascending: true })
         .limit(5);
 
-      // Get recent activities
-      const activitiesResult = await supabase
-        .from("checklist_executions")
-        .select("id, status, created_at, checklist_id, equipment_id, technician_id")
-        .order("created_at", { ascending: false })
-        .limit(5);
-
       // Get equipment list
       const eqListResult = await supabase
         .from("equipment")
         .select("id, name, location, category, status, image_url")
         .order("created_at", { ascending: false })
         .limit(5);
-
-      // Fetch related data separately to avoid deep type instantiation
-      const activities = activitiesResult.data || [];
-      const activitiesWithRelations = await Promise.all(
-        activities.map(async (activity: any) => {
-          const [checklistRes, equipmentRes, technicianRes] = await Promise.all([
-            activity.checklist_id 
-              ? supabase.from("checklists").select("name").eq("id", activity.checklist_id).single()
-              : Promise.resolve({ data: null }),
-            activity.equipment_id
-              ? supabase.from("equipment").select("name").eq("id", activity.equipment_id).single()
-              : Promise.resolve({ data: null }),
-            activity.technician_id
-              ? supabase.from("profiles").select("full_name").eq("id", activity.technician_id).single()
-              : Promise.resolve({ data: null })
-          ]);
-          
-          return {
-            ...activity,
-            checklist: checklistRes.data,
-            equipment: equipmentRes.data,
-            technician: technicianRes.data
-          };
-        })
-      );
 
       setStats({
         totalEquipment: eqCount || 0,
@@ -163,7 +128,6 @@ export default function DashboardPage() {
         overdueItems: overdueResult.data?.length || 0
       });
 
-      setRecentActivity(activitiesWithRelations);
       setEquipmentList(eqListResult.data || []);
 
     } catch (error) {
@@ -190,25 +154,6 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Error loading user stats:", error);
     }
-  };
-
-  const formatRelativeTime = (date: string) => {
-    const now = new Date();
-    const past = new Date(date);
-    const diffMs = now.getTime() - past.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 60) return `${diffMins}m ${t("common.ago") || "ago"}`;
-    if (diffHours < 24) return `${t("analytics.today")} ${past.getHours().toString().padStart(2, "0")}:${past.getMinutes().toString().padStart(2, "0")}`;
-    if (diffDays === 1) return language === "it" ? "Ieri" : language === "fr" ? "Hier" : language === "es" ? "Ayer" : "Yesterday";
-    if (diffDays < 7) return `${diffDays}d ${t("common.ago") || "ago"}`;
-    return past.toLocaleDateString(language === "it" ? "it-IT" : language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : "en-US", { day: "2-digit", month: "short" });
-  };
-
-  const getInitials = (name: string) => {
-    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
   const getRoleLabel = (role: string) => {
@@ -341,10 +286,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* KPI CARDS */}
+        {/* KPI CARDS - All Clickable */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Equipment Stat */}
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
+          {/* Equipment Stat - Links to /equipment */}
+          <Card 
+            className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-blue-500/50 cursor-pointer"
+            onClick={() => router.push("/equipment")}
+          >
             <CardContent className="p-6">
               <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
                 <Wrench className="w-6 h-6 text-blue-400" />
@@ -356,8 +304,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Checklists Stat */}
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
+          {/* Checklists Stat - Links to /checklists */}
+          <Card 
+            className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-green-500/50 cursor-pointer"
+            onClick={() => router.push("/checklists")}
+          >
             <CardContent className="p-6">
               <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
                 <ClipboardList className="w-6 h-6 text-green-400" />
@@ -369,8 +320,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Upcoming Maintenance */}
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
+          {/* Upcoming Maintenance - Links to /maintenance */}
+          <Card 
+            className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-orange-500/50 cursor-pointer"
+            onClick={() => router.push("/maintenance")}
+          >
             <CardContent className="p-6">
               <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
                 <Clock className="w-6 h-6 text-[#FF6B35]" />
@@ -382,8 +336,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Overdue Items */}
-          <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-slate-600/50">
+          {/* Overdue Items - Links to /maintenance */}
+          <Card 
+            className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-red-500/50 cursor-pointer"
+            onClick={() => router.push("/maintenance")}
+          >
             <CardContent className="p-6">
               <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center mb-4">
                 <AlertTriangle className="w-6 h-6 text-red-400" />
@@ -396,138 +353,68 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* BOTTOM SECTIONS GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Recent Activity */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-2">
-              <h3 className="text-lg font-bold text-white">{t("dashboard.recentActivity")}</h3>
-              <Button variant="ghost" className="text-blue-400 hover:text-blue-300 font-medium p-0 h-auto hover:bg-transparent" asChild>
-                <Link href="/maintenance">{t("dashboard.viewAll")}</Link>
-              </Button>
-            </div>
+        {/* Equipment List - Full Width */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-lg font-bold text-white">{t("equipment.title")}</h3>
+            <Button variant="ghost" className="text-blue-400 hover:text-blue-300 font-medium p-0 h-auto hover:bg-transparent" asChild>
+              <Link href="/equipment">{t("dashboard.viewAll")}</Link>
+            </Button>
+          </div>
 
-            <div className="space-y-3">
-              {recentActivity.map((activity) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {equipmentList.map((item) => {
+              const statusConfig: Record<string, { label: string; color: string }> = {
+                active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
+                under_maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+                inactive: { label: t("equipment.inactive"), color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
+                decommissioned: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" }
+              };
+
+              const status = statusConfig[item.status] || statusConfig.active;
+
+              return (
                 <Card 
-                  key={activity.id} 
-                  className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all overflow-hidden group cursor-pointer hover:border-slate-600"
-                  onClick={() => router.push(`/checklist/${activity.id}`)}
+                  key={item.id} 
+                  className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl hover:border-blue-500/50 transition-all overflow-hidden cursor-pointer group"
+                  onClick={() => router.push(`/equipment/${item.id}`)}
                 >
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge className={`rounded-lg px-3 py-1 text-xs font-bold border-0 ${
-                        activity.status === "completed" 
-                          ? "bg-green-500/20 text-green-400" 
-                          : "bg-amber-500/20 text-amber-400"
-                      }`}>
-                        {activity.status === "completed" ? t("common.completed") : t("common.inProgress")}
-                      </Badge>
+                  <div className="p-4 flex items-center gap-4">
+                    <div className="w-16 h-16 bg-slate-700/50 rounded-xl flex-shrink-0 overflow-hidden relative">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-700/50 text-slate-500">
+                          <Wrench className="w-6 h-6" />
+                        </div>
+                      )}
                     </div>
-
-                    <h4 className="font-bold text-white text-base mb-2">
-                      {activity.checklist?.name || t("checklists.title")}
-                    </h4>
-
-                    <div className="flex items-center gap-2 mb-3 text-slate-400">
-                      <Wrench className="w-4 h-4" />
-                      <span className="text-sm font-medium">{activity.equipment?.name || "N/A"}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Avatar className="w-6 h-6 bg-blue-500/20">
-                          <AvatarFallback className="text-blue-400 text-xs font-semibold">
-                            {getInitials(activity.technician?.full_name || "NA")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs text-slate-400 font-medium">
-                          {activity.technician?.full_name || t("common.unassigned")}
-                        </span>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-white text-base mb-1 truncate">{item.name}</h4>
+                      <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
+                        <span className="truncate">{item.location || t("equipment.noLocation")}</span>
+                        <ChevronRight className="w-4 h-4 flex-shrink-0 text-slate-600 group-hover:text-blue-400 transition-colors" />
                       </div>
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <Clock className="w-3 h-3" />
-                        <span className="text-xs font-medium">{formatRelativeTime(activity.created_at)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 font-medium">{item.category || t("equipment.generic")}</span>
+                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
+                          {status.label}
+                        </Badge>
                       </div>
                     </div>
                   </div>
                 </Card>
-              ))}
+              );
+            })}
 
-              {recentActivity.length === 0 && (
-                <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-8 text-center">
-                  <ClipboardList className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                  <p className="text-slate-400 font-medium">{t("dashboard.noActivity")}</p>
-                </Card>
-              )}
-            </div>
+            {equipmentList.length === 0 && (
+              <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-8 text-center col-span-full">
+                <Wrench className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400 font-medium">{t("equipment.noEquipment")}</p>
+              </Card>
+            )}
           </div>
-
-          {/* Equipment List */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-2">
-              <h3 className="text-lg font-bold text-white">{t("equipment.title")}</h3>
-              <Button variant="ghost" className="text-blue-400 hover:text-blue-300 font-medium p-0 h-auto hover:bg-transparent" asChild>
-                <Link href="/equipment">{t("dashboard.viewAll")}</Link>
-              </Button>
-            </div>
-
-            <div className="space-y-3">
-              {equipmentList.map((item) => {
-                const statusConfig: Record<string, { label: string; color: string }> = {
-                  active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
-                  under_maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-                  inactive: { label: t("equipment.inactive"), color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-                  decommissioned: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" }
-                };
-
-                const status = statusConfig[item.status] || statusConfig.active;
-
-                return (
-                  <Card 
-                    key={item.id} 
-                    className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-lg hover:shadow-xl hover:border-blue-500/50 transition-all overflow-hidden cursor-pointer group"
-                    onClick={() => router.push(`/equipment/${item.id}`)}
-                  >
-                    <div className="p-4 flex items-center gap-4">
-                      <div className="w-16 h-16 bg-slate-700/50 rounded-xl flex-shrink-0 overflow-hidden relative">
-                        {item.image_url ? (
-                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-slate-700/50 text-slate-500">
-                            <Wrench className="w-6 h-6" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-white text-base mb-1 truncate">{item.name}</h4>
-                        <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
-                          <span className="truncate">{item.location || t("equipment.noLocation")}</span>
-                          <ChevronRight className="w-4 h-4 flex-shrink-0 text-slate-600 group-hover:text-blue-400 transition-colors" />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-medium">{item.category || t("equipment.generic")}</span>
-                          <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
-                            {status.label}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-
-              {equipmentList.length === 0 && (
-                <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-8 text-center">
-                  <Wrench className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                  <p className="text-slate-400 font-medium">{t("equipment.noEquipment")}</p>
-                </Card>
-              )}
-            </div>
-          </div>
-
         </div>
       </div>
     </MainLayout>
