@@ -44,6 +44,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.warning": "Attenzione",
         "common.never": "Mai",
         "common.noDescription": "Nessuna descrizione",
+        "common.show": "Mostra",
+        "common.clickToShow": "Clicca per mostrare",
 
         // Navigation
         "nav.dashboard": "Dashboard",
@@ -123,14 +125,15 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.serialNumberPlaceholder": "Inserisci numero seriale",
         "equipment.manufacturerPlaceholder": "Inserisci produttore",
         "equipment.modelPlaceholder": "Inserisci modello",
+        "equipment.noNotes": "Nessuna nota",
+        "equipment.history": "Storico",
+        "equipment.maintenanceHistory": "Storico Manutenzioni",
+        "equipment.noHistory": "Nessuno storico disponibile",
 
         // Maintenance
         "maintenance.title": "Manutenzione",
         "maintenance.subtitle": "Gestisci e monitora tutte le manutenzioni",
         "maintenance.addMaintenance": "Nuova Manutenzione",
-        "maintenance.addFirst": "Aggiungi Prima Manutenzione",
-        "maintenance.noMaintenance": "Nessuna manutenzione trovata",
-        "maintenance.noMaintenanceDesc": "Inizia aggiungendo la tua prima manutenzione",
         "maintenance.new": "Nuova Manutenzione",
         "maintenance.newMaintenance": "Nuova Manutenzione",
         "maintenance.edit": "Modifica Manutenzione",
@@ -322,6 +325,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.warning": "Warning",
         "common.never": "Never",
         "common.noDescription": "No description",
+        "common.show": "Show",
+        "common.clickToShow": "Click to show",
 
         // Navigation
         "nav.dashboard": "Dashboard",
@@ -401,6 +406,10 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.serialNumberPlaceholder": "Enter serial number",
         "equipment.manufacturerPlaceholder": "Enter manufacturer",
         "equipment.modelPlaceholder": "Enter model",
+        "equipment.noNotes": "No notes",
+        "equipment.history": "History",
+        "equipment.maintenanceHistory": "Maintenance History",
+        "equipment.noHistory": "No history available",
 
         // Maintenance
         "maintenance.title": "Maintenance",
@@ -600,6 +609,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.warning": "Attention",
         "common.never": "Jamais",
         "common.noDescription": "Aucune description",
+        "common.show": "Afficher",
+        "common.clickToShow": "Cliquez pour afficher",
 
         // Navigation
         "nav.dashboard": "Tableau de bord",
@@ -878,12 +889,14 @@ const translations: Record<Language, Record<string, string>> = {
         "common.warning": "Advertencia",
         "common.never": "Nunca",
         "common.noDescription": "Sin descripción",
+        "common.show": "Mostrar",
+        "common.clickToShow": "Clic para mostrar",
 
         // Navigation
         "nav.dashboard": "Panel de Control",
         "nav.equipment": "Equipos",
         "nav.maintenance": "Mantenimiento",
-        "nav.checklists": "Checklists",
+        "nav.checklists": "Checklist",
         "nav.analytics": "Análisis",
         "nav.settings": "Configuración",
         "nav.users": "Usuarios",
@@ -957,6 +970,10 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.serialNumberPlaceholder": "Ingrese número de serie",
         "equipment.manufacturerPlaceholder": "Ingrese fabricante",
         "equipment.modelPlaceholder": "Ingrese modelo",
+        "equipment.noNotes": "Sin notas",
+        "equipment.history": "Historial",
+        "equipment.maintenanceHistory": "Historial de Mantenimiento",
+        "equipment.noHistory": "Sin historial disponible",
 
         // Maintenance
         "maintenance.title": "Mantenimiento",
@@ -1007,7 +1024,7 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.loadError": "Error al cargar",
 
         // Checklists
-        "checklists.title": "Checklists",
+        "checklists.title": "Checklist",
         "checklists.subtitle": "Gestiona y monitorea todas las checklists",
         "checklists.addChecklist": "Nueva Checklist",
         "checklists.addFirst": "Agregar Primera Checklist",
