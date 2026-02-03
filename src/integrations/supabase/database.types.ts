@@ -25,6 +25,7 @@ export type Database = {
           maintenance_log_id: string | null
           notes: string | null
           results: Json | null
+          schedule_id: string | null
           signature: string | null
           started_at: string | null
           status: string
@@ -38,6 +39,7 @@ export type Database = {
           maintenance_log_id?: string | null
           notes?: string | null
           results?: Json | null
+          schedule_id?: string | null
           signature?: string | null
           started_at?: string | null
           status?: string
@@ -51,6 +53,7 @@ export type Database = {
           maintenance_log_id?: string | null
           notes?: string | null
           results?: Json | null
+          schedule_id?: string | null
           signature?: string | null
           started_at?: string | null
           status?: string
@@ -75,6 +78,13 @@ export type Database = {
             columns: ["maintenance_log_id"]
             isOneToOne: false
             referencedRelation: "maintenance_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_executions_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_schedules"
             referencedColumns: ["id"]
           },
         ]

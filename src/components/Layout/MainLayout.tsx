@@ -120,7 +120,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         );
       })}
 
-      {(userRole === "admin" || userRole === "supervisor") && (
+      {(profile?.role === "admin" || profile?.role === "supervisor") && (
         <>
           <div className="my-3 px-4">
             <div className="h-px bg-border" />
