@@ -94,7 +94,7 @@ export default function MaintenanceScheduleDetail() {
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
-              <CardTitle className="text-white">{t("maintenance.details")}</CardTitle>
+              <CardTitle className="text-white">{t("maintenance.scheduleDetails")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center border-b border-slate-700 pb-2">
@@ -114,7 +114,7 @@ export default function MaintenanceScheduleDetail() {
                 </span>
               </div>
               <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-                <span className="text-slate-400">{t("maintenance.lastPerformed")}</span>
+                <span className="text-slate-400">{t("maintenance.lastPerformedAt")}</span>
                 <span className="text-white">
                   {schedule.last_performed_at 
                     ? new Date(schedule.last_performed_at).toLocaleDateString() 
@@ -139,7 +139,7 @@ export default function MaintenanceScheduleDetail() {
         <div className="flex justify-center pt-6">
           <Button size="lg" className="w-full md:w-auto bg-[#FF6B35] hover:bg-[#e55a2b]" onClick={() => router.push(`/checklist/execute?schedule=${schedule.id}&equipment=${schedule.equipment_id}`)}>
             <CheckCircle className="mr-2 h-5 w-5" />
-            {t("maintenance.performNow")}
+            {t("maintenance.performMaintenance")}
           </Button>
         </div>
       </div>

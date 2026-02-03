@@ -42,10 +42,12 @@ const translations: Record<Language, Record<string, string>> = {
         "common.success": "Successo",
         "common.error": "Errore",
         "common.warning": "Attenzione",
+        "common.never": "Mai",
+        "common.noDescription": "Nessuna descrizione",
 
         // Navigation
         "nav.dashboard": "Dashboard",
-        "nav.equipment": "Attrezzature",
+        "nav.equipment": "Attrezzatura",
         "nav.maintenance": "Manutenzione",
         "nav.checklists": "Checklist",
         "nav.analytics": "Analisi",
@@ -75,7 +77,7 @@ const translations: Record<Language, Record<string, string>> = {
         "dashboard.selectLanguage": "Seleziona Lingua",
 
         // Equipment
-        "equipment.title": "Attrezzature",
+        "equipment.title": "Attrezzatura",
         "equipment.subtitle": "Gestisci e monitora tutte le attrezzature",
         "equipment.new": "Nuova Attrezzatura",
         "equipment.edit": "Modifica Attrezzatura",
@@ -164,6 +166,11 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.createError": "Errore durante la creazione",
         "maintenance.updateSuccess": "Manutenzione aggiornata con successo",
         "maintenance.updateError": "Errore durante l'aggiornamento",
+        "maintenance.scheduleDetails": "Dettagli Programma",
+        "maintenance.lastPerformedAt": "Ultima Esecuzione",
+        "maintenance.performMaintenance": "Esegui Manutenzione",
+        "maintenance.notFound": "Manutenzione non trovata",
+        "maintenance.loadError": "Errore durante il caricamento",
 
         // Checklists
         "checklists.title": "Checklist",
@@ -272,7 +279,7 @@ const translations: Record<Language, Record<string, string>> = {
         "analytics.title": "Analisi",
         "analytics.checklistExecutions": "Esecuzioni Checklist",
         "analytics.maintenanceStats": "Statistiche Manutenzione",
-        "analytics.equipmentStatus": "Stato Attrezzature",
+        "analytics.equipmentStatus": "Stato Attrezzatura",
         "analytics.period": "Periodo",
         "analytics.today": "Oggi",
         "analytics.thisWeek": "Questa Settimana",
@@ -313,6 +320,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.success": "Success",
         "common.error": "Error",
         "common.warning": "Warning",
+        "common.never": "Never",
+        "common.noDescription": "No description",
 
         // Navigation
         "nav.dashboard": "Dashboard",
@@ -435,6 +444,11 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.createError": "Error creating maintenance",
         "maintenance.updateSuccess": "Maintenance updated successfully",
         "maintenance.updateError": "Error updating maintenance",
+        "maintenance.scheduleDetails": "Schedule Details",
+        "maintenance.lastPerformedAt": "Last Performed",
+        "maintenance.performMaintenance": "Perform Maintenance",
+        "maintenance.notFound": "Maintenance not found",
+        "maintenance.loadError": "Error loading maintenance",
 
         // Checklists
         "checklists.title": "Checklists",
@@ -584,6 +598,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.success": "Succès",
         "common.error": "Erreur",
         "common.warning": "Attention",
+        "common.never": "Jamais",
+        "common.noDescription": "Aucune description",
 
         // Navigation
         "nav.dashboard": "Tableau de bord",
@@ -683,7 +699,7 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.type": "Type de Maintenance",
         "maintenance.preventive": "Préventive",
         "maintenance.corrective": "Corrective",
-        "maintenance.predictive": "Prédictive",
+        "maintenance.predictive": "Préditive",
         "maintenance.scheduledDate": "Date Programmée",
         "maintenance.completedDate": "Date de Fin",
         "maintenance.technician": "Technicien",
@@ -706,6 +722,11 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.createError": "Erreur lors de la création",
         "maintenance.updateSuccess": "Maintenance mise à jour avec succès",
         "maintenance.updateError": "Erreur lors de la mise à jour",
+        "maintenance.scheduleDetails": "Détails du Programme",
+        "maintenance.lastPerformedAt": "Dernière Exécution",
+        "maintenance.performMaintenance": "Effectuer la Maintenance",
+        "maintenance.notFound": "Maintenance non trouvée",
+        "maintenance.loadError": "Erreur lors du chargement",
 
         // Checklists
         "checklists.title": "Checklists",
@@ -800,9 +821,9 @@ const translations: Record<Language, Record<string, string>> = {
         "scanner.scan": "Scanner",
         "scanner.scanning": "Scan en cours...",
         "scanner.noCamera": "Aucune caméra trouvée",
-        "scanner.permissionDenied": "Permission caméra refusée",
-        "scanner.equipmentFound": "Équipement trouvé",
-        "scanner.equipmentNotFound": "Équipement non trouvé",
+        "scanner.permissionDenied": "Permesso caméra negato",
+        "scanner.equipmentFound": "Attrezzatura trovata",
+        "scanner.equipmentNotFound": "Attrezzatura non trovata",
 
         // Notifications
         "notifications.title": "Notifications",
@@ -855,6 +876,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.success": "Éxito",
         "common.error": "Error",
         "common.warning": "Advertencia",
+        "common.never": "Nunca",
+        "common.noDescription": "Sin descripción",
 
         // Navigation
         "nav.dashboard": "Panel de Control",
@@ -977,6 +1000,11 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.createError": "Error al crear mantenimiento",
         "maintenance.updateSuccess": "Mantenimiento actualizado exitosamente",
         "maintenance.updateError": "Error al actualizar",
+        "maintenance.scheduleDetails": "Detalles del Programa",
+        "maintenance.lastPerformedAt": "Última Ejecución",
+        "maintenance.performMaintenance": "Realizar Mantenimiento",
+        "maintenance.notFound": "Mantenimiento no encontrado",
+        "maintenance.loadError": "Error al cargar",
 
         // Checklists
         "checklists.title": "Checklists",
@@ -1062,7 +1090,7 @@ const translations: Record<Language, Record<string, string>> = {
         "auth.rememberMe": "Recordarme",
         "auth.noAccount": "¿No tiene una cuenta?",
         "auth.hasAccount": "¿Ya tiene una cuenta?",
-        "auth.invalidCredentials": "Credenciales inválidas",
+        "auth.invalidCredentials": "Identifiants invalides",
         "auth.loginSuccess": "Inicio de sesión exitoso",
         "auth.logoutSuccess": "Cierre de sesión exitoso",
 
