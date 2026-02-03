@@ -26,6 +26,7 @@ export default function EditChecklist() {
   const router = useRouter();
   const { id } = router.query;
   const { t } = useLanguage();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [checklist, setChecklist] = useState<any>(null);
