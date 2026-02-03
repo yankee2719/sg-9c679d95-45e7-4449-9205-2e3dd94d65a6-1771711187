@@ -226,31 +226,6 @@ export const maintenanceService = {
     return data;
   },
 
-  // Complete maintenance log
-  async completeLog(id: string, completionData: {
-    time_spent_minutes?: number;
-    notes?: string;
-  }) {
-    const { data, error } = await supabase
-      .from("maintenance_logs")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        time_spent_minutes: completionData.time_spent_minutes || null,
-        notes: completionData.notes || null
-      })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error completing maintenance log:", error);
-      throw error;
-    }
-
-    return data;
-  },
-
   // Get upcoming maintenance
   async getUpcoming(days: number = 7): Promise<MaintenanceSchedule[]> {
     const futureDate = new Date();

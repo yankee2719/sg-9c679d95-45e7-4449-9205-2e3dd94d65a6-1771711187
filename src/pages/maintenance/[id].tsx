@@ -6,21 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { maintenanceService } from "@/services/maintenanceService";
-import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Edit, Trash2, CheckCircle } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { useLanguage } from "@/contexts/LanguageContext";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 export default function MaintenanceScheduleDetail() {
   const router = useRouter();
@@ -30,9 +18,6 @@ export default function MaintenanceScheduleDetail() {
   
   const [schedule, setSchedule] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
-  const [timeSpent, setTimeSpent] = useState("");
-  const [completionNotes, setCompletionNotes] = useState("");
 
   useEffect(() => {
     if (id && typeof id === "string") {
@@ -70,54 +55,6 @@ export default function MaintenanceScheduleDetail() {
       toast({
         title: t("common.error"),
         description: t("maintenance.deleteError"),
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleComplete = async () => {
-    try {
-      // First create a maintenance log if it doesn't exist
-      const logs = await maintenanceService.getLogs(schedule.equipment_id);
-      let logId = logs.find((log: any) => log.schedule_id === schedule.id)?.id;
-
-      if (!logId) {
-        // Create a new log entry
-        const { data: session } = await supabase.auth.getSession();
-        const newLog = await maintenanceService.createLog({
-          equipment_id: schedule.equipment_id,
-          performed_by: session?.session?.user?.id || "",
-          title: schedule.title,
-          description: schedule.description || "",
-          schedule_id: schedule.id,
-          status: "completed"
-        });
-        logId = newLog.id;
-      }
-
-      // Complete the log
-      await maintenanceService.completeLog(logId, {
-        time_spent_minutes: timeSpent ? parseInt(timeSpent) : undefined,
-        notes: completionNotes || undefined
-      });
-
-      // Update the schedule's last_performed_at
-      await maintenanceService.updateSchedule(schedule.id, {
-        last_performed_at: new Date().toISOString()
-      });
-
-      toast({
-        title: t("common.success"),
-        description: "Manutenzione completata con successo",
-      });
-
-      setShowCompleteDialog(false);
-      loadSchedule(id as string);
-    } catch (error) {
-      console.error("Error completing maintenance:", error);
-      toast({
-        title: t("common.error"),
-        description: "Errore durante il completamento della manutenzione",
         variant: "destructive",
       });
     }
@@ -200,53 +137,11 @@ export default function MaintenanceScheduleDetail() {
         </div>
 
         <div className="flex justify-center pt-6">
-          <Button size="lg" className="w-full md:w-auto bg-[#FF6B35] hover:bg-[#e55a2b]" onClick={() => setShowCompleteDialog(true)}>
+          <Button size="lg" className="w-full md:w-auto bg-[#FF6B35] hover:bg-[#e55a2b]" onClick={() => router.push(`/checklist/execute?schedule=${schedule.id}&equipment=${schedule.equipment_id}`)}>
             <CheckCircle className="mr-2 h-5 w-5" />
-            Completa Manutenzione
+            {t("maintenance.performMaintenance")}
           </Button>
         </div>
-
-        <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
-          <DialogContent className="bg-slate-800 border-slate-700 text-white">
-            <DialogHeader>
-              <DialogTitle>Completa Manutenzione</DialogTitle>
-              <DialogDescription className="text-slate-400">
-                Inserisci i dettagli del completamento della manutenzione
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="timeSpent">Tempo impiegato (minuti)</Label>
-                <Input
-                  id="timeSpent"
-                  type="number"
-                  placeholder="Es: 120"
-                  value={timeSpent}
-                  onChange={(e) => setTimeSpent(e.target.value)}
-                  className="bg-slate-900 border-slate-700 text-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notes">Note (opzionale)</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Aggiungi note sul lavoro svolto..."
-                  value={completionNotes}
-                  onChange={(e) => setCompletionNotes(e.target.value)}
-                  className="bg-slate-900 border-slate-700 text-white min-h-[100px]"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCompleteDialog(false)} className="border-slate-600 text-white hover:bg-slate-700">
-                Annulla
-              </Button>
-              <Button onClick={handleComplete} className="bg-[#FF6B35] hover:bg-[#e55a2b]">
-                Completa
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </MainLayout>
   );
