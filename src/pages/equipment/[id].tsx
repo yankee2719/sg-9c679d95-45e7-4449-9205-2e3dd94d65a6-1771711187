@@ -190,14 +190,14 @@ export default function EquipmentDetailPage() {
           {/* QR Code Card - Now takes the right column */}
           <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-foreground">QR Code</CardTitle>
+              <CardTitle className="text-foreground">{t("equipment.qrCode")}</CardTitle>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowQR(!showQR)}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground border-primary"
               >
-                {showQR ? t("common.hide") : t("common.show")}
+                {showQR ? t("common.close") : t("common.show")}
               </Button>
             </CardHeader>
             <CardContent className="flex justify-center">
@@ -216,7 +216,7 @@ export default function EquipmentDetailPage() {
           {/* Notes Card */}
           <Card className="lg:col-span-3 bg-slate-800 border-slate-700">
             <CardHeader>
-              <CardTitle className="text-white">{t("equipment.notes")}</CardTitle>
+              <CardTitle className="text-white">{t("common.notes")}</CardTitle>
             </CardHeader>
             <CardContent>
               {equipment.notes ? (
@@ -241,7 +241,7 @@ export default function EquipmentDetailPage() {
             </TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-slate-700">
               <History className="h-4 w-4 mr-2" />
-              {t("equipment.history")}
+              {t("equipment.maintenanceHistory")}
             </TabsTrigger>
           </TabsList>
 
@@ -253,12 +253,12 @@ export default function EquipmentDetailPage() {
                   onClick={() => router.push(`/maintenance/new?equipment=${equipment.id}`)}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
-                  {t("maintenance.schedule")}
+                  {t("maintenance.new")}
                 </Button>
               </CardHeader>
               <CardContent>
                 {maintenance.length === 0 ? (
-                  <p className="text-slate-500 text-center py-8">{t("maintenance.noScheduled")}</p>
+                  <p className="text-slate-500 text-center py-8">{t("maintenance.noMaintenance")}</p>
                 ) : (
                   <div className="space-y-3">
                     {maintenance.map((item) => (
@@ -272,7 +272,7 @@ export default function EquipmentDetailPage() {
                           <p className="text-sm text-slate-400">
                             {item.next_due_date
                               ? new Date(item.next_due_date).toLocaleDateString()
-                              : t("common.noDate")}
+                              : t("common.never")}
                           </p>
                         </div>
                       </div>
