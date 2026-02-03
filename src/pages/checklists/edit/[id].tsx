@@ -7,16 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Upload, X } from "lucide-react";
 import { checklistService } from "@/services/checklistService";
 import { SEO } from "@/components/SEO";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChecklistItem {
   id?: string;
   title: string;
   description?: string;
   is_required?: boolean;
+  images?: string[];
 }
 
 export default function EditChecklist() {
@@ -48,8 +51,49 @@ export default function EditChecklist() {
     }
   };
 
+  const handleImageUpload = async (index: number, file: File) => {
+    try {
+      const itemId = items[index].id || `temp-${index}`;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${itemId}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('checklist-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('checklist-images')
+        .getPublicUrl(filePath);
+
+      const newItems = [...items];
+      newItems[index].images = [...(newItems[index].images || []), publicUrl];
+      setItems(newItems);
+
+      toast({
+        title: t("common.success"),
+        description: "Immagine caricata con successo",
+      });
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: t("common.error"),
+        description: "Errore durante il caricamento dell'immagine",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const removeImage = (itemIndex: number, imageUrl: string) => {
+    const newItems = [...items];
+    newItems[itemIndex].images = newItems[itemIndex].images?.filter(img => img !== imageUrl) || [];
+    setItems(newItems);
+  };
+
   const handleAddItem = () => {
-    setItems([...items, { title: "", description: "", is_required: false }]);
+    setItems([...items, { title: "", description: "", is_required: false, images: [] }]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -146,6 +190,53 @@ export default function EditChecklist() {
                     onChange={(e) => handleItemChange(index, "description", e.target.value)}
                     className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
+                  <div>
+                    <Label className="text-xs text-slate-400 mb-2 block">Immagini di riferimento</Label>
+                    <div className="space-y-2">
+                      {item.images && item.images.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2">
+                          {item.images.map((imageUrl, imgIndex) => (
+                            <div key={imgIndex} className="relative group">
+                              <img 
+                                src={imageUrl} 
+                                alt={`Riferimento ${imgIndex + 1}`}
+                                className="w-full h-20 object-cover rounded border border-slate-600"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index, imageUrl)}
+                                className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`image-${index}`}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleImageUpload(index, file);
+                              e.target.value = '';
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        <Label
+                          htmlFor={`image-${index}`}
+                          className="cursor-pointer flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded text-sm text-slate-300 transition-colors"
+                        >
+                          <Upload className="h-4 w-4" />
+                          Carica immagine
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox 
                       checked={item.is_required || false}

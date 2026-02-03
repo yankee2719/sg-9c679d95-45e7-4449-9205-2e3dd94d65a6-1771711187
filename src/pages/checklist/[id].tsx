@@ -22,6 +22,7 @@ interface ChecklistItem {
     order_index: number;
     checked?: boolean;
     notes?: string;
+    images?: string[];
 }
 
 interface ChecklistExecution {
@@ -387,6 +388,24 @@ export default function ChecklistExecutionPage() {
 
                                             {item.description && (
                                                 <p className="text-sm text-gray-400">{item.description}</p>
+                                            )}
+
+                                            {item.images && item.images.length > 0 && (
+                                                <div className="space-y-2 mt-3">
+                                                    <p className="text-xs text-gray-400 font-medium">Immagini di riferimento:</p>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                        {item.images.map((imageUrl, imgIndex) => (
+                                                            <div key={imgIndex} className="relative group cursor-pointer">
+                                                                <img 
+                                                                    src={imageUrl} 
+                                                                    alt={`Riferimento ${imgIndex + 1}`}
+                                                                    className="w-full h-24 object-cover rounded border border-gray-600 hover:border-primary transition-colors"
+                                                                    onClick={() => window.open(imageUrl, '_blank')}
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             )}
 
                                             <div className="space-y-2">
