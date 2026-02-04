@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 // Helper function to bypass TypeScript type inference issues
 async function fetchExecutions(startDate: string) {
+  // @ts-expect-error - Bypass deep type instantiation error
   const result = await supabase
     .from("checklist_executions")
     .select("checklist_id")
@@ -11,6 +12,7 @@ async function fetchExecutions(startDate: string) {
 
 // Helper function for checklists
 async function fetchChecklists(ids: string[]) {
+  // @ts-expect-error - Bypass deep type instantiation error
   const result = await supabase
     .from("checklists")
     .select("id, name")
@@ -227,6 +229,7 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
+      // @ts-expect-error - Bypass deep type instantiation error
       const result = await supabase
         .from("checklist_executions")
         .select("executed_by, status, started_at, completed_at")
@@ -243,6 +246,7 @@ export const analyticsService = {
 
       // Get profiles separately
       const userIds = Array.from(new Set(data?.map(e => e.executed_by) || []));
+      // @ts-expect-error - Bypass deep type instantiation error
       const profileResult = await supabase
         .from("profiles")
         .select("id, full_name")
