@@ -29,6 +29,7 @@ export type Database = {
           signature: string | null
           started_at: string | null
           status: string
+          tenant_id: string | null
         }
         Insert: {
           checklist_id: string
@@ -43,6 +44,7 @@ export type Database = {
           signature?: string | null
           started_at?: string | null
           status?: string
+          tenant_id?: string | null
         }
         Update: {
           checklist_id?: string
@@ -57,6 +59,7 @@ export type Database = {
           signature?: string | null
           started_at?: string | null
           status?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -85,6 +88,13 @@ export type Database = {
             columns: ["schedule_id"]
             isOneToOne: false
             referencedRelation: "maintenance_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_executions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -142,6 +152,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          tenant_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -152,6 +163,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
+          tenant_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -162,6 +174,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          tenant_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -170,6 +183,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklists_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -182,6 +202,7 @@ export type Database = {
           file_size: number | null
           file_type: string | null
           id: string
+          tenant_id: string | null
           title: string
           uploaded_by: string | null
         }
@@ -192,6 +213,7 @@ export type Database = {
           file_size?: number | null
           file_type?: string | null
           id?: string
+          tenant_id?: string | null
           title: string
           uploaded_by?: string | null
         }
@@ -202,6 +224,7 @@ export type Database = {
           file_size?: number | null
           file_type?: string | null
           id?: string
+          tenant_id?: string | null
           title?: string
           uploaded_by?: string | null
         }
@@ -211,6 +234,13 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
@@ -238,6 +268,7 @@ export type Database = {
           serial_number: string | null
           status: string
           technical_specs: Json | null
+          tenant_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -255,6 +286,7 @@ export type Database = {
           serial_number?: string | null
           status?: string
           technical_specs?: Json | null
+          tenant_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -272,9 +304,18 @@ export type Database = {
           serial_number?: string | null
           status?: string
           technical_specs?: Json | null
+          tenant_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "equipment_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       maintenance_logs: {
         Row: {
@@ -472,6 +513,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           role: string
+          tenant_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -482,6 +524,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           role: string
+          tenant_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -492,6 +535,42 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           role?: string
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          created_at: string | null
+          id: string
+          max_users: number | null
+          name: string
+          subscription_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          max_users?: number | null
+          name: string
+          subscription_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          max_users?: number | null
+          name?: string
+          subscription_status?: string | null
           updated_at?: string | null
         }
         Relationships: []

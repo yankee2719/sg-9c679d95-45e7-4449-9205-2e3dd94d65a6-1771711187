@@ -8,8 +8,8 @@ export interface ChecklistExecutionStats {
 }
 
 export interface TemplateUsageStats {
-  template_id: string;
-  template_name: string;
+  checklist_id: string;
+  checklist_name: string;
   usage_count: number;
 }
 
@@ -51,9 +51,8 @@ export const analyticsService = {
 
       // Get active checklists count
       const { count: checklistCount, error: clError } = await supabase
-        .from("checklist_templates")
-        .select("*", { count: "exact", head: true })
-        .eq("is_active", true);
+        .from("checklists")
+        .select("*", { count: "exact", head: true });
 
       if (clError) console.error("Error fetching checklist count:", clError);
 
@@ -150,7 +149,7 @@ export const analyticsService = {
     }
   },
 
-  // Get template usage stats
+  // Get checklist usage stats
   async getTemplateUsageStats(daysAgo: number = 30): Promise<TemplateUsageStats[]> {
     try {
       const startDate = new Date();
@@ -159,28 +158,28 @@ export const analyticsService = {
       const { data, error } = await supabase
         .from("checklist_executions")
         .select(`
-          template_id,
-          checklist_templates (name)
+          checklist_id,
+          checklists (name)
         `)
         .gte("started_at", startDate.toISOString());
 
       if (error) throw error;
 
-      const templateCounts: Record<string, { name: string; count: number }> = {};
+      const checklistCounts: Record<string, { name: string; count: number }> = {};
       data?.forEach((execution) => {
-        const templateId = execution.template_id;
-        const templateName = (execution.checklist_templates as any)?.name || "Unknown";
+        const checklistId = execution.checklist_id;
+        const checklistName = (execution.checklists as any)?.name || "Unknown";
         
-        if (!templateCounts[templateId]) {
-          templateCounts[templateId] = { name: templateName, count: 0 };
+        if (!checklistCounts[checklistId]) {
+          checklistCounts[checklistId] = { name: checklistName, count: 0 };
         }
-        templateCounts[templateId].count++;
+        checklistCounts[checklistId].count++;
       });
 
-      return Object.entries(templateCounts)
-        .map(([template_id, { name, count }]) => ({
-          template_id,
-          template_name: name,
+      return Object.entries(checklistCounts)
+        .map(([checklist_id, { name, count }]) => ({
+          checklist_id,
+          checklist_name: name,
           usage_count: count,
         }))
         .sort((a, b) => b.usage_count - a.usage_count);
@@ -218,11 +217,11 @@ export const analyticsService = {
       }> = {};
 
       data?.forEach((execution) => {
-        const odId = execution.executed_by;
+        const techId = execution.executed_by;
         const name = (execution.profiles as any)?.full_name || "Unknown";
 
-        if (!technicianStats[odId]) {
-          technicianStats[odId] = {
+        if (!technicianStats[techId]) {
+          technicianStats[techId] = {
             name,
             executions: 0,
             completed: 0,
@@ -231,18 +230,18 @@ export const analyticsService = {
           };
         }
 
-        technicianStats[odId].executions++;
+        technicianStats[techId].executions++;
         
         if (execution.status === "completed") {
-          technicianStats[odId].completed++;
+          technicianStats[techId].completed++;
           
           if (execution.started_at && execution.completed_at) {
             const startTime = new Date(execution.started_at).getTime();
             const endTime = new Date(execution.completed_at).getTime();
             const minutes = (endTime - startTime) / (1000 * 60);
             if (minutes > 0 && minutes < 480) { // Max 8 hours
-              technicianStats[odId].totalTime += minutes;
-              technicianStats[odId].completedWithTime++;
+              technicianStats[techId].totalTime += minutes;
+              technicianStats[techId].completedWithTime++;
             }
           }
         }
@@ -331,9 +330,9 @@ export const analyticsService = {
       startDate.setMonth(startDate.getMonth() - months);
 
       const { data, error } = await supabase
-        .from("maintenance_logs")
-        .select("status, performed_at, scheduled_date")
-        .gte("performed_at", startDate.toISOString());
+        .from("maintenance")
+        .select("status, completed_at, scheduled_date")
+        .gte("completed_at", startDate.toISOString());
 
       if (error) throw error;
 
@@ -348,8 +347,8 @@ export const analyticsService = {
       }
 
       data?.forEach((log) => {
-        if (log.performed_at) {
-          const date = new Date(log.performed_at);
+        if (log.completed_at) {
+          const date = new Date(log.completed_at);
           const monthKey = date.toLocaleDateString("it-IT", { month: "short" });
           if (monthlyStats[monthKey]) {
             monthlyStats[monthKey].scheduled++;
