@@ -54,17 +54,13 @@ interface User {
   full_name: string | null;
   role: "admin" | "supervisor" | "technician";
   is_active: boolean;
-  phone: string | null;
   created_at: string;
-  last_sign_in_at: string | null;
-  two_factor_enabled: boolean;
   tenant_id: string | null;
 }
 
 interface Tenant {
   id: string;
   name: string;
-  is_active: boolean;
 }
 
 export default function AdminUsersPage() {
@@ -97,7 +93,6 @@ export default function AdminUsersPage() {
   const [editUserData, setEditUserData] = useState({
     full_name: "",
     role: "technician" as "admin" | "supervisor" | "technician",
-    phone: "",
     is_active: true,
   });
 
@@ -201,10 +196,7 @@ export default function AdminUsersPage() {
         full_name: u.full_name,
         role: u.role as "admin" | "supervisor" | "technician",
         is_active: u.is_active ?? true,
-        phone: u.phone,
         created_at: u.created_at || "",
-        last_sign_in_at: u.last_sign_in_at,
-        two_factor_enabled: u.two_factor_enabled ?? false,
         tenant_id: u.tenant_id,
       })));
     } catch (error) {
@@ -218,7 +210,7 @@ export default function AdminUsersPage() {
   };
 
   // Get available roles based on current user's role
-  const getAvailableRoles = () => {
+  const getAvailableRoles = (): ("admin" | "supervisor" | "technician")[] => {
     if (currentUserRole === "admin") {
       return ["supervisor", "technician"];
     } else if (currentUserRole === "supervisor") {
@@ -250,9 +242,11 @@ export default function AdminUsersPage() {
 
     setCreating(true);
     try {
-      const { data, error } = await apiClient.users.create({
-        ...newUserData,
-        tenant_id: currentTenantId,
+      const { error } = await apiClient.users.create({
+        email: newUserData.email,
+        password: newUserData.password,
+        full_name: newUserData.full_name || undefined,
+        role: newUserData.role,
       });
 
       if (error) {
@@ -307,7 +301,6 @@ export default function AdminUsersPage() {
         .update({
           full_name: editUserData.full_name,
           role: editUserData.role,
-          phone: editUserData.phone,
           is_active: editUserData.is_active,
         })
         .eq("id", selectedUser.id);
@@ -404,7 +397,6 @@ export default function AdminUsersPage() {
     setEditUserData({
       full_name: user.full_name || "",
       role: user.role,
-      phone: user.phone || "",
       is_active: user.is_active,
     });
     setEditDialogOpen(true);
@@ -577,7 +569,7 @@ export default function AdminUsersPage() {
                     <TableHead className="text-muted-foreground">{t("users.name")}</TableHead>
                     <TableHead className="text-muted-foreground">{t("users.role")}</TableHead>
                     <TableHead className="text-muted-foreground">{t("users.status")}</TableHead>
-                    <TableHead className="text-muted-foreground">{t("users.lastAccess")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("users.createdAt")}</TableHead>
                     <TableHead className="text-muted-foreground text-right">{t("users.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -611,9 +603,9 @@ export default function AdminUsersPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {user.last_sign_in_at
-                            ? new Date(user.last_sign_in_at).toLocaleDateString("it-IT")
-                            : t("users.never")}
+                          {user.created_at
+                            ? new Date(user.created_at).toLocaleDateString("it-IT")
+                            : "-"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -797,18 +789,6 @@ export default function AdminUsersPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit_phone">{t("users.phone")}</Label>
-              <Input
-                id="edit_phone"
-                type="tel"
-                value={editUserData.phone}
-                onChange={(e) =>
-                  setEditUserData({ ...editUserData, phone: e.target.value })
-                }
-              />
             </div>
 
             <div className="space-y-2">
