@@ -1,25 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Helper function to bypass TypeScript type inference issues
-async function fetchExecutions(startDate: string) {
-  // @ts-expect-error - Bypass deep type instantiation error
-  const result = await supabase
-    .from("checklist_executions")
-    .select("checklist_id")
-    .gte("started_at", startDate);
-  return result;
-}
-
-// Helper function for checklists
-async function fetchChecklists(ids: string[]) {
-  // @ts-expect-error - Bypass deep type instantiation error
-  const result = await supabase
-    .from("checklists")
-    .select("id, name")
-    .in("id", ids);
-  return result;
-}
-
 // Simple type definitions to avoid deep type instantiation
 interface SimpleExecution {
   checklist_id: string;
@@ -65,6 +45,33 @@ export interface DashboardStats {
   activeChecklists: number;
   upcomingMaintenance: number;
   overdueItems: number;
+}
+
+// Helper function to get checklist executions - bypasses type inference issues
+async function getChecklistExecutionsRaw(startDate: string): Promise<{ data: SimpleExecution[] | null; error: unknown }> {
+  const { data, error } = await (supabase as unknown as { from: (table: string) => { select: (cols: string) => { gte: (col: string, val: string) => Promise<{ data: SimpleExecution[] | null; error: unknown }> } } })
+    .from("checklist_executions")
+    .select("checklist_id, status, started_at, completed_at, executed_by")
+    .gte("started_at", startDate);
+  return { data, error };
+}
+
+// Helper function to get checklists by IDs
+async function getChecklistsByIds(ids: string[]): Promise<{ data: Array<{ id: string; name: string }> | null; error: unknown }> {
+  const { data, error } = await (supabase as unknown as { from: (table: string) => { select: (cols: string) => { in: (col: string, vals: string[]) => Promise<{ data: Array<{ id: string; name: string }> | null; error: unknown }> } } })
+    .from("checklists")
+    .select("id, name")
+    .in("id", ids);
+  return { data, error };
+}
+
+// Helper function to get profiles by IDs
+async function getProfilesByIds(ids: string[]): Promise<{ data: Array<{ id: string; full_name: string | null }> | null; error: unknown }> {
+  const { data, error } = await (supabase as unknown as { from: (table: string) => { select: (cols: string) => { in: (col: string, vals: string[]) => Promise<{ data: Array<{ id: string; full_name: string | null }> | null; error: unknown }> } } })
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", ids);
+  return { data, error };
 }
 
 export const analyticsService = {
@@ -151,10 +158,7 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      const { data, error } = await supabase
-        .from("checklist_executions")
-        .select("status")
-        .gte("started_at", startDate.toISOString());
+      const { data, error } = await getChecklistExecutionsRaw(startDate.toISOString());
 
       if (error) throw error;
 
@@ -184,25 +188,21 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      // Use helper function to avoid type instantiation error
-      const { data: rawData, error: execError } = await fetchExecutions(startDate.toISOString());
+      const { data: executions, error: execError } = await getChecklistExecutionsRaw(startDate.toISOString());
 
       if (execError) throw execError;
-      
-      const executions = (rawData || []) as Array<{ checklist_id: string }>;
+      if (!executions || executions.length === 0) return [];
 
       // Get unique checklist IDs
       const checklistIds = Array.from(new Set(executions.map(e => e.checklist_id)));
       
       if (checklistIds.length === 0) return [];
       
-      // Use helper function for checklists
-      const { data: checklistData, error: clError } = await fetchChecklists(checklistIds);
+      const { data: checklists, error: clError } = await getChecklistsByIds(checklistIds);
       
       if (clError) throw clError;
 
-      const checklists = (checklistData || []) as Array<{ id: string; name: string }>;
-      const checklistMap = new Map(checklists.map(c => [c.id, c.name]));
+      const checklistMap = new Map((checklists || []).map(c => [c.id, c.name]));
 
       const checklistCounts: Record<string, number> = {};
       executions.forEach((execution) => {
@@ -229,31 +229,19 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      // @ts-expect-error - Bypass deep type instantiation error
-      const result = await supabase
-        .from("checklist_executions")
-        .select("executed_by, status, started_at, completed_at")
-        .gte("started_at", startDate.toISOString());
+      const { data, error } = await getChecklistExecutionsRaw(startDate.toISOString());
 
-      if (result.error) throw result.error;
-      
-      const data = result.data as Array<{
-        executed_by: string;
-        status: string;
-        started_at: string;
-        completed_at: string | null;
-      }>;
+      if (error) throw error;
+      if (!data || data.length === 0) return [];
 
-      // Get profiles separately
-      const userIds = Array.from(new Set(data?.map(e => e.executed_by) || []));
-      // @ts-expect-error - Bypass deep type instantiation error
-      const profileResult = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", userIds);
+      // Get unique user IDs
+      const userIds = Array.from(new Set(data.map(e => e.executed_by).filter((id): id is string => !!id)));
       
-      const profiles = profileResult.data as Array<{ id: string; full_name: string | null }> | null;
-      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name || "Unknown"]) || []);
+      const { data: profiles, error: profileError } = await getProfilesByIds(userIds);
+      
+      if (profileError) console.error("Error fetching profiles:", profileError);
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name || "Unknown"]));
 
       const technicianStats: Record<string, {
         name: string;
@@ -263,8 +251,10 @@ export const analyticsService = {
         completedWithTime: number;
       }> = {};
 
-      data?.forEach((execution) => {
+      data.forEach((execution) => {
         const techId = execution.executed_by;
+        if (!techId) return;
+        
         const name = profileMap.get(techId) || "Unknown";
 
         if (!technicianStats[techId]) {
@@ -317,11 +307,7 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      const { data, error } = await supabase
-        .from("checklist_executions")
-        .select("started_at")
-        .gte("started_at", startDate.toISOString())
-        .order("started_at", { ascending: true });
+      const { data, error } = await getChecklistExecutionsRaw(startDate.toISOString());
 
       if (error) throw error;
 
@@ -378,7 +364,7 @@ export const analyticsService = {
 
       const { data, error } = await supabase
         .from("maintenance_logs")
-        .select("status, completed_at, created_at")
+        .select("status, performed_at, created_at")
         .gte("created_at", startDate.toISOString());
 
       if (error) throw error;
@@ -394,7 +380,7 @@ export const analyticsService = {
       }
 
       data?.forEach((log) => {
-        const date = log.completed_at ? new Date(log.completed_at) : new Date(log.created_at);
+        const date = log.performed_at ? new Date(log.performed_at) : new Date(log.created_at);
         const monthKey = date.toLocaleDateString("it-IT", { month: "short" });
         if (monthlyStats[monthKey]) {
           monthlyStats[monthKey].scheduled++;
