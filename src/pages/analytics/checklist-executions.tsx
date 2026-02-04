@@ -14,13 +14,13 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ChecklistExecution {
   id: string;
-  template_id: string;
+  checklist_id: string;
   equipment_id: string;
   executed_by: string;
   started_at: string;
   completed_at: string | null;
   status: string;
-  checklist_templates: {
+  checklists: {
     name: string;
   } | null;
   equipment: {
@@ -77,7 +77,7 @@ export default function ChecklistExecutionsAnalytics() {
       .from("checklist_executions")
       .select(`
         *,
-        checklist_templates (name),
+        checklists (name),
         equipment (name, equipment_code),
         profiles (full_name)
       `)
@@ -125,7 +125,7 @@ export default function ChecklistExecutionsAnalytics() {
     const csvContent = [
       ["Checklist", "Attrezzatura", "Esecutore", "Data", "Stato"].join(","),
       ...executions.map(e => [
-        e.checklist_templates?.name || "N/A",
+        e.checklists?.name || "N/A",
         e.equipment?.name || "N/A",
         e.profiles?.full_name || "N/A",
         e.started_at ? format(new Date(e.started_at), "dd/MM/yyyy HH:mm") : "N/A",
@@ -258,14 +258,14 @@ export default function ChecklistExecutionsAnalytics() {
                 <div className="space-y-3">
                   {templateStats.slice(0, 5).map((template, index) => (
                     <div
-                      key={template.template_id}
+                      key={template.checklist_id}
                       className="flex items-center justify-between p-3 border border-slate-700/50 rounded-lg bg-slate-800/50"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-medium">
                           {index + 1}
                         </div>
-                        <span className="text-white font-medium">{template.template_name}</span>
+                        <span className="text-white font-medium">{template.checklist_name}</span>
                       </div>
                       <Badge variant="secondary" className="bg-blue-500/10 text-blue-400">
                         {template.usage_count} esecuzioni
@@ -339,7 +339,7 @@ export default function ChecklistExecutionsAnalytics() {
                   >
                     <div className="flex-1">
                       <div className="font-medium text-white">
-                        {execution.checklist_templates?.name || "Checklist sconosciuta"}
+                        {execution.checklists?.name || "Checklist sconosciuta"}
                       </div>
                       <div className="text-sm text-slate-400 mt-1">
                         Attrezzatura: {execution.equipment?.name || "N/A"} ({execution.equipment?.equipment_code || "N/A"})
