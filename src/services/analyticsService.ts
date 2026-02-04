@@ -1,5 +1,23 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// Helper function to bypass TypeScript type inference issues
+async function fetchExecutions(startDate: string) {
+  const result = await supabase
+    .from("checklist_executions")
+    .select("checklist_id")
+    .gte("started_at", startDate);
+  return result;
+}
+
+// Helper function for checklists
+async function fetchChecklists(ids: string[]) {
+  const result = await supabase
+    .from("checklists")
+    .select("id, name")
+    .in("id", ids);
+  return result;
+}
+
 // Simple type definitions to avoid deep type instantiation
 interface SimpleExecution {
   checklist_id: string;
@@ -164,28 +182,24 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      // Use type assertion to avoid deep instantiation - this is the problematic line
-      const { data: rawData, error: execError } = await supabase
-        .from("checklist_executions")
-        .select("checklist_id")
-        .gte("started_at", startDate.toISOString()) as { data: Array<{ checklist_id: string }> | null; error: any };
+      // Use helper function to avoid type instantiation error
+      const { data: rawData, error: execError } = await fetchExecutions(startDate.toISOString());
 
       if (execError) throw execError;
       
-      const executions = rawData || [];
+      const executions = (rawData || []) as Array<{ checklist_id: string }>;
 
       // Get unique checklist IDs
       const checklistIds = Array.from(new Set(executions.map(e => e.checklist_id)));
       
-      // Second query - get checklist names
-      const { data: checklistData, error: clError } = await supabase
-        .from("checklists")
-        .select("id, name")
-        .in("id", checklistIds) as { data: Array<{ id: string; name: string }> | null; error: any };
+      if (checklistIds.length === 0) return [];
+      
+      // Use helper function for checklists
+      const { data: checklistData, error: clError } = await fetchChecklists(checklistIds);
       
       if (clError) throw clError;
 
-      const checklists = checklistData || [];
+      const checklists = (checklistData || []) as Array<{ id: string; name: string }>;
       const checklistMap = new Map(checklists.map(c => [c.id, c.name]));
 
       const checklistCounts: Record<string, number> = {};
