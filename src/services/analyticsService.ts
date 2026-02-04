@@ -9,6 +9,13 @@ interface SimpleExecution {
   executed_by?: string;
 }
 
+// Type for maintenance log query result
+interface MaintenanceLogRow {
+  status: string;
+  completed_at: string | null;
+  created_at: string | null;
+}
+
 export interface ChecklistExecutionStats {
   total: number;
   completed: number;
@@ -96,7 +103,7 @@ export const analyticsService = {
       const { count: upcomingCount, error: umError } = await supabase
         .from("maintenance_schedules")
         .select("*", { count: "exact", head: true })
-        .eq("is_active", true);
+        .eq("status", "active");
 
       if (umError) console.error("Error fetching maintenance count:", umError);
 
@@ -105,7 +112,7 @@ export const analyticsService = {
       const { count: overdueCount, error: odError } = await supabase
         .from("maintenance_schedules")
         .select("*", { count: "exact", head: true })
-        .eq("is_active", true)
+        .eq("status", "active")
         .lt("next_due_date", today);
 
       if (odError) console.error("Error fetching overdue count:", odError);
@@ -365,7 +372,8 @@ export const analyticsService = {
       const { data, error } = await supabase
         .from("maintenance_logs")
         .select("status, completed_at, created_at")
-        .gte("created_at", startDate.toISOString());
+        .gte("created_at", startDate.toISOString())
+        .returns<MaintenanceLogRow[]>();
 
       if (error) throw error;
 
@@ -380,7 +388,7 @@ export const analyticsService = {
       }
 
       data?.forEach((log) => {
-        const date = log.completed_at ? new Date(log.completed_at) : new Date(log.created_at);
+        const date = log.completed_at ? new Date(log.completed_at) : new Date(log.created_at!);
         const monthKey = date.toLocaleDateString("it-IT", { month: "short" });
         if (monthlyStats[monthKey]) {
           monthlyStats[monthKey].scheduled++;

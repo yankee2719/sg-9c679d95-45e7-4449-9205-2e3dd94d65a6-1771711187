@@ -81,14 +81,24 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
-  const navigation = [
-    { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard },
-    { name: t("nav.equipment"), href: "/equipment", icon: Wrench },
-    { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock },
-    { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList },
-    { name: t("nav.scanner"), href: "/scanner", icon: QrCode },
-    { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3 },
-  ];
+  // Navigation items based on role
+  const getNavigationItems = () => {
+    const currentRole = profile?.role || userRole;
+    
+    // Base navigation for all roles
+    const baseNav = [
+      { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
+      { name: t("nav.equipment"), href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
+      { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
+      { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
+      { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
+      { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
+    ];
+
+    return baseNav.filter(item => item.roles.includes(currentRole));
+  };
+
+  const navigation = getNavigationItems();
 
   const adminNavigation = [
     { name: t("nav.users"), href: "/admin/users", icon: Users },
@@ -97,6 +107,11 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
   const isActive = (href: string) => {
     if (href === "/dashboard") return router.pathname === "/dashboard";
     return router.pathname.startsWith(href);
+  };
+
+  const canAccessAdmin = () => {
+    const currentRole = profile?.role || userRole;
+    return currentRole === "admin" || currentRole === "supervisor";
   };
 
   const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
@@ -120,7 +135,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         );
       })}
 
-      {(profile?.role === "admin" || profile?.role === "supervisor") && (
+      {canAccessAdmin() && (
         <>
           <div className="my-3 px-4">
             <div className="h-px bg-border" />
