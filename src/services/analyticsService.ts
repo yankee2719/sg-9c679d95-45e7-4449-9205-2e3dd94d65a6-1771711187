@@ -364,7 +364,7 @@ export const analyticsService = {
 
       const { data, error } = await supabase
         .from("maintenance_logs")
-        .select("status, performed_at, created_at")
+        .select("status, completed_at, created_at")
         .gte("created_at", startDate.toISOString());
 
       if (error) throw error;
@@ -380,7 +380,7 @@ export const analyticsService = {
       }
 
       data?.forEach((log) => {
-        const date = log.performed_at ? new Date(log.performed_at) : new Date(log.created_at);
+        const date = log.completed_at ? new Date(log.completed_at) : new Date(log.created_at);
         const monthKey = date.toLocaleDateString("it-IT", { month: "short" });
         if (monthlyStats[monthKey]) {
           monthlyStats[monthKey].scheduled++;
