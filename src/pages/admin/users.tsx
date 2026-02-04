@@ -32,9 +32,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { authService } from "@/services/authService";
-import { userService } from "@/services/userService";
 import { apiClient } from "@/lib/apiClient";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   UserPlus,
   Shield,
@@ -46,6 +45,7 @@ import {
   CheckCircle,
   XCircle,
   Search,
+  Building2,
 } from "lucide-react";
 
 interface User {
@@ -58,14 +58,24 @@ interface User {
   created_at: string;
   last_sign_in_at: string | null;
   two_factor_enabled: boolean;
+  tenant_id: string | null;
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 export default function AdminUsersPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useLanguage();
 
-  const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician" | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<"admin" | "supervisor" | "technician" | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+  const [currentTenantName, setCurrentTenantName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,7 +106,7 @@ export default function AdminUsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   useEffect(() => {
-    const checkAdminAccess = async () => {
+    const checkAccess = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
@@ -104,24 +114,51 @@ export default function AdminUsersPage() {
           return;
         }
         
-        const profile = await userService.getUserById(user.id);
-        if (profile.role !== "admin") {
+        // Get user profile with tenant info
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role, tenant_id")
+          .eq("id", user.id)
+          .single();
+
+        if (profileError || !profile) {
+          router.push("/login");
+          return;
+        }
+
+        // Only admin and supervisor can access this page
+        if (profile.role !== "admin" && profile.role !== "supervisor") {
           router.push("/dashboard");
           return;
         }
 
-        setUserRole(profile.role);
+        setCurrentUserRole(profile.role as "admin" | "supervisor" | "technician");
         setCurrentUserId(user.id);
-        await loadUsers();
+        setCurrentTenantId(profile.tenant_id);
+
+        // Get tenant name
+        if (profile.tenant_id) {
+          const { data: tenant } = await supabase
+            .from("tenants")
+            .select("name")
+            .eq("id", profile.tenant_id)
+            .single();
+          
+          if (tenant) {
+            setCurrentTenantName(tenant.name);
+          }
+        }
+
+        await loadUsers(profile.role as "admin" | "supervisor", profile.tenant_id);
       } catch (error) {
-        console.error("Error checking admin access:", error);
+        console.error("Error checking access:", error);
         router.push("/login");
       } finally {
         setLoading(false);
       }
     };
 
-    checkAdminAccess();
+    checkAccess();
   }, [router]);
 
   useEffect(() => {
@@ -140,46 +177,91 @@ export default function AdminUsersPage() {
     }
   }, [searchQuery, users]);
 
-  const loadUsers = async () => {
+  const loadUsers = async (role: "admin" | "supervisor", tenantId: string | null) => {
     try {
-      const { data, error } = await apiClient.users.list();
+      // Load users from same tenant only (RLS will enforce this)
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      if (error) {
-        throw new Error(error);
+      if (error) throw error;
+
+      // Filter based on role hierarchy
+      let filteredData = data || [];
+      
+      if (role === "supervisor") {
+        // Supervisors can only see technicians
+        filteredData = filteredData.filter(u => u.role === "technician");
       }
 
-      setUsers(data?.users || []);
+      setUsers(filteredData.map(u => ({
+        id: u.id,
+        email: u.email || "",
+        full_name: u.full_name,
+        role: u.role as "admin" | "supervisor" | "technician",
+        is_active: u.is_active ?? true,
+        phone: u.phone,
+        created_at: u.created_at || "",
+        last_sign_in_at: u.last_sign_in_at,
+        two_factor_enabled: u.two_factor_enabled ?? false,
+        tenant_id: u.tenant_id,
+      })));
     } catch (error) {
       console.error("Error loading users:", error);
       toast({
         variant: "destructive",
-        title: "Errore",
-        description: "Impossibile caricare gli utenti",
+        title: t("common.error"),
+        description: t("users.loadError"),
       });
     }
+  };
+
+  // Get available roles based on current user's role
+  const getAvailableRoles = () => {
+    if (currentUserRole === "admin") {
+      return ["supervisor", "technician"];
+    } else if (currentUserRole === "supervisor") {
+      return ["technician"];
+    }
+    return [];
   };
 
   const handleCreateUser = async () => {
     if (!newUserData.email || !newUserData.password) {
       toast({
         variant: "destructive",
-        title: "Errore",
-        description: "Email e password sono obbligatori",
+        title: t("common.error"),
+        description: t("users.emailPasswordRequired"),
+      });
+      return;
+    }
+
+    // Validate role hierarchy
+    const availableRoles = getAvailableRoles();
+    if (!availableRoles.includes(newUserData.role)) {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotCreateRole"),
       });
       return;
     }
 
     setCreating(true);
     try {
-      const { data, error } = await apiClient.users.create(newUserData);
+      const { data, error } = await apiClient.users.create({
+        ...newUserData,
+        tenant_id: currentTenantId,
+      });
 
       if (error) {
         throw new Error(error);
       }
 
       toast({
-        title: "✅ Utente Creato",
-        description: `${newUserData.email} è stato creato con successo`,
+        title: "✅ " + t("users.created"),
+        description: `${newUserData.email} ${t("users.createdSuccess")}`,
       });
 
       setCreateDialogOpen(false);
@@ -191,13 +273,13 @@ export default function AdminUsersPage() {
         phone: "",
       });
 
-      await loadUsers();
-    } catch (error: any) {
+      await loadUsers(currentUserRole!, currentTenantId);
+    } catch (error: unknown) {
       console.error("Error creating user:", error);
       toast({
         variant: "destructive",
-        title: "❌ Errore",
-        description: error.message || "Impossibile creare l'utente",
+        title: "❌ " + t("common.error"),
+        description: error instanceof Error ? error.message : t("users.createError"),
       });
     } finally {
       setCreating(false);
@@ -207,29 +289,46 @@ export default function AdminUsersPage() {
   const handleEditUser = async () => {
     if (!selectedUser) return;
 
+    // Validate role hierarchy
+    const availableRoles = getAvailableRoles();
+    if (editUserData.role !== selectedUser.role && !availableRoles.includes(editUserData.role)) {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotAssignRole"),
+      });
+      return;
+    }
+
     setEditing(true);
     try {
-      const { error } = await apiClient.users.update(selectedUser.id, editUserData);
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: editUserData.full_name,
+          role: editUserData.role,
+          phone: editUserData.phone,
+          is_active: editUserData.is_active,
+        })
+        .eq("id", selectedUser.id);
 
-      if (error) {
-        throw new Error(error);
-      }
+      if (error) throw error;
 
       toast({
-        title: "✅ Utente Aggiornato",
-        description: "Le modifiche sono state salvate",
+        title: "✅ " + t("users.updated"),
+        description: t("users.updatedSuccess"),
       });
 
       setEditDialogOpen(false);
       setSelectedUser(null);
 
-      await loadUsers();
-    } catch (error: any) {
+      await loadUsers(currentUserRole!, currentTenantId);
+    } catch (error: unknown) {
       console.error("Error updating user:", error);
       toast({
         variant: "destructive",
-        title: "❌ Errore",
-        description: error.message || "Impossibile aggiornare l'utente",
+        title: "❌ " + t("common.error"),
+        description: error instanceof Error ? error.message : t("users.updateError"),
       });
     } finally {
       setEditing(false);
@@ -239,29 +338,51 @@ export default function AdminUsersPage() {
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
 
+    // Prevent deleting yourself
+    if (userToDelete.id === currentUserId) {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotDeleteSelf"),
+      });
+      return;
+    }
+
+    // Validate role hierarchy
+    if (currentUserRole === "supervisor" && userToDelete.role !== "technician") {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotDeleteRole"),
+      });
+      return;
+    }
+
     setDeleting(true);
     try {
-      const { error } = await apiClient.users.delete(userToDelete.id);
+      // Deactivate user instead of deleting
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: false })
+        .eq("id", userToDelete.id);
 
-      if (error) {
-        throw new Error(error);
-      }
+      if (error) throw error;
 
       toast({
-        title: "✅ Utente Eliminato",
-        description: `${userToDelete.email} è stato eliminato`,
+        title: "✅ " + t("users.deactivated"),
+        description: `${userToDelete.email} ${t("users.deactivatedSuccess")}`,
       });
 
       setDeleteDialogOpen(false);
       setUserToDelete(null);
 
-      await loadUsers();
-    } catch (error: any) {
-      console.error("Error deleting user:", error);
+      await loadUsers(currentUserRole!, currentTenantId);
+    } catch (error: unknown) {
+      console.error("Error deactivating user:", error);
       toast({
         variant: "destructive",
-        title: "❌ Errore",
-        description: error.message || "Impossibile eliminare l'utente",
+        title: "❌ " + t("common.error"),
+        description: error instanceof Error ? error.message : t("users.deleteError"),
       });
     } finally {
       setDeleting(false);
@@ -269,6 +390,16 @@ export default function AdminUsersPage() {
   };
 
   const openEditDialog = (user: User) => {
+    // Validate can edit this user
+    if (currentUserRole === "supervisor" && user.role !== "technician") {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotEditRole"),
+      });
+      return;
+    }
+
     setSelectedUser(user);
     setEditUserData({
       full_name: user.full_name || "",
@@ -280,6 +411,25 @@ export default function AdminUsersPage() {
   };
 
   const openDeleteDialog = (user: User) => {
+    // Validate can delete this user
+    if (user.id === currentUserId) {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotDeleteSelf"),
+      });
+      return;
+    }
+
+    if (currentUserRole === "supervisor" && user.role !== "technician") {
+      toast({
+        variant: "destructive",
+        title: t("common.error"),
+        description: t("users.cannotDeleteRole"),
+      });
+      return;
+    }
+
     setUserToDelete(user);
     setDeleteDialogOpen(true);
   };
@@ -287,11 +437,11 @@ export default function AdminUsersPage() {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "admin":
-        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Admin</Badge>;
+        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{t("users.roleAdmin")}</Badge>;
       case "supervisor":
-        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Supervisore</Badge>;
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">{t("users.roleSupervisor")}</Badge>;
       case "technician":
-        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Tecnico</Badge>;
+        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">{t("users.roleTechnician")}</Badge>;
       default:
         return <Badge>{role}</Badge>;
     }
@@ -299,85 +449,82 @@ export default function AdminUsersPage() {
 
   if (loading) {
     return (
-      <MainLayout userRole={userRole}>
+      <MainLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-[#fb923c]" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </MainLayout>
     );
   }
 
   return (
-    <MainLayout userRole={userRole}>
-      <SEO title="Gestione Utenti - Maint Ops" />
+    <MainLayout>
+      <SEO title={`${t("users.title")} - Maint Ops`} />
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Shield className="h-8 w-8 text-[#fb923c]" />
-              Gestione Utenti
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+              <Shield className="h-8 w-8 text-primary" />
+              {t("users.title")}
             </h1>
-            <p className="text-slate-400 mt-2">
-              Amministra utenti, ruoli e permessi del sistema
+            <p className="text-muted-foreground mt-2 flex items-center gap-2">
+              {currentTenantName && (
+                <>
+                  <Building2 className="h-4 w-4" />
+                  <span className="font-medium">{currentTenantName}</span>
+                  <span>•</span>
+                </>
+              )}
+              {currentUserRole === "admin" 
+                ? t("users.descriptionAdmin")
+                : t("users.descriptionSupervisor")}
             </p>
           </div>
           <Button
             onClick={() => setCreateDialogOpen(true)}
-            className="bg-[#fb923c] hover:bg-[#f97316] text-white"
+            className="bg-primary hover:bg-primary/90"
           >
             <UserPlus className="h-5 w-5 mr-2" />
-            Nuovo Utente
+            {t("users.newUser")}
           </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-card border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Totale Utenti</p>
-                  <p className="text-3xl font-bold text-white mt-2">{users.length}</p>
+                  <p className="text-sm text-muted-foreground">{t("users.totalUsers")}</p>
+                  <p className="text-3xl font-bold text-foreground mt-2">{users.length}</p>
                 </div>
                 <Users className="h-12 w-12 text-blue-500 opacity-20" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Amministratori</p>
-                  <p className="text-3xl font-bold text-white mt-2">
-                    {users.filter((u) => u.role === "admin").length}
-                  </p>
+          {currentUserRole === "admin" && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">{t("users.supervisors")}</p>
+                    <p className="text-3xl font-bold text-foreground mt-2">
+                      {users.filter((u) => u.role === "supervisor").length}
+                    </p>
+                  </div>
+                  <Shield className="h-12 w-12 text-blue-500 opacity-20" />
                 </div>
-                <Shield className="h-12 w-12 text-red-500 opacity-20" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-card border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Supervisori</p>
-                  <p className="text-3xl font-bold text-white mt-2">
-                    {users.filter((u) => u.role === "supervisor").length}
-                  </p>
-                </div>
-                <Users className="h-12 w-12 text-blue-500 opacity-20" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-400">Tecnici</p>
-                  <p className="text-3xl font-bold text-white mt-2">
+                  <p className="text-sm text-muted-foreground">{t("users.technicians")}</p>
+                  <p className="text-3xl font-bold text-foreground mt-2">
                     {users.filter((u) => u.role === "technician").length}
                   </p>
                 </div>
@@ -385,55 +532,68 @@ export default function AdminUsersPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-card border-border">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{t("users.activeUsers")}</p>
+                  <p className="text-3xl font-bold text-foreground mt-2">
+                    {users.filter((u) => u.is_active).length}
+                  </p>
+                </div>
+                <CheckCircle className="h-12 w-12 text-green-500 opacity-20" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
-                placeholder="Cerca per email, nome o ruolo..."
+                placeholder={t("users.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                className="pl-10"
               />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-white">
-              Elenco Utenti ({filteredUsers.length})
+            <CardTitle className="text-foreground">
+              {t("users.userList")} ({filteredUsers.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-700">
-                    <TableHead className="text-slate-300">Email</TableHead>
-                    <TableHead className="text-slate-300">Nome</TableHead>
-                    <TableHead className="text-slate-300">Ruolo</TableHead>
-                    <TableHead className="text-slate-300">Stato</TableHead>
-                    <TableHead className="text-slate-300">2FA</TableHead>
-                    <TableHead className="text-slate-300">Ultimo Accesso</TableHead>
-                    <TableHead className="text-slate-300 text-right">Azioni</TableHead>
+                  <TableRow className="border-border">
+                    <TableHead className="text-muted-foreground">{t("users.email")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("users.name")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("users.role")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("users.status")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("users.lastAccess")}</TableHead>
+                    <TableHead className="text-muted-foreground text-right">{t("users.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-slate-400">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>Nessun utente trovato</p>
+                        <p>{t("users.noUsers")}</p>
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredUsers.map((user) => (
-                      <TableRow key={user.id} className="border-slate-700">
-                        <TableCell className="text-white">{user.email}</TableCell>
-                        <TableCell className="text-slate-300">
+                      <TableRow key={user.id} className="border-border">
+                        <TableCell className="text-foreground">{user.email}</TableCell>
+                        <TableCell className="text-muted-foreground">
                           {user.full_name || "-"}
                         </TableCell>
                         <TableCell>{getRoleBadge(user.role)}</TableCell>
@@ -441,30 +601,19 @@ export default function AdminUsersPage() {
                           {user.is_active ? (
                             <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                               <CheckCircle className="h-3 w-3 mr-1" />
-                              Attivo
+                              {t("users.active")}
                             </Badge>
                           ) : (
                             <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
                               <XCircle className="h-3 w-3 mr-1" />
-                              Inattivo
+                              {t("users.inactive")}
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell>
-                          {user.two_factor_enabled ? (
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                              Abilitato
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-slate-400">
-                              Disabilitato
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-slate-400">
+                        <TableCell className="text-muted-foreground">
                           {user.last_sign_in_at
                             ? new Date(user.last_sign_in_at).toLocaleDateString("it-IT")
-                            : "Mai"}
+                            : t("users.never")}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -473,6 +622,7 @@ export default function AdminUsersPage() {
                               variant="ghost"
                               onClick={() => openEditDialog(user)}
                               className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                              disabled={currentUserRole === "supervisor" && user.role !== "technician"}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -481,6 +631,7 @@ export default function AdminUsersPage() {
                               variant="ghost"
                               onClick={() => openDeleteDialog(user)}
                               className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              disabled={user.id === currentUserId || (currentUserRole === "supervisor" && user.role !== "technician")}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -496,18 +647,19 @@ export default function AdminUsersPage() {
         </Card>
       </div>
 
+      {/* Create User Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+        <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-white">Crea Nuovo Utente</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Inserisci i dati del nuovo utente
+            <DialogTitle className="text-foreground">{t("users.createNew")}</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t("users.createDescription")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-200">Email *</Label>
+              <Label htmlFor="email">{t("users.email")} *</Label>
               <Input
                 id="email"
                 type="email"
@@ -516,12 +668,11 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, email: e.target.value })
                 }
                 placeholder="utente@example.com"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-200">Password *</Label>
+              <Label htmlFor="password">{t("users.password")} *</Label>
               <Input
                 id="password"
                 type="password"
@@ -530,12 +681,11 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, password: e.target.value })
                 }
                 placeholder="••••••••"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="full_name" className="text-slate-200">Nome Completo</Label>
+              <Label htmlFor="full_name">{t("users.fullName")}</Label>
               <Input
                 id="full_name"
                 value={newUserData.full_name}
@@ -543,31 +693,32 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, full_name: e.target.value })
                 }
                 placeholder="Mario Rossi"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="role" className="text-slate-200">Ruolo *</Label>
+              <Label htmlFor="role">{t("users.role")} *</Label>
               <Select
                 value={newUserData.role}
-                onValueChange={(value: any) =>
+                onValueChange={(value: "admin" | "supervisor" | "technician") =>
                   setNewUserData({ ...newUserData, role: value })
                 }
               >
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                  <SelectValue placeholder="Seleziona ruolo" />
+                <SelectTrigger>
+                  <SelectValue placeholder={t("users.selectRole")} />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="admin" className="text-white">Admin</SelectItem>
-                  <SelectItem value="supervisor" className="text-white">Supervisor</SelectItem>
-                  <SelectItem value="technician" className="text-white">Technician</SelectItem>
+                <SelectContent>
+                  {getAvailableRoles().map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role === "supervisor" ? t("users.roleSupervisor") : t("users.roleTechnician")}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-slate-200">Telefono</Label>
+              <Label htmlFor="phone">{t("users.phone")}</Label>
               <Input
                 id="phone"
                 type="tel"
@@ -576,7 +727,6 @@ export default function AdminUsersPage() {
                   setNewUserData({ ...newUserData, phone: e.target.value })
                 }
                 placeholder="+39 123 456 7890"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
           </div>
@@ -586,71 +736,71 @@ export default function AdminUsersPage() {
               variant="outline"
               onClick={() => setCreateDialogOpen(false)}
               disabled={creating}
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
-              Annulla
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={handleCreateUser}
               disabled={creating}
-              className="bg-[#fb923c] hover:bg-[#f97316] text-white"
             >
               {creating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creazione...
+                  {t("common.creating")}
                 </>
               ) : (
-                "Crea Utente"
+                t("users.createUser")
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Edit User Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+        <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-white">Modifica Utente</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Aggiorna i dati di {selectedUser?.email}
+            <DialogTitle className="text-foreground">{t("users.editUser")}</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t("users.editDescription")} {selectedUser?.email}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit_full_name" className="text-slate-200">Nome Completo</Label>
+              <Label htmlFor="edit_full_name">{t("users.fullName")}</Label>
               <Input
                 id="edit_full_name"
                 value={editUserData.full_name}
                 onChange={(e) =>
                   setEditUserData({ ...editUserData, full_name: e.target.value })
                 }
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_role" className="text-slate-200">Ruolo</Label>
+              <Label htmlFor="edit_role">{t("users.role")}</Label>
               <Select
                 value={editUserData.role}
-                onValueChange={(value: any) =>
+                onValueChange={(value: "admin" | "supervisor" | "technician") =>
                   setEditUserData({ ...editUserData, role: value })
                 }
               >
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="admin" className="text-white">Admin</SelectItem>
-                  <SelectItem value="supervisor" className="text-white">Supervisor</SelectItem>
-                  <SelectItem value="technician" className="text-white">Technician</SelectItem>
+                <SelectContent>
+                  {getAvailableRoles().map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role === "supervisor" ? t("users.roleSupervisor") : t("users.roleTechnician")}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_phone" className="text-slate-200">Telefono</Label>
+              <Label htmlFor="edit_phone">{t("users.phone")}</Label>
               <Input
                 id="edit_phone"
                 type="tel"
@@ -658,24 +808,23 @@ export default function AdminUsersPage() {
                 onChange={(e) =>
                   setEditUserData({ ...editUserData, phone: e.target.value })
                 }
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit_is_active" className="text-slate-200">Stato</Label>
+              <Label htmlFor="edit_is_active">{t("users.status")}</Label>
               <Select
                 value={editUserData.is_active ? "active" : "inactive"}
                 onValueChange={(value) =>
                   setEditUserData({ ...editUserData, is_active: value === "active" })
                 }
               >
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="active" className="text-white">Attivo</SelectItem>
-                  <SelectItem value="inactive" className="text-white">Inattivo</SelectItem>
+                <SelectContent>
+                  <SelectItem value="active">{t("users.active")}</SelectItem>
+                  <SelectItem value="inactive">{t("users.inactive")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -686,35 +835,34 @@ export default function AdminUsersPage() {
               variant="outline"
               onClick={() => setEditDialogOpen(false)}
               disabled={editing}
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
-              Annulla
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={handleEditUser}
               disabled={editing}
-              className="bg-[#fb923c] hover:bg-[#f97316] text-white"
             >
               {editing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Salvataggio...
+                  {t("common.saving")}
                 </>
               ) : (
-                "Salva Modifiche"
+                t("common.save")
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Delete User Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="bg-slate-800 border-slate-700 text-white">
+        <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-red-400">Elimina Utente</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Sei sicuro di voler eliminare <strong>{userToDelete?.email}</strong>?
-              Questa azione non può essere annullata.
+            <DialogTitle className="text-destructive">{t("users.deactivateUser")}</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t("users.deactivateConfirm")} <strong>{userToDelete?.email}</strong>?
+              {t("users.deactivateNote")}
             </DialogDescription>
           </DialogHeader>
 
@@ -723,22 +871,21 @@ export default function AdminUsersPage() {
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
               disabled={deleting}
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
-              Annulla
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={handleDeleteUser}
               disabled={deleting}
-              className="bg-red-500 hover:bg-red-600 text-white"
+              variant="destructive"
             >
               {deleting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Eliminazione...
+                  {t("common.deactivating")}
                 </>
               ) : (
-                "Elimina Utente"
+                t("users.deactivate")
               )}
             </Button>
           </DialogFooter>
