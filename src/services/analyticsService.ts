@@ -1,7 +1,23 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 
-type Tables<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
+// Simple type definitions to avoid deep type instantiation
+interface SimpleExecution {
+  status: string;
+  started_at: string;
+  completed_at?: string | null;
+  executed_by: string;
+  checklist_id: string;
+}
+
+interface SimpleProfile {
+  id: string;
+  full_name: string | null;
+}
+
+interface SimpleChecklist {
+  id: string;
+  name: string;
+}
 
 export interface ChecklistExecutionStats {
   total: number;
@@ -158,22 +174,24 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      const { data, error } = await supabase
+      const result = await supabase
         .from("checklist_executions")
         .select("checklist_id")
         .gte("started_at", startDate.toISOString());
 
-      if (error) throw error;
+      if (result.error) throw result.error;
+      const data = result.data as Array<{ checklist_id: string }>;
 
       // Get unique checklist IDs
       const checklistIds = Array.from(new Set(data?.map(e => e.checklist_id) || []));
       
       // Get checklist names separately
-      const { data: checklists } = await supabase
+      const checklistResult = await supabase
         .from("checklists")
         .select("id, name")
         .in("id", checklistIds);
-
+      
+      const checklists = checklistResult.data as SimpleChecklist[] | null;
       const checklistMap = new Map(checklists?.map(c => [c.id, c.name]) || []);
 
       const checklistCounts: Record<string, number> = {};
@@ -201,21 +219,23 @@ export const analyticsService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysAgo);
 
-      const { data, error } = await supabase
+      const result = await supabase
         .from("checklist_executions")
         .select("executed_by, status, started_at, completed_at")
         .gte("started_at", startDate.toISOString());
 
-      if (error) throw error;
+      if (result.error) throw result.error;
+      const data = result.data as SimpleExecution[];
 
       // Get profiles separately to avoid deep type instantiation
       const userIds = Array.from(new Set(data?.map(e => e.executed_by) || []));
-      const { data: profiles } = await supabase
+      const profileResult = await supabase
         .from("profiles")
         .select("id, full_name")
         .in("id", userIds);
-
-      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
+      
+      const profiles = profileResult.data as SimpleProfile[] | null;
+      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name || "Unknown"]) || []);
 
       const technicianStats: Record<string, {
         name: string;
