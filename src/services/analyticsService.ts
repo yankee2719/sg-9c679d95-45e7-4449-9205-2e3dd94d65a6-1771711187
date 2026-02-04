@@ -330,7 +330,7 @@ export const analyticsService = {
       startDate.setMonth(startDate.getMonth() - months);
 
       const { data, error } = await supabase
-        .from("maintenance")
+        .from("maintenance_logs")
         .select("status, completed_at, scheduled_date")
         .gte("completed_at", startDate.toISOString());
 
