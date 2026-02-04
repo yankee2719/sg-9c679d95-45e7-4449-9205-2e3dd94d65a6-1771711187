@@ -172,8 +172,14 @@ export default function AdminUsersPage() {
     }
   }, [searchQuery, users]);
 
-  const loadUsers = async (role: "admin" | "supervisor", tenantId: string | null) => {
+  const loadUsers = async (role: "admin" | "supervisor" | "technician", tenantId: string | null) => {
     try {
+      // Technicians shouldn't be on this page, but handle gracefully
+      if (role === "technician") {
+        setUsers([]);
+        return;
+      }
+      
       // Load users from same tenant only (RLS will enforce this)
       const { data, error } = await supabase
         .from("profiles")
