@@ -1,4 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type Tables<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
 
 export interface ChecklistExecutionStats {
   total: number;
@@ -157,29 +160,32 @@ export const analyticsService = {
 
       const { data, error } = await supabase
         .from("checklist_executions")
-        .select(`
-          checklist_id,
-          checklists (name)
-        `)
+        .select("checklist_id")
         .gte("started_at", startDate.toISOString());
 
       if (error) throw error;
 
-      const checklistCounts: Record<string, { name: string; count: number }> = {};
+      // Get unique checklist IDs
+      const checklistIds = Array.from(new Set(data?.map(e => e.checklist_id) || []));
+      
+      // Get checklist names separately
+      const { data: checklists } = await supabase
+        .from("checklists")
+        .select("id, name")
+        .in("id", checklistIds);
+
+      const checklistMap = new Map(checklists?.map(c => [c.id, c.name]) || []);
+
+      const checklistCounts: Record<string, number> = {};
       data?.forEach((execution) => {
         const checklistId = execution.checklist_id;
-        const checklistName = (execution.checklists as any)?.name || "Unknown";
-        
-        if (!checklistCounts[checklistId]) {
-          checklistCounts[checklistId] = { name: checklistName, count: 0 };
-        }
-        checklistCounts[checklistId].count++;
+        checklistCounts[checklistId] = (checklistCounts[checklistId] || 0) + 1;
       });
 
       return Object.entries(checklistCounts)
-        .map(([checklist_id, { name, count }]) => ({
+        .map(([checklist_id, count]) => ({
           checklist_id,
-          checklist_name: name,
+          checklist_name: checklistMap.get(checklist_id) || "Unknown",
           usage_count: count,
         }))
         .sort((a, b) => b.usage_count - a.usage_count);
@@ -197,16 +203,19 @@ export const analyticsService = {
 
       const { data, error } = await supabase
         .from("checklist_executions")
-        .select(`
-          executed_by,
-          status,
-          started_at,
-          completed_at,
-          profiles (full_name)
-        `)
+        .select("executed_by, status, started_at, completed_at")
         .gte("started_at", startDate.toISOString());
 
       if (error) throw error;
+
+      // Get profiles separately to avoid deep type instantiation
+      const userIds = Array.from(new Set(data?.map(e => e.executed_by) || []));
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
 
       const technicianStats: Record<string, {
         name: string;
@@ -218,7 +227,7 @@ export const analyticsService = {
 
       data?.forEach((execution) => {
         const techId = execution.executed_by;
-        const name = (execution.profiles as any)?.full_name || "Unknown";
+        const name = profileMap.get(techId) || "Unknown";
 
         if (!technicianStats[techId]) {
           technicianStats[techId] = {
@@ -239,7 +248,7 @@ export const analyticsService = {
             const startTime = new Date(execution.started_at).getTime();
             const endTime = new Date(execution.completed_at).getTime();
             const minutes = (endTime - startTime) / (1000 * 60);
-            if (minutes > 0 && minutes < 480) { // Max 8 hours
+            if (minutes > 0 && minutes < 480) {
               technicianStats[techId].totalTime += minutes;
               technicianStats[techId].completedWithTime++;
             }
@@ -331,8 +340,8 @@ export const analyticsService = {
 
       const { data, error } = await supabase
         .from("maintenance_logs")
-        .select("status, completed_at, scheduled_date")
-        .gte("completed_at", startDate.toISOString());
+        .select("status, completed_at, created_at")
+        .gte("created_at", startDate.toISOString());
 
       if (error) throw error;
 
@@ -347,14 +356,12 @@ export const analyticsService = {
       }
 
       data?.forEach((log) => {
-        if (log.completed_at) {
-          const date = new Date(log.completed_at);
-          const monthKey = date.toLocaleDateString("it-IT", { month: "short" });
-          if (monthlyStats[monthKey]) {
-            monthlyStats[monthKey].scheduled++;
-            if (log.status === "completed") {
-              monthlyStats[monthKey].completed++;
-            }
+        const date = log.completed_at ? new Date(log.completed_at) : new Date(log.created_at);
+        const monthKey = date.toLocaleDateString("it-IT", { month: "short" });
+        if (monthlyStats[monthKey]) {
+          monthlyStats[monthKey].scheduled++;
+          if (log.status === "completed") {
+            monthlyStats[monthKey].completed++;
           }
         }
       });
