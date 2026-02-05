@@ -37,3 +37,8 @@ next-env.d.ts
 
 # firebase
 firebase-service-account.json
+
+# Softgen - prevent committing dependencies and build artifacts
+dist/
+.cache/
+.turbo/
