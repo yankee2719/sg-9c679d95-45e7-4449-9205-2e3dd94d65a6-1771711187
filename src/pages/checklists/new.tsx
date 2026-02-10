@@ -182,15 +182,31 @@ export default function NewChecklistTemplate() {
                 return;
             }
 
+            // Get user profile for tenant_id
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("tenant_id")
+                .eq("id", user.id)
+                .single();
+
+            if (!profile?.tenant_id) {
+                toast({
+                    title: "Errore",
+                    description: "Profilo utente non configurato correttamente",
+                    variant: "destructive",
+                });
+                setLoading(false);
+                return;
+            }
+
             const { data: checklist, error: checklistError } = await supabase
                 .from("checklists")
                 .insert({
-                    title: formData.title.trim(),
                     name: formData.title.trim(),
                     description: formData.description.trim() || null,
-                    category: formData.category,
-                    equipment_category: formData.equipment_type.trim() || null,
-                    created_by: user.id
+                    category: formData.category || formData.equipment_type?.trim() || null,
+                    created_by: user.id,
+                    tenant_id: profile.tenant_id
                 })
                 .select()
                 .single();

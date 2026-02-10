@@ -95,43 +95,35 @@ export default function RegisterPage() {
         }
 
         try {
-            const plan = pricingPlans[selectedPlan];
-
-            const { data: tenantData, error: tenantError } = await supabase
-                .from("tenants")
-                .insert({
-                    name: companyName,
-                    max_users: plan.maxUsers === -1 ? 9999 : plan.maxUsers,
-                    subscription_status: "trialing",
-                })
-                .select()
-                .single();
-
-            if (tenantError) throw tenantError;
-
-            const { data: authData, error: signUpError } = await supabase.auth.signUp({
-                email,
-                password,
-                options: { data: { full_name: fullName } }
+            // Call server-side registration API
+            const response = await fetch("/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    companyName,
+                    fullName,
+                    email,
+                    password,
+                    plan: selectedPlan,
+                }),
             });
 
-            if (signUpError) throw signUpError;
+            const data = await response.json();
 
-            if (authData.user) {
-                const { error: profileError } = await supabase
-                    .from("profiles")
-                    .update({
-                        full_name: fullName,
-                        role: "admin",
-                        tenant_id: tenantData.id,
-                    })
-                    .eq("id", authData.user.id);
-
-                if (profileError) throw profileError;
-
-                setSuccess(true);
-                setTimeout(() => { router.push("/dashboard"); }, 2000);
+            if (!response.ok) {
+                throw new Error(data.error || "Errore durante la registrazione");
             }
+
+            // Auto-login after successful registration
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (signInError) throw signInError;
+
+            setSuccess(true);
+            setTimeout(() => { router.push("/dashboard"); }, 2000);
         } catch (err: any) {
             console.error("Registration error:", err);
             setError(err.message || "Errore durante la registrazione");
