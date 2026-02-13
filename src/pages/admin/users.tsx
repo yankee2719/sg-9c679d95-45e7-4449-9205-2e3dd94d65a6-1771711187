@@ -225,11 +225,6 @@ export default function AdminUsersPage() {
         return [];
     };
 
-    // ✅ NUOVA FUNZIONE: Attende semplicemente con un delay
-    const waitForProfileCreation = async (delayMs: number = 1500): Promise<void> => {
-        return new Promise(resolve => setTimeout(resolve, delayMs));
-    };
-
     const handleCreateUser = async () => {
         if (!newUserData.email || !newUserData.password) {
             toast({
@@ -253,21 +248,16 @@ export default function AdminUsersPage() {
 
         setCreating(true);
         try {
-            // ✅ MODIFICA: apiClient.users.create dovrebbe restituire anche l'ID dell'utente creato
-            // Se non lo fa, dobbiamo assumere che la creazione sia riuscita e aspettare
-            const result = await apiClient.users.create({
+            const { error } = await apiClient.users.create({
                 email: newUserData.email,
                 password: newUserData.password,
                 full_name: newUserData.full_name || undefined,
                 role: newUserData.role,
             });
 
-            if (result.error) {
-                throw new Error(result.error);
+            if (error) {
+                throw new Error(error);
             }
-
-            // ✅ ASPETTA che il trigger del database crei il profilo (di solito 500ms-2s)
-            await waitForProfileCreation(1500);
 
             toast({
                 title: "✅ " + t("users.created"),
@@ -283,7 +273,6 @@ export default function AdminUsersPage() {
                 phone: "",
             });
 
-            // ✅ RICARICA LA LISTA
             await loadUsers(currentUserRole!, currentTenantId);
         } catch (error: unknown) {
             console.error("Error creating user:", error);
