@@ -1,548 +1,252 @@
-// ============================================================================
-// MAINTENANCE SERVICE
-// ============================================================================
-// Business logic per Maintenance Plans e Work Orders
-// ============================================================================
+import { supabase } from "@/integrations/supabase/client";
 
-import { createClient } from '@supabase/supabase-js';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export type MaintenancePlanType = 'time_based' | 'usage_based' | 'condition_based' | 'predictive';
-export type MaintenancePriority = 'critical' | 'high' | 'medium' | 'low';
-export type WorkOrderStatus = 
-  | 'draft' 
-  | 'scheduled' 
-  | 'assigned' 
-  | 'in_progress' 
-  | 'paused' 
-  | 'completed' 
-  | 'approved' 
-  | 'cancelled';
-
-export interface MaintenancePlan {
+interface MaintenanceSchedule {
   id: string;
-  organization_id: string;
-  plant_id?: string;
   equipment_id: string;
-  
   title: string;
-  description?: string;
-  plan_type: MaintenancePlanType;
-  priority: MaintenancePriority;
-  
-  frequency_days?: number;
-  frequency_hours?: number;
-  usage_threshold?: number;
-  usage_unit?: string;
-  
-  estimated_duration_minutes?: number;
-  required_skills?: string[];
-  checklist_template?: any;
-  required_parts?: any;
-  required_tools?: string[];
-  
-  safety_notes?: string;
-  requires_shutdown: boolean;
-  compliance_tags?: string[];
-  
-  is_active: boolean;
-  next_due_date?: string;
-  last_generated_at?: string;
-  
-  created_by: string;
+  description: string | null;
+  frequency: string;
+  next_due_date: string | null;
+  last_performed_at: string | null;
+  assigned_to: string | null;
+  checklist_id: string | null;
   created_at: string;
   updated_at: string;
+  equipment?: { id: string; name: string; equipment_code?: string };
+  checklist?: { id: string; name: string };
 }
 
-export interface WorkOrder {
+interface MaintenanceLog {
   id: string;
-  wo_number: string;
-  
-  organization_id: string;
-  plant_id: string;
   equipment_id: string;
-  
-  maintenance_plan_id?: string;
-  parent_event_id?: string;
-  
+  performed_by: string;
   title: string;
-  description?: string;
-  priority: MaintenancePriority;
-  wo_type: string;
-  
-  scheduled_start?: string;
-  scheduled_end?: string;
-  estimated_duration_minutes?: number;
-  
-  assigned_to?: string;
-  assigned_at?: string;
-  assigned_by?: string;
-  
-  actual_start?: string;
-  actual_end?: string;
-  actual_duration_minutes?: number;
-  
-  checklist?: ChecklistItem[];
-  checklist_completion_percentage: number;
-  
-  parts_used?: PartUsed[];
-  labor_hours?: number;
-  external_cost?: number;
-  total_cost?: number;
-  
-  downtime_minutes: number;
-  downtime_reason?: string;
-  production_impact?: string;
-  
-  work_performed?: string;
-  findings?: string;
-  recommendations?: string;
-  
-  photo_urls?: string[];
-  document_ids?: string[];
-  
-  technician_signature?: Signature;
-  supervisor_signature?: Signature;
-  
-  status: WorkOrderStatus;
-  status_changed_at: string;
-  status_changed_by?: string;
-  
-  approved_at?: string;
-  approved_by?: string;
-  is_closed: boolean;
-  closed_at?: string;
-  
-  completion_event_id?: string;
-  
-  created_by: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  schedule_id: string | null;
+  notes: string | null;
   created_at: string;
-  updated_at: string;
+  completed_at: string | null;
+  equipment?: { id: string; name: string };
+  performed_by_user?: { id: string; full_name: string };
 }
 
-export interface ChecklistItem {
-  id: string;
-  task: string;
-  completed: boolean;
-  completed_at?: string;
-  completed_by?: string;
-  notes?: string;
-}
+export const maintenanceService = {
+  // Get all maintenance schedules
+  async getSchedules(): Promise<MaintenanceSchedule[]> {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .select(`
+        *,
+        equipment:equipment(id, name, equipment_code),
+        checklist:checklists(id, name)
+      `)
+      .order("next_due_date", { ascending: true });
 
-export interface PartUsed {
-  part_id?: string;
-  part_number: string;
-  name: string;
-  quantity: number;
-  unit_cost?: number;
-}
+    if (error) {
+      console.error("Error fetching maintenance schedules:", error);
+      throw error;
+    }
 
-export interface Signature {
-  signed_by: string;
-  signed_at: string;
-  signature_data?: string; // Base64 or URL
-}
+    return (data || []) as MaintenanceSchedule[];
+  },
 
-export interface CreateMaintenancePlanInput {
-  equipment_id: string;
-  plant_id?: string;
-  title: string;
-  description?: string;
-  plan_type: MaintenancePlanType;
-  priority?: MaintenancePriority;
-  frequency_days?: number;
-  frequency_hours?: number;
-  usage_threshold?: number;
-  usage_unit?: string;
-  estimated_duration_minutes?: number;
-  required_skills?: string[];
-  checklist_template?: any;
-  required_parts?: any;
-  required_tools?: string[];
-  safety_notes?: string;
-  requires_shutdown?: boolean;
-  compliance_tags?: string[];
-}
-
-export interface CreateWorkOrderInput {
-  equipment_id: string;
-  plant_id: string;
-  maintenance_plan_id?: string;
-  title: string;
-  description?: string;
-  priority?: MaintenancePriority;
-  wo_type: string;
-  scheduled_start?: string;
-  scheduled_end?: string;
-  estimated_duration_minutes?: number;
-}
-
-export interface UpdateWorkOrderInput {
-  title?: string;
-  description?: string;
-  priority?: MaintenancePriority;
-  scheduled_start?: string;
-  scheduled_end?: string;
-  assigned_to?: string;
-  checklist?: ChecklistItem[];
-  parts_used?: PartUsed[];
-  labor_hours?: number;
-  external_cost?: number;
-  downtime_minutes?: number;
-  downtime_reason?: string;
-  production_impact?: string;
-  work_performed?: string;
-  findings?: string;
-  recommendations?: string;
-}
-
-// ============================================================================
-// SERVICE CLASS
-// ============================================================================
-
-export class MaintenanceService {
-  private supabase: ReturnType<typeof createClient>;
-
-  constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-  }
-
-  // ==========================================================================
-  // MAINTENANCE PLANS
-  // ==========================================================================
-
-  async createMaintenancePlan(
-    input: CreateMaintenancePlanInput,
-    userId: string,
-    organizationId: string
-  ): Promise<MaintenancePlan> {
-    const { data, error } = await this.supabase
-      .from('maintenance_plans')
-      .insert({
-        organization_id: organizationId,
-        ...input,
-        created_by: userId,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  async getMaintenancePlansByEquipment(equipmentId: string): Promise<MaintenancePlan[]> {
-    const { data, error } = await this.supabase
-      .from('maintenance_plans')
-      .select('*')
-      .eq('equipment_id', equipmentId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  async getMaintenancePlansDue(organizationId: string): Promise<MaintenancePlan[]> {
-    const { data, error } = await this.supabase
-      .from('maintenance_plans')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .eq('is_active', true)
-      .lte('next_due_date', new Date().toISOString())
-      .order('next_due_date', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  async updateMaintenancePlan(
-    planId: string,
-    updates: Partial<CreateMaintenancePlanInput>
-  ): Promise<MaintenancePlan> {
-    const { data, error } = await this.supabase
-      .from('maintenance_plans')
-      .update(updates)
-      .eq('id', planId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  async deactivateMaintenancePlan(planId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('maintenance_plans')
-      .update({ is_active: false })
-      .eq('id', planId);
-
-    if (error) throw error;
-  }
-
-  // ==========================================================================
-  // WORK ORDERS
-  // ==========================================================================
-
-  async createWorkOrder(
-    input: CreateWorkOrderInput,
-    userId: string,
-    organizationId: string
-  ): Promise<WorkOrder> {
-    // Generate WO number
-    const woNumber = await this.generateWONumber(organizationId);
-
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .insert({
-        organization_id: organizationId,
-        wo_number: woNumber,
-        ...input,
-        created_by: userId,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  async getWorkOrderById(woId: string): Promise<WorkOrder | null> {
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .select('*')
-      .eq('id', woId)
+  // Get schedule by ID
+  async getScheduleById(id: string): Promise<MaintenanceSchedule> {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .select(`
+        *,
+        equipment:equipment(id, name, equipment_code),
+        checklist:checklists(id, name)
+      `)
+      .eq("id", id)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
+      console.error("Error fetching schedule:", error);
       throw error;
     }
+
+    return data as MaintenanceSchedule;
+  },
+
+  // Create maintenance schedule
+  async createSchedule(scheduleData: {
+    equipment_id: string;
+    title: string;
+    description?: string;
+    frequency: string;
+    next_due_date: string;
+    assigned_to?: string;
+    checklist_id?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .insert({
+        equipment_id: scheduleData.equipment_id,
+        title: scheduleData.title,
+        description: scheduleData.description || null,
+        frequency: scheduleData.frequency,
+        next_due_date: scheduleData.next_due_date,
+        assigned_to: scheduleData.assigned_to || null,
+        checklist_id: scheduleData.checklist_id || null
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating maintenance schedule:", error);
+      throw error;
+    }
+
     return data;
-  }
+  },
 
-  async getWorkOrdersByEquipment(
-    equipmentId: string,
-    filters?: {
-      status?: WorkOrderStatus[];
-      startDate?: string;
-      endDate?: string;
-    }
-  ): Promise<WorkOrder[]> {
-    let query = this.supabase
-      .from('work_orders')
-      .select('*')
-      .eq('equipment_id', equipmentId);
+  // Update maintenance schedule
+  async updateSchedule(id: string, scheduleData: {
+    equipment_id?: string;
+    title?: string;
+    description?: string;
+    frequency?: string;
+    next_due_date?: string;
+    assigned_to?: string | null;
+    checklist_id?: string | null;
+    last_performed_at?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .update(scheduleData)
+      .eq("id", id)
+      .select()
+      .single();
 
-    if (filters?.status) {
-      query = query.in('status', filters.status);
-    }
-
-    if (filters?.startDate) {
-      query = query.gte('created_at', filters.startDate);
-    }
-
-    if (filters?.endDate) {
-      query = query.lte('created_at', filters.endDate);
+    if (error) {
+      console.error("Error updating maintenance schedule:", error);
+      throw error;
     }
 
-    query = query.order('created_at', { ascending: false });
+    return data;
+  },
+
+  // Delete maintenance schedule
+  async deleteSchedule(id: string) {
+    const { error } = await supabase
+      .from("maintenance_schedules")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error deleting schedule:", error);
+      throw error;
+    }
+  },
+
+  // Get maintenance logs
+  async getLogs(equipmentId?: string): Promise<MaintenanceLog[]> {
+    let query = supabase
+      .from("maintenance_logs")
+      .select(`
+        *,
+        equipment:equipment(id, name),
+        performed_by_user:profiles(id, full_name)
+      `)
+      .order("created_at", { ascending: false });
+
+    if (equipmentId) {
+      query = query.eq("equipment_id", equipmentId);
+    }
 
     const { data, error } = await query;
 
-    if (error) throw error;
-    return data || [];
-  }
-
-  async getMyWorkOrders(userId: string): Promise<WorkOrder[]> {
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .select('*')
-      .eq('assigned_to', userId)
-      .in('status', ['assigned', 'in_progress', 'paused'])
-      .order('priority', { ascending: true })
-      .order('scheduled_start', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  async updateWorkOrder(
-    woId: string,
-    updates: UpdateWorkOrderInput,
-    userId: string
-  ): Promise<WorkOrder> {
-    // Check if work order is closed
-    const wo = await this.getWorkOrderById(woId);
-    if (wo?.is_closed) {
-      throw new Error('Cannot update closed work order');
+    if (error) {
+      console.error("Error fetching maintenance logs:", error);
+      throw error;
     }
 
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .update(updates)
-      .eq('id', woId)
-      .select()
-      .single();
+    return (data || []) as MaintenanceLog[];
+  },
 
-    if (error) throw error;
-    return data;
-  }
-
-  async transitionWorkOrderStatus(
-    woId: string,
-    newStatus: WorkOrderStatus,
-    userId: string,
-    reason?: string,
-    metadata?: any
-  ): Promise<boolean> {
-    const { data, error } = await this.supabase.rpc('transition_work_order_status', {
-      p_work_order_id: woId,
-      p_new_status: newStatus,
-      p_changed_by: userId,
-      p_reason: reason,
-      p_metadata: metadata,
-    });
-
-    if (error) throw error;
-    return data;
-  }
-
-  async assignWorkOrder(woId: string, technicianId: string, assignedBy: string): Promise<WorkOrder> {
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .update({
-        assigned_to: technicianId,
-        assigned_by: assignedBy,
+  // Create maintenance log
+  async createLog(logData: {
+    equipment_id: string;
+    performed_by: string;
+    title: string;
+    description?: string;
+    priority?: string;
+    status?: string;
+    schedule_id?: string;
+    notes?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .insert({
+        equipment_id: logData.equipment_id,
+        performed_by: logData.performed_by,
+        title: logData.title,
+        description: logData.description || null,
+        priority: logData.priority || "medium",
+        status: logData.status || "pending",
+        schedule_id: logData.schedule_id || null,
+        notes: logData.notes || null
       })
-      .eq('id', woId)
       .select()
       .single();
 
-    if (error) throw error;
-
-    // Transition to assigned
-    await this.transitionWorkOrderStatus(woId, 'assigned', assignedBy, 'Assigned to technician');
+    if (error) {
+      console.error("Error creating maintenance log:", error);
+      throw error;
+    }
 
     return data;
-  }
+  },
 
-  async updateChecklist(
-    woId: string,
-    checklist: ChecklistItem[],
-    userId: string
-  ): Promise<WorkOrder> {
-    const completedCount = checklist.filter(item => item.completed).length;
-    const percentage = Math.round((completedCount / checklist.length) * 100);
-
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .update({
-        checklist,
-        checklist_completion_percentage: percentage,
-      })
-      .eq('id', woId)
+  // Update maintenance log
+  async updateLog(id: string, logData: {
+    title?: string;
+    description?: string;
+    priority?: string;
+    status?: string;
+    notes?: string;
+    completed_at?: string;
+  }) {
+    const { data, error } = await supabase
+      .from("maintenance_logs")
+      .update(logData)
+      .eq("id", id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error updating maintenance log:", error);
+      throw error;
+    }
+
     return data;
-  }
+  },
 
-  async addSignature(
-    woId: string,
-    signatureType: 'technician' | 'supervisor',
-    signatureData: Signature
-  ): Promise<WorkOrder> {
-    const field = signatureType === 'technician' 
-      ? 'technician_signature' 
-      : 'supervisor_signature';
+  // Get upcoming maintenance
+  async getUpcoming(days: number = 7): Promise<MaintenanceSchedule[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
 
-    const { data, error } = await this.supabase
-      .from('work_orders')
-      .update({ [field]: signatureData })
-      .eq('id', woId)
-      .select()
-      .single();
+    const { data, error } = await supabase
+      .from("maintenance_schedules")
+      .select(`
+        *,
+        equipment:equipment(id, name, equipment_code)
+      `)
+      .lte("next_due_date", futureDate.toISOString())
+      .order("next_due_date", { ascending: true });
 
-    if (error) throw error;
-    return data;
-  }
-
-  async getWorkOrderStatusHistory(woId: string) {
-    const { data, error } = await this.supabase
-      .from('work_order_status_history')
-      .select('*')
-      .eq('work_order_id', woId)
-      .order('changed_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
-  }
-
-  // ==========================================================================
-  // UTILITIES
-  // ==========================================================================
-
-  private async generateWONumber(organizationId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    
-    // Get count for this year
-    const { count } = await this.supabase
-      .from('work_orders')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', organizationId)
-      .gte('created_at', `${year}-01-01`)
-      .lte('created_at', `${year}-12-31`);
-
-    const sequence = (count || 0) + 1;
-    return `WO-${year}-${sequence.toString().padStart(6, '0')}`;
-  }
-
-  async searchWorkOrders(
-    organizationId: string,
-    query: string,
-    filters?: {
-      status?: WorkOrderStatus[];
-      priority?: MaintenancePriority[];
-      equipmentId?: string;
-    }
-  ): Promise<WorkOrder[]> {
-    let dbQuery = this.supabase
-      .from('work_orders')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .textSearch('fts', query, { config: 'english' });
-
-    if (filters?.status) {
-      dbQuery = dbQuery.in('status', filters.status);
+    if (error) {
+      console.error("Error fetching upcoming maintenance:", error);
+      throw error;
     }
 
-    if (filters?.priority) {
-      dbQuery = dbQuery.in('priority', filters.priority);
-    }
-
-    if (filters?.equipmentId) {
-      dbQuery = dbQuery.eq('equipment_id', filters.equipmentId);
-    }
-
-    const { data, error } = await dbQuery.order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
+    return (data || []) as MaintenanceSchedule[];
   }
-}
+};
 
-// Singleton instance
-let maintenanceServiceInstance: MaintenanceService | null = null;
-
-export function getMaintenanceService(): MaintenanceService {
-  if (!maintenanceServiceInstance) {
-    maintenanceServiceInstance = new MaintenanceService();
-  }
-  return maintenanceServiceInstance;
-}
+export default maintenanceService;
