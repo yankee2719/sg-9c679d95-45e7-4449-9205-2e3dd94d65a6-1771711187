@@ -264,7 +264,7 @@ export default function AdminUsersPage() {
                 throw new Error(response.error || "Errore creazione utente");
             }
 
-            // ✅ Estrai i dati dalla risposta (struttura: { message, user: { id, email, full_name, role, phone } })
+            // ✅ CORRETTO: Estrai i dati dalla risposta (struttura: { message, user: { ... } })
             const apiUser = response.data.user;
 
             if (!apiUser) {
