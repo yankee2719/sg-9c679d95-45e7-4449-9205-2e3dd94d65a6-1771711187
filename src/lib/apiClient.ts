@@ -421,21 +421,24 @@ export interface User {
     updated_at?: string;
 }
 
-// Interfaccia per la risposta di create-user.ts
+// ✅ Interfaccia corretta per la risposta di /api/users/create
 export interface CreateUserResponse {
+    message: string;
     user: {
         id: string;
         email: string;
-        profile: User;
+        full_name?: string;
+        role: "admin" | "supervisor" | "technician";
+        phone?: string;
     };
 }
 
 export const userApi = {
     list: () => fetchApi < User[] > ("/api/users/list"),
 
-    // ✅ CORRETTO: endpoint cambiato da "/api/users/create" a "/api/create-user"
+    // ✅ CORRETTO: endpoint è /api/users/create (non /api/create-user)
     create: (data: { email: string; password: string; full_name?: string; role: User["role"] }) =>
-        fetchApi < CreateUserResponse > ("/api/create-user", {
+        fetchApi < CreateUserResponse > ("/api/users/create", {
             method: "POST",
             body: JSON.stringify(data),
         }),
