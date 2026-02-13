@@ -225,6 +225,22 @@ export default function AdminUsersPage() {
     return [];
   };
 
+  // ✅ NUOVA FUNZIONE: Attende che il profilo venga creato nel database
+  const waitForUserCreation = async (email: string, maxAttempts = 10): Promise<boolean> => {
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .single();
+        
+      if (data) return true;
+    }
+    return false;
+  };
+
   const handleCreateUser = async () => {
     if (!newUserData.email || !newUserData.password) {
       toast({
@@ -259,10 +275,22 @@ export default function AdminUsersPage() {
         throw new Error(error);
       }
 
-      toast({
-        title: "✅ " + t("users.created"),
-        description: `${newUserData.email} ${t("users.createdSuccess")}`,
-      });
+      // ✅ ASPETTA CHE IL PROFILO SIA CREATO NEL DATABASE
+      const userCreated = await waitForUserCreation(newUserData.email);
+      
+      if (!userCreated) {
+        console.warn("Timeout: profilo non trovato dopo", 10, "tentativi");
+        toast({
+          variant: "default",
+          title: "⚠️ Attenzione",
+          description: "Utente creato ma il profilo potrebbe non essere immediatamente visibile. Ricarica la pagina.",
+        });
+      } else {
+        toast({
+          title: "✅ " + t("users.created"),
+          description: `${newUserData.email} ${t("users.createdSuccess")}`,
+        });
+      }
 
       setCreateDialogOpen(false);
       setNewUserData({
@@ -273,6 +301,7 @@ export default function AdminUsersPage() {
         phone: "",
       });
 
+      // ✅ ORA RICARICA LA LISTA (il profilo dovrebbe esserci)
       await loadUsers(currentUserRole!, currentTenantId);
     } catch (error: unknown) {
       console.error("Error creating user:", error);
