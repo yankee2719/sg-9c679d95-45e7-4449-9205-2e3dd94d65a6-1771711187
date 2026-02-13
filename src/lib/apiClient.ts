@@ -1,459 +1,915 @@
-import { authService } from "@/services/authService";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { MainLayout } from "@/components/Layout/MainLayout";
+import { SEO } from "@/components/SEO";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { apiClient } from "@/lib/apiClient";
+import { useLanguage } from "@/contexts/LanguageContext";
+import {
+    UserPlus,
+    Shield,
+    Users,
+    Loader2,
+    Edit,
+    Trash2,
+    AlertCircle,
+    CheckCircle,
+    XCircle,
+    Search,
+    Building2,
+} from "lucide-react";
 
-/**
- * API Client for Next.js API endpoints with full CRUD support
- */
-
-export interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-    code?: string;
-    message?: string;
-    details?: unknown;
-    pagination?: {
-        page: number;
-        limit: number;
-        total: number;
-        totalPages: number;
-        hasMore: boolean;
-    };
-}
-
-export interface PaginationParams {
-    page?: number;
-    limit?: number;
-    sort?: string;
-    order?: "asc" | "desc";
-}
-
-async function fetchApi<T>(
-    endpoint: string,
-    options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-    try {
-        // Get current session token
-        const session = await authService.getCurrentSession();
-        if (!session) {
-            return { success: false, error: "Not authenticated", code: "UNAUTHORIZED" };
-        }
-
-        // Build headers
-        const headers: Record<string, string> = {
-            Authorization: `Bearer ${session.access_token}`,
-            ...(options.headers as Record<string, string>),
-        };
-
-        // Add Content-Type for non-GET requests with body
-        if (options.body && typeof options.body === "string") {
-            headers["Content-Type"] = "application/json";
-        }
-
-        // Make API request
-        const response = await fetch(endpoint, {
-            ...options,
-            headers,
-        });
-
-        // Handle 204 No Content
-        if (response.status === 204) {
-            return { success: true, data: undefined };
-        }
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            return {
-                success: false,
-                error: data.error || data.message || `API error: ${response.status}`,
-                code: data.code,
-                message: data.message,
-                details: data.details,
-            };
-        }
-
-        return {
-            success: true,
-            data: data.data,
-            pagination: data.pagination,
-        };
-    } catch (error) {
-        console.error("API request failed:", error);
-        return {
-            success: false,
-            error: "Network error",
-            code: "NETWORK_ERROR",
-        };
-    }
-}
-
-// Build query string from params
-function buildQuery(params: Record<string, unknown>): string {
-    const query = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined && value !== null && value !== "") {
-            query.append(key, String(value));
-        }
-    }
-    return query.toString() ? `?${query.toString()}` : "";
-}
-
-// =====================
-// Equipment API
-// =====================
-export interface Equipment {
-    id: string;
-    name: string;
-    equipment_code: string;
-    category: string;
-    manufacturer?: string;
-    model?: string;
-    serial_number?: string;
-    location?: string;
-    status: "active" | "inactive" | "under_maintenance" | "decommissioned";
-    purchase_date?: string;
-    warranty_expiry?: string;
-    notes?: string;
-    image_url?: string;
-    qr_code?: string;
-    tenant_id?: string;
-    created_at?: string;
-    updated_at?: string;
-}
-
-export interface EquipmentListParams extends PaginationParams {
-    search?: string;
-    category?: string;
-    status?: string;
-    location?: string;
-}
-
-export const equipmentApi = {
-    list: (params: EquipmentListParams = {}) =>
-        fetchApi < Equipment[] > (`/api/equipment${buildQuery(params)}`),
-
-    get: (id: string) =>
-        fetchApi < Equipment > (`/api/equipment/${id}`),
-
-    create: (data: Partial<Equipment>) =>
-        fetchApi < Equipment > ("/api/equipment", {
-            method: "POST",
-            body: JSON.stringify(data),
-        }),
-
-    update: (id: string, data: Partial<Equipment>) =>
-        fetchApi < Equipment > (`/api/equipment/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        }),
-
-    delete: (id: string) =>
-        fetchApi < void> (`/api/equipment/${id}`, {
-            method: "DELETE",
-        }),
-
-    generateQrCode: (id: string) =>
-        fetchApi < { qr_code: string; equipment: Equipment } > (
-            `/api/equipment/${id}/generate-qr`,
-            { method: "POST" }
-        ),
-};
-
-// =====================
-// Checklist API
-// =====================
-export interface ChecklistItem {
-    id: string;
-    checklist_id: string;
-    title: string;
-    description?: string;
-    input_type: "checkbox" | "text" | "number" | "photo" | "signature" | "select";
-    is_required: boolean;
-    order_index: number;
-    images?: string[];
-    created_at?: string;
-}
-
-export interface Checklist {
-    id: string;
-    name: string;
-    description?: string;
-    category?: string;
-    is_active: boolean;
-    items?: ChecklistItem[];
-    tenant_id?: string;
-    created_by?: string;
-    created_at?: string;
-    updated_at?: string;
-}
-
-export interface ChecklistListParams extends PaginationParams {
-    search?: string;
-    category?: string;
-    is_active?: boolean;
-    include_items?: boolean;
-}
-
-export const checklistApi = {
-    list: (params: ChecklistListParams = {}) =>
-        fetchApi < Checklist[] > (`/api/checklists${buildQuery(params)}`),
-
-    get: (id: string) =>
-        fetchApi < Checklist > (`/api/checklists/${id}`),
-
-    create: (data: { name: string; description?: string; category?: string; is_active?: boolean; items?: Partial<ChecklistItem>[] }) =>
-        fetchApi < Checklist > ("/api/checklists", {
-            method: "POST",
-            body: JSON.stringify(data),
-        }),
-
-    update: (id: string, data: Partial<Checklist> & { items?: Partial<ChecklistItem>[] }) =>
-        fetchApi < Checklist > (`/api/checklists/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        }),
-
-    delete: (id: string) =>
-        fetchApi < void> (`/api/checklists/${id}`, {
-            method: "DELETE",
-        }),
-
-    // Items
-    getItems: (checklistId: string) =>
-        fetchApi < ChecklistItem[] > (`/api/checklists/${checklistId}/items`),
-
-    addItem: (checklistId: string, item: Partial<ChecklistItem>) =>
-        fetchApi < ChecklistItem > (`/api/checklists/${checklistId}/items`, {
-            method: "POST",
-            body: JSON.stringify(item),
-        }),
-
-    reorderItems: (checklistId: string, items: { id: string; order_index: number }[]) =>
-        fetchApi < ChecklistItem[] > (`/api/checklists/${checklistId}/items`, {
-            method: "PUT",
-            body: JSON.stringify({ items }),
-        }),
-};
-
-// =====================
-// Checklist Execution API
-// =====================
-export interface ChecklistExecution {
-    id: string;
-    checklist_id: string;
-    executed_by: string;
-    status: "pending" | "in_progress" | "completed" | "cancelled";
-    started_at?: string;
-    completed_at?: string;
-    results?: Record<string, unknown>;
-    notes?: string;
-    signature?: string;
-    schedule_id?: string;
-    maintenance_log_id?: string;
-    tenant_id?: string;
-    checklist?: Checklist;
-    executor?: { id: string; full_name: string; email: string };
-    created_at?: string;
-}
-
-export interface ExecutionListParams extends PaginationParams {
-    checklist_id?: string;
-    equipment_id?: string;
-    executed_by?: string;
-    status?: string;
-    from_date?: string;
-    to_date?: string;
-}
-
-export const executionApi = {
-    list: (params: ExecutionListParams = {}) =>
-        fetchApi < ChecklistExecution[] > (`/api/checklists/executions${buildQuery(params)}`),
-
-    get: (id: string) =>
-        fetchApi < ChecklistExecution > (`/api/checklists/executions/${id}`),
-
-    start: (data: { checklist_id: string; equipment_id?: string; schedule_id?: string }) =>
-        fetchApi < ChecklistExecution > ("/api/checklists/executions", {
-            method: "POST",
-            body: JSON.stringify(data),
-        }),
-
-    update: (id: string, data: { status?: string; results?: Record<string, unknown>; notes?: string; signature?: string }) =>
-        fetchApi < ChecklistExecution > (`/api/checklists/executions/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        }),
-
-    complete: (id: string, data: { results?: Record<string, unknown>; notes?: string; signature?: string }) =>
-        fetchApi < ChecklistExecution > (`/api/checklists/executions/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ ...data, status: "completed" }),
-        }),
-
-    cancel: (id: string) =>
-        fetchApi < void> (`/api/checklists/executions/${id}`, {
-            method: "DELETE",
-        }),
-};
-
-// =====================
-// Maintenance API
-// =====================
-export interface MaintenanceSchedule {
-    id: string;
-    equipment_id: string;
-    title: string;
-    description?: string;
-    frequency: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" | "custom";
-    next_due_date: string;
-    last_completed?: string;
-    assigned_to?: string;
-    checklist_id?: string;
-    priority?: "low" | "medium" | "high" | "critical";
-    estimated_duration_minutes?: number;
-    notes?: string;
-    status: "scheduled" | "overdue" | "completed";
-    equipment?: Partial<Equipment>;
-    assigned_user?: { id: string; full_name: string; email: string };
-    created_at?: string;
-    updated_at?: string;
-}
-
-export interface MaintenanceListParams extends PaginationParams {
-    equipment_id?: string;
-    status?: string;
-    frequency?: string;
-    assigned_to?: string;
-    upcoming_days?: number;
-    overdue?: boolean;
-}
-
-export const maintenanceApi = {
-    list: (params: MaintenanceListParams = {}) =>
-        fetchApi < MaintenanceSchedule[] > (`/api/maintenance/schedules${buildQuery(params)}`),
-
-    get: (id: string) =>
-        fetchApi < MaintenanceSchedule & { recent_logs: unknown[] } > (`/api/maintenance/schedules/${id}`),
-
-    create: (data: Partial<MaintenanceSchedule>) =>
-        fetchApi < MaintenanceSchedule > ("/api/maintenance/schedules", {
-            method: "POST",
-            body: JSON.stringify(data),
-        }),
-
-    update: (id: string, data: Partial<MaintenanceSchedule>) =>
-        fetchApi < MaintenanceSchedule > (`/api/maintenance/schedules/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        }),
-
-    delete: (id: string) =>
-        fetchApi < void> (`/api/maintenance/schedules/${id}`, {
-            method: "DELETE",
-        }),
-
-    complete: (id: string, data: { notes?: string; duration_minutes?: number; parts_used?: string; cost?: number }) =>
-        fetchApi < { schedule: MaintenanceSchedule; log: unknown; next_due_date: string } > (
-            `/api/maintenance/schedules/${id}/complete`,
-            {
-                method: "POST",
-                body: JSON.stringify(data),
-            }
-        ),
-
-    upcoming: () =>
-        fetchApi < MaintenanceSchedule[] > ("/api/maintenance/schedules?upcoming_days=7"),
-
-    overdue: () =>
-        fetchApi < MaintenanceSchedule[] > ("/api/maintenance/schedules?overdue=true"),
-};
-
-// =====================
-// Notifications API
-// =====================
-export interface Notification {
-    id: string;
-    user_id: string;
-    title: string;
-    message: string;
-    type: "info" | "warning" | "error" | "success";
-    link?: string;
-    is_read: boolean;
-    created_at: string;
-}
-
-export const notificationApi = {
-    list: (params: { page?: number; limit?: number; is_read?: boolean; type?: string } = {}) =>
-        fetchApi < Notification[] > (`/api/notifications${buildQuery(params)}`),
-
-    get: (id: string) =>
-        fetchApi < Notification > (`/api/notifications/${id}`),
-
-    markAsRead: (id: string) =>
-        fetchApi < Notification > (`/api/notifications/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ is_read: true }),
-        }),
-
-    markAllAsRead: () =>
-        fetchApi < { message: string } > ("/api/notifications", {
-            method: "PATCH",
-        }),
-
-    delete: (id: string) =>
-        fetchApi < void> (`/api/notifications/${id}`, {
-            method: "DELETE",
-        }),
-};
-
-// =====================
-// Users API
-// =====================
-export interface User {
+interface User {
     id: string;
     email: string;
-    full_name?: string;
+    full_name: string | null;
     role: "admin" | "supervisor" | "technician";
-    avatar_url?: string;
     is_active: boolean;
-    tenant_id?: string;
-    created_at?: string;
-    updated_at?: string;
+    created_at: string;
+    tenant_id: string | null;
 }
 
-export const userApi = {
-    list: () => fetchApi < User[] > ("/api/users/list"),
+interface Tenant {
+    id: string;
+    name: string;
+}
 
-    create: (data: { email: string; password: string; full_name?: string; role: User["role"] }) =>
-        fetchApi < { user: User } > ("/api/users/create", {
-            method: "POST",
-            body: JSON.stringify(data),
-        }),
+export default function AdminUsersPage() {
+    const router = useRouter();
+    const { toast } = useToast();
+    const { t } = useLanguage();
 
-    update: (id: string, data: Partial<User>) =>
-        fetchApi < User > (`/api/users/${id}/update`, {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        }),
+    const [currentUserRole, setCurrentUserRole] = useState < "admin" | "supervisor" | "technician" | null > (null);
+    const [currentUserId, setCurrentUserId] = useState < string | null > (null);
+    const [currentTenantId, setCurrentTenantId] = useState < string | null > (null);
+    const [currentTenantName, setCurrentTenantName] = useState < string > ("");
+    const [loading, setLoading] = useState(true);
+    const [users, setUsers] = useState < User[] > ([]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [filteredUsers, setFilteredUsers] = useState < User[] > ([]);
 
-    delete: (id: string) =>
-        fetchApi < void> (`/api/users/${id}/delete`, {
-            method: "DELETE",
-        }),
+    const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [newUserData, setNewUserData] = useState({
+        email: "",
+        password: "",
+        full_name: "",
+        role: "technician" as "admin" | "supervisor" | "technician",
+        phone: "",
+    });
 
-    me: () => fetchApi < User > ("/api/profiles/me"),
-};
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [selectedUser, setSelectedUser] = useState < User | null > (null);
+    const [editUserData, setEditUserData] = useState({
+        full_name: "",
+        role: "technician" as "admin" | "supervisor" | "technician",
+        is_active: true,
+    });
 
-// Legacy export for backwards compatibility
-export const apiClient = {
-    users: userApi,
-    profile: {
-        me: userApi.me,
-    },
-    equipment: {
-        list: () => equipmentApi.list(),
-    },
-    maintenance: {
-        upcoming: () => maintenanceApi.upcoming(),
-    },
-};
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [userToDelete, setUserToDelete] = useState < User | null > (null);
+
+    useEffect(() => {
+        const checkAccess = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    router.push("/login");
+                    return;
+                }
+
+                // Get user profile with tenant info
+                const { data: profile, error: profileError } = await supabase
+                    .from("profiles")
+                    .select("role, tenant_id")
+                    .eq("id", user.id)
+                    .single();
+
+                if (profileError || !profile) {
+                    router.push("/login");
+                    return;
+                }
+
+                // Only admin and supervisor can access this page
+                if (profile.role !== "admin" && profile.role !== "supervisor") {
+                    router.push("/dashboard");
+                    return;
+                }
+
+                setCurrentUserRole(profile.role as "admin" | "supervisor" | "technician");
+                setCurrentUserId(user.id);
+                setCurrentTenantId(profile.tenant_id);
+
+                // Get tenant name
+                if (profile.tenant_id) {
+                    const { data: tenant } = await supabase
+                        .from("tenants")
+                        .select("name")
+                        .eq("id", profile.tenant_id)
+                        .single();
+
+                    if (tenant) {
+                        setCurrentTenantName(tenant.name);
+                    }
+                }
+
+                await loadUsers(profile.role as "admin" | "supervisor", profile.tenant_id);
+            } catch (error) {
+                console.error("Error checking access:", error);
+                router.push("/login");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        checkAccess();
+    }, [router]);
+
+    useEffect(() => {
+        if (searchQuery.trim() === "") {
+            setFilteredUsers(users);
+        } else {
+            const query = searchQuery.toLowerCase();
+            setFilteredUsers(
+                users.filter(
+                    (user) =>
+                        user.email?.toLowerCase().includes(query) ||
+                        user.full_name?.toLowerCase().includes(query) ||
+                        user.role?.toLowerCase().includes(query)
+                )
+            );
+        }
+    }, [searchQuery, users]);
+
+    const loadUsers = async (role: "admin" | "supervisor" | "technician", tenantId: string | null) => {
+        try {
+            // Technicians shouldn't be on this page, but handle gracefully
+            if (role === "technician") {
+                setUsers([]);
+                return;
+            }
+
+            // Load users from same tenant only (RLS will enforce this)
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+
+            // Filter based on role hierarchy
+            let filteredData = data || [];
+
+            if (role === "supervisor") {
+                // Supervisors can only see technicians
+                filteredData = filteredData.filter(u => u.role === "technician");
+            }
+
+            setUsers(filteredData.map(u => ({
+                id: u.id,
+                email: u.email || "",
+                full_name: u.full_name,
+                role: u.role as "admin" | "supervisor" | "technician",
+                is_active: u.is_active ?? true,
+                created_at: u.created_at || "",
+                tenant_id: u.tenant_id,
+            })));
+        } catch (error) {
+            console.error("Error loading users:", error);
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.loadError"),
+            });
+        }
+    };
+
+    // Get available roles based on current user's role
+    const getAvailableRoles = (): ("admin" | "supervisor" | "technician")[] => {
+        if (currentUserRole === "admin") {
+            return ["supervisor", "technician"];
+        } else if (currentUserRole === "supervisor") {
+            return ["technician"];
+        }
+        return [];
+    };
+
+    // ✅ FUNZIONE CORRETTA: Crea utente e aggiorna lista immediatamente
+    const handleCreateUser = async () => {
+        if (!newUserData.email || !newUserData.password) {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.emailPasswordRequired"),
+            });
+            return;
+        }
+
+        // Validate role hierarchy
+        const availableRoles = getAvailableRoles();
+        if (!availableRoles.includes(newUserData.role)) {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotCreateRole"),
+            });
+            return;
+        }
+
+        setCreating(true);
+        try {
+            console.log("🚀 Creazione utente:", newUserData.email);
+
+            const response = await apiClient.users.create({
+                email: newUserData.email,
+                password: newUserData.password,
+                full_name: newUserData.full_name || undefined,
+                role: newUserData.role,
+            });
+
+            console.log("📥 Risposta API:", response);
+
+            if (!response.success || !response.data) {
+                throw new Error(response.error || "Errore creazione utente");
+            }
+
+            // Estrai i dati dalla risposta
+            const apiUser = response.data.user;
+
+            if (!apiUser) {
+                throw new Error("Risposta API non valida: manca user");
+            }
+
+            // Crea oggetto User per lo stato locale
+            const newUser: User = {
+                id: apiUser.id,
+                email: apiUser.email,
+                full_name: apiUser.profile?.full_name || newUserData.full_name || null,
+                role: apiUser.profile?.role || newUserData.role,
+                is_active: apiUser.profile?.is_active ?? true,
+                created_at: apiUser.profile?.created_at || new Date().toISOString(),
+                tenant_id: apiUser.profile?.tenant_id || currentTenantId,
+            };
+
+            console.log("➕ Aggiungo utente alla lista:", newUser);
+
+            // ✅ AGGIUNGI SUBITO ALLA LISTA (ottimistico)
+            setUsers(prevUsers => [newUser, ...prevUsers]);
+
+            toast({
+                title: "✅ " + t("users.created"),
+                description: `${newUserData.email} ${t("users.createdSuccess")}`,
+            });
+
+            setCreateDialogOpen(false);
+            setNewUserData({
+                email: "",
+                password: "",
+                full_name: "",
+                role: "technician",
+                phone: "",
+            });
+
+            // Ricarica dopo un breve delay per sincronizzare
+            setTimeout(async () => {
+                await loadUsers(currentUserRole!, currentTenantId);
+            }, 500);
+
+        } catch (error: unknown) {
+            console.error("❌ Errore creazione utente:", error);
+            toast({
+                variant: "destructive",
+                title: "❌ " + t("common.error"),
+                description: error instanceof Error ? error.message : t("users.createError"),
+            });
+        } finally {
+            setCreating(false);
+            console.log("🏁 Fine handleCreateUser");
+        }
+    };
+
+    const handleEditUser = async () => {
+        if (!selectedUser) return;
+
+        // Validate role hierarchy
+        const availableRoles = getAvailableRoles();
+        if (editUserData.role !== selectedUser.role && !availableRoles.includes(editUserData.role)) {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotAssignRole"),
+            });
+            return;
+        }
+
+        setEditing(true);
+        try {
+            const { error } = await supabase
+                .from("profiles")
+                .update({
+                    full_name: editUserData.full_name,
+                    role: editUserData.role,
+                    is_active: editUserData.is_active,
+                })
+                .eq("id", selectedUser.id);
+
+            if (error) throw error;
+
+            toast({
+                title: "✅ " + t("users.updated"),
+                description: t("users.updatedSuccess"),
+            });
+
+            setEditDialogOpen(false);
+            setSelectedUser(null);
+
+            await loadUsers(currentUserRole!, currentTenantId);
+        } catch (error: unknown) {
+            console.error("Error updating user:", error);
+            toast({
+                variant: "destructive",
+                title: "❌ " + t("common.error"),
+                description: error instanceof Error ? error.message : t("users.updateError"),
+            });
+        } finally {
+            setEditing(false);
+        }
+    };
+
+    const handleDeleteUser = async () => {
+        if (!userToDelete) return;
+
+        // Prevent deleting yourself
+        if (userToDelete.id === currentUserId) {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotDeleteSelf"),
+            });
+            return;
+        }
+
+        // Validate role hierarchy
+        if (currentUserRole === "supervisor" && userToDelete.role !== "technician") {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotDeleteRole"),
+            });
+            return;
+        }
+
+        setDeleting(true);
+        try {
+            // Deactivate user instead of deleting
+            const { error } = await supabase
+                .from("profiles")
+                .update({ is_active: false })
+                .eq("id", userToDelete.id);
+
+            if (error) throw error;
+
+            toast({
+                title: "✅ " + t("users.deactivated"),
+                description: `${userToDelete.email} ${t("users.deactivatedSuccess")}`,
+            });
+
+            setDeleteDialogOpen(false);
+            setUserToDelete(null);
+
+            await loadUsers(currentUserRole!, currentTenantId);
+        } catch (error: unknown) {
+            console.error("Error deactivating user:", error);
+            toast({
+                variant: "destructive",
+                title: "❌ " + t("common.error"),
+                description: error instanceof Error ? error.message : t("users.deleteError"),
+            });
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const openEditDialog = (user: User) => {
+        // Validate can edit this user
+        if (currentUserRole === "supervisor" && user.role !== "technician") {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotEditRole"),
+            });
+            return;
+        }
+
+        setSelectedUser(user);
+        setEditUserData({
+            full_name: user.full_name || "",
+            role: user.role,
+            is_active: user.is_active,
+        });
+        setEditDialogOpen(true);
+    };
+
+    const openDeleteDialog = (user: User) => {
+        // Validate can delete this user
+        if (user.id === currentUserId) {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotDeleteSelf"),
+            });
+            return;
+        }
+
+        if (currentUserRole === "supervisor" && user.role !== "technician") {
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: t("users.cannotDeleteRole"),
+            });
+            return;
+        }
+
+        setUserToDelete(user);
+        setDeleteDialogOpen(true);
+    };
+
+    const getRoleBadge = (role: string) => {
+        switch (role) {
+            case "admin":
+                return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{t("users.roleAdmin")}</Badge>;
+            case "supervisor":
+                return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">{t("users.roleSupervisor")}</Badge>;
+            case "technician":
+                return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">{t("users.roleTechnician")}</Badge>;
+            default:
+                return <Badge>{role}</Badge>;
+        }
+    };
+
+    if (loading) {
+        return (
+            <MainLayout>
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </MainLayout>
+        );
+    }
+
+    return (
+        <MainLayout>
+            <SEO title={`${t("users.title")} - Maint Ops`} />
+
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+                            <Shield className="h-8 w-8 text-primary" />
+                            {t("users.title")}
+                        </h1>
+                        <p className="text-muted-foreground mt-2 flex items-center gap-2">
+                            {currentTenantName && (
+                                <>
+                                    <Building2 className="h-4 w-4" />
+                                    <span className="font-medium">{currentTenantName}</span>
+                                    <span>•</span>
+                                </>
+                            )}
+                            {currentUserRole === "admin"
+                                ? t("users.descriptionAdmin")
+                                : t("users.descriptionSupervisor")}
+                        </p>
+                    </div>
+                    <Button
+                        onClick={() => setCreateDialogOpen(true)}
+                        className="bg-primary hover:bg-primary/90"
+                    >
+                        <UserPlus className="h-5 w-5 mr-2" />
+                        {t("users.newUser")}
+                    </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <Card className="bg-card border-border">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">{t("users.totalUsers")}</p>
+                                    <p className="text-3xl font-bold text-foreground mt-2">{users.length}</p>
+                                </div>
+                                <Users className="h-12 w-12 text-blue-500 opacity-20" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {currentUserRole === "admin" && (
+                        <Card className="bg-card border-border">
+                            <CardContent className="p-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{t("users.supervisors")}</p>
+                                        <p className="text-3xl font-bold text-foreground mt-2">
+                                            {users.filter((u) => u.role === "supervisor").length}
+                                        </p>
+                                    </div>
+                                    <Shield className="h-12 w-12 text-blue-500 opacity-20" />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <Card className="bg-card border-border">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">{t("users.technicians")}</p>
+                                    <p className="text-3xl font-bold text-foreground mt-2">
+                                        {users.filter((u) => u.role === "technician").length}
+                                    </p>
+                                </div>
+                                <Users className="h-12 w-12 text-green-500 opacity-20" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-card border-border">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">{t("users.activeUsers")}</p>
+                                    <p className="text-3xl font-bold text-foreground mt-2">
+                                        {users.filter((u) => u.is_active).length}
+                                    </p>
+                                </div>
+                                <CheckCircle className="h-12 w-12 text-green-500 opacity-20" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <Card className="bg-card border-border">
+                    <CardContent className="p-6">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                            <Input
+                                placeholder={t("users.searchPlaceholder")}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-10"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-card border-border">
+                    <CardHeader>
+                        <CardTitle className="text-foreground">
+                            {t("users.userList")} ({filteredUsers.length})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-border">
+                                        <TableHead className="text-muted-foreground">{t("users.email")}</TableHead>
+                                        <TableHead className="text-muted-foreground">{t("users.name")}</TableHead>
+                                        <TableHead className="text-muted-foreground">{t("users.role")}</TableHead>
+                                        <TableHead className="text-muted-foreground">{t("users.status")}</TableHead>
+                                        <TableHead className="text-muted-foreground">{t("users.createdAt")}</TableHead>
+                                        <TableHead className="text-muted-foreground text-right">{t("users.actions")}</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredUsers.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                                <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                                <p>{t("users.noUsers")}</p>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        filteredUsers.map((user) => (
+                                            <TableRow key={user.id} className="border-border">
+                                                <TableCell className="text-foreground">{user.email}</TableCell>
+                                                <TableCell className="text-muted-foreground">
+                                                    {user.full_name || "-"}
+                                                </TableCell>
+                                                <TableCell>{getRoleBadge(user.role)}</TableCell>
+                                                <TableCell>
+                                                    {user.is_active ? (
+                                                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                                            {t("users.active")}
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+                                                            <XCircle className="h-3 w-3 mr-1" />
+                                                            {t("users.inactive")}
+                                                        </Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground">
+                                                    {user.created_at
+                                                        ? new Date(user.created_at).toLocaleDateString("it-IT")
+                                                        : "-"}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => openEditDialog(user)}
+                                                            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                                                            disabled={currentUserRole === "supervisor" && user.role !== "technician"}
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => openDeleteDialog(user)}
+                                                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                                            disabled={user.id === currentUserId || (currentUserRole === "supervisor" && user.role !== "technician")}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Create User Dialog */}
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogContent className="bg-card border-border">
+                    <DialogHeader>
+                        <DialogTitle className="text-foreground">{t("users.createNew")}</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                            {t("users.createDescription")}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="email">{t("users.email")} *</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                value={newUserData.email}
+                                onChange={(e) =>
+                                    setNewUserData({ ...newUserData, email: e.target.value })
+                                }
+                                placeholder="utente@example.com"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="password">{t("users.password")} *</Label>
+                            <Input
+                                id="password"
+                                type="password"
+                                value={newUserData.password}
+                                onChange={(e) =>
+                                    setNewUserData({ ...newUserData, password: e.target.value })
+                                }
+                                placeholder="••••••••"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="full_name">{t("users.fullName")}</Label>
+                            <Input
+                                id="full_name"
+                                value={newUserData.full_name}
+                                onChange={(e) =>
+                                    setNewUserData({ ...newUserData, full_name: e.target.value })
+                                }
+                                placeholder="Mario Rossi"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="role">{t("users.role")} *</Label>
+                            <Select
+                                value={newUserData.role}
+                                onValueChange={(value: "admin" | "supervisor" | "technician") =>
+                                    setNewUserData({ ...newUserData, role: value })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder={t("users.selectRole")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {getAvailableRoles().map((role) => (
+                                        <SelectItem key={role} value={role}>
+                                            {role === "supervisor" ? t("users.roleSupervisor") : t("users.roleTechnician")}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="phone">{t("users.phone")}</Label>
+                            <Input
+                                id="phone"
+                                type="tel"
+                                value={newUserData.phone}
+                                onChange={(e) =>
+                                    setNewUserData({ ...newUserData, phone: e.target.value })
+                                }
+                                placeholder="+39 123 456 7890"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setCreateDialogOpen(false)}
+                            disabled={creating}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            onClick={handleCreateUser}
+                            disabled={creating}
+                        >
+                            {creating ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    {t("common.creating")}
+                                </>
+                            ) : (
+                                t("users.createUser")
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit User Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="bg-card border-border">
+                    <DialogHeader>
+                        <DialogTitle className="text-foreground">{t("users.editUser")}</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                            {t("users.editDescription")} {selectedUser?.email}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit_full_name">{t("users.fullName")}</Label>
+                            <Input
+                                id="edit_full_name"
+                                value={editUserData.full_name}
+                                onChange={(e) =>
+                                    setEditUserData({ ...editUserData, full_name: e.target.value })
+                                }
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="edit_role">{t("users.role")}</Label>
+                            <Select
+                                value={editUserData.role}
+                                onValueChange={(value: "admin" | "supervisor" | "technician") =>
+                                    setEditUserData({ ...editUserData, role: value })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {getAvailableRoles().map((role) => (
+                                        <SelectItem key={role} value={role}>
+                                            {role === "supervisor" ? t("users.roleSupervisor") : t("users.roleTechnician")}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="edit_is_active">{t("users.status")}</Label>
+                            <Select
+                                value={editUserData.is_active ? "active" : "inactive"}
+                                onValueChange={(value) =>
+                                    setEditUserData({ ...editUserData, is_active: value === "active" })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">{t("users.active")}</SelectItem>
+                                    <SelectItem value="inactive">{t("users.inactive")}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setEditDialogOpen(false)}
+                            disabled={editing}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            onClick={handleEditUser}
+                            disabled={editing}
+                        >
+                            {editing ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    {t("common.saving")}
+                                </>
+                            ) : (
+                                t("common.save")
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete User Dialog */}
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent className="bg-card border-border">
+                    <DialogHeader>
+                        <DialogTitle className="text-destructive">{t("users.deactivateUser")}</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                            {t("users.deactivateConfirm")} <strong>{userToDelete?.email}</strong>?
+                            {t("users.deactivateNote")}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteDialogOpen(false)}
+                            disabled={deleting}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            onClick={handleDeleteUser}
+                            disabled={deleting}
+                            variant="destructive"
+                        >
+                            {deleting ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    {t("common.deactivating")}
+                                </>
+                            ) : (
+                                t("users.deactivate")
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </MainLayout>
+    );
+}
