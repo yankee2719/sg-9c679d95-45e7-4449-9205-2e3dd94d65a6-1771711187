@@ -1,155 +1,191 @@
-import { useRouter } from 'next/router';
+// ============================================================================
+// EQUIPMENT DOCUMENTS PAGE - WITH AUTH
+// ============================================================================
+// File: pages/equipment/[id]/documents.tsx
+// Versione con auth reale integrato
+// ============================================================================
+
 import { useState } from 'react';
-import { DocumentUploader } from '@/components/documents/DocumentUploader';
-import { DocumentList } from '@/components/documents/DocumentList';
-import { ComplianceDashboard } from '@/components/documents/ComplianceDashboard';
-import { DocumentDetailModal } from '@/components/documents/DocumentDetailModal';
-import { FileText, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { DocumentUpload } from '@/components/Documents/DocumentUpload';
+import { DocumentList } from '@/components/Documents/DocumentList';
+import { VersionHistory } from '@/components/Documents/VersionHistory';
+import { AuditLogViewer } from '@/components/Documents/AuditLogViewer';
+import { AccessControlManager } from '@/components/Documents/AccessControlManager';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from '@/components/ui/tabs';
+import { Plus, FileText, ArrowLeft, Loader2 } from 'lucide-react';
+
+interface Document {
+    id: string;
+    title: string;
+    description?: string;
+    category: string;
+    version_number: number;
+    file_size_bytes: number;
+    compliance_tags?: string[];
+    created_at: string;
+}
 
 export default function EquipmentDocumentsPage() {
     const router = useRouter();
-    const { id } = router.query;
+    const { id: equipmentId } = router.query;
 
-    const [selectedDocumentId, setSelectedDocumentId] = useState < string | null > (null);
-    const [selectedCategory, setSelectedCategory] = useState('TECH_MANUAL');
-    const [refreshKey, setRefreshKey] = useState(0);
+    // Auth
+    const { user, loading: authLoading } = useCurrentUser();
 
-    // Loading state mentre Next.js carica il router
-    if (!router.isReady) {
+    // State
+    const [showUploadDialog, setShowUploadDialog] = useState(false);
+    const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+    const [selectedDocument, setSelectedDocument] = useState < Document | null > (null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    // Loading state
+    if (authLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
         );
     }
 
-    // Validazione ID
-    if (!id || typeof id !== 'string') {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <p className="text-gray-600 mb-4">ID equipaggiamento non valido</p>
-                    <Link
-                        href="/equipment"
-                        className="text-blue-600 hover:text-blue-700 underline"
-                    >
-                        Torna alla lista equipaggiamenti
-                    </Link>
-                </div>
-            </div>
-        );
+    // Not authenticated
+    if (!user) {
+        router.push('/login');
+        return null;
     }
 
-    function handleUploadSuccess() {
-        setRefreshKey(prev => prev + 1);
+    // No equipment ID
+    if (!equipmentId || typeof equipmentId !== 'string') {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto p-6 space-y-6">
             {/* Header */}
-            <div className="bg-white border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <Link
-                        href={`/equipment/${id}`}
-                        className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => router.push(`/equipment/${equipmentId}`)}
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Torna all'equipaggiamento
-                    </Link>
-
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                                <FileText className="w-8 h-8 text-blue-600" />
-                                Gestione Documenti
-                            </h1>
-                            <p className="mt-2 text-gray-600">
-                                Carica e gestisci i documenti tecnici dell'equipaggiamento
-                            </p>
-                        </div>
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold flex items-center gap-2">
+                            <FileText className="h-8 w-8" />
+                            Equipment Documents
+                        </h1>
+                        <p className="text-gray-500 mt-1">
+                            Manage technical documentation, manuals, and certifications
+                        </p>
                     </div>
                 </div>
+
+                <Button
+                    onClick={() => setShowUploadDialog(true)}
+                    className="gap-2"
+                >
+                    <Plus className="h-4 w-4" />
+                    Upload Document
+                </Button>
             </div>
 
-            {/* Content */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Column - Upload & Compliance */}
-                    <div className="lg:col-span-1 space-y-6">
-                        {/* Compliance Dashboard */}
-                        <ComplianceDashboard organizationId={id} />
+            {/* Document List */}
+            <DocumentList
+                equipmentId={equipmentId}
+                key={refreshTrigger}
+                onViewDocument={(doc) => {
+                    setSelectedDocument(doc);
+                    setShowDetailsDialog(true);
+                }}
+                onViewVersions={(doc) => {
+                    setSelectedDocument(doc);
+                    setShowDetailsDialog(true);
+                }}
+                onRefresh={() => setRefreshTrigger(prev => prev + 1)}
+            />
 
-                        {/* Category Selector */}
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Categoria Documento
-                            </label>
-                            <select
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg 
-                  focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                  bg-white text-gray-900"
-                            >
-                                <option value="TECH_MANUAL">Manuale Tecnico</option>
-                                <option value="CE_DECLARATION">Dichiarazione CE</option>
-                                <option value="RISK_ASSESSMENT">Valutazione Rischi</option>
-                                <option value="WIRING_DIAGRAM">Schema Elettrico</option>
-                                <option value="PNEUMATIC_DIAGRAM">Schema Pneumatico</option>
-                                <option value="HYDRAULIC_DIAGRAM">Schema Idraulico</option>
-                                <option value="SPARE_PARTS">Catalogo Ricambi</option>
-                                <option value="MAINTENANCE_LOG">Registro Manutenzioni</option>
-                                <option value="INSPECTION_REPORT">Rapporto Ispezione</option>
-                                <option value="INSTALLATION_MANUAL">Manuale Installazione</option>
-                                <option value="SAFETY_PROCEDURE">Procedura Sicurezza</option>
-                            </select>
-                            <p className="mt-2 text-xs text-gray-500">
-                                Seleziona la categoria appropriata per il documento da caricare
+            {/* Upload Dialog */}
+            <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Upload New Document</DialogTitle>
+                    </DialogHeader>
+                    <DocumentUpload
+                        equipmentId={equipmentId}
+                        onUploadComplete={(documentId) => {
+                            console.log('Document uploaded:', documentId);
+                            setShowUploadDialog(false);
+                            setRefreshTrigger(prev => prev + 1);
+                        }}
+                        onCancel={() => setShowUploadDialog(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+
+            {/* Document Details Dialog */}
+            {selectedDocument && (
+                <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+                    <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl">
+                                {selectedDocument.title}
+                            </DialogTitle>
+                            <p className="text-sm text-gray-500">
+                                Version {selectedDocument.version_number} • {selectedDocument.category}
                             </p>
-                        </div>
+                        </DialogHeader>
 
-                        {/* Document Uploader */}
-                        <DocumentUploader
-                            organizationId={id}
-                            categoryCode={selectedCategory}
-                            onSuccess={handleUploadSuccess}
-                        />
-                    </div>
+                        <Tabs defaultValue="versions" className="mt-4">
+                            <TabsList className="grid w-full grid-cols-3">
+                                <TabsTrigger value="versions">Version History</TabsTrigger>
+                                <TabsTrigger value="audit">Audit Trail</TabsTrigger>
+                                <TabsTrigger value="access">Access Control</TabsTrigger>
+                            </TabsList>
 
-                    {/* Right Column - Document List */}
-                    <div className="lg:col-span-2">
-                        <DocumentList
-                            key={refreshKey}
-                            organizationId={id}
-                            onDocumentClick={setSelectedDocumentId}
-                            className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm"
-                        />
-                    </div>
-                </div>
+                            <TabsContent value="versions" className="mt-6">
+                                <VersionHistory
+                                    documentId={selectedDocument.id}
+                                    currentVersionNumber={selectedDocument.version_number}
+                                />
+                            </TabsContent>
 
-                {/* Info Card - Best Practices */}
-                <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2">
-                        📋 Best Practices Documentazione
-                    </h3>
-                    <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• Mantieni sempre aggiornati i documenti CE obbligatori</li>
-                        <li>• Usa nomi file descrittivi e include versione/data</li>
-                        <li>• Aggiungi sempre una descrizione dettagliata del cambiamento quando carichi nuove versioni</li>
-                        <li>• Verifica il checksum SHA-256 dopo il download per garantire l'integrità del file</li>
-                        <li>• Conserva tutte le versioni precedenti per tracciabilità normativa</li>
-                    </ul>
-                </div>
-            </div>
+                            <TabsContent value="audit" className="mt-6">
+                                <AuditLogViewer
+                                    documentId={selectedDocument.id}
+                                    limit={100}
+                                />
+                            </TabsContent>
 
-            {/* Detail Modal */}
-            {selectedDocumentId && (
-                <DocumentDetailModal
-                    documentId={selectedDocumentId}
-                    onClose={() => setSelectedDocumentId(null)}
-                />
+                            <TabsContent value="access" className="mt-6">
+                                <AccessControlManager
+                                    documentId={selectedDocument.id}
+                                    currentUserId={user.id}
+                                />
+                            </TabsContent>
+                        </Tabs>
+                    </DialogContent>
+                </Dialog>
             )}
         </div>
     );
 }
+

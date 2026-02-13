@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface MachineEvent {
     event_id: string;
-    machine_id: string;
+    equipment_id: string;  // ✅ Cambiato da machine_id
     organization_id: string;
     event_type: string;
     event_version: number;
@@ -35,13 +35,13 @@ export class MachineEventService {
      * @returns event_id dell'evento creato
      */
     static async recordEvent({
-        machineId,
+        equipmentId,  // ✅ Cambiato da machineId
         organizationId,
         eventType,
         payload,
         actorType = 'user',
     }: {
-        machineId: string;
+        equipmentId: string;  // ✅ Cambiato da machineId
         organizationId: string;
         eventType: string;
         payload: Record<string, any>;
@@ -50,7 +50,7 @@ export class MachineEventService {
         // Using imported supabase client
 
         const { data, error } = await supabase.rpc('insert_machine_event', {
-            p_machine_id: machineId,
+            p_equipment_id: equipmentId,  // ✅ Cambiato da p_machine_id
             p_organization_id: organizationId,
             p_event_type: eventType,
             p_payload: payload,
@@ -70,7 +70,7 @@ export class MachineEventService {
      * @param limit Numero massimo di eventi da recuperare (default 50)
      */
     static async getTimeline(
-        machineId: string,
+        equipmentId: string,  // ✅ Cambiato da machineId
         organizationId: string,
         limit = 50
     ): Promise<MachineEvent[]> {
@@ -79,7 +79,7 @@ export class MachineEventService {
         const { data, error } = await supabase
             .from('machine_events')
             .select('*')
-            .eq('machine_id', machineId)
+            .eq('equipment_id', equipmentId)  // ✅ Cambiato da machine_id
             .eq('organization_id', organizationId)
             .order('created_at', { ascending: false })
             .order('sequence_number', { ascending: false })
@@ -98,7 +98,7 @@ export class MachineEventService {
      * @returns Stato di validità e lista di eventi corrotti (se presenti)
      */
     static async verifyIntegrity(
-        machineId: string,
+        equipmentId: string,  // ✅ Cambiato da machineId
         organizationId: string
     ): Promise<{
         isValid: boolean;
@@ -109,7 +109,7 @@ export class MachineEventService {
         // Using imported supabase client
 
         const { data, error } = await supabase.rpc('verify_machine_event_chain', {
-            p_machine_id: machineId,
+            p_equipment_id: equipmentId,  // ✅ Cambiato da p_machine_id
             p_organization_id: organizationId,
         });
 
@@ -134,14 +134,14 @@ export class MachineEventService {
      * @param atTimestamp Momento temporale (default: ora)
      */
     static async reconstructState(
-        machineId: string,
+        equipmentId: string,  // ✅ Cambiato da machineId
         organizationId: string,
         atTimestamp?: Date
     ): Promise<Record<string, any>> {
         // Using imported supabase client
 
         const { data, error } = await supabase.rpc('reconstruct_machine_state', {
-            p_machine_id: machineId,
+            p_equipment_id: equipmentId,  // ✅ Cambiato da p_machine_id
             p_organization_id: organizationId,
             p_at_timestamp: atTimestamp?.toISOString() || new Date().toISOString(),
         });
