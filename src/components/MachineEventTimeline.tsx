@@ -179,13 +179,21 @@ export function MachineEventTimeline({
     const [loading, setLoading] = useState(true);
     const [isValid, setIsValid] = useState(true);
     const [integrityChecked, setIntegrityChecked] = useState(false);
+    const [error, setError] = useState < string | null > (null);
 
     useEffect(() => {
+        // Validazione: non caricare se machineId o organizationId non sono validi
+        if (!machineId || !organizationId || machineId === 'null' || organizationId === 'null') {
+            setLoading(false);
+            setError('ID macchina o organizzazione non valido');
+            return;
+        }
         loadData();
     }, [machineId, organizationId, limit]);
 
     async function loadData() {
         setLoading(true);
+        setError(null);
         try {
             // Load events
             const eventsData = await MachineEventService.getTimeline(
@@ -204,8 +212,9 @@ export function MachineEventTimeline({
                 setIsValid(integrity.isValid);
                 setIntegrityChecked(true);
             }
-        } catch (error) {
-            console.error('Failed to load timeline:', error);
+        } catch (err) {
+            console.error('Failed to load timeline:', err);
+            setError(err instanceof Error ? err.message : 'Errore caricamento timeline');
         } finally {
             setLoading(false);
         }
@@ -221,6 +230,22 @@ export function MachineEventTimeline({
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    if (error) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Timeline Eventi</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Alert variant="destructive">
+                        <ShieldAlert className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 </CardContent>
             </Card>
         );
