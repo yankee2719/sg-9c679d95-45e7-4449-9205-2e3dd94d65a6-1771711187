@@ -225,6 +225,7 @@ export default function AdminUsersPage() {
         return [];
     };
 
+    // ✅ FUNZIONE CORRETTA: Crea utente e aggiorna lista immediatamente
     const handleCreateUser = async () => {
         if (!newUserData.email || !newUserData.password) {
             toast({
@@ -248,16 +249,43 @@ export default function AdminUsersPage() {
 
         setCreating(true);
         try {
-            const { error } = await apiClient.users.create({
+            console.log("🚀 Creazione utente:", newUserData.email);
+
+            const response = await apiClient.users.create({
                 email: newUserData.email,
                 password: newUserData.password,
                 full_name: newUserData.full_name || undefined,
                 role: newUserData.role,
             });
 
-            if (error) {
-                throw new Error(error);
+            console.log("📥 Risposta API:", response);
+
+            if (!response.success || !response.data) {
+                throw new Error(response.error || "Errore creazione utente");
             }
+
+            // ✅ Estrai i dati dalla risposta (struttura: { message, user: { id, email, full_name, role, phone } })
+            const apiUser = response.data.user;
+
+            if (!apiUser) {
+                throw new Error("Risposta API non valida: manca user");
+            }
+
+            // ✅ Crea oggetto User per lo stato locale
+            const newUser: User = {
+                id: apiUser.id,
+                email: apiUser.email,
+                full_name: apiUser.full_name || newUserData.full_name || null,
+                role: apiUser.role || newUserData.role,
+                is_active: true,
+                created_at: new Date().toISOString(),
+                tenant_id: currentTenantId,
+            };
+
+            console.log("➕ Aggiungo utente alla lista:", newUser);
+
+            // ✅ AGGIUNGI SUBITO ALLA LISTA (ottimistico)
+            setUsers(prevUsers => [newUser, ...prevUsers]);
 
             toast({
                 title: "✅ " + t("users.created"),
@@ -273,9 +301,13 @@ export default function AdminUsersPage() {
                 phone: "",
             });
 
-            await loadUsers(currentUserRole!, currentTenantId);
+            // Ricarica dopo un breve delay per sincronizzare
+            setTimeout(async () => {
+                await loadUsers(currentUserRole!, currentTenantId);
+            }, 500);
+
         } catch (error: unknown) {
-            console.error("Error creating user:", error);
+            console.error("❌ Errore creazione utente:", error);
             toast({
                 variant: "destructive",
                 title: "❌ " + t("common.error"),
@@ -283,6 +315,7 @@ export default function AdminUsersPage() {
             });
         } finally {
             setCreating(false);
+            console.log("🏁 Fine handleCreateUser");
         }
     };
 
