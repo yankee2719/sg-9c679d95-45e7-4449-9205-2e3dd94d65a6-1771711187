@@ -64,17 +64,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (profileError) {
       console.error("Error upserting profile:", profileError);
-      
+
       // Try to rollback: Delete auth user
       try {
         await serviceSupabase.auth.admin.deleteUser(authData.user.id);
       } catch (rollbackError) {
         console.error("Rollback failed:", rollbackError);
       }
-      
-      return res.status(500).json({ 
-        error: "Failed to create user profile", 
-        details: profileError.message 
+
+      return res.status(500).json({
+        error: "Failed to create user profile",
+        details: profileError.message
       });
     }
 
@@ -102,7 +102,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     });
   } catch (error) {
     console.error("Unexpected error in /api/users/create:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: "Internal server error",
       details: error instanceof Error ? error.message : "Unknown error"
     });
