@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MachineEventTimeline } from '@/components/MachineEventTimeline';
-import MainLayout from '@/components/Layout/MainLayout';
+import { MainLayout } from '@/components/Layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ export default function EquipmentDetailPage() {
     const router = useRouter();
     const { id } = router.query;
 
-    const [equipment, setEquipment] = useState<Equipment | null>(null);
+    const [equipment, setEquipment] = useState < Equipment | null > (null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -233,4 +233,3 @@ export default function EquipmentDetailPage() {
         </MainLayout>
     );
 }
-
