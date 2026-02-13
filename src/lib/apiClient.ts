@@ -72,9 +72,10 @@ async function fetchApi<T>(
             };
         }
 
+        // ✅ CORRETTO: Supporta sia { data: ... } che risposta diretta
         return {
             success: true,
-            data: data.data,
+            data: data.data || data,
             pagination: data.pagination,
         };
     } catch (error) {
@@ -421,7 +422,7 @@ export interface User {
     updated_at?: string;
 }
 
-// ✅ Interfaccia corretta per la risposta di /api/users/create
+// Interfaccia per la risposta di /api/users/create
 export interface CreateUserResponse {
     message: string;
     user: {
@@ -436,7 +437,6 @@ export interface CreateUserResponse {
 export const userApi = {
     list: () => fetchApi < User[] > ("/api/users/list"),
 
-    // ✅ CORRETTO: endpoint è /api/users/create (non /api/create-user)
     create: (data: { email: string; password: string; full_name?: string; role: User["role"] }) =>
         fetchApi < CreateUserResponse > ("/api/users/create", {
             method: "POST",
