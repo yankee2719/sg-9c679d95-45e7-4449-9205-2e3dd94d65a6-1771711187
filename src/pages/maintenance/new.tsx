@@ -4,7 +4,7 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { getAllEquipment } from "@/services/equipmentService";
 import { checklistService } from "@/services/checklistService";
-import { maintenanceService } from "@/services/maintenanceService";
+import maintenanceService from "@/services/maintenanceService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
