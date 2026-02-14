@@ -1,25 +1,16 @@
 // src/hooks/usePlatformAuth.tsx
-/**
- * Platform Authentication Hook
- * Manages platform user authentication and access control
- */
+// Fixed: works with actual platform_users table instead of JWT claims
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { platformService } from "@/services/platformService";
+import { platformService, PlatformUser } from "@/services/platformService";
 import { useToast } from "@/hooks/use-toast";
 
 export interface PlatformAuthState {
     isPlatform: boolean;
     platformRole: string | null;
-    platformUser: any | null;
+    platformUser: PlatformUser | null;
     loading: boolean;
-    isImpersonating: boolean;
-    impersonationDetails: {
-        sessionId?: string;
-        organizationId?: string;
-        expiresAt?: string;
-    } | null;
 }
 
 export function usePlatformAuth() {
@@ -31,8 +22,6 @@ export function usePlatformAuth() {
         platformRole: null,
         platformUser: null,
         loading: true,
-        isImpersonating: false,
-        impersonationDetails: null,
     });
 
     useEffect(() => {
@@ -43,11 +32,10 @@ export function usePlatformAuth() {
         try {
             setState((prev) => ({ ...prev, loading: true }));
 
-            const [isPlatform, role, user, impersonation] = await Promise.all([
+            const [isPlatform, role, user] = await Promise.all([
                 platformService.isPlatformUser(),
                 platformService.getPlatformRole(),
                 platformService.getCurrentPlatformUser(),
-                platformService.isImpersonating(),
             ]);
 
             setState({
@@ -55,8 +43,6 @@ export function usePlatformAuth() {
                 platformRole: role,
                 platformUser: user,
                 loading: false,
-                isImpersonating: impersonation.active,
-                impersonationDetails: impersonation.active ? impersonation : null,
             });
         } catch (error) {
             console.error("Error checking platform access:", error);
@@ -90,17 +76,11 @@ export function usePlatformAuth() {
     };
 
     const canImpersonate = () => {
-        return (
-            state.isPlatform &&
-            state.platformUser?.can_impersonate === true
-        );
+        return state.isPlatform && state.platformUser?.can_impersonate === true;
     };
 
     const canModifyTenants = () => {
-        return (
-            state.isPlatform &&
-            state.platformUser?.can_modify_tenants === true
-        );
+        return state.isPlatform && state.platformUser?.can_modify_tenants === true;
     };
 
     return {
