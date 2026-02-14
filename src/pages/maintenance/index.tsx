@@ -22,8 +22,10 @@ import {
     Clock,
     AlertTriangle,
     CheckCircle,
-    Calendar
+    Calendar,
+    Trash2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface MaintenanceTask {
     id: string;
@@ -43,6 +45,7 @@ interface MaintenanceTask {
 
 export default function MaintenancePage() {
     const router = useRouter();
+    const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("technician");
     const [tasks, setTasks] = useState < MaintenanceTask[] > ([]);
@@ -50,6 +53,7 @@ export default function MaintenancePage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [priorityFilter, setPriorityFilter] = useState("all");
+    const [deleting, setDeleting] = useState < string | null > (null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -112,6 +116,36 @@ export default function MaintenancePage() {
         setFilteredTasks(filtered);
     }, [searchQuery, statusFilter, priorityFilter, tasks]);
 
+    const handleDelete = async (e: React.MouseEvent, id: string, title: string) => {
+        e.stopPropagation();
+        if (!confirm(`Sei sicuro di voler eliminare "${title}"?`)) return;
+
+        setDeleting(id);
+        try {
+            const { error } = await supabase
+                .from("maintenance_schedules")
+                .delete()
+                .eq("id", id);
+
+            if (error) throw error;
+
+            setTasks((prev) => prev.filter((item) => item.id !== id));
+            toast({
+                title: "Eliminata",
+                description: `"${title}" è stata eliminata correttamente`,
+            });
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast({
+                title: "Errore",
+                description: error instanceof Error ? error.message : "Errore durante l'eliminazione",
+                variant: "destructive",
+            });
+        } finally {
+            setDeleting(null);
+        }
+    };
+
     const getStatusConfig = (status: string) => {
         const configs: Record<string, { label: string; color: string; icon: any }> = {
             scheduled: { label: "Programmata", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Calendar },
@@ -123,17 +157,17 @@ export default function MaintenancePage() {
         return configs[status] || configs.scheduled;
     };
 
-    const getPriorityConfig = (priority: string) => {
+    const getPriorityConfig = (priority: string | null) => {
         const configs: Record<string, { label: string; color: string }> = {
             low: { label: "Bassa", color: "bg-slate-500/20 text-slate-400" },
             medium: { label: "Media", color: "bg-amber-500/20 text-amber-400" },
             high: { label: "Alta", color: "bg-red-500/20 text-red-400" },
             urgent: { label: "Urgente", color: "bg-red-600/20 text-red-500" }
         };
-        return configs[priority] || configs.medium;
+        return configs[priority || "medium"] || configs.medium;
     };
 
-    const formatDate = (date: string) => {
+    const formatDate = (date: string | null) => {
         if (!date) return "N/A";
         return new Date(date).toLocaleDateString("it-IT", {
             day: "2-digit",
@@ -262,10 +296,22 @@ export default function MaintenancePage() {
                                             </div>
                                         </div>
 
-                                        {/* Status Badge */}
-                                        <Badge className={`rounded-lg px-3 py-1.5 text-sm font-semibold border flex-shrink-0 ${status.color}`}>
-                                            {status.label}
-                                        </Badge>
+                                        {/* Status Badge + Delete */}
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <Badge className={`rounded-lg px-3 py-1.5 text-sm font-semibold border ${status.color}`}>
+                                                {status.label}
+                                            </Badge>
+                                            {(userRole === "admin" || userRole === "supervisor") && (
+                                                <button
+                                                    onClick={(e) => handleDelete(e, task.id, task.title)}
+                                                    disabled={deleting === task.id}
+                                                    className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                                                    title="Elimina manutenzione"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
