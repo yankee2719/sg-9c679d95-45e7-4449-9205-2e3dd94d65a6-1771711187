@@ -37,7 +37,6 @@ interface DocumentRecord {
     id: string;
     equipment_id: string;
     title: string;
-    file_url: string;
     file_path: string | null;
     file_type: string | null;
     file_size: number | null;
@@ -116,12 +115,11 @@ export function DocumentUpload({
             if (uploadError) throw uploadError;
 
             // 4. Insert document record in database
-            // Note: DB has both file_url (original) and file_path (added by migration)
+            // DB may have file_url, file_path, or both depending on migration state
             const { error: dbError } = await supabase.from("documents").insert({
                 equipment_id: equipmentId,
                 tenant_id: tenantId,
                 title: title.trim(),
-                file_url: filePath,
                 file_path: filePath,
                 file_type: file.type,
                 file_size: file.size,
@@ -163,7 +161,8 @@ export function DocumentUpload({
 
     const handleDownload = async (doc: DocumentRecord) => {
         try {
-            const storagePath = doc.file_path || doc.file_url;
+            const storagePath = doc.file_path;
+            if (!storagePath) throw new Error("No file path");
             const { data, error } = await supabase.storage
                 .from("equipment-documents")
                 .download(storagePath);
@@ -193,10 +192,12 @@ export function DocumentUpload({
         if (!confirm("Sei sicuro di voler eliminare questo documento?")) return;
 
         try {
-            const storagePath = doc.file_path || doc.file_url;
-            await supabase.storage
-                .from("equipment-documents")
-                .remove([storagePath]);
+            const storagePath = doc.file_path;
+            if (storagePath) {
+                await supabase.storage
+                    .from("equipment-documents")
+                    .remove([storagePath]);
+            }
 
             const { error } = await supabase
                 .from("documents")
