@@ -37,7 +37,7 @@ interface DocumentRecord {
     id: string;
     equipment_id: string;
     title: string;
-    file_path: string | null;
+    file_path: string;
     file_type: string | null;
     file_size: number | null;
     tenant_id: string | null;
@@ -115,7 +115,6 @@ export function DocumentUpload({
             if (uploadError) throw uploadError;
 
             // 4. Insert document record in database
-            // DB may have file_url, file_path, or both depending on migration state
             const { error: dbError } = await supabase.from("documents").insert({
                 equipment_id: equipmentId,
                 tenant_id: tenantId,
@@ -161,11 +160,9 @@ export function DocumentUpload({
 
     const handleDownload = async (doc: DocumentRecord) => {
         try {
-            const storagePath = doc.file_path;
-            if (!storagePath) throw new Error("No file path");
             const { data, error } = await supabase.storage
                 .from("equipment-documents")
-                .download(storagePath);
+                .download(doc.file_path);
 
             if (error) throw error;
             if (!data) throw new Error("No data");
@@ -192,12 +189,9 @@ export function DocumentUpload({
         if (!confirm("Sei sicuro di voler eliminare questo documento?")) return;
 
         try {
-            const storagePath = doc.file_path;
-            if (storagePath) {
-                await supabase.storage
-                    .from("equipment-documents")
-                    .remove([storagePath]);
-            }
+            await supabase.storage
+                .from("equipment-documents")
+                .remove([doc.file_path]);
 
             const { error } = await supabase
                 .from("documents")
