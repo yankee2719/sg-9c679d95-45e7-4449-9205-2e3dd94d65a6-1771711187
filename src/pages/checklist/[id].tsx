@@ -237,10 +237,9 @@ export default function ChecklistExecutionPage() {
             const executionId = Array.isArray(id) ? id[0] : id;
 
             console.log("Completing checklist execution:", executionId);
-            console.log("Current execution object:", execution);
             console.log("Schedule ID to update:", execution?.schedule_id);
 
-            // Aggiorna l'esecuzione della checklist
+            // 1. Aggiorna l'esecuzione della checklist
             const { error: updateError } = await supabase
                 .from("checklist_executions")
                 .update({
@@ -258,7 +257,7 @@ export default function ChecklistExecutionPage() {
 
             console.log("Checklist execution updated successfully");
 
-            // Se c'è una manutenzione collegata, aggiorna anche quella
+            // 2. Aggiorna lo stato della manutenzione collegata
             if (execution?.schedule_id) {
                 console.log("Updating maintenance schedule:", execution.schedule_id);
 
@@ -266,15 +265,48 @@ export default function ChecklistExecutionPage() {
                     .from("maintenance_schedules")
                     .update({
                         status: "completed",
-                        last_completed_date: new Date().toISOString()
+                        last_performed_at: new Date().toISOString()
                     })
                     .eq("id", execution.schedule_id)
                     .select();
 
                 if (maintenanceError) {
                     console.error("Error updating maintenance schedule:", maintenanceError);
+                    // Non blocca il flusso, logga solo
                 } else {
-                    console.log("Maintenance schedule updated successfully:", maintenanceData);
+                    console.log("Maintenance schedule updated:", maintenanceData);
+                }
+
+                // 3. Crea anche un log di manutenzione
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    // Recupera info schedule per il log
+                    const { data: schedData } = await supabase
+                        .from("maintenance_schedules")
+                        .select("equipment_id, title, tenant_id")
+                        .eq("id", execution.schedule_id)
+                        .single();
+
+                    if (schedData) {
+                        const { error: logError } = await supabase
+                            .from("maintenance_logs")
+                            .insert({
+                                equipment_id: schedData.equipment_id,
+                                performed_by: user.id,
+                                title: schedData.title,
+                                description: `Checklist "${checklist?.name}" completata`,
+                                status: "completed",
+                                completed_at: new Date().toISOString(),
+                                schedule_id: execution.schedule_id,
+                                tenant_id: schedData.tenant_id,
+                            });
+
+                        if (logError) {
+                            console.error("Error creating maintenance log:", logError);
+                        } else {
+                            console.log("Maintenance log created");
+                        }
+                    }
                 }
             } else {
                 console.log("No schedule_id found, skipping maintenance update");
@@ -325,6 +357,12 @@ export default function ChecklistExecutionPage() {
     const progress = calculateProgress();
     const startTime = execution.started_at ? new Date(execution.started_at) : new Date();
 
+    // Colore barra: verde al 100%, primary (arancione) sotto
+    const progressBarColor = progress === 100 ? "bg-green-500" : "bg-primary";
+    const progressBadgeClass = progress === 100
+        ? "bg-green-500/20 text-green-400 border-green-500/30"
+        : "";
+
     return (
         <MainLayout>
             <SEO title={`Esegui Checklist - ${checklist?.name || ""}`} />
@@ -349,7 +387,10 @@ export default function ChecklistExecutionPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-white">Progresso</CardTitle>
-                            <Badge variant={progress === 100 ? "default" : "secondary"} className="text-lg px-3 py-1">
+                            <Badge
+                                variant={progress === 100 ? "default" : "secondary"}
+                                className={`text-lg px-3 py-1 ${progressBadgeClass}`}
+                            >
                                 {progress}%
                             </Badge>
                         </div>
@@ -357,7 +398,7 @@ export default function ChecklistExecutionPage() {
                     <CardContent>
                         <div className="w-full bg-gray-700 rounded-full h-3">
                             <div
-                                className="bg-primary h-3 rounded-full transition-all duration-300"
+                                className={`${progressBarColor} h-3 rounded-full transition-all duration-300`}
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
@@ -377,7 +418,9 @@ export default function ChecklistExecutionPage() {
                                         />
                                         <div className="flex-1 space-y-2">
                                             <div className="flex items-start justify-between gap-2">
-                                                <p className="text-white font-medium">{item.title}</p>
+                                                <p className={`font-medium ${item.checked ? "text-green-400 line-through" : "text-white"}`}>
+                                                    {item.title}
+                                                </p>
                                                 {item.is_required && (
                                                     <Badge variant="destructive">
                                                         <Flag className="h-3 w-3 mr-1" />
@@ -396,8 +439,8 @@ export default function ChecklistExecutionPage() {
                                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                         {item.images.map((imageUrl, imgIndex) => (
                                                             <div key={imgIndex} className="relative group cursor-pointer">
-                                                                <img 
-                                                                    src={imageUrl} 
+                                                                <img
+                                                                    src={imageUrl}
                                                                     alt={`Riferimento ${imgIndex + 1}`}
                                                                     className="w-full h-24 object-cover rounded border border-gray-600 hover:border-primary transition-colors"
                                                                     onClick={() => window.open(imageUrl, '_blank')}
@@ -443,7 +486,7 @@ export default function ChecklistExecutionPage() {
                     <Button
                         onClick={handleComplete}
                         disabled={progress < 100 || completing}
-                        className="flex-1 bg-primary hover:bg-primary/90"
+                        className={`flex-1 ${progress === 100 ? "bg-green-600 hover:bg-green-700" : "bg-primary hover:bg-primary/90"}`}
                     >
                         {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                         Completa
@@ -544,7 +587,7 @@ export default function ChecklistExecutionPage() {
                             type="button"
                             onClick={confirmComplete}
                             disabled={completing || !technicianName.trim()}
-                            className="bg-primary hover:bg-primary/90"
+                            className="bg-green-600 hover:bg-green-700"
                         >
                             {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Conferma e Invia
