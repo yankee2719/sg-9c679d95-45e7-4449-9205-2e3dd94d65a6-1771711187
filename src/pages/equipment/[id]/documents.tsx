@@ -1,156 +1,139 @@
-import { useRouter } from 'next/router';
-import { useState } from 'react';
-import { DocumentUploader } from '@/components/documents/DocumentUploader';
-import { DocumentList } from '@/components/documents/DocumentList';
-import { ComplianceDashboard } from '@/components/documents/ComplianceDashboard';
-import { DocumentDetailModal } from '@/components/documents/DocumentDetailModal';
-import { FileText, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+iimport { useRouter } from "next/router";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
+import { FileText, ArrowLeft, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { MainLayout } from "@/components/Layout/MainLayout";
+
+interface Equipment {
+    id: string;
+    name: string;
+    equipment_code: string;
+}
 
 export default function EquipmentDocumentsPage() {
     const router = useRouter();
     const { id } = router.query;
 
-    const [selectedDocumentId, setSelectedDocumentId] = useState < string | null > (null);
-    const [selectedCategory, setSelectedCategory] = useState('TECH_MANUAL');
-    const [refreshKey, setRefreshKey] = useState(0);
+    const [equipment, setEquipment] = useState < Equipment | null > (null);
+    const [loading, setLoading] = useState(true);
 
-    // Loading state mentre Next.js carica il router
+    useEffect(() => {
+        if (id && typeof id === "string") {
+            loadEquipment(id);
+        }
+    }, [id]);
+
+    async function loadEquipment(equipmentId: string) {
+        try {
+            const { data, error } = await supabase
+                .from("equipment")
+                .select("id, name, equipment_code")
+                .eq("id", equipmentId)
+                .single();
+
+            if (error) throw error;
+            setEquipment(data);
+        } catch (error) {
+            console.error("Failed to load equipment:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     if (!router.isReady) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-            </div>
-        );
-    }
-
-    // Validazione ID
-    if (!id || typeof id !== 'string') {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <p className="text-gray-600 mb-4">ID equipaggiamento non valido</p>
-                    <Link
-                        href="/equipment"
-                        className="text-blue-600 hover:text-blue-700 underline"
-                    >
-                        Torna alla lista equipaggiamenti
-                    </Link>
+            <MainLayout>
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-            </div>
+            </MainLayout>
         );
     }
 
-    function handleUploadSuccess() {
-        setRefreshKey(prev => prev + 1);
+    if (!id || typeof id !== "string") {
+        return (
+            <MainLayout>
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <div className="text-center">
+                        <p className="text-muted-foreground mb-4">
+                            ID equipaggiamento non valido
+                        </p>
+                        <Link
+                            href="/equipment"
+                            className="text-primary hover:underline"
+                        >
+                            Torna alla lista equipaggiamenti
+                        </Link>
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
+
+    if (loading) {
+        return (
+            <MainLayout>
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </MainLayout>
+        );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <MainLayout>
+            <div className="space-y-6 max-w-5xl mx-auto">
+                {/* Header */}
+                <div>
                     <Link
                         href={`/equipment/${id}`}
-                        className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+                        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
                     >
                         <ArrowLeft className="w-4 h-4" />
-                        Torna all'equipaggiamento
+                        Torna all&apos;equipaggiamento
                     </Link>
 
                     <div className="flex items-start justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                                <FileText className="w-8 h-8 text-blue-600" />
+                            <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                                <FileText className="w-7 h-7 text-primary" />
                                 Gestione Documenti
                             </h1>
-                            <p className="mt-2 text-gray-600">
-                                Carica e gestisci i documenti tecnici dell'equipaggiamento
-                            </p>
+                            {equipment && (
+                                <p className="mt-1 text-muted-foreground">
+                                    {equipment.name} ({equipment.equipment_code})
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Content */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Column - Upload & Compliance */}
-                    <div className="lg:col-span-1 space-y-6">
-                        {/* Compliance Dashboard */}
-                        <ComplianceDashboard organizationId={id} />
+                {/* Document Upload & List Component */}
+                <DocumentUpload equipmentId={id} />
 
-                        {/* Category Selector */}
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Categoria Documento
-                            </label>
-                            <select
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg 
-                  focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                  bg-white text-gray-900"
-                            >
-                                <option value="TECH_MANUAL">Manuale Tecnico</option>
-                                <option value="CE_DECLARATION">Dichiarazione CE</option>
-                                <option value="RISK_ASSESSMENT">Valutazione Rischi</option>
-                                <option value="WIRING_DIAGRAM">Schema Elettrico</option>
-                                <option value="PNEUMATIC_DIAGRAM">Schema Pneumatico</option>
-                                <option value="HYDRAULIC_DIAGRAM">Schema Idraulico</option>
-                                <option value="SPARE_PARTS">Catalogo Ricambi</option>
-                                <option value="MAINTENANCE_LOG">Registro Manutenzioni</option>
-                                <option value="INSPECTION_REPORT">Rapporto Ispezione</option>
-                                <option value="INSTALLATION_MANUAL">Manuale Installazione</option>
-                                <option value="SAFETY_PROCEDURE">Procedura Sicurezza</option>
-                            </select>
-                            <p className="mt-2 text-xs text-gray-500">
-                                Seleziona la categoria appropriata per il documento da caricare
-                            </p>
-                        </div>
-
-                        {/* Document Uploader */}
-                        <DocumentUploader
-                            organizationId={id}
-                            categoryCode={selectedCategory}
-                            onSuccess={handleUploadSuccess}
-                        />
-                    </div>
-
-                    {/* Right Column - Document List */}
-                    <div className="lg:col-span-2">
-                        <DocumentList
-                            key={refreshKey}
-                            organizationId={id}
-                            onDocumentClick={setSelectedDocumentId}
-                            className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm"
-                        />
-                    </div>
-                </div>
-
-                {/* Info Card - Best Practices */}
-                <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2">
+                {/* Best Practices Info */}
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-6">
+                    <h3 className="text-sm font-semibold text-blue-400 mb-2">
                         📋 Best Practices Documentazione
                     </h3>
-                    <ul className="text-sm text-blue-800 space-y-1">
+                    <ul className="text-sm text-blue-300 space-y-1">
                         <li>• Mantieni sempre aggiornati i documenti CE obbligatori</li>
-                        <li>• Usa nomi file descrittivi e include versione/data</li>
-                        <li>• Aggiungi sempre una descrizione dettagliata del cambiamento quando carichi nuove versioni</li>
-                        <li>• Verifica il checksum SHA-256 dopo il download per garantire l'integrità del file</li>
-                        <li>• Conserva tutte le versioni precedenti per tracciabilità normativa</li>
+                        <li>
+                            • Usa nomi file descrittivi e includi versione/data
+                        </li>
+                        <li>
+                            • Aggiungi una descrizione dettagliata quando carichi nuove
+                            versioni
+                        </li>
+                        <li>
+                            • Conserva tutte le versioni precedenti per tracciabilità
+                            normativa
+                        </li>
                     </ul>
                 </div>
             </div>
-
-            {/* Detail Modal */}
-            {selectedDocumentId && (
-                <DocumentDetailModal
-                    documentId={selectedDocumentId}
-                    onClose={() => setSelectedDocumentId(null)}
-                />
-            )}
-        </div>
+        </MainLayout>
     );
 }
-
