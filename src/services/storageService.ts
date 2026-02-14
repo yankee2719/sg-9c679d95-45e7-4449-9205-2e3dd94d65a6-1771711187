@@ -1,15 +1,13 @@
 // ============================================================================
-// STEP 6: STORAGE SERVICE
+// STORAGE SERVICE - FIXED
 // ============================================================================
-// Storage service per gestire upload/download documenti con:
-// - SHA-256 checksum calculation
-// - Structured storage paths
-// - File validation
-// - Supabase Storage integration
+// Fixes:
+// - Removed Node.js crypto import (crashes in browser)
+// - Uses Web Crypto API for SHA-256 checksums
+// - Compatible with both browser and server environments
 // ============================================================================
 
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
 
 // ============================================================================
 // TYPES
@@ -43,7 +41,7 @@ export interface UploadDocumentParams {
     file: File | Buffer;
     equipmentId: string;
     category: DocumentCategory;
-    filename?: string; // Optional override
+    filename?: string;
 }
 
 export interface UploadResult {
@@ -66,7 +64,7 @@ export interface StoragePathConfig {
 // CONFIGURATION
 // ============================================================================
 
-const STORAGE_BUCKET = 'documents'; // Supabase bucket name
+const STORAGE_BUCKET = 'equipment-documents';
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 const ALLOWED_MIME_TYPES = [
@@ -77,9 +75,9 @@ const ALLOWED_MIME_TYPES = [
     'image/webp',
     'video/mp4',
     'video/webm',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-    'application/vnd.ms-excel', // .xls
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
     'text/plain',
     'text/csv',
 ];
@@ -96,74 +94,68 @@ export class DocumentStorageService {
     }
 
     // --------------------------------------------------------------------------
-    // SHA-256 CHECKSUM CALCULATION
+    // SHA-256 CHECKSUM CALCULATION (Web Crypto API - browser compatible)
     // --------------------------------------------------------------------------
 
-    /**
-     * Calculate SHA-256 checksum of file
-     * Browser: Uses Web Crypto API
-     * Node: Uses crypto module
-     */
     async calculateChecksum(file: File | Buffer): Promise<string> {
-        if (typeof window !== 'undefined' && file instanceof File) {
-            // Browser environment
-            const buffer = await file.arrayBuffer();
-            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        let buffer: ArrayBuffer;
+
+        if (file instanceof File) {
+            buffer = await file.arrayBuffer();
         } else if (Buffer.isBuffer(file)) {
-            // Node.js environment
-            return crypto.createHash('sha256').update(file).digest('hex');
+            // Convert Node.js Buffer to ArrayBuffer
+            buffer = file.buffer.slice(
+                file.byteOffset,
+                file.byteOffset + file.byteLength
+            );
         } else {
             throw new Error('Unsupported file type for checksum calculation');
         }
+
+        // Use Web Crypto API (works in both modern browsers and Node.js 18+)
+        const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', buffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
     }
 
     // --------------------------------------------------------------------------
     // STORAGE PATH GENERATION
     // --------------------------------------------------------------------------
 
-    /**
-     * Generate structured storage path
-     * Pattern: /equipment/{equipmentId}/documents/{category}/{filename}
-     * 
-     * Quando implementeremo Organization Engine, diventerà:
-     * /manufacturer/{mId}/customer/{cId}/plant/{pId}/machine/{mId}/documents/{category}/{filename}
-     */
     generateStoragePath(config: StoragePathConfig): string {
         const { equipmentId, category, version, filename } = config;
 
-        // Sanitize filename (remove special chars, spaces)
         const sanitizedFilename = filename
             .replace(/[^a-zA-Z0-9._-]/g, '_')
             .replace(/_{2,}/g, '_');
 
-        // Add version suffix if provided
         const versionSuffix = version ? `_v${version}` : '';
-        const [name, ext] = sanitizedFilename.split(/\.(?=[^.]+$)/);
+        const parts = sanitizedFilename.split(/\.(?=[^.]+$)/);
+        const name = parts[0];
+        const ext = parts[1];
         const finalFilename = ext
             ? `${name}${versionSuffix}.${ext}`
             : `${sanitizedFilename}${versionSuffix}`;
 
-        return `/equipment/${equipmentId}/documents/${category}/${finalFilename}`;
+        return `${equipmentId}/${category}/${Date.now()}_${finalFilename}`;
     }
 
     // --------------------------------------------------------------------------
     // FILE VALIDATION
     // --------------------------------------------------------------------------
 
-    validateFile(file: File | Buffer, filename: string): void {
-        // Check file size
+    validateFile(file: File | Buffer, _filename: string): void {
         const fileSize = file instanceof File ? file.size : file.length;
         if (fileSize > MAX_FILE_SIZE) {
-            throw new Error(`File size exceeds maximum allowed (${MAX_FILE_SIZE / 1024 / 1024}MB)`);
+            throw new Error(
+                `File size exceeds maximum allowed (${MAX_FILE_SIZE / 1024 / 1024}MB)`
+            );
         }
 
         if (fileSize === 0) {
             throw new Error('File is empty');
         }
 
-        // Check MIME type
         if (file instanceof File) {
             if (!ALLOWED_MIME_TYPES.includes(file.type)) {
                 throw new Error(`File type ${file.type} not allowed`);
@@ -175,46 +167,37 @@ export class DocumentStorageService {
     // UPLOAD DOCUMENT
     // --------------------------------------------------------------------------
 
-    /**
-     * Upload document to Supabase Storage
-     * Returns storage path, checksum, and metadata
-     */
     async uploadDocument(params: UploadDocumentParams): Promise<UploadResult> {
         const { file, equipmentId, category, filename } = params;
 
-        // Determine filename
-        const originalFilename = filename || (file instanceof File ? file.name : 'document');
+        const originalFilename =
+            filename || (file instanceof File ? file.name : 'document');
 
-        // Validate file
         this.validateFile(file, originalFilename);
 
-        // Calculate checksum
         const fileChecksum = await this.calculateChecksum(file);
 
-        // Generate storage path
         const storagePath = this.generateStoragePath({
             equipmentId,
             category,
             filename: originalFilename,
         });
 
-        // Get file size and MIME type
         const fileSizeBytes = file instanceof File ? file.size : file.length;
-        const mimeType = file instanceof File ? file.type : 'application/octet-stream';
+        const mimeType =
+            file instanceof File ? file.type : 'application/octet-stream';
 
-        // Upload to Supabase Storage
-        const { data, error } = await this.supabase.storage
+        const { error } = await this.supabase.storage
             .from(STORAGE_BUCKET)
             .upload(storagePath, file, {
                 contentType: mimeType,
-                upsert: false, // Don't overwrite - enforce immutability
+                upsert: false,
             });
 
         if (error) {
             throw new Error(`Upload failed: ${error.message}`);
         }
 
-        // Get public URL (optional - dipende da bucket settings)
         const { data: urlData } = this.supabase.storage
             .from(STORAGE_BUCKET)
             .getPublicUrl(storagePath);
@@ -233,23 +216,19 @@ export class DocumentStorageService {
     // UPLOAD NEW VERSION
     // --------------------------------------------------------------------------
 
-    /**
-     * Upload new version of existing document
-     * Automatically increments version number in filename
-     */
     async uploadNewVersion(
         params: UploadDocumentParams,
         currentVersionNumber: number
     ): Promise<UploadResult> {
         const { file, equipmentId, category, filename } = params;
 
-        const originalFilename = filename || (file instanceof File ? file.name : 'document');
+        const originalFilename =
+            filename || (file instanceof File ? file.name : 'document');
 
         this.validateFile(file, originalFilename);
 
         const fileChecksum = await this.calculateChecksum(file);
 
-        // Generate path with version number
         const storagePath = this.generateStoragePath({
             equipmentId,
             category,
@@ -258,9 +237,10 @@ export class DocumentStorageService {
         });
 
         const fileSizeBytes = file instanceof File ? file.size : file.length;
-        const mimeType = file instanceof File ? file.type : 'application/octet-stream';
+        const mimeType =
+            file instanceof File ? file.type : 'application/octet-stream';
 
-        const { data, error } = await this.supabase.storage
+        const { error } = await this.supabase.storage
             .from(STORAGE_BUCKET)
             .upload(storagePath, file, {
                 contentType: mimeType,
@@ -289,9 +269,6 @@ export class DocumentStorageService {
     // DOWNLOAD DOCUMENT
     // --------------------------------------------------------------------------
 
-    /**
-     * Download document from storage
-     */
     async downloadDocument(storagePath: string): Promise<Blob> {
         const { data, error } = await this.supabase.storage
             .from(STORAGE_BUCKET)
@@ -309,14 +286,13 @@ export class DocumentStorageService {
     }
 
     // --------------------------------------------------------------------------
-    // GET SIGNED URL (for temporary access)
+    // GET SIGNED URL
     // --------------------------------------------------------------------------
 
-    /**
-     * Generate temporary signed URL for document access
-     * Useful for sharing documents with expiration
-     */
-    async getSignedUrl(storagePath: string, expiresIn: number = 3600): Promise<string> {
+    async getSignedUrl(
+        storagePath: string,
+        expiresIn: number = 3600
+    ): Promise<string> {
         const { data, error } = await this.supabase.storage
             .from(STORAGE_BUCKET)
             .createSignedUrl(storagePath, expiresIn);
@@ -333,13 +309,9 @@ export class DocumentStorageService {
     }
 
     // --------------------------------------------------------------------------
-    // DELETE DOCUMENT (admin only - use with caution)
+    // DELETE DOCUMENT
     // --------------------------------------------------------------------------
 
-    /**
-     * Delete document from storage
-     * WARNING: This is permanent! Consider soft-delete in database instead.
-     */
     async deleteDocument(storagePath: string): Promise<void> {
         const { error } = await this.supabase.storage
             .from(STORAGE_BUCKET)
@@ -354,25 +326,25 @@ export class DocumentStorageService {
     // CHECK IF FILE EXISTS
     // --------------------------------------------------------------------------
 
-    /**
-     * Check if file exists at storage path
-     */
     async fileExists(storagePath: string): Promise<boolean> {
+        const parts = storagePath.split('/');
+        const folder = parts.slice(0, -1).join('/');
+        const filename = parts[parts.length - 1];
+
         const { data, error } = await this.supabase.storage
             .from(STORAGE_BUCKET)
-            .list(storagePath.split('/').slice(0, -1).join('/'));
+            .list(folder);
 
         if (error) {
             return false;
         }
 
-        const filename = storagePath.split('/').pop();
-        return data?.some(file => file.name === filename) ?? false;
+        return data?.some((file) => file.name === filename) ?? false;
     }
 }
 
 // ============================================================================
-// SINGLETON INSTANCE (for convenience)
+// SINGLETON INSTANCE
 // ============================================================================
 
 let storageServiceInstance: DocumentStorageService | null = null;
@@ -386,52 +358,11 @@ export function getStorageService(): DocumentStorageService {
             throw new Error('Supabase URL and Key must be configured');
         }
 
-        storageServiceInstance = new DocumentStorageService(supabaseUrl, supabaseKey);
+        storageServiceInstance = new DocumentStorageService(
+            supabaseUrl,
+            supabaseKey
+        );
     }
 
     return storageServiceInstance;
 }
-
-// ============================================================================
-// USAGE EXAMPLES
-// ============================================================================
-
-/*
-// Example 1: Upload document
-const storageService = getStorageService();
-
-const result = await storageService.uploadDocument({
-  file: uploadedFile,
-  equipmentId: 'equipment-uuid-123',
-  category: 'technical_manual',
-});
-
-console.log('Checksum:', result.fileChecksum);
-console.log('Path:', result.storagePath);
-
-// Example 2: Upload new version
-const newVersionResult = await storageService.uploadNewVersion(
-  {
-    file: newFile,
-    equipmentId: 'equipment-uuid-123',
-    category: 'technical_manual',
-  },
-  2 // current version number
-);
-
-// Example 3: Download document
-const blob = await storageService.downloadDocument('/equipment/123/documents/technical_manual/manual.pdf');
-
-// Example 4: Get temporary access URL
-const signedUrl = await storageService.getSignedUrl(
-  '/equipment/123/documents/technical_manual/manual.pdf',
-  3600 // 1 hour
-);
-
-// Example 5: Check checksum match (verify integrity)
-const uploadedChecksum = result.fileChecksum;
-const recalculatedChecksum = await storageService.calculateChecksum(file);
-if (uploadedChecksum === recalculatedChecksum) {
-  console.log('✅ File integrity verified');
-}
-*/
