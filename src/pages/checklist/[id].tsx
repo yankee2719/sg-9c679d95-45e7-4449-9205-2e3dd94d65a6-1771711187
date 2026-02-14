@@ -261,51 +261,96 @@ export default function ChecklistExecutionPage() {
             if (execution?.schedule_id) {
                 console.log("Updating maintenance schedule:", execution.schedule_id);
 
-                const { data: maintenanceData, error: maintenanceError } = await supabase
+                // Recupera info complete dello schedule
+                const { data: schedData } = await supabase
                     .from("maintenance_schedules")
-                    .update({
-                        status: "completed",
-                        last_performed_at: new Date().toISOString()
-                    })
+                    .select("equipment_id, title, tenant_id, frequency, next_due_date")
                     .eq("id", execution.schedule_id)
-                    .select();
+                    .single();
+
+                // Calcola prossima scadenza per manutenzioni ricorrenti
+                const calcNextDueDate = (frequency: string | null, currentDue: string | null): string | null => {
+                    if (!frequency) return null;
+                    const base = currentDue ? new Date(currentDue) : new Date();
+                    const now = new Date();
+                    const start = base > now ? base : now;
+
+                    const freqLower = frequency.toLowerCase();
+                    if (freqLower === "daily" || freqLower === "giornaliera") {
+                        start.setDate(start.getDate() + 1);
+                    } else if (freqLower === "weekly" || freqLower === "settimanale") {
+                        start.setDate(start.getDate() + 7);
+                    } else if (freqLower === "biweekly" || freqLower === "bisettimanale") {
+                        start.setDate(start.getDate() + 14);
+                    } else if (freqLower === "monthly" || freqLower === "mensile") {
+                        start.setMonth(start.getMonth() + 1);
+                    } else if (freqLower === "quarterly" || freqLower === "trimestrale") {
+                        start.setMonth(start.getMonth() + 3);
+                    } else if (freqLower === "semiannual" || freqLower === "semestrale") {
+                        start.setMonth(start.getMonth() + 6);
+                    } else if (freqLower === "annual" || freqLower === "annuale" || freqLower === "yearly") {
+                        start.setFullYear(start.getFullYear() + 1);
+                    } else {
+                        // Frequenza non riconosciuta, non rischedulare
+                        return null;
+                    }
+                    return start.toISOString();
+                };
+
+                const nextDue = calcNextDueDate(schedData?.frequency || null, schedData?.next_due_date || null);
+                const isRecurring = nextDue !== null;
+
+                // Aggiorna schedule: se ricorrente → rischedula, altrimenti → completed
+                const updatePayload: any = {
+                    last_performed_at: new Date().toISOString(),
+                };
+
+                if (isRecurring) {
+                    updatePayload.status = "scheduled";
+                    updatePayload.next_due_date = nextDue;
+                } else {
+                    updatePayload.status = "completed";
+                }
+
+                const { error: maintenanceError } = await supabase
+                    .from("maintenance_schedules")
+                    .update(updatePayload)
+                    .eq("id", execution.schedule_id);
 
                 if (maintenanceError) {
                     console.error("Error updating maintenance schedule:", maintenanceError);
-                    // Non blocca il flusso, logga solo
                 } else {
-                    console.log("Maintenance schedule updated:", maintenanceData);
+                    console.log("Maintenance schedule updated:", isRecurring ? `rescheduled to ${nextDue}` : "completed");
                 }
 
-                // 3. Crea anche un log di manutenzione
+                // 3. Crea log di manutenzione
                 const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    // Recupera info schedule per il log
-                    const { data: schedData } = await supabase
-                        .from("maintenance_schedules")
-                        .select("equipment_id, title, tenant_id")
-                        .eq("id", execution.schedule_id)
-                        .single();
+                if (user && schedData) {
+                    const { error: logError } = await supabase
+                        .from("maintenance_logs")
+                        .insert({
+                            equipment_id: schedData.equipment_id,
+                            performed_by: user.id,
+                            title: schedData.title,
+                            description: `Checklist "${checklist?.name}" completata${isRecurring ? `. Prossima: ${new Date(nextDue!).toLocaleDateString("it-IT")}` : ""}`,
+                            status: "completed",
+                            completed_at: new Date().toISOString(),
+                            schedule_id: execution.schedule_id,
+                            tenant_id: schedData.tenant_id,
+                        });
 
-                    if (schedData) {
-                        const { error: logError } = await supabase
-                            .from("maintenance_logs")
-                            .insert({
-                                equipment_id: schedData.equipment_id,
-                                performed_by: user.id,
-                                title: schedData.title,
-                                description: `Checklist "${checklist?.name}" completata`,
-                                status: "completed",
-                                completed_at: new Date().toISOString(),
-                                schedule_id: execution.schedule_id,
-                                tenant_id: schedData.tenant_id,
-                            });
+                    if (logError) {
+                        console.error("Error creating maintenance log:", logError);
+                    }
 
-                        if (logError) {
-                            console.error("Error creating maintenance log:", logError);
-                        } else {
-                            console.log("Maintenance log created");
-                        }
+                    // 4. Riporta lo stato dell'attrezzatura ad "active"
+                    const { error: equipError } = await supabase
+                        .from("equipment")
+                        .update({ status: "active", updated_at: new Date().toISOString() })
+                        .eq("id", schedData.equipment_id);
+
+                    if (equipError) {
+                        console.error("Error updating equipment status:", equipError);
                     }
                 }
             } else {
