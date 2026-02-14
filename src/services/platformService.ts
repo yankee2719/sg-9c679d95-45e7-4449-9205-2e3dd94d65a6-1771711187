@@ -1,554 +1,264 @@
-// src/services/platformService.ts
-/**
- * Platform Administration Service
- * For platform users (software operators) only
- * 
- * SECURITY: All operations require platform_role in JWT claims
- * Uses RLS bypass via JWT claims, not tenant memberships
- */
+// ============================================================================
+// PLATFORM SERVICE - FIXED
+// ============================================================================
+// Works with actual database tables:
+// - platform_users (created in migration)
+// - tenants (existing)
+// - profiles (existing)
+// Removed references to non-existent: organizations, tenant_health_metrics,
+// impersonation_sessions, platform_audit_logs, organization_memberships
+// ============================================================================
 
 import { supabase } from "@/integrations/supabase/client";
 
+export interface PlatformUser {
+    id: string;
+    auth_user_id: string;
+    email: string;
+    full_name: string | null;
+    platform_role: "platform_owner" | "platform_admin" | "platform_support";
+    can_impersonate: boolean;
+    can_modify_tenants: boolean;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface TenantOverview {
+    id: string;
+    name: string;
+    slug: string;
+    is_active: boolean;
+    max_users: number | null;
+    created_at: string;
+    user_count: number;
+    equipment_count: number;
+}
+
+export interface PlatformMetrics {
+    totalTenants: number;
+    activeTenants: number;
+    totalUsers: number;
+    totalEquipment: number;
+}
+
 export const platformService = {
-  // =====================================================
-  // AUTHENTICATION & AUTHORIZATION
-  // =====================================================
-
-  /**
-   * Check if current user is a platform user
-   */
-  async isPlatformUser(): Promise<boolean> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return false;
-
-      const jwt = session.access_token;
-      const payload = JSON.parse(atob(jwt.split(".")[1]));
-
-      return payload.app_metadata?.platform_role !== undefined;
-    } catch {
-      return false;
-    }
-  },
-
-  /**
-   * Get current platform user's role
-   */
-  async getPlatformRole(): Promise<string | null> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return null;
-
-      const jwt = session.access_token;
-      const payload = JSON.parse(atob(jwt.split(".")[1]));
-
-      return payload.app_metadata?.platform_role || null;
-    } catch {
-      return null;
-    }
-  },
-
-  /**
-   * Get current platform user details
-   */
-  async getCurrentPlatformUser(): Promise<any | null> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from("platform_users")
-        .select("*")
-        .eq("auth_user_id", user.id)
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error fetching platform user:", error);
-      return null;
-    }
-  },
-
-  // =====================================================
-  // TENANT MANAGEMENT
-  // =====================================================
-
-  /**
-   * Get all organizations (platform view)
-   */
-  async getAllOrganizations(): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from("organizations")
-        .select(`
-          *,
-          health:tenant_health_metrics(*),
-          memberships:organization_memberships(count)
-        `)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      return (data || []).map((org: any) => ({
-        ...org,
-        health: org.health?.[0] || null,
-        active_users_count: org.memberships?.[0]?.count || 0,
-      }));
-    } catch (error) {
-      console.error("Error fetching organizations:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get organization by ID
-   */
-  async getOrganizationById(organizationId: string): Promise<any | null> {
-    try {
-      const { data, error } = await supabase
-        .from("organizations")
-        .select(`
-          *,
-          health:tenant_health_metrics(*),
-          memberships:organization_memberships(*)
-        `)
-        .eq("id", organizationId)
-        .single();
-
-      if (error) throw error;
-
-      return {
-        ...data,
-        health: data.health?.[0] || null,
-        active_users_count: data.memberships?.length || 0,
-      };
-    } catch (error) {
-      console.error("Error fetching organization:", error);
-      return null;
-    }
-  },
-
-  /**
-   * Get platform metrics
-   */
-  async getPlatformMetrics(): Promise<any> {
-    try {
-      const orgs = await this.getAllOrganizations();
-
-      return {
-        totalTenants: orgs.length,
-        activeTenants: orgs.filter((o) => o.tenant_status === "active").length,
-        suspendedTenants: orgs.filter((o) => o.tenant_status === "suspended").length,
-        readOnlyTenants: orgs.filter((o) => o.tenant_status === "read_only").length,
-        trialTenants: orgs.filter((o) => o.tenant_status === "trial").length,
-        archivedTenants: orgs.filter((o) => o.tenant_status === "archived").length,
-        totalUsers: orgs.reduce((sum, o) => sum + (o.active_users_count || 0), 0),
-        totalMachines: orgs.reduce((sum, o) => sum + (o.health?.total_machines || 0), 0),
-        healthDistribution: {
-          healthy: orgs.filter((o) => o.health?.health_status === "healthy").length,
-          warning: orgs.filter((o) => o.health?.health_status === "warning").length,
-          critical: orgs.filter((o) => o.health?.health_status === "critical").length,
-          inactive: orgs.filter((o) => o.health?.health_status === "inactive").length,
-        },
-      };
-    } catch (error) {
-      console.error("Error calculating metrics:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Suspend a tenant
-   */
-  async suspendTenant(
-    organizationId: string,
-    reason: string
-  ): Promise<{ success: boolean; error: Error | null }> {
-    try {
-      const platformUser = await this.getCurrentPlatformUser();
-      if (!platformUser) throw new Error("Not authenticated");
-
-      const { error } = await supabase
-        .from("organizations")
-        .update({
-          tenant_status: "suspended",
-          suspended_at: new Date().toISOString(),
-          suspended_by: platformUser.id,
-          suspension_reason: reason,
-        })
-        .eq("id", organizationId);
-
-      if (error) throw error;
-
-      await this.createAuditLog({
-        action: "tenant.suspended",
-        organizationId,
-        severity: "critical",
-        metadata: { reason },
-      });
-
-      return { success: true, error: null };
-    } catch (error) {
-      console.error("Error suspending tenant:", error);
-      return { success: false, error: error as Error };
-    }
-  },
-
-  /**
-   * Reactivate a tenant
-   */
-  async reactivateTenant(
-    organizationId: string
-  ): Promise<{ success: boolean; error: Error | null }> {
-    try {
-      const { error } = await supabase
-        .from("organizations")
-        .update({
-          tenant_status: "active",
-          suspended_at: null,
-          suspended_by: null,
-          suspension_reason: null,
-        })
-        .eq("id", organizationId);
-
-      if (error) throw error;
-
-      await this.createAuditLog({
-        action: "tenant.reactivated",
-        organizationId,
-        severity: "warning",
-      });
-
-      return { success: true, error: null };
-    } catch (error) {
-      console.error("Error reactivating tenant:", error);
-      return { success: false, error: error as Error };
-    }
-  },
-
-  /**
-   * Archive a tenant
-   */
-  async archiveTenant(
-    organizationId: string,
-    reason: string
-  ): Promise<{ success: boolean; error: Error | null }> {
-    try {
-      const platformUser = await this.getCurrentPlatformUser();
-      if (!platformUser || platformUser.platform_role !== "platform_owner") {
-        throw new Error("Only platform owners can archive tenants");
-      }
-
-      const { error } = await supabase
-        .from("organizations")
-        .update({
-          tenant_status: "archived",
-          platform_notes: reason,
-        })
-        .eq("id", organizationId);
-
-      if (error) throw error;
-
-      await this.createAuditLog({
-        action: "tenant.archived",
-        organizationId,
-        severity: "critical",
-        metadata: { reason },
-      });
-
-      return { success: true, error: null };
-    } catch (error) {
-      console.error("Error archiving tenant:", error);
-      return { success: false, error: error as Error };
-    }
-  },
-
-  // =====================================================
-  // IMPERSONATION
-  // =====================================================
-
-  /**
-   * Start impersonation session
-   */
-  async startImpersonation(
-    organizationId: string,
-    reason: string,
-    durationHours: number = 4
-  ): Promise<{ sessionId: string | null; error: Error | null }> {
-    try {
-      if (durationHours < 1 || durationHours > 8) {
-        throw new Error("Duration must be between 1 and 8 hours");
-      }
-
-      const { data, error } = await supabase.rpc("start_impersonation_session", {
-        p_target_organization_id: organizationId,
-        p_target_user_id: null,
-        p_reason: reason,
-        p_duration_hours: durationHours,
-      });
-
-      if (error) throw error;
-
-      // Refresh session to get new JWT with impersonation claims
-      await supabase.auth.refreshSession();
-
-      return { sessionId: data as string, error: null };
-    } catch (error) {
-      console.error("Error starting impersonation:", error);
-      return { sessionId: null, error: error as Error };
-    }
-  },
-
-  /**
-   * End impersonation session
-   */
-  async endImpersonation(
-    sessionId: string
-  ): Promise<{ success: boolean; error: Error | null }> {
-    try {
-      const { error } = await supabase.rpc("end_impersonation_session", {
-        p_session_id: sessionId,
-      });
-
-      if (error) throw error;
-
-      await supabase.auth.refreshSession();
-
-      return { success: true, error: null };
-    } catch (error) {
-      console.error("Error ending impersonation:", error);
-      return { success: false, error: error as Error };
-    }
-  },
-
-  /**
-   * Check if currently impersonating
-   */
-  async isImpersonating(): Promise<{
-    active: boolean;
-    sessionId?: string;
-    organizationId?: string;
-    expiresAt?: string;
-  }> {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return { active: false };
-
-      const jwt = session.access_token;
-      const payload = JSON.parse(atob(jwt.split(".")[1]));
-
-      if (payload.impersonation) {
-        return {
-          active: true,
-          sessionId: payload.impersonation.session_id,
-          organizationId: payload.impersonation.organization_id,
-          expiresAt: payload.impersonation.expires_at,
-        };
-      }
-
-      return { active: false };
-    } catch {
-      return { active: false };
-    }
-  },
-
-  /**
-   * Get active impersonation sessions
-   */
-  async getActiveImpersonationSessions(): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from("impersonation_sessions")
-        .select(`
-          *,
-          platform_user:platform_users(email, full_name),
-          organization:organizations(name, slug)
-        `)
-        .eq("status", "active")
-        .order("started_at", { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error fetching sessions:", error);
-      return [];
-    }
-  },
-
-  // =====================================================
-  // AUDIT LOGS
-  // =====================================================
-
-  /**
-   * Create audit log entry
-   */
-  async createAuditLog(params: {
-    action: string;
-    organizationId?: string;
-    resourceType?: string;
-    resourceId?: string;
-    severity?: "info" | "warning" | "critical";
-    metadata?: any;
-  }): Promise<void> {
-    try {
-      const platformUser = await this.getCurrentPlatformUser();
-      if (!platformUser) return;
-
-      const impersonation = await this.isImpersonating();
-
-      await supabase.from("platform_audit_logs").insert({
-        platform_user_id: platformUser.id,
-        impersonation_session_id: impersonation.active ? impersonation.sessionId : null,
-        organization_id: params.organizationId,
-        action: params.action,
-        resource_type: params.resourceType,
-        resource_id: params.resourceId,
-        severity: params.severity || "info",
-        metadata: params.metadata || {},
-      });
-    } catch (error) {
-      console.error("Error creating audit log:", error);
-    }
-  },
-
-  /**
-   * Get audit logs
-   */
-  async getAuditLogs(filters?: {
-    organizationId?: string;
-    action?: string;
-    severity?: string;
-    limit?: number;
-  }): Promise<any[]> {
-    try {
-      let query = supabase
-        .from("platform_audit_logs")
-        .select(`
-          *,
-          platform_user:platform_users(email, full_name),
-          organization:organizations(name, slug)
-        `)
-        .order("created_at", { ascending: false });
-
-      if (filters?.organizationId) {
-        query = query.eq("organization_id", filters.organizationId);
-      }
-      if (filters?.action) {
-        query = query.eq("action", filters.action);
-      }
-      if (filters?.severity) {
-        query = query.eq("severity", filters.severity);
-      }
-
-      query = query.limit(filters?.limit || 100);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error fetching audit logs:", error);
-      return [];
-    }
-  },
-
-  // =====================================================
-  // HEALTH MONITORING
-  // =====================================================
-
-  /**
-   * Get tenant health metrics
-   */
-  async getTenantHealthMetrics(organizationId?: string): Promise<any[]> {
-    try {
-      let query = supabase
-        .from("tenant_health_metrics")
-        .select(`
-          *,
-          organization:organizations(name, slug, tenant_status)
-        `)
-        .order("health_score", { ascending: true });
-
-      if (organizationId) {
-        query = query.eq("organization_id", organizationId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error fetching health metrics:", error);
-      return [];
-    }
-  },
-
-  /**
-   * Calculate health metrics manually
-   */
-  async calculateHealthMetrics(): Promise<{
-    success: boolean;
-    updatedCount?: number;
-    error: Error | null;
-  }> {
-    try {
-      const { data, error } = await supabase.rpc("calculate_tenant_health_metrics");
-
-      if (error) throw error;
-
-      return { success: true, updatedCount: data as number, error: null };
-    } catch (error) {
-      console.error("Error calculating health metrics:", error);
-      return { success: false, error: error as Error };
-    }
-  },
-
-  /**
-   * Get tenants by health status
-   */
-  async getTenantsByHealthStatus(
-    status: "healthy" | "warning" | "critical" | "inactive"
-  ): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from("organizations")
-        .select(`
-          *,
-          health:tenant_health_metrics!inner(*)
-        `)
-        .eq("health.health_status", status)
-        .order("health.health_score", { ascending: true });
-
-      if (error) throw error;
-
-      return (data || []).map((org: any) => ({
-        ...org,
-        health: org.health?.[0] || null,
-      }));
-    } catch (error) {
-      console.error("Error fetching tenants by health:", error);
-      return [];
-    }
-  },
-
-  // =====================================================
-  // PLATFORM USERS MANAGEMENT
-  // =====================================================
-
-  /**
-   * Get all platform users
-   */
-  async getPlatformUsers(): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from("platform_users")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error fetching platform users:", error);
-      return [];
-    }
-  },
+    // =====================================================
+    // AUTHENTICATION & AUTHORIZATION
+    // =====================================================
+
+    async isPlatformUser(): Promise<boolean> {
+        try {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+            if (!user) return false;
+
+            const { data, error } = await supabase
+                .from("platform_users")
+                .select("id")
+                .eq("auth_user_id", user.id)
+                .eq("is_active", true)
+                .maybeSingle();
+
+            if (error) {
+                // Table might not exist yet
+                console.warn("platform_users table may not exist:", error.message);
+                return false;
+            }
+
+            return !!data;
+        } catch {
+            return false;
+        }
+    },
+
+    async getPlatformRole(): Promise<string | null> {
+        try {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+            if (!user) return null;
+
+            const { data, error } = await supabase
+                .from("platform_users")
+                .select("platform_role")
+                .eq("auth_user_id", user.id)
+                .eq("is_active", true)
+                .maybeSingle();
+
+            if (error || !data) return null;
+            return data.platform_role;
+        } catch {
+            return null;
+        }
+    },
+
+    async getCurrentPlatformUser(): Promise<PlatformUser | null> {
+        try {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+            if (!user) return null;
+
+            const { data, error } = await supabase
+                .from("platform_users")
+                .select("*")
+                .eq("auth_user_id", user.id)
+                .eq("is_active", true)
+                .maybeSingle();
+
+            if (error || !data) return null;
+            return data as PlatformUser;
+        } catch {
+            return null;
+        }
+    },
+
+    // =====================================================
+    // TENANT MANAGEMENT
+    // =====================================================
+
+    async getAllTenants(): Promise<TenantOverview[]> {
+        try {
+            const { data: tenants, error } = await supabase
+                .from("tenants")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+            if (!tenants) return [];
+
+            // Get user counts per tenant
+            const { data: userCounts } = await supabase
+                .from("profiles")
+                .select("tenant_id");
+
+            // Get equipment counts per tenant
+            const { data: eqCounts } = await supabase
+                .from("equipment")
+                .select("tenant_id");
+
+            return tenants.map((t) => ({
+                id: t.id,
+                name: t.name,
+                slug: t.slug || "",
+                is_active: t.is_active ?? true,
+                max_users: t.max_users || null,
+                created_at: t.created_at,
+                user_count: userCounts?.filter((u) => u.tenant_id === t.id).length || 0,
+                equipment_count:
+                    eqCounts?.filter((e) => e.tenant_id === t.id).length || 0,
+            }));
+        } catch (error) {
+            console.error("Error fetching tenants:", error);
+            return [];
+        }
+    },
+
+    async getTenantById(tenantId: string): Promise<TenantOverview | null> {
+        try {
+            const { data, error } = await supabase
+                .from("tenants")
+                .select("*")
+                .eq("id", tenantId)
+                .single();
+
+            if (error) throw error;
+
+            const { count: userCount } = await supabase
+                .from("profiles")
+                .select("*", { count: "exact", head: true })
+                .eq("tenant_id", tenantId);
+
+            const { count: eqCount } = await supabase
+                .from("equipment")
+                .select("*", { count: "exact", head: true })
+                .eq("tenant_id", tenantId);
+
+            return {
+                id: data.id,
+                name: data.name,
+                slug: data.slug || "",
+                is_active: data.is_active ?? true,
+                max_users: data.max_users || null,
+                created_at: data.created_at,
+                user_count: userCount || 0,
+                equipment_count: eqCount || 0,
+            };
+        } catch {
+            return null;
+        }
+    },
+
+    async getPlatformMetrics(): Promise<PlatformMetrics> {
+        try {
+            const tenants = await this.getAllTenants();
+
+            return {
+                totalTenants: tenants.length,
+                activeTenants: tenants.filter((t) => t.is_active).length,
+                totalUsers: tenants.reduce((sum, t) => sum + t.user_count, 0),
+                totalEquipment: tenants.reduce((sum, t) => sum + t.equipment_count, 0),
+            };
+        } catch (error) {
+            console.error("Error calculating metrics:", error);
+            return {
+                totalTenants: 0,
+                activeTenants: 0,
+                totalUsers: 0,
+                totalEquipment: 0,
+            };
+        }
+    },
+
+    async suspendTenant(
+        tenantId: string,
+        _reason: string
+    ): Promise<{ success: boolean; error: Error | null }> {
+        try {
+            const { error } = await supabase
+                .from("tenants")
+                .update({ is_active: false })
+                .eq("id", tenantId);
+
+            if (error) throw error;
+            return { success: true, error: null };
+        } catch (error) {
+            return { success: false, error: error as Error };
+        }
+    },
+
+    async reactivateTenant(
+        tenantId: string
+    ): Promise<{ success: boolean; error: Error | null }> {
+        try {
+            const { error } = await supabase
+                .from("tenants")
+                .update({ is_active: true })
+                .eq("id", tenantId);
+
+            if (error) throw error;
+            return { success: true, error: null };
+        } catch (error) {
+            return { success: false, error: error as Error };
+        }
+    },
+
+    // =====================================================
+    // PLATFORM USERS MANAGEMENT
+    // =====================================================
+
+    async getPlatformUsers(): Promise<PlatformUser[]> {
+        try {
+            const { data, error } = await supabase
+                .from("platform_users")
+                .select("*")
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+            return (data || []) as PlatformUser[];
+        } catch {
+            return [];
+        }
+    },
 };
