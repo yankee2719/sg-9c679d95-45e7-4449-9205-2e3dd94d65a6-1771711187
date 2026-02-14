@@ -1,209 +1,271 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// Helper to get current user's tenant_id
+async function getCurrentTenantId(): Promise<string | null> {
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single();
+
+    return profile?.tenant_id || null;
+}
+
 export const checklistService = {
-  async getAllChecklists() {
-    const { data, error } = await supabase
-      .from("checklists")
-      .select(`
+    async getAllChecklists() {
+        const { data, error } = await supabase
+            .from("checklists")
+            .select(
+                `
         *,
         items:checklist_items(*)
-      `)
-      .order("created_at", { ascending: false });
+      `
+            )
+            .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching checklists:", error);
-      throw error;
-    }
+        if (error) {
+            console.error("Error fetching checklists:", error);
+            throw error;
+        }
 
-    return data || [];
-  },
+        return data || [];
+    },
 
-  async getChecklistById(id: string) {
-    const { data, error } = await supabase
-      .from("checklists")
-      .select(`
+    async getChecklistById(id: string) {
+        const { data, error } = await supabase
+            .from("checklists")
+            .select(
+                `
         *,
         items:checklist_items(*)
-      `)
-      .eq("id", id)
-      .single();
+      `
+            )
+            .eq("id", id)
+            .single();
 
-    if (error) {
-      console.error("Error fetching checklist:", error);
-      throw error;
-    }
+        if (error) {
+            console.error("Error fetching checklist:", error);
+            throw error;
+        }
 
-    return data;
-  },
+        return data;
+    },
 
-  async createChecklist(checklist: {
-    name: string;
-    description?: string;
-    is_active?: boolean;
-  }) {
-    const { data, error } = await supabase
-      .from("checklists")
-      .insert(checklist)
-      .select()
-      .single();
+    async createChecklist(checklist: {
+        name: string;
+        description?: string;
+        is_active?: boolean;
+    }) {
+        const tenantId = await getCurrentTenantId();
 
-    if (error) {
-      console.error("Error creating checklist:", error);
-      throw error;
-    }
+        const { data, error } = await supabase
+            .from("checklists")
+            .insert({
+                ...checklist,
+                tenant_id: tenantId,
+            })
+            .select()
+            .single();
 
-    return data;
-  },
+        if (error) {
+            console.error("Error creating checklist:", error);
+            throw error;
+        }
 
-  async updateChecklist(id: string, updates: {
-    name?: string;
-    description?: string;
-    is_active?: boolean;
-  }) {
-    const { data, error } = await supabase
-      .from("checklists")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+        return data;
+    },
 
-    if (error) {
-      console.error("Error updating checklist:", error);
-      throw error;
-    }
+    async updateChecklist(
+        id: string,
+        updates: {
+            name?: string;
+            description?: string;
+            is_active?: boolean;
+        }
+    ) {
+        const { data, error } = await supabase
+            .from("checklists")
+            .update(updates)
+            .eq("id", id)
+            .select()
+            .single();
 
-    return data;
-  },
+        if (error) {
+            console.error("Error updating checklist:", error);
+            throw error;
+        }
 
-  async deleteChecklist(id: string) {
-    // First delete all items
-    await supabase
-      .from("checklist_items")
-      .delete()
-      .eq("checklist_id", id);
+        return data;
+    },
 
-    const { error } = await supabase
-      .from("checklists")
-      .delete()
-      .eq("id", id);
+    async deleteChecklist(id: string) {
+        // First delete all items
+        await supabase.from("checklist_items").delete().eq("checklist_id", id);
 
-    if (error) {
-      console.error("Error deleting checklist:", error);
-      throw error;
-    }
-  },
+        const { error } = await supabase.from("checklists").delete().eq("id", id);
 
-  async addChecklistItem(item: {
-    checklist_id: string;
-    title: string;
-    description?: string;
-    item_type: string;
-    is_required?: boolean;
-    order_index: number;
-  }) {
-    const { data, error } = await supabase
-      .from("checklist_items")
-      .insert(item)
-      .select()
-      .single();
+        if (error) {
+            console.error("Error deleting checklist:", error);
+            throw error;
+        }
+    },
 
-    if (error) {
-      console.error("Error adding checklist item:", error);
-      throw error;
-    }
+    async addChecklistItem(item: {
+        checklist_id: string;
+        title: string;
+        description?: string;
+        item_type: string;
+        is_required?: boolean;
+        order_index: number;
+    }) {
+        const tenantId = await getCurrentTenantId();
 
-    return data;
-  },
+        const { data, error } = await supabase
+            .from("checklist_items")
+            .insert({
+                ...item,
+                tenant_id: tenantId,
+            })
+            .select()
+            .single();
 
-  async updateChecklistItem(id: string, updates: {
-    title?: string;
-    description?: string;
-    item_type?: string;
-    is_required?: boolean;
-    order_index?: number;
-  }) {
-    const { data, error } = await supabase
-      .from("checklist_items")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+        if (error) {
+            console.error("Error adding checklist item:", error);
+            throw error;
+        }
 
-    if (error) {
-      console.error("Error updating checklist item:", error);
-      throw error;
-    }
+        return data;
+    },
 
-    return data;
-  },
+    async updateChecklistItem(
+        id: string,
+        updates: {
+            title?: string;
+            description?: string;
+            item_type?: string;
+            is_required?: boolean;
+            order_index?: number;
+        }
+    ) {
+        const { data, error } = await supabase
+            .from("checklist_items")
+            .update(updates)
+            .eq("id", id)
+            .select()
+            .single();
 
-  async deleteChecklistItem(id: string) {
-    const { error } = await supabase
-      .from("checklist_items")
-      .delete()
-      .eq("id", id);
+        if (error) {
+            console.error("Error updating checklist item:", error);
+            throw error;
+        }
 
-    if (error) {
-      console.error("Error deleting checklist item:", error);
-      throw error;
-    }
-  },
+        return data;
+    },
 
-  async createExecution(execution: {
-    checklist_id: string;
-    executed_by: string;
-    equipment_id?: string;
-    status: string;
-  }) {
-    const { data, error } = await supabase
-      .from("checklist_executions")
-      .insert(execution)
-      .select()
-      .single();
+    async deleteChecklistItem(id: string) {
+        const { error } = await supabase
+            .from("checklist_items")
+            .delete()
+            .eq("id", id);
 
-    if (error) {
-      console.error("Error creating execution:", error);
-      throw error;
-    }
+        if (error) {
+            console.error("Error deleting checklist item:", error);
+            throw error;
+        }
+    },
 
-    return data;
-  },
+    // FIX: Added maintenance_log_id and schedule_id support + tenant_id
+    async createExecution(execution: {
+        checklist_id: string;
+        executed_by: string;
+        equipment_id?: string;
+        maintenance_log_id?: string;
+        schedule_id?: string;
+        status: string;
+    }) {
+        const tenantId = await getCurrentTenantId();
 
-  async getExecutionById(id: string) {
-    const { data, error } = await supabase
-      .from("checklist_executions")
-      .select(`
+        const { data, error } = await supabase
+            .from("checklist_executions")
+            .insert({
+                ...execution,
+                tenant_id: tenantId,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Error creating execution:", error);
+            throw error;
+        }
+
+        return data;
+    },
+
+    async getExecutionById(id: string) {
+        const { data, error } = await supabase
+            .from("checklist_executions")
+            .select(
+                `
         *,
         checklist:checklists(*),
         equipment:equipment(*),
         executor:profiles(*)
-      `)
-      .eq("id", id)
-      .single();
+      `
+            )
+            .eq("id", id)
+            .single();
 
-    if (error) {
-      console.error("Error fetching execution:", error);
-      throw error;
-    }
+        if (error) {
+            console.error("Error fetching execution:", error);
+            throw error;
+        }
 
-    return data;
-  },
+        return data;
+    },
 
-  async updateExecution(id: string, updates: any) {
-    const { data, error } = await supabase
-      .from("checklist_executions")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+    async updateExecution(id: string, updates: Record<string, unknown>) {
+        const { data, error } = await supabase
+            .from("checklist_executions")
+            .update(updates)
+            .eq("id", id)
+            .select()
+            .single();
 
-    if (error) {
-      console.error("Error updating execution:", error);
-      throw error;
-    }
+        if (error) {
+            console.error("Error updating execution:", error);
+            throw error;
+        }
 
-    return data;
-  }
+        return data;
+    },
+
+    // FIX: Get executions by maintenance log
+    async getExecutionsByMaintenanceLog(maintenanceLogId: string) {
+        const { data, error } = await supabase
+            .from("checklist_executions")
+            .select(
+                `
+        *,
+        checklist:checklists(id, name),
+        executor:profiles(id, full_name)
+      `
+            )
+            .eq("maintenance_log_id", maintenanceLogId)
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            console.error("Error fetching executions by log:", error);
+            throw error;
+        }
+
+        return data || [];
+    },
 };
 
 export default checklistService;
