@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { uploadDocument, UploadDocumentParams, UploadProgress } from '@/lib/documentApi';
+import { documentService, UploadDocumentParams } from '@/services/documentService';
+
+export interface UploadProgress {
+    stage: 'checksum' | 'uploading' | 'saving' | 'complete';
+    progress: number;
+    message: string;
+}
 
 export function useDocumentUpload() {
     const [uploading, setUploading] = useState(false);
@@ -9,13 +15,18 @@ export function useDocumentUpload() {
     async function upload(params: UploadDocumentParams) {
         setUploading(true);
         setError(null);
-        setProgress(null);
+        setProgress({ stage: 'checksum', progress: 10, message: 'Calcolo checksum...' });
 
         try {
-            const result = await uploadDocument(params, (prog) => {
-                setProgress(prog);
-            });
+            setProgress({ stage: 'uploading', progress: 40, message: 'Upload file...' });
 
+            const result = await documentService.uploadDocument(params);
+
+            if (!result) {
+                throw new Error('Upload fallito');
+            }
+
+            setProgress({ stage: 'complete', progress: 100, message: 'Completato' });
             return result;
         } catch (err: any) {
             setError(err);
@@ -38,3 +49,4 @@ export function useDocumentUpload() {
         error,
         reset
     };
+}
