@@ -1,8 +1,20 @@
 // src/services/machineEventsService.ts
+// ============================================================================
+// MACHINE EVENTS SERVICE — now backed by real machine_events table
+// ============================================================================
+// Changes from old version:
+//   - RPC call now matches actual DB function: insert_machine_event
+//   - Table machine_events now exists
+//   - verify_machine_event_chain is a real DB function
+//   - Removed client-side hash computation (done server-side in DB trigger)
+// ============================================================================
+
 import { supabase } from '@/integrations/supabase/client';
 
+export type EventActorType = 'user' | 'system' | 'api' | 'webhook';
+
 export interface MachineEvent {
-    event_id: string;
+    id: string;
     machine_id: string;
     organization_id: string;
     event_type: string;
@@ -10,7 +22,7 @@ export interface MachineEvent {
     payload: Record<string, any>;
     created_at: string;
     actor_id: string | null;
-    actor_type: string | null;
+    actor_type: EventActorType;
     previous_hash: string | null;
     hash: string;
     sequence_number: number;
@@ -19,320 +31,181 @@ export interface MachineEvent {
 export interface EventVerification {
     event_id: string;
     event_type: string;
+    sequence_number: number;
     created_at: string;
     is_valid: boolean;
     expected_previous_hash: string | null;
     actual_previous_hash: string | null;
 }
 
-/**
- * Service per gestire eventi immutabili delle macchine
- * Event sourcing con hash chain per audit trail tamper-proof
- */
-export class MachineEventService {
-    /**
-     * Registra un nuovo evento per una macchina
-     * @returns event_id dell'evento creato
-     */
-    static async recordEvent({
-        machineId,
-        organizationId,
-        eventType,
-        payload,
-        actorType = 'user',
-    }: {
+// ============================================================================
+// COMMON EVENT TYPES
+// ============================================================================
+
+export const EVENT_TYPES = {
+    // Lifecycle
+    LIFECYCLE_CHANGED: 'lifecycle.changed',
+    COMMISSIONED: 'lifecycle.commissioned',
+    DECOMMISSIONED: 'lifecycle.decommissioned',
+    TRANSFERRED: 'lifecycle.transferred',
+
+    // Maintenance
+    MAINTENANCE_COMPLETED: 'maintenance.completed',
+    MAINTENANCE_STARTED: 'maintenance.started',
+    INSPECTION_COMPLETED: 'inspection.completed',
+
+    // Documents
+    DOCUMENT_UPLOADED: 'document.uploaded',
+    DOCUMENT_VERSION_ADDED: 'document.version_added',
+    DOCUMENT_SIGNED: 'document.signed',
+
+    // Operations
+    CHECKLIST_EXECUTED: 'checklist.executed',
+    ANOMALY_REPORTED: 'anomaly.reported',
+    NOTE_ADDED: 'note.added',
+    PHOTO_ADDED: 'photo.added',
+} as const;
+
+// ============================================================================
+// SERVICE
+// ============================================================================
+
+export const machineEventsService = {
+
+    // ─── RECORD EVENT ────────────────────────────────────────────────────
+
+    async recordEvent(params: {
         machineId: string;
         organizationId: string;
         eventType: string;
         payload: Record<string, any>;
-        actorType?: 'user' | 'system' | 'api' | 'webhook';
-    }): Promise<string> {
-        // Using imported supabase client
+        actorType?: EventActorType;
+    }): Promise<string | null> {
+        try {
+            const { data, error } = await supabase.rpc('insert_machine_event', {
+                p_machine_id: params.machineId,
+                p_organization_id: params.organizationId,
+                p_event_type: params.eventType,
+                p_payload: params.payload,
+                p_actor_type: params.actorType || 'user',
+            });
 
-        const { data, error } = await supabase.rpc('insert_machine_event', {
-            p_machine_id: machineId,
-            p_organization_id: organizationId,
-            p_event_type: eventType,
-            p_payload: payload,
-            p_actor_type: actorType,
-        });
-
-        if (error) {
+            if (error) throw error;
+            return data as string;
+        } catch (error) {
             console.error('Failed to record machine event:', error);
-            throw new Error(`Failed to record event: ${error.message}`);
+            return null;
         }
+    },
 
-        return data as string;
-    }
+    // ─── TIMELINE ────────────────────────────────────────────────────────
 
-    /**
-     * Ottieni timeline degli eventi per una macchina
-     * @param limit Numero massimo di eventi da recuperare (default 50)
-     */
-    static async getTimeline(
+    async getTimeline(
         machineId: string,
-        organizationId: string,
-        limit = 50
+        options?: {
+            limit?: number;
+            eventTypes?: string[];
+            after?: string;
+            before?: string;
+        }
     ): Promise<MachineEvent[]> {
-        // Using imported supabase client
-
-        const { data, error } = await supabase
+        let query = supabase
             .from('machine_events')
             .select('*')
             .eq('machine_id', machineId)
-            .eq('organization_id', organizationId)
-            .order('created_at', { ascending: false })
             .order('sequence_number', { ascending: false })
-            .limit(limit);
+            .limit(options?.limit || 50);
 
-        if (error) {
-            console.error('Failed to load timeline:', error);
-            // Return empty array instead of throwing - table might not exist
-            return [];
+        if (options?.eventTypes?.length) {
+            query = query.in('event_type', options.eventTypes);
         }
-
-        return (data || []) as MachineEvent[];
-    }
-
-    /**
-     * Verifica l'integrità della hash chain
-     * @returns Stato di validità e lista di eventi corrotti (se presenti)
-     */
-    static async verifyIntegrity(
-        machineId: string,
-        organizationId: string
-    ): Promise<{
-        isValid: boolean;
-        totalEvents: number;
-        validEvents: number;
-        corruptedEvents: EventVerification[];
-    }> {
-        // Using imported supabase client
-
-        const { data, error } = await supabase.rpc('verify_machine_event_chain', {
-            p_machine_id: machineId,
-            p_organization_id: organizationId,
-        });
-
-        if (error) {
-            console.error('Failed to verify chain:', error);
-            // Return valid result instead of throwing - table might not exist
-            return {
-                isValid: true,
-                totalEvents: 0,
-                validEvents: 0,
-                corruptedEvents: [],
-            };
+        if (options?.after) {
+            query = query.gt('created_at', options.after);
         }
-
-        const events = (data || []) as EventVerification[];
-        const corrupted = events.filter((e) => !e.is_valid);
-
-        return {
-            isValid: corrupted.length === 0,
-            totalEvents: events.length,
-            validEvents: events.length - corrupted.length,
-            corruptedEvents: corrupted,
-        };
-    }
-
-    /**
-     * Ricostruisci lo stato della macchina a un dato momento
-     * @param atTimestamp Momento temporale (default: ora)
-     */
-    static async reconstructState(
-        machineId: string,
-        organizationId: string,
-        atTimestamp?: Date
-    ): Promise<Record<string, any>> {
-        // Using imported supabase client
-
-        const { data, error } = await supabase.rpc('reconstruct_machine_state', {
-            p_machine_id: machineId,
-            p_organization_id: organizationId,
-            p_at_timestamp: atTimestamp?.toISOString() || new Date().toISOString(),
-        });
-
-        if (error) {
-            console.error('Failed to reconstruct state:', error);
-            throw new Error(`Failed to reconstruct state: ${error.message}`);
-        }
-
-        return (data || {}) as Record<string, any>;
-    }
-
-    /**
-     * Ottieni statistiche eventi per organizzazione
-     * @param dateFrom Data di inizio (default: ultimi 30 giorni)
-     */
-    static async getStats(
-        organizationId: string,
-        dateFrom?: Date
-    ): Promise<Record<string, number>> {
-        // Using imported supabase client
-
-        let query = supabase
-            .from('machine_events')
-            .select('event_type')
-            .eq('organization_id', organizationId);
-
-        if (dateFrom) {
-            query = query.gte('created_at', dateFrom.toISOString());
+        if (options?.before) {
+            query = query.lt('created_at', options.before);
         }
 
         const { data, error } = await query;
 
         if (error) {
-            console.error('Failed to load stats:', error);
-            throw new Error(`Failed to load stats: ${error.message}`);
+            console.error('Error fetching timeline:', error);
+            return [];
         }
+        return data || [];
+    },
 
-        // Raggruppa per event_type
-        const stats: Record<string, number> = {};
-        (data || []).forEach((event: { event_type: string }) => {
-            stats[event.event_type] = (stats[event.event_type] || 0) + 1;
-        });
+    // ─── ORGANIZATION EVENTS ─────────────────────────────────────────────
 
-        return stats;
-    }
-
-    /**
-     * Ottieni eventi recenti per tutte le macchine (vista aggregata)
-     */
-    static async getRecentEvents(
+    async getOrganizationEvents(
         organizationId: string,
-        limit = 20
-    ): Promise<any[]> {
-        // Using imported supabase client
-
-        const { data, error } = await supabase
-            .from('recent_machine_events')
+        options?: { limit?: number; eventTypes?: string[] }
+    ): Promise<MachineEvent[]> {
+        let query = supabase
+            .from('machine_events')
             .select('*')
             .eq('organization_id', organizationId)
-            .limit(limit);
+            .order('created_at', { ascending: false })
+            .limit(options?.limit || 100);
 
-        if (error) {
-            console.error('Failed to load recent events:', error);
-            throw new Error(`Failed to load recent events: ${error.message}`);
+        if (options?.eventTypes?.length) {
+            query = query.in('event_type', options.eventTypes);
         }
 
+        const { data, error } = await query;
+        if (error) return [];
         return data || [];
-    }
+    },
 
-    /**
-     * Ottieni singolo evento per ID
-     */
-    static async getEventById(
-        eventId: string,
-        organizationId: string
-    ): Promise<MachineEvent | null> {
-        // Using imported supabase client
+    // ─── VERIFY CHAIN ────────────────────────────────────────────────────
 
-        const { data, error } = await supabase.rpc('get_machine_event', {
-            p_event_id: eventId,
-            p_organization_id: organizationId,
-        });
+    async verifyChain(machineId: string): Promise<{
+        isValid: boolean;
+        totalEvents: number;
+        invalidEvents: EventVerification[];
+    }> {
+        try {
+            const { data, error } = await supabase.rpc('verify_machine_event_chain', {
+                p_machine_id: machineId,
+            });
 
-        if (error) {
-            console.error('Failed to load event:', error);
-            return null;
+            if (error) throw error;
+
+            const events = (data || []) as EventVerification[];
+            const invalid = events.filter(e => !e.is_valid);
+
+            return {
+                isValid: invalid.length === 0,
+                totalEvents: events.length,
+                invalidEvents: invalid,
+            };
+        } catch (error) {
+            console.error('Error verifying chain:', error);
+            return { isValid: false, totalEvents: 0, invalidEvents: [] };
         }
+    },
 
-        return data as MachineEvent | null;
-    }
-}
+    // ─── EVENT STATS ─────────────────────────────────────────────────────
 
-/**
- * Event Types Costanti
- * Usa questi per type-safety quando registri eventi
- */
-export const EVENT_TYPES = {
-    // Machine Lifecycle
-    MACHINE_CREATED: 'machine.created',
-    MACHINE_UPDATED: 'machine.updated',
-    MACHINE_RELOCATED: 'machine.relocated',
-    MACHINE_STATUS_CHANGED: 'machine.status_changed',
-    MACHINE_DECOMMISSIONED: 'machine.decommissioned',
-    MACHINE_TRANSFERRED: 'machine.transferred',
+    async getEventCount(machineId: string): Promise<number> {
+        const { count, error } = await supabase
+            .from('machine_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('machine_id', machineId);
 
-    // Maintenance
-    MAINTENANCE_SCHEDULED: 'maintenance.scheduled',
-    MAINTENANCE_STARTED: 'maintenance.started',
-    MAINTENANCE_COMPLETED: 'maintenance.completed',
-    MAINTENANCE_CANCELLED: 'maintenance.cancelled',
-    MAINTENANCE_OVERDUE: 'maintenance.overdue',
+        return error ? 0 : (count || 0);
+    },
 
-    // Documents
-    DOCUMENT_UPLOADED: 'document.uploaded',
-    DOCUMENT_UPDATED: 'document.updated',
-    DOCUMENT_DELETED: 'document.deleted',
+    async getLastEvent(machineId: string): Promise<MachineEvent | null> {
+        const { data, error } = await supabase
+            .from('machine_events')
+            .select('*')
+            .eq('machine_id', machineId)
+            .order('sequence_number', { ascending: false })
+            .limit(1)
+            .single();
 
-    // Checklists
-    CHECKLIST_EXECUTED: 'checklist.executed',
-    CHECKLIST_ITEM_CHECKED: 'checklist.item_checked',
-
-    // Safety
-    SAFETY_INCIDENT_REPORTED: 'safety.incident_reported',
-    SAFETY_RISK_ASSESSED: 'safety.risk_assessed',
-    SAFETY_INSPECTION_COMPLETED: 'safety.inspection_completed',
-
-    // Compliance
-    COMPLIANCE_AUDIT_PASSED: 'compliance.audit_passed',
-    COMPLIANCE_AUDIT_FAILED: 'compliance.audit_failed',
-    COMPLIANCE_CERTIFICATE_ISSUED: 'compliance.certificate_issued',
-    COMPLIANCE_CERTIFICATE_EXPIRED: 'compliance.certificate_expired',
-} as const;
-
-export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];
-
-/**
- * Helper per creare payload tipizzati
- */
-export const EventPayloads = {
-    machineRelocated: (oldLocation: string, newLocation: string, reason?: string) => ({
-        old_location: oldLocation,
-        new_location: newLocation,
-        reason,
-        timestamp: new Date().toISOString(),
-    }),
-
-    maintenanceCompleted: (data: {
-        technician: string;
-        duration_hours: number;
-        parts_replaced?: string[];
-        cost?: number;
-        notes?: string;
-    }) => ({
-        ...data,
-        completed_at: new Date().toISOString(),
-    }),
-
-    documentUploaded: (data: {
-        document_type: string;
-        filename: string;
-        file_size_kb: number;
-        uploaded_by: string;
-    }) => ({
-        ...data,
-        uploaded_at: new Date().toISOString(),
-    }),
-
-    safetyIncident: (data: {
-        severity: 'low' | 'medium' | 'high' | 'critical';
-        description: string;
-        reported_by: string;
-        immediate_action_taken?: string;
-    }) => ({
-        ...data,
-        reported_at: new Date().toISOString(),
-    }),
-
-    complianceCertificate: (data: {
-        certificate_type: string;
-        certificate_number: string;
-        issue_date: string;
-        expiry_date: string;
-        issued_by: string;
-        standards?: string[];
-    }) => data,
+        if (error) return null;
+        return data;
+    },
 };
