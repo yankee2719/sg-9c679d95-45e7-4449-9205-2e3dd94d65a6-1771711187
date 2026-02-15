@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
-import { userService } from "@/services/userService";
+import { getProfileData } from "@/lib/supabaseHelpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +33,12 @@ export default function DashboardPage() {
     const router = useRouter();
     const { t, language, setLanguage } = useLanguage();
     const [loading, setLoading] = useState(true);
-    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("technician");
+    const [userRole, setUserRole] = useState < string > ("technician");
     const [userName, setUserName] = useState("User");
 
     // Real data state
     const [stats, setStats] = useState({
-        totalEquipment: 0,
+        totalMachines: 0,
         activeChecklists: 0,
         upcomingMaintenance: 0,
         overdueItems: 0
@@ -47,12 +47,14 @@ export default function DashboardPage() {
     // User stats for admin
     const [userStats, setUserStats] = useState({
         total: 0,
+        owners: 0,
         admins: 0,
-        supervisors: 0,
-        technicians: 0
+        plant_managers: 0,
+        technicians: 0,
+        viewers: 0
     });
 
-    const [equipmentList, setEquipmentList] = useState < any[] > ([]);
+    const [machineList, setMachineList] = useState < any[] > ([]);
 
     useEffect(() => {
         const loadData = async () => {
@@ -63,18 +65,21 @@ export default function DashboardPage() {
                     return;
                 }
 
-                const profile = await userService.getUserById(user.id);
-                if (!profile) {
+                // Get profile + role via helper (new schema)
+                const profileData = await getProfileData(user.id);
+                if (!profileData) {
                     console.error("Profile not found for user:", user.id);
-                    router.push("/login");
-                    return;
+                    // Don't redirect — profile might just be delayed by trigger
+                    setUserName(user.email || "User");
+                    setUserRole("technician");
+                } else {
+                    setUserName(profileData.full_name || user.email || "User");
+                    setUserRole(profileData.role || "technician");
                 }
-                setUserName(profile.full_name || profile.email || "User");
-                setUserRole(profile.role as "admin" | "supervisor" | "technician");
 
                 await Promise.all([
                     loadDashboardData(),
-                    profile.role === "admin" ? loadUserStats() : Promise.resolve()
+                    (profileData?.role === "owner" || profileData?.role === "admin") ? loadUserStats() : Promise.resolve()
                 ]);
             } catch (error) {
                 console.error("Error loading dashboard data:", error);
@@ -88,10 +93,11 @@ export default function DashboardPage() {
 
     const loadDashboardData = async () => {
         try {
-            // Get equipment count
-            const { count: eqCount } = await supabase
-                .from("equipment")
-                .select("*", { count: "exact", head: true });
+            // Get machines count (was: equipment)
+            const { count: machineCount } = await supabase
+                .from("machines")
+                .select("*", { count: "exact", head: true })
+                .eq("is_archived", false);
 
             // Get active checklists count
             const { count: checkCount } = await supabase
@@ -99,41 +105,40 @@ export default function DashboardPage() {
                 .select("*", { count: "exact", head: true })
                 .eq("is_active", true);
 
-            // Get upcoming maintenance (next 7 days)
+            // Get upcoming maintenance (was: maintenance_schedules → now: maintenance_plans)
             const futureDate = new Date();
             futureDate.setDate(futureDate.getDate() + 7);
 
-            const upcomingResult = await supabase
-                .from("maintenance_schedules")
-                .select("id, title, next_due_date, equipment_id")
+            const { count: upcomingCount } = await supabase
+                .from("maintenance_plans")
+                .select("*", { count: "exact", head: true })
+                .eq("is_active", true)
                 .lte("next_due_date", futureDate.toISOString())
-                .gte("next_due_date", new Date().toISOString())
-                .order("next_due_date", { ascending: true })
-                .limit(5);
+                .gte("next_due_date", new Date().toISOString());
 
             // Get overdue maintenance
-            const overdueResult = await supabase
-                .from("maintenance_schedules")
-                .select("id, title, next_due_date, equipment_id")
-                .lt("next_due_date", new Date().toISOString())
-                .order("next_due_date", { ascending: true })
-                .limit(5);
+            const { count: overdueCount } = await supabase
+                .from("maintenance_plans")
+                .select("*", { count: "exact", head: true })
+                .eq("is_active", true)
+                .lt("next_due_date", new Date().toISOString());
 
-            // Get equipment list
-            const eqListResult = await supabase
-                .from("equipment")
-                .select("id, name, location, category, status, image_url")
+            // Get machine list (was: equipment)
+            const machineListResult = await supabase
+                .from("machines")
+                .select("id, name, location, machine_type, lifecycle_state, image_url")
+                .eq("is_archived", false)
                 .order("created_at", { ascending: false })
                 .limit(5);
 
             setStats({
-                totalEquipment: eqCount || 0,
+                totalMachines: machineCount || 0,
                 activeChecklists: checkCount || 0,
-                upcomingMaintenance: upcomingResult.data?.length || 0,
-                overdueItems: overdueResult.data?.length || 0
+                upcomingMaintenance: upcomingCount || 0,
+                overdueItems: overdueCount || 0
             });
 
-            setEquipmentList(eqListResult.data || []);
+            setMachineList(machineListResult.data || []);
 
         } catch (error) {
             console.error("Error loading dashboard data:", error);
@@ -142,36 +147,68 @@ export default function DashboardPage() {
 
     const loadUserStats = async () => {
         try {
-            const { data, error } = await supabase
+            // Get user's default org
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data: profile } = await supabase
                 .from("profiles")
-                .select("role");
+                .select("default_organization_id")
+                .eq("id", user.id)
+                .single();
+
+            if (!profile?.default_organization_id) return;
+
+            // Get members of this organization (was: profiles with role)
+            const { data: members, error } = await supabase
+                .from("organization_memberships")
+                .select("role")
+                .eq("organization_id", profile.default_organization_id)
+                .eq("is_active", true);
 
             if (error) throw error;
 
-            const stats = {
-                total: data.length,
-                admins: data.filter(u => u.role === "admin").length,
-                supervisors: data.filter(u => u.role === "supervisor").length,
-                technicians: data.filter(u => u.role === "technician").length
-            };
-
-            setUserStats(stats);
+            setUserStats({
+                total: members?.length || 0,
+                owners: members?.filter(m => m.role === "owner").length || 0,
+                admins: members?.filter(m => m.role === "admin").length || 0,
+                plant_managers: members?.filter(m => m.role === "plant_manager").length || 0,
+                technicians: members?.filter(m => m.role === "technician").length || 0,
+                viewers: members?.filter(m => m.role === "viewer").length || 0,
+            });
         } catch (error) {
             console.error("Error loading user stats:", error);
         }
     };
 
     const getRoleLabel = (role: string) => {
-        if (role === "admin") return t("users.admin");
-        if (role === "supervisor") return language === "it" ? "Supervisore" : language === "fr" ? "Superviseur" : language === "es" ? "Supervisor" : "Supervisor";
-        return t("users.technician");
+        const labels: Record<string, string> = {
+            owner: "Proprietario",
+            admin: t("users.admin"),
+            plant_manager: "Plant Manager",
+            technician: t("users.technician"),
+            viewer: "Viewer",
+        };
+        return labels[role] || role;
+    };
+
+    // Map lifecycle_state to display config
+    const getLifecycleConfig = (state: string) => {
+        const configs: Record<string, { label: string; color: string }> = {
+            commissioning: { label: "Commissioning", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+            active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
+            maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+            decommissioned: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" },
+            transferred: { label: "Trasferita", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
+        };
+        return configs[state] || configs.active;
     };
 
     if (loading) return null;
 
     return (
         <MainLayout userRole={userRole}>
-            <SEO title={`${t("dashboard.title")} - Maint Ops`} />
+            <SEO title={`${t("dashboard.title")} - MACHINA`} />
 
             <div className="space-y-8 max-w-7xl mx-auto">
 
@@ -234,14 +271,12 @@ export default function DashboardPage() {
                             <ArrowRight className="w-6 h-6 text-white" />
                         </div>
                     </div>
-
-                    {/* Decorative circles */}
                     <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
                     <div className="absolute bottom-0 left-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
                 </div>
 
-                {/* ADMIN CARD - Only visible for admins */}
-                {userRole === "admin" && (
+                {/* ADMIN CARD - Only visible for owner/admin */}
+                {(userRole === "owner" || userRole === "admin") && (
                     <div className="rounded-3xl bg-gradient-to-br from-purple-500 via-purple-600 to-indigo-600 p-8 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-500/30"
                         onClick={() => router.push("/admin/users")}>
                         <div className="relative z-10">
@@ -269,13 +304,13 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                                     <Shield className="w-5 h-5 text-white/80 mb-2" />
-                                    <div className="text-2xl font-bold mb-1">{userStats.admins}</div>
+                                    <div className="text-2xl font-bold mb-1">{userStats.admins + userStats.owners}</div>
                                     <div className="text-sm text-purple-100 font-medium">{t("users.admin")}</div>
                                 </div>
                                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                                     <Users className="w-5 h-5 text-white/80 mb-2" />
-                                    <div className="text-2xl font-bold mb-1">{userStats.supervisors}</div>
-                                    <div className="text-sm text-purple-100 font-medium">{getRoleLabel("supervisor")}</div>
+                                    <div className="text-2xl font-bold mb-1">{userStats.plant_managers}</div>
+                                    <div className="text-sm text-purple-100 font-medium">Plant Manager</div>
                                 </div>
                                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                                     <Wrench className="w-5 h-5 text-white/80 mb-2" />
@@ -284,36 +319,28 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Decorative circles */}
                         <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
                         <div className="absolute bottom-0 left-20 w-32 h-32 bg-white/10 rounded-full blur-xl" />
                     </div>
                 )}
 
-                {/* KPI CARDS - All Clickable */}
+                {/* KPI CARDS */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Equipment Stat - Links to /equipment */}
-                    <Card
-                        className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-blue-500/50 cursor-pointer"
-                        onClick={() => router.push("/equipment")}
-                    >
+                    <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-blue-500/50 cursor-pointer"
+                        onClick={() => router.push("/equipment")}>
                         <CardContent className="p-6">
                             <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
                                 <Wrench className="w-6 h-6 text-blue-400" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="text-4xl font-bold text-white">{stats.totalEquipment}</h3>
+                                <h3 className="text-4xl font-bold text-white">{stats.totalMachines}</h3>
                                 <p className="font-medium text-slate-300 text-sm">{t("dashboard.totalEquipment")}</p>
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Checklists Stat - Links to /checklists */}
-                    <Card
-                        className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-green-500/50 cursor-pointer"
-                        onClick={() => router.push("/checklists")}
-                    >
+                    <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-green-500/50 cursor-pointer"
+                        onClick={() => router.push("/checklists")}>
                         <CardContent className="p-6">
                             <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
                                 <ClipboardList className="w-6 h-6 text-green-400" />
@@ -325,11 +352,8 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Upcoming Maintenance - Links to /maintenance */}
-                    <Card
-                        className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-orange-500/50 cursor-pointer"
-                        onClick={() => router.push("/maintenance")}
-                    >
+                    <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-orange-500/50 cursor-pointer"
+                        onClick={() => router.push("/maintenance")}>
                         <CardContent className="p-6">
                             <div className="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
                                 <Clock className="w-6 h-6 text-[#FF6B35]" />
@@ -341,11 +365,8 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Overdue Items - Links to /maintenance */}
-                    <Card
-                        className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-red-500/50 cursor-pointer"
-                        onClick={() => router.push("/maintenance")}
-                    >
+                    <Card className="rounded-2xl border-slate-700/50 bg-slate-800/30 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all hover:border-red-500/50 cursor-pointer"
+                        onClick={() => router.push("/maintenance")}>
                         <CardContent className="p-6">
                             <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center mb-4">
                                 <AlertTriangle className="w-6 h-6 text-red-400" />
@@ -358,7 +379,7 @@ export default function DashboardPage() {
                     </Card>
                 </div>
 
-                {/* Equipment List - Full Width */}
+                {/* Machine List (was: Equipment List) */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between px-2">
                         <h3 className="text-lg font-bold text-white">{t("equipment.title")}</h3>
@@ -368,16 +389,8 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {equipmentList.map((item) => {
-                            const statusConfig: Record<string, { label: string; color: string }> = {
-                                active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
-                                under_maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-                                inactive: { label: t("equipment.inactive"), color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-                                decommissioned: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" }
-                            };
-
-                            const status = statusConfig[item.status] || statusConfig.active;
-
+                        {machineList.map((item) => {
+                            const lifecycle = getLifecycleConfig(item.lifecycle_state || "active");
                             return (
                                 <Card
                                     key={item.id}
@@ -402,9 +415,9 @@ export default function DashboardPage() {
                                                 <ChevronRight className="w-4 h-4 flex-shrink-0 text-slate-600 group-hover:text-blue-400 transition-colors" />
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-500 font-medium">{item.category || t("equipment.generic")}</span>
-                                                <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
-                                                    {status.label}
+                                                <span className="text-xs text-slate-500 font-medium">{item.machine_type || t("equipment.generic")}</span>
+                                                <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${lifecycle.color}`}>
+                                                    {lifecycle.label}
                                                 </Badge>
                                             </div>
                                         </div>
@@ -413,7 +426,7 @@ export default function DashboardPage() {
                             );
                         })}
 
-                        {equipmentList.length === 0 && (
+                        {machineList.length === 0 && (
                             <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-8 text-center col-span-full">
                                 <Wrench className="w-12 h-12 text-slate-600 mx-auto mb-3" />
                                 <p className="text-slate-400 font-medium">{t("equipment.noEquipment")}</p>
