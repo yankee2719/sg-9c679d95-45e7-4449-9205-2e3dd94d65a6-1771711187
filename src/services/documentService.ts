@@ -1,79 +1,47 @@
+// src/services/documentService.ts
 // ============================================================================
-// STEP 7: DOCUMENT SERVICE (Business Logic)
+// DOCUMENT SERVICE — replaces old documentService.ts + storageService.ts
 // ============================================================================
-// Orchestrazione completa di:
-// - Storage (file upload/download)
-// - Database (documents, versions)
-// - Audit log (tracking automatico)
-// - Access control (permissions check)
-// ============================================================================
-
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { DocumentStorageService, getStorageService, DocumentCategory } from './storageService';
-
-// ============================================================================
-// TYPES
+// Changes:
+//   - Backed by real documents + document_versions + document_audit_logs tables
+//   - SHA-256 checksum calculated client-side, stored in document_versions
+//   - Immutable version chain (document_versions is append-only)
+//   - Storage path: /{org_id}/{plant_id}/{machine_id}/{category}/{filename}
+//   - Removed: all references to non-existent tables
+//   - Merged: storageService logic into this single service
 // ============================================================================
 
-export interface CreateDocumentParams {
-    equipmentId: string;
-    title: string;
-    description?: string;
-    category: DocumentCategory;
-    file: File | Buffer;
-    regulatoryFramework?: string;
-    complianceTags?: string[];
-    documentNumber?: string;
-    validFrom?: Date;
-    validUntil?: Date;
-    languageCode?: string;
-    tags?: string[];
-    metadata?: Record<string, any>;
-}
+import { supabase } from '@/integrations/supabase/client';
 
-export interface UpdateDocumentMetadataParams {
-    documentId: string;
-    title?: string;
-    description?: string;
-    complianceTags?: string[];
-    validFrom?: Date;
-    validUntil?: Date;
-    tags?: string[];
-    metadata?: Record<string, any>;
-}
-
-export interface CreateVersionParams {
-    documentId: string;
-    file: File | Buffer;
-    changeReason: string;
-    changeSummary?: string;
-    newTitle?: string;
-    newDescription?: string;
-}
+export type DocumentCategory =
+    | 'technical_manual'
+    | 'risk_assessment'
+    | 'ce_declaration'
+    | 'electrical_schema'
+    | 'maintenance_manual'
+    | 'spare_parts_catalog'
+    | 'training_material'
+    | 'inspection_report'
+    | 'certificate'
+    | 'photo'
+    | 'video'
+    | 'other';
 
 export interface Document {
     id: string;
-    equipment_id: string;
+    organization_id: string;
+    plant_id: string | null;
+    machine_id: string | null;
     title: string;
-    description?: string;
+    description: string | null;
     category: DocumentCategory;
-    version_number: number;
-    is_current_version: boolean;
-    file_checksum: string;
-    file_size_bytes: number;
-    storage_path: string;
-    mime_type: string;
-    original_filename: string;
-    regulatory_framework?: string;
-    compliance_tags?: string[];
-    document_number?: string;
-    valid_from?: string;
-    valid_until?: string;
-    language_code: string;
-    uploaded_by: string;
-    uploaded_at: string;
-    metadata: Record<string, any>;
-    tags?: string[];
+    language: string;
+    is_mandatory: boolean;
+    regulatory_reference: string | null;
+    current_version_id: string | null;
+    version_count: number;
+    tags: string[];
+    is_archived: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -82,545 +50,391 @@ export interface DocumentVersion {
     id: string;
     document_id: string;
     version_number: number;
-    file_checksum: string;
-    file_size_bytes: number;
-    storage_path: string;
+    previous_version_id: string | null;
+    file_path: string;
+    file_name: string;
+    file_size: number;
     mime_type: string;
-    original_filename: string;
-    changed_by: string;
-    change_reason?: string;
-    change_summary?: string;
+    checksum_sha256: string;
+    change_summary: string | null;
+    signed_by: string | null;
+    signed_at: string | null;
+    created_at: string;
+    created_by: string;
+}
+
+export interface DocumentWithVersion extends Document {
+    current_version?: DocumentVersion;
+    machine?: { id: string; name: string };
+    plant?: { id: string; name: string };
+}
+
+export interface UploadDocumentParams {
+    organizationId: string;
+    plantId?: string;
+    machineId?: string;
     title: string;
     description?: string;
     category: DocumentCategory;
-    created_at: string;
+    file: File;
+    isMandatory?: boolean;
+    regulatoryReference?: string;
+    tags?: string[];
+    language?: string;
 }
 
-export interface AuditLogEntry {
-    id: string;
-    document_id: string;
-    action: string;
-    performed_by: string;
-    performed_at: string;
-    ip_address?: string;
-    user_agent?: string;
-    details?: string;
-    metadata?: Record<string, any>;
-    success: boolean;
+export interface AddVersionParams {
+    documentId: string;
+    file: File;
+    changeSummary?: string;
 }
 
 // ============================================================================
-// DOCUMENT SERVICE CLASS
+// CHECKSUM UTILITY
 // ============================================================================
 
-export class DocumentService {
-    private supabase: SupabaseClient;
-    private storage: DocumentStorageService;
+async function calculateChecksum(file: File): Promise<string> {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-    constructor(supabaseUrl: string, supabaseKey: string) {
-        this.supabase = createClient(supabaseUrl, supabaseKey);
-        this.storage = getStorageService();
-    }
+function buildStoragePath(
+    orgId: string,
+    plantId: string | null,
+    machineId: string | null,
+    category: string,
+    fileName: string
+): string {
+    const parts = [orgId];
+    if (plantId) parts.push(plantId);
+    if (machineId) parts.push(machineId);
+    parts.push(category);
+    // Add timestamp to prevent collisions
+    const ext = fileName.split('.').pop() || '';
+    const base = fileName.replace(/\.[^.]+$/, '');
+    const timestamp = Date.now();
+    parts.push(`${base}_${timestamp}.${ext}`);
+    return parts.join('/');
+}
 
-    // --------------------------------------------------------------------------
-    // CREATE DOCUMENT
-    // --------------------------------------------------------------------------
+// ============================================================================
+// SERVICE
+// ============================================================================
 
-    /**
-     * Create new document with automatic:
-     * - File upload to storage
-     * - SHA-256 checksum calculation
-     * - Database record creation
-     * - Initial version creation (via trigger)
-     * - Audit log entry (via trigger)
-     */
-    async createDocument(
-        params: CreateDocumentParams,
-        userId: string
-    ): Promise<Document> {
+export const documentService = {
+
+    // ─── LIST ────────────────────────────────────────────────────────────
+
+    async getDocuments(
+        organizationId: string,
+        filters?: {
+            machineId?: string;
+            plantId?: string;
+            category?: DocumentCategory;
+            isMandatory?: boolean;
+            searchQuery?: string;
+        }
+    ): Promise<DocumentWithVersion[]> {
+        let query = supabase
+            .from('documents')
+            .select(`
+                *,
+                current_version:document_versions!fk_documents_current_version (*),
+                machine:machines (id, name),
+                plant:plants (id, name)
+            `)
+            .eq('organization_id', organizationId)
+            .eq('is_archived', false)
+            .order('updated_at', { ascending: false });
+
+        if (filters?.machineId) query = query.eq('machine_id', filters.machineId);
+        if (filters?.plantId) query = query.eq('plant_id', filters.plantId);
+        if (filters?.category) query = query.eq('category', filters.category);
+        if (filters?.isMandatory !== undefined) query = query.eq('is_mandatory', filters.isMandatory);
+        if (filters?.searchQuery) query = query.ilike('title', `%${filters.searchQuery}%`);
+
+        const { data, error } = await query;
+        if (error) {
+            console.error('Error fetching documents:', error);
+            return [];
+        }
+        return (data as unknown as DocumentWithVersion[]) || [];
+    },
+
+    async getDocumentById(id: string): Promise<DocumentWithVersion | null> {
+        const { data, error } = await supabase
+            .from('documents')
+            .select(`
+                *,
+                current_version:document_versions!fk_documents_current_version (*),
+                machine:machines (id, name),
+                plant:plants (id, name)
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) return null;
+
+        // Log view in audit
+        await this.logAudit(id, null, 'viewed');
+
+        return data as unknown as DocumentWithVersion;
+    },
+
+    // ─── UPLOAD (create document + first version) ────────────────────────
+
+    async uploadDocument(params: UploadDocumentParams): Promise<Document | null> {
         try {
-            // 1. Upload file to storage
-            const uploadResult = await this.storage.uploadDocument({
-                file: params.file,
-                equipmentId: params.equipmentId,
-                category: params.category,
-                filename: params.file instanceof File ? params.file.name : undefined,
-            });
+            // 1. Calculate checksum
+            const checksum = await calculateChecksum(params.file);
 
-            // 2. Insert into database
-            const { data, error } = await this.supabase
+            // 2. Build storage path
+            const storagePath = buildStoragePath(
+                params.organizationId,
+                params.plantId || null,
+                params.machineId || null,
+                params.category,
+                params.file.name
+            );
+
+            // 3. Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from('documents')
+                .upload(storagePath, params.file, {
+                    cacheControl: '3600',
+                    upsert: false,
+                });
+
+            if (uploadError) throw uploadError;
+
+            // 4. Create document record
+            const { data: doc, error: docError } = await supabase
                 .from('documents')
                 .insert({
-                    equipment_id: params.equipmentId,
+                    organization_id: params.organizationId,
+                    plant_id: params.plantId || null,
+                    machine_id: params.machineId || null,
                     title: params.title,
-                    description: params.description,
+                    description: params.description || null,
                     category: params.category,
-                    file_checksum: uploadResult.fileChecksum,
-                    file_size_bytes: uploadResult.fileSizeBytes,
-                    storage_path: uploadResult.storagePath,
-                    mime_type: uploadResult.mimeType,
-                    original_filename: uploadResult.originalFilename,
-                    regulatory_framework: params.regulatoryFramework,
-                    compliance_tags: params.complianceTags,
-                    document_number: params.documentNumber,
-                    valid_from: params.validFrom?.toISOString(),
-                    valid_until: params.validUntil?.toISOString(),
-                    language_code: params.languageCode || 'it',
-                    uploaded_by: userId,
-                    metadata: params.metadata || {},
+                    language: params.language || 'it',
+                    is_mandatory: params.isMandatory || false,
+                    regulatory_reference: params.regulatoryReference || null,
                     tags: params.tags || [],
                 })
                 .select()
                 .single();
 
-            if (error) {
-                // Rollback: delete uploaded file
-                await this.storage.deleteDocument(uploadResult.storagePath).catch(() => { });
-                throw new Error(`Database insert failed: ${error.message}`);
-            }
+            if (docError) throw docError;
 
-            return data as Document;
+            // 5. Create first version
+            const { data: { user } } = await supabase.auth.getUser();
 
+            const { error: versionError } = await supabase
+                .from('document_versions')
+                .insert({
+                    document_id: doc.id,
+                    version_number: 1,
+                    file_path: storagePath,
+                    file_name: params.file.name,
+                    file_size: params.file.size,
+                    mime_type: params.file.type || 'application/octet-stream',
+                    checksum_sha256: checksum,
+                    change_summary: 'Versione iniziale',
+                    created_by: user!.id,
+                });
+
+            if (versionError) throw versionError;
+
+            // 6. Log audit
+            await this.logAudit(doc.id, null, 'created');
+
+            return doc;
         } catch (error) {
-            console.error('Create document failed:', error);
-            throw error;
+            console.error('Error uploading document:', error);
+            return null;
         }
-    }
+    },
 
-    // --------------------------------------------------------------------------
-    // CREATE NEW VERSION
-    // --------------------------------------------------------------------------
+    // ─── ADD VERSION ─────────────────────────────────────────────────────
 
-    /**
-     * Create new version of existing document
-     * Uses database function for atomic version increment
-     */
-    async createNewVersion(
-        params: CreateVersionParams,
-        userId: string
-    ): Promise<Document> {
+    async addVersion(params: AddVersionParams): Promise<DocumentVersion | null> {
         try {
-            // 1. Get current document info
-            const { data: currentDoc, error: fetchError } = await this.supabase
+            // 1. Get current document
+            const { data: doc } = await supabase
                 .from('documents')
-                .select('equipment_id, category, version_number')
+                .select('*, current_version:document_versions!fk_documents_current_version (id, file_path)')
                 .eq('id', params.documentId)
-                .eq('is_current_version', true)
                 .single();
 
-            if (fetchError || !currentDoc) {
-                throw new Error('Current document not found');
-            }
+            if (!doc) throw new Error('Document not found');
 
-            // 2. Upload new version to storage
-            const uploadResult = await this.storage.uploadNewVersion(
-                {
-                    file: params.file,
-                    equipmentId: currentDoc.equipment_id,
-                    category: currentDoc.category,
-                    filename: params.file instanceof File ? params.file.name : undefined,
-                },
-                currentDoc.version_number
-            );
+            // 2. Calculate checksum
+            const checksum = await calculateChecksum(params.file);
 
-            // 3. Call database function to create new version
-            const { data, error } = await this.supabase.rpc('create_document_new_version', {
-                p_document_id: params.documentId,
-                p_new_file_checksum: uploadResult.fileChecksum,
-                p_new_file_size_bytes: uploadResult.fileSizeBytes,
-                p_new_storage_path: uploadResult.storagePath,
-                p_new_mime_type: uploadResult.mimeType,
-                p_new_original_filename: uploadResult.originalFilename,
-                p_uploaded_by: userId,
-                p_change_reason: params.changeReason,
-                p_change_summary: params.changeSummary,
-                p_new_title: params.newTitle,
-                p_new_description: params.newDescription,
-            });
+            // 3. Build storage path (reuse org/plant/machine structure)
+            const oldPath = (doc as any).current_version?.file_path || '';
+            const pathParts = oldPath.split('/');
+            pathParts.pop(); // Remove old filename
+            const ext = params.file.name.split('.').pop() || '';
+            const base = params.file.name.replace(/\.[^.]+$/, '');
+            pathParts.push(`${base}_${Date.now()}.${ext}`);
+            const storagePath = pathParts.join('/');
 
-            if (error) {
-                // Rollback: delete uploaded file
-                await this.storage.deleteDocument(uploadResult.storagePath).catch(() => { });
-                throw new Error(`Version creation failed: ${error.message}`);
-            }
-
-            // 4. Fetch the new document
-            const { data: newDoc, error: newDocError } = await this.supabase
+            // 4. Upload file
+            const { error: uploadError } = await supabase.storage
                 .from('documents')
+                .upload(storagePath, params.file, { upsert: false });
+
+            if (uploadError) throw uploadError;
+
+            // 5. Create version record
+            const { data: { user } } = await supabase.auth.getUser();
+
+            const { data: version, error } = await supabase
+                .from('document_versions')
+                .insert({
+                    document_id: params.documentId,
+                    version_number: doc.version_count + 1,
+                    previous_version_id: doc.current_version_id,
+                    file_path: storagePath,
+                    file_name: params.file.name,
+                    file_size: params.file.size,
+                    mime_type: params.file.type || 'application/octet-stream',
+                    checksum_sha256: checksum,
+                    change_summary: params.changeSummary || null,
+                    created_by: user!.id,
+                })
                 .select()
-                .eq('id', data)
                 .single();
 
-            if (newDocError) {
-                throw new Error('Failed to fetch new version');
-            }
+            // Note: trigger update_document_version_count auto-updates document
 
-            return newDoc as Document;
+            if (error) throw error;
 
+            // 6. Log audit
+            await this.logAudit(params.documentId, version.id, 'version_added');
+
+            return version;
         } catch (error) {
-            console.error('Create version failed:', error);
-            throw error;
+            console.error('Error adding version:', error);
+            return null;
         }
-    }
+    },
 
-    // --------------------------------------------------------------------------
-    // GET DOCUMENT BY ID
-    // --------------------------------------------------------------------------
-
-    async getDocumentById(documentId: string): Promise<Document | null> {
-        const { data, error } = await this.supabase
-            .from('documents')
-            .select()
-            .eq('id', documentId)
-            .single();
-
-        if (error) {
-            if (error.code === 'PGRST116') return null; // Not found
-            throw new Error(`Get document failed: ${error.message}`);
-        }
-
-        return data as Document;
-    }
-
-    // --------------------------------------------------------------------------
-    // GET DOCUMENTS BY EQUIPMENT
-    // --------------------------------------------------------------------------
-
-    async getDocumentsByEquipment(
-        equipmentId: string,
-        currentVersionOnly: boolean = true
-    ): Promise<Document[]> {
-        let query = this.supabase
-            .from('documents')
-            .select()
-            .eq('equipment_id', equipmentId);
-
-        if (currentVersionOnly) {
-            query = query.eq('is_current_version', true);
-        }
-
-        const { data, error } = await query.order('created_at', { ascending: false });
-
-        if (error) {
-            throw new Error(`Get documents failed: ${error.message}`);
-        }
-
-        return data as Document[];
-    }
-
-    // --------------------------------------------------------------------------
-    // GET VERSION HISTORY
-    // --------------------------------------------------------------------------
+    // ─── VERSION HISTORY ─────────────────────────────────────────────────
 
     async getVersionHistory(documentId: string): Promise<DocumentVersion[]> {
-        const { data, error } = await this.supabase
+        const { data, error } = await supabase
             .from('document_versions')
-            .select()
+            .select('*')
             .eq('document_id', documentId)
             .order('version_number', { ascending: false });
 
-        if (error) {
-            throw new Error(`Get version history failed: ${error.message}`);
-        }
+        if (error) return [];
+        return data || [];
+    },
 
-        return data as DocumentVersion[];
-    }
+    // ─── DOWNLOAD ────────────────────────────────────────────────────────
 
-    // --------------------------------------------------------------------------
-    // UPDATE DOCUMENT METADATA
-    // --------------------------------------------------------------------------
-
-    /**
-     * Update document metadata only (file is immutable)
-     */
-    async updateDocumentMetadata(
-        params: UpdateDocumentMetadataParams,
-        userId: string
-    ): Promise<Document> {
-        const updateData: any = {};
-
-        if (params.title) updateData.title = params.title;
-        if (params.description !== undefined) updateData.description = params.description;
-        if (params.complianceTags) updateData.compliance_tags = params.complianceTags;
-        if (params.validFrom) updateData.valid_from = params.validFrom.toISOString();
-        if (params.validUntil) updateData.valid_until = params.validUntil.toISOString();
-        if (params.tags) updateData.tags = params.tags;
-        if (params.metadata) updateData.metadata = params.metadata;
-
-        const { data, error } = await this.supabase
-            .from('documents')
-            .update(updateData)
-            .eq('id', params.documentId)
-            .select()
+    async downloadVersion(versionId: string): Promise<string | null> {
+        const { data: version } = await supabase
+            .from('document_versions')
+            .select('file_path, document_id')
+            .eq('id', versionId)
             .single();
 
-        if (error) {
-            throw new Error(`Update metadata failed: ${error.message}`);
-        }
+        if (!version) return null;
 
-        return data as Document;
-    }
+        const { data, error } = await supabase.storage
+            .from('documents')
+            .createSignedUrl(version.file_path, 3600); // 1 hour
 
-    // --------------------------------------------------------------------------
-    // LOG DOCUMENT ACTION (Manual - per viewed/downloaded)
-    // --------------------------------------------------------------------------
+        if (error) return null;
 
-    async logDocumentAction(
+        // Log download
+        await this.logAudit(version.document_id, versionId, 'downloaded');
+
+        return data.signedUrl;
+    },
+
+    // ─── ARCHIVE ─────────────────────────────────────────────────────────
+
+    async archiveDocument(id: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('documents')
+            .update({ is_archived: true, archived_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (!error) await this.logAudit(id, null, 'archived');
+        return !error;
+    },
+
+    // ─── AUDIT LOG ───────────────────────────────────────────────────────
+
+    async logAudit(
         documentId: string,
-        action: 'viewed' | 'downloaded' | 'signed',
-        userId: string,
-        details?: string,
+        versionId: string | null,
+        action: string,
         metadata?: Record<string, any>
     ): Promise<void> {
-        const { error } = await this.supabase.rpc('log_document_action', {
-            p_document_id: documentId,
-            p_action: action,
-            p_performed_by: userId,
-            p_details: details,
-            p_metadata: metadata || {},
+        const { data: { user } } = await supabase.auth.getUser();
+
+        await supabase.from('document_audit_logs').insert({
+            document_id: documentId,
+            version_id: versionId,
+            action,
+            actor_id: user?.id || null,
+            metadata: metadata || {},
         });
+    },
 
-        if (error) {
-            console.error('Log action failed:', error);
-            // Non throw - audit log failure shouldn't block operation
-        }
-    }
-
-    // --------------------------------------------------------------------------
-    // GET AUDIT LOG
-    // --------------------------------------------------------------------------
-
-    async getAuditLog(documentId: string, limit: number = 100): Promise<AuditLogEntry[]> {
-        const { data, error } = await this.supabase
-            .from('document_audit_log')
-            .select()
+    async getAuditLog(documentId: string): Promise<any[]> {
+        const { data, error } = await supabase
+            .from('document_audit_logs')
+            .select(`
+                *,
+                actor:profiles (id, display_name, email)
+            `)
             .eq('document_id', documentId)
-            .order('performed_at', { ascending: false })
-            .limit(limit);
+            .order('created_at', { ascending: false });
 
-        if (error) {
-            throw new Error(`Get audit log failed: ${error.message}`);
-        }
+        if (error) return [];
+        return data || [];
+    },
 
-        return data as AuditLogEntry[];
-    }
+    // ─── COMPLIANCE CHECK ────────────────────────────────────────────────
 
-    // --------------------------------------------------------------------------
-    // DOWNLOAD DOCUMENT
-    // --------------------------------------------------------------------------
+    async getMandatoryDocumentStatus(
+        organizationId: string,
+        machineId?: string
+    ): Promise<{ category: DocumentCategory; exists: boolean; documentId?: string }[]> {
+        const mandatoryCategories: DocumentCategory[] = [
+            'technical_manual',
+            'risk_assessment',
+            'ce_declaration',
+            'electrical_schema',
+            'maintenance_manual',
+        ];
 
-    async downloadDocument(documentId: string, userId: string): Promise<{
-        blob: Blob;
-        filename: string;
-        mimeType: string;
-    }> {
-        // 1. Get document info
-        const document = await this.getDocumentById(documentId);
-        if (!document) {
-            throw new Error('Document not found');
-        }
-
-        // 2. Download from storage
-        const blob = await this.storage.downloadDocument(document.storage_path);
-
-        // 3. Log download action
-        await this.logDocumentAction(
-            documentId,
-            'downloaded',
-            userId,
-            `Downloaded version ${document.version_number}`
-        );
-
-        return {
-            blob,
-            filename: document.original_filename,
-            mimeType: document.mime_type,
-        };
-    }
-
-    // --------------------------------------------------------------------------
-    // GET SIGNED URL (temporary access)
-    // --------------------------------------------------------------------------
-
-    async getSignedUrl(
-        documentId: string,
-        expiresIn: number = 3600
-    ): Promise<string> {
-        const document = await this.getDocumentById(documentId);
-        if (!document) {
-            throw new Error('Document not found');
-        }
-
-        return await this.storage.getSignedUrl(document.storage_path, expiresIn);
-    }
-
-    // --------------------------------------------------------------------------
-    // DELETE DOCUMENT (soft delete recommended)
-    // --------------------------------------------------------------------------
-
-    async deleteDocument(documentId: string): Promise<void> {
-        // Nota: Considera soft-delete aggiungendo campo deleted_at invece
-        const { error } = await this.supabase
+        let query = supabase
             .from('documents')
-            .delete()
-            .eq('id', documentId);
+            .select('id, category')
+            .eq('organization_id', organizationId)
+            .eq('is_mandatory', true)
+            .eq('is_archived', false);
 
-        if (error) {
-            throw new Error(`Delete document failed: ${error.message}`);
-        }
+        if (machineId) query = query.eq('machine_id', machineId);
 
-        // Storage cleanup can be done with a scheduled job
-    }
+        const { data } = await query;
+        const existingCategories = new Set((data || []).map(d => d.category));
 
-    // --------------------------------------------------------------------------
-    // CHECK USER PERMISSION
-    // --------------------------------------------------------------------------
-
-    async checkUserPermission(
-        userId: string,
-        documentId: string,
-        requiredPermission: 'view' | 'download' | 'sign' | 'manage'
-    ): Promise<boolean> {
-        const { data, error } = await this.supabase.rpc('check_user_document_permission', {
-            p_user_id: userId,
-            p_document_id: documentId,
-            p_required_permission: requiredPermission,
-        });
-
-        if (error) {
-            console.error('Permission check failed:', error);
-            return false;
-        }
-
-        return data === true;
-    }
-
-    // --------------------------------------------------------------------------
-    // SEARCH DOCUMENTS
-    // --------------------------------------------------------------------------
-
-    async searchDocuments(params: {
-        query?: string;
-        category?: DocumentCategory;
-        equipmentId?: string;
-        complianceTags?: string[];
-        limit?: number;
-    }): Promise<Document[]> {
-        let query = this.supabase
-            .from('documents')
-            .select()
-            .eq('is_current_version', true);
-
-        if (params.equipmentId) {
-            query = query.eq('equipment_id', params.equipmentId);
-        }
-
-        if (params.category) {
-            query = query.eq('category', params.category);
-        }
-
-        if (params.complianceTags && params.complianceTags.length > 0) {
-            query = query.overlaps('compliance_tags', params.complianceTags);
-        }
-
-        if (params.query) {
-            query = query.or(`title.ilike.%${params.query}%,description.ilike.%${params.query}%`);
-        }
-
-        const { data, error } = await query
-            .order('created_at', { ascending: false })
-            .limit(params.limit || 50);
-
-        if (error) {
-            throw new Error(`Search failed: ${error.message}`);
-        }
-
-        return data as Document[];
-    }
-}
-
-// ============================================================================
-// SINGLETON INSTANCE
-// ============================================================================
-
-let documentServiceInstance: DocumentService | null = null;
-
-export function getDocumentService(): DocumentService {
-    if (!documentServiceInstance) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-        if (!supabaseUrl || !supabaseKey) {
-            throw new Error('Supabase URL and Key must be configured');
-        }
-
-        documentServiceInstance = new DocumentService(supabaseUrl, supabaseKey);
-    }
-
-    return documentServiceInstance;
-}
-
-// ============================================================================
-// USAGE EXAMPLES
-// ============================================================================
-
-/*
-import { getDocumentService } from '@/services/documentService';
-
-// Example 1: Create document
-const docService = getDocumentService();
-
-const newDoc = await docService.createDocument({
-  equipmentId: 'equipment-uuid',
-  title: 'Technical Manual Rev.2',
-  description: 'Updated technical specifications',
-  category: 'technical_manual',
-  file: uploadedFile,
-  complianceTags: ['CE', 'ISO9001'],
-  languageCode: 'it',
-  tags: ['machinery', 'safety'],
-}, userId);
-
-console.log('Document created:', newDoc.id);
-
-// Example 2: Create new version
-const newVersion = await docService.createNewVersion({
-  documentId: existingDocId,
-  file: newFile,
-  changeReason: 'Updated safety warnings',
-  changeSummary: 'Added chapter 5 about emergency procedures',
-}, userId);
-
-// Example 3: Download document (with audit log)
-const { blob, filename } = await docService.downloadDocument(docId, userId);
-
-// Trigger browser download
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = filename;
-a.click();
-
-// Example 4: Get version history
-const versions = await docService.getVersionHistory(docId);
-console.log(`Document has ${versions.length} versions`);
-
-// Example 5: Check permission before action
-const canDownload = await docService.checkUserPermission(
-  userId,
-  docId,
-  'download'
-);
-
-if (canDownload) {
-  // Allow download
-}
-
-// Example 6: Search documents
-const results = await docService.searchDocuments({
-  query: 'safety',
-  category: 'technical_manual',
-  complianceTags: ['CE'],
-  limit: 20,
-});
-*/
+        return mandatoryCategories.map(cat => ({
+            category: cat,
+            exists: existingCategories.has(cat),
+            documentId: (data || []).find(d => d.category === cat)?.id,
+        }));
+    },
+};
