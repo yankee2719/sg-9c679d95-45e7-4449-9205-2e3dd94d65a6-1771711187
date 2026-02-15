@@ -1,6 +1,6 @@
 {
-    "name": "Maint Ops",
-    "short_name": "MaintOps",
+    "name": "MACHINA",
+    "short_name": "MACHINA",
     "description": "Gestione Manutenzione Industriale",
     "start_url": "/dashboard",
     "display": "standalone",
