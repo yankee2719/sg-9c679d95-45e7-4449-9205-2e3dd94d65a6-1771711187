@@ -33,9 +33,9 @@ export default function NewEquipment() {
   const [showQRGenerator, setShowQRGenerator] = useState(false);
 
   // Plants & departments
-  const [plants, setPlants] = useState<Plant[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([]);
+  const [plants, setPlants] = useState < Plant[] > ([]);
+  const [departments, setDepartments] = useState < Department[] > ([]);
+  const [filteredDepartments, setFilteredDepartments] = useState < Department[] > ([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -148,7 +148,7 @@ export default function NewEquipment() {
               <CardTitle className="text-white">{t("equipment.qrGenerator")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <QRCodeGenerator value={formData.equipment_code || "new-equipment"} />
+              <QRCodeGenerator value={formData.equipment_code || "new-equipment"} allowCustomLink />
             </CardContent>
           </Card>
         )}
