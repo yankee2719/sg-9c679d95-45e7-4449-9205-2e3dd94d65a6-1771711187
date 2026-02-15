@@ -152,14 +152,14 @@ export default function MaintenancePage() {
             pending: { label: "In attesa", color: "bg-amber-500/20 text-amber-400 border-amber-500/30", icon: Clock },
             in_progress: { label: "In corso", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Wrench },
             completed: { label: "Completata", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: CheckCircle },
-            cancelled: { label: "Annullata", color: "bg-slate-500/20 text-slate-400 border-slate-500/30", icon: AlertTriangle }
+            cancelled: { label: "Annullata", color: "bg-slate-500/20 text-muted-foreground border-slate-500/30", icon: AlertTriangle }
         };
         return configs[status] || configs.scheduled;
     };
 
     const getPriorityConfig = (priority: string | null) => {
         const configs: Record<string, { label: string; color: string }> = {
-            low: { label: "Bassa", color: "bg-slate-500/20 text-slate-400" },
+            low: { label: "Bassa", color: "bg-slate-500/20 text-muted-foreground" },
             medium: { label: "Media", color: "bg-amber-500/20 text-amber-400" },
             high: { label: "Alta", color: "bg-red-500/20 text-red-400" },
             urgent: { label: "Urgente", color: "bg-red-600/20 text-red-500" }
@@ -180,18 +180,18 @@ export default function MaintenancePage() {
 
     return (
         <MainLayout userRole={userRole}>
-            <SEO title="Manutenzioni - Maint Ops" />
+            <SEO title="Manutenzioni - MACHINA" />
 
             <div className="space-y-6 max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Manutenzioni</h1>
-                        <p className="text-slate-400 mt-1">Gestisci le manutenzioni programmate</p>
+                        <h1 className="text-2xl font-bold text-foreground">Manutenzioni</h1>
+                        <p className="text-muted-foreground mt-1">Gestisci le manutenzioni programmate</p>
                     </div>
                     {(userRole === "admin" || userRole === "supervisor") && (
                         <Button
-                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground"
                             onClick={() => router.push("/maintenance/new")}
                         >
                             <Plus className="w-4 h-4 mr-2" />
@@ -201,42 +201,42 @@ export default function MaintenancePage() {
                 </div>
 
                 {/* Filters */}
-                <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+                <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm">
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="flex-1 relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Cerca..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                                    className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
                                 />
                             </div>
                             <div className="flex gap-3">
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-[160px] bg-slate-700/50 border-slate-600 text-white">
-                                        <Filter className="w-4 h-4 mr-2 text-slate-400" />
+                                    <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
+                                        <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
                                         <SelectValue placeholder="Stato" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="all" className="text-white hover:bg-slate-700">Tutti</SelectItem>
-                                        <SelectItem value="scheduled" className="text-white hover:bg-slate-700">Programmata</SelectItem>
-                                        <SelectItem value="pending" className="text-white hover:bg-slate-700">In attesa</SelectItem>
-                                        <SelectItem value="in_progress" className="text-white hover:bg-slate-700">In corso</SelectItem>
-                                        <SelectItem value="completed" className="text-white hover:bg-slate-700">Completata</SelectItem>
-                                        <SelectItem value="cancelled" className="text-white hover:bg-slate-700">Annullata</SelectItem>
+                                    <SelectContent className="bg-card border-border">
+                                        <SelectItem value="all" className="text-foreground hover:bg-muted">Tutti</SelectItem>
+                                        <SelectItem value="scheduled" className="text-foreground hover:bg-muted">Programmata</SelectItem>
+                                        <SelectItem value="pending" className="text-foreground hover:bg-muted">In attesa</SelectItem>
+                                        <SelectItem value="in_progress" className="text-foreground hover:bg-muted">In corso</SelectItem>
+                                        <SelectItem value="completed" className="text-foreground hover:bg-muted">Completata</SelectItem>
+                                        <SelectItem value="cancelled" className="text-foreground hover:bg-muted">Annullata</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                                    <SelectTrigger className="w-[160px] bg-slate-700/50 border-slate-600 text-white">
+                                    <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
                                         <SelectValue placeholder="Priorità" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="all" className="text-white hover:bg-slate-700">Tutte</SelectItem>
-                                        <SelectItem value="low" className="text-white hover:bg-slate-700">Bassa</SelectItem>
-                                        <SelectItem value="medium" className="text-white hover:bg-slate-700">Media</SelectItem>
-                                        <SelectItem value="high" className="text-white hover:bg-slate-700">Alta</SelectItem>
+                                    <SelectContent className="bg-card border-border">
+                                        <SelectItem value="all" className="text-foreground hover:bg-muted">Tutte</SelectItem>
+                                        <SelectItem value="low" className="text-foreground hover:bg-muted">Bassa</SelectItem>
+                                        <SelectItem value="medium" className="text-foreground hover:bg-muted">Media</SelectItem>
+                                        <SelectItem value="high" className="text-foreground hover:bg-muted">Alta</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -254,7 +254,7 @@ export default function MaintenancePage() {
                         return (
                             <Card
                                 key={task.id}
-                                className="rounded-2xl backdrop-blur-sm transition-all cursor-pointer group overflow-hidden border-slate-700 bg-slate-800/50 hover:border-blue-500/50"
+                                className="rounded-2xl backdrop-blur-sm transition-all cursor-pointer group overflow-hidden border-border bg-card/80 hover:border-blue-500/50"
                                 onClick={() => router.push(`/maintenance/${task.id}`)}
                             >
                                 <CardContent className="p-5">
@@ -267,7 +267,7 @@ export default function MaintenancePage() {
                                         {/* Content */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-start justify-between gap-4 mb-2">
-                                                <h3 className="font-bold text-white text-lg">{task.title}</h3>
+                                                <h3 className="font-bold text-foreground text-lg">{task.title}</h3>
                                                 <div className="flex items-center gap-2 flex-shrink-0">
                                                     <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border-0 ${priority.color}`}>
                                                         {priority.label}
@@ -275,7 +275,7 @@ export default function MaintenancePage() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                                                 {task.next_due_date && (
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="w-4 h-4" />
@@ -321,13 +321,13 @@ export default function MaintenancePage() {
 
                 {/* Empty State */}
                 {filteredTasks.length === 0 && (
-                    <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center">
-                        <Wrench className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-white mb-2">Nessuna manutenzione</h3>
-                        <p className="text-slate-400 mb-6">Non ci sono manutenzioni programmate</p>
+                    <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm p-12 text-center">
+                        <Wrench className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-foreground mb-2">Nessuna manutenzione</h3>
+                        <p className="text-muted-foreground mb-6">Non ci sono manutenzioni programmate</p>
                         {(userRole === "admin" || userRole === "supervisor") && (
                             <Button
-                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground"
                                 onClick={() => router.push("/maintenance/new")}
                             >
                                 <Plus className="w-4 h-4 mr-2" />
