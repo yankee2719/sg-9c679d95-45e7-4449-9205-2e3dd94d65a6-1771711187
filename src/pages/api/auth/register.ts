@@ -3,8 +3,14 @@ import { getServiceSupabase } from "@/lib/apiAuth";
 
 /**
  * Public registration endpoint.
- * Creates tenant + auth user + profile atomically using service role.
+ * Creates auth user + organization + membership atomically using service role.
  * No authentication required (this IS the signup flow).
+ *
+ * New schema flow:
+ *   1. Create auth user (trigger handle_new_user creates profile automatically)
+ *   2. Create organization with slug
+ *   3. Create organization_membership (role: owner)
+ *   4. Update profile with default_organization_id
  */
 export default async function handler(
     req: NextApiRequest,
@@ -25,50 +31,35 @@ export default async function handler(
         return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    const validPlans: Record<string, number> = {
-        starter: 6,
-        professional: 19,
-        enterprise: 9999,
+    // Plan → subscription limits
+    const planLimits: Record<string, { maxUsers: number; maxPlants: number; maxMachines: number }> = {
+        starter: { maxUsers: 6, maxPlants: 2, maxMachines: 100 },
+        professional: { maxUsers: 19, maxPlants: 10, maxMachines: 500 },
+        enterprise: { maxUsers: 9999, maxPlants: 9999, maxMachines: 9999 },
     };
 
-    const maxUsers = validPlans[plan] || validPlans.professional;
+    const limits = planLimits[plan] || planLimits.professional;
 
     const supabaseAdmin = getServiceSupabase();
 
-    let tenantId: string | null = null;
     let authUserId: string | null = null;
+    let organizationId: string | null = null;
 
     try {
-        // Step 1: Create tenant
-        const { data: tenant, error: tenantError } = await supabaseAdmin
-            .from("tenants")
-            .insert({
-                name: companyName,
-                max_users: maxUsers,
-                subscription_status: "active",
-            })
-            .select("id")
-            .single();
-
-        if (tenantError) {
-            console.error("Tenant creation error:", tenantError);
-            return res.status(500).json({ error: "Failed to create organization" });
-        }
-
-        tenantId = tenant.id;
-
-        // Step 2: Create auth user
+        // ── Step 1: Create auth user ─────────────────────────────────
+        // The DB trigger handle_new_user will auto-create a profile row
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
             password,
             email_confirm: true,
-            user_metadata: { full_name: fullName },
+            user_metadata: {
+                display_name: fullName,
+                first_name: fullName.split(' ')[0] || fullName,
+                last_name: fullName.split(' ').slice(1).join(' ') || null,
+            },
         });
 
         if (authError) {
-            // Rollback: delete tenant
-            await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
-
             if (authError.message?.includes("already been registered")) {
                 return res.status(409).json({ error: "Email already registered" });
             }
@@ -77,53 +68,118 @@ export default async function handler(
         }
 
         if (!authData?.user) {
-            await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
             return res.status(500).json({ error: "User creation failed" });
         }
 
         authUserId = authData.user.id;
 
-        // Step 3: Create/update profile with admin role and tenant
-        const { error: profileError } = await supabaseAdmin
-            .from("profiles")
-            .upsert(
-                {
-                    id: authUserId,
-                    email,
-                    full_name: fullName,
-                    role: "admin",
-                    tenant_id: tenantId,
-                    is_active: true,
-                },
-                { onConflict: "id" }
-            );
+        // ── Step 2: Generate slug from company name ──────────────────
+        let slug = companyName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')  // Remove accents
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, '');
 
-        if (profileError) {
-            console.error("Profile creation error:", profileError);
-            // Rollback: delete auth user and tenant
+        // Check uniqueness
+        let slugCandidate = slug;
+        let counter = 0;
+        while (counter < 10) {
+            const { data: existing } = await supabaseAdmin
+                .from('organizations')
+                .select('id')
+                .eq('slug', slugCandidate)
+                .maybeSingle();
+
+            if (!existing) break;
+            counter++;
+            slugCandidate = `${slug}-${counter}`;
+        }
+        if (counter > 0) slug = slugCandidate;
+
+        // ── Step 3: Create organization ──────────────────────────────
+        const { data: org, error: orgError } = await supabaseAdmin
+            .from('organizations')
+            .insert({
+                name: companyName,
+                slug,
+                type: 'customer',
+                email,
+                subscription_status: 'trial',
+                subscription_plan: plan || 'professional',
+                max_users: limits.maxUsers,
+                max_plants: limits.maxPlants,
+                max_machines: limits.maxMachines,
+            })
+            .select('id')
+            .single();
+
+        if (orgError) {
+            console.error("Organization creation error:", orgError);
+            // Rollback: delete auth user
             await supabaseAdmin.auth.admin.deleteUser(authUserId);
-            await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
-            return res.status(500).json({ error: "Profile creation failed" });
+            return res.status(500).json({ error: "Failed to create organization" });
         }
 
+        organizationId = org.id;
+
+        // ── Step 4: Create membership (user = owner) ─────────────────
+        const { error: membershipError } = await supabaseAdmin
+            .from('organization_memberships')
+            .insert({
+                organization_id: organizationId,
+                user_id: authUserId,
+                role: 'owner',
+                is_active: true,
+                accepted_at: new Date().toISOString(),
+            });
+
+        if (membershipError) {
+            console.error("Membership creation error:", membershipError);
+            // Rollback
+            await supabaseAdmin.from('organizations').delete().eq('id', organizationId);
+            await supabaseAdmin.auth.admin.deleteUser(authUserId);
+            return res.status(500).json({ error: "Failed to assign membership" });
+        }
+
+        // ── Step 5: Update profile with default org + name ───────────
+        const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .update({
+                default_organization_id: organizationId,
+                first_name: fullName.split(' ')[0] || fullName,
+                last_name: fullName.split(' ').slice(1).join(' ') || null,
+                display_name: fullName,
+            })
+            .eq('id', authUserId);
+
+        if (profileError) {
+            console.error("Profile update error (non-fatal):", profileError);
+            // Non-fatal: user can update profile later
+        }
+
+        // ── Success ──────────────────────────────────────────────────
         return res.status(201).json({
             message: "Registration successful",
             user: {
                 id: authUserId,
                 email,
-                role: "admin",
-                tenant_id: tenantId,
+                organization_id: organizationId,
             },
         });
+
     } catch (error) {
         console.error("Registration error:", error);
 
         // Best-effort rollback
+        if (organizationId) {
+            await supabaseAdmin.from('organization_memberships')
+                .delete().eq('organization_id', organizationId).catch(() => { });
+            await supabaseAdmin.from('organizations')
+                .delete().eq('id', organizationId).catch(() => { });
+        }
         if (authUserId) {
             await supabaseAdmin.auth.admin.deleteUser(authUserId).catch(() => { });
-        }
-        if (tenantId) {
-            await supabaseAdmin.from("tenants").delete().eq("id", tenantId).catch(() => { });
         }
 
         return res.status(500).json({ error: "Internal server error" });
