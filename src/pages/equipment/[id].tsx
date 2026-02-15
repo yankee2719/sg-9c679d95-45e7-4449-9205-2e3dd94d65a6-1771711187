@@ -172,7 +172,7 @@ export default function EquipmentDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-4">
-              <QRCodeGenerator value={qrValue} />
+              <QRCodeGenerator value={qrValue} allowCustomLink />
               <p className="text-sm text-slate-400 text-center">
                 Scansiona per accedere alla scheda di <strong className="text-white">{equipment.name}</strong>
               </p>
