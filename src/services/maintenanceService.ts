@@ -1,388 +1,453 @@
-import { supabase } from "@/integrations/supabase/client";
-import { checklistService } from "./checklistService";
+// src/services/maintenanceService.ts
+// ============================================================================
+// MAINTENANCE SERVICE — replaces old maintenanceService.ts
+// ============================================================================
+// Changes:
+//   - Split into two domains: Maintenance Plans + Work Orders
+//   - maintenance_schedules → maintenance_plans (preventive templates)
+//   - maintenance_logs → work_orders (execution instances)
+//   - Removed: tenant_id filtering (RLS handles it)
+//   - Added: work_order_status workflow (draft→scheduled→in_progress→completed)
+//   - Added: immutable closure (completed work orders cannot be modified)
+//   - Added: auto-event generation on completion (via DB trigger)
+// ============================================================================
 
-// Helper to get current user's tenant_id
-async function getCurrentTenantId(): Promise<string | null> {
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
+import { supabase } from '@/integrations/supabase/client';
 
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", user.id)
-        .single();
+export type WorkOrderStatus = 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled';
+export type WorkOrderPriority = 'low' | 'medium' | 'high' | 'critical';
+export type WorkType = 'preventive' | 'corrective' | 'predictive' | 'inspection' | 'emergency';
 
-    return profile?.tenant_id || null;
-}
+// ============================================================================
+// TYPES — MAINTENANCE PLANS
+// ============================================================================
 
-interface MaintenanceSchedule {
+export interface MaintenancePlan {
     id: string;
-    equipment_id: string;
+    organization_id: string;
+    machine_id: string | null;
     title: string;
     description: string | null;
-    frequency: string;
+    frequency_type: string;
+    frequency_value: number;
+    estimated_duration_minutes: number | null;
+    required_skills: string[] | null;
+    spare_parts: any[];
+    instructions: string | null;
+    safety_notes: string | null;
+    default_assignee_id: string | null;
+    priority: WorkOrderPriority;
+    is_active: boolean;
     next_due_date: string | null;
-    last_performed_at: string | null;
-    assigned_to: string | null;
-    checklist_id: string | null;
-    tenant_id: string | null;
+    last_executed_at: string | null;
     created_at: string;
     updated_at: string;
-    equipment?: { id: string; name: string; equipment_code?: string };
-    checklist?: { id: string; name: string };
 }
 
-interface MaintenanceLog {
+export interface CreatePlanParams {
+    organization_id: string;
+    machine_id?: string;
+    title: string;
+    description?: string;
+    frequency_type: string;
+    frequency_value: number;
+    estimated_duration_minutes?: number;
+    instructions?: string;
+    safety_notes?: string;
+    priority?: WorkOrderPriority;
+    default_assignee_id?: string;
+    next_due_date?: string;
+}
+
+// ============================================================================
+// TYPES — WORK ORDERS
+// ============================================================================
+
+export interface WorkOrder {
     id: string;
-    equipment_id: string;
-    performed_by: string;
+    organization_id: string;
+    machine_id: string;
+    plant_id: string;
+    maintenance_plan_id: string | null;
     title: string;
     description: string | null;
-    priority: string;
-    status: string;
-    schedule_id: string | null;
-    tenant_id: string | null;
-    notes: string | null;
-    created_at: string;
+    work_type: WorkType;
+    priority: WorkOrderPriority;
+    status: WorkOrderStatus;
+    scheduled_date: string | null;
+    due_date: string | null;
+    assigned_to: string | null;
+    started_at: string | null;
     completed_at: string | null;
-    equipment?: { id: string; name: string };
-    performed_by_user?: { id: string; full_name: string };
+    actual_duration_minutes: number | null;
+    work_performed: string | null;
+    findings: string | null;
+    spare_parts_used: any[];
+    completed_by: string | null;
+    reviewed_by: string | null;
+    signature_data: any | null;
+    labor_cost: number | null;
+    parts_cost: number | null;
+    total_cost: number | null;
+    notes: string | null;
+    photos: string[];
+    created_at: string;
+    updated_at: string;
 }
 
-export const maintenanceService = {
-    // Get all maintenance schedules
-    async getSchedules(): Promise<MaintenanceSchedule[]> {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(
-                `
-        *,
-        equipment:equipment(id, name, equipment_code),
-        checklist:checklists(id, name)
-      `
-            )
-            .order("next_due_date", { ascending: true });
+export interface CreateWorkOrderParams {
+    organization_id: string;
+    machine_id: string;
+    plant_id: string;
+    maintenance_plan_id?: string;
+    title: string;
+    description?: string;
+    work_type: WorkType;
+    priority?: WorkOrderPriority;
+    scheduled_date?: string;
+    due_date?: string;
+    assigned_to?: string;
+}
 
-        if (error) {
-            console.error("Error fetching maintenance schedules:", error);
-            throw error;
-        }
+export interface CompleteWorkOrderParams {
+    work_performed: string;
+    findings?: string;
+    actual_duration_minutes?: number;
+    spare_parts_used?: any[];
+    labor_cost?: number;
+    parts_cost?: number;
+    notes?: string;
+}
 
-        return (data || []) as MaintenanceSchedule[];
-    },
+export interface WorkOrderWithRelations extends WorkOrder {
+    machine?: { id: string; name: string; internal_code: string | null };
+    plant?: { id: string; name: string };
+    assignee?: { id: string; display_name: string; email: string };
+}
 
-    // Get schedule by ID
-    async getScheduleById(id: string): Promise<MaintenanceSchedule> {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(
-                `
-        *,
-        equipment:equipment(id, name, equipment_code),
-        checklist:checklists(id, name)
-      `
-            )
-            .eq("id", id)
-            .single();
+// ============================================================================
+// SERVICE — MAINTENANCE PLANS
+// ============================================================================
 
-        if (error) {
-            console.error("Error fetching schedule:", error);
-            throw error;
-        }
+export const maintenancePlanService = {
 
-        return data as MaintenanceSchedule;
-    },
-
-    // Create maintenance schedule (FIX: adds tenant_id)
-    async createSchedule(scheduleData: {
-        equipment_id: string;
-        title: string;
-        description?: string;
-        frequency: string;
-        next_due_date: string;
-        assigned_to?: string;
-        checklist_id?: string;
-    }) {
-        const tenantId = await getCurrentTenantId();
-
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .insert({
-                equipment_id: scheduleData.equipment_id,
-                title: scheduleData.title,
-                description: scheduleData.description || null,
-                frequency: scheduleData.frequency,
-                next_due_date: scheduleData.next_due_date,
-                assigned_to: scheduleData.assigned_to || null,
-                checklist_id: scheduleData.checklist_id || null,
-                tenant_id: tenantId,
-            })
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error creating maintenance schedule:", error);
-            throw error;
-        }
-
-        return data;
-    },
-
-    // Update maintenance schedule
-    async updateSchedule(
-        id: string,
-        scheduleData: {
-            equipment_id?: string;
-            title?: string;
-            description?: string;
-            frequency?: string;
-            next_due_date?: string;
-            assigned_to?: string | null;
-            checklist_id?: string | null;
-            last_performed_at?: string;
-        }
-    ) {
-        const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .update(scheduleData)
-            .eq("id", id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error updating maintenance schedule:", error);
-            throw error;
-        }
-
-        return data;
-    },
-
-    // Delete maintenance schedule
-    async deleteSchedule(id: string) {
-        const { error } = await supabase
-            .from("maintenance_schedules")
-            .delete()
-            .eq("id", id);
-
-        if (error) {
-            console.error("Error deleting schedule:", error);
-            throw error;
-        }
-    },
-
-    // Get maintenance logs (FIX: adds tenant_id)
-    async getLogs(equipmentId?: string): Promise<MaintenanceLog[]> {
+    async getPlans(organizationId: string, machineId?: string): Promise<MaintenancePlan[]> {
         let query = supabase
-            .from("maintenance_logs")
-            .select(
-                `
-        *,
-        equipment:equipment(id, name),
-        performed_by_user:profiles(id, full_name)
-      `
-            )
-            .order("created_at", { ascending: false });
+            .from('maintenance_plans')
+            .select('*')
+            .eq('organization_id', organizationId)
+            .order('next_due_date', { ascending: true, nullsFirst: false });
 
-        if (equipmentId) {
-            query = query.eq("equipment_id", equipmentId);
+        if (machineId) {
+            query = query.eq('machine_id', machineId);
         }
 
         const { data, error } = await query;
-
-        if (error) {
-            console.error("Error fetching maintenance logs:", error);
-            throw error;
-        }
-
-        return (data || []) as MaintenanceLog[];
+        if (error) return [];
+        return data || [];
     },
 
-    // Create maintenance log (FIX: adds tenant_id)
-    async createLog(logData: {
-        equipment_id: string;
-        performed_by: string;
-        title: string;
-        description?: string;
-        priority?: string;
-        status?: string;
-        schedule_id?: string;
-        notes?: string;
-    }) {
-        const tenantId = await getCurrentTenantId();
+    async getPlanById(id: string): Promise<MaintenancePlan | null> {
+        const { data, error } = await supabase
+            .from('maintenance_plans')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) return null;
+        return data;
+    },
+
+    async createPlan(params: CreatePlanParams): Promise<MaintenancePlan | null> {
+        const { data, error } = await supabase
+            .from('maintenance_plans')
+            .insert(params)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error creating maintenance plan:', error);
+            return null;
+        }
+        return data;
+    },
+
+    async updatePlan(id: string, updates: Partial<MaintenancePlan>): Promise<MaintenancePlan | null> {
+        const { data, error } = await supabase
+            .from('maintenance_plans')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return null;
+        return data;
+    },
+
+    async deactivatePlan(id: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('maintenance_plans')
+            .update({ is_active: false })
+            .eq('id', id);
+        return !error;
+    },
+
+    async getOverduePlans(organizationId: string): Promise<MaintenancePlan[]> {
+        const today = new Date().toISOString().split('T')[0];
 
         const { data, error } = await supabase
-            .from("maintenance_logs")
+            .from('maintenance_plans')
+            .select('*')
+            .eq('organization_id', organizationId)
+            .eq('is_active', true)
+            .lt('next_due_date', today)
+            .order('next_due_date');
+
+        if (error) return [];
+        return data || [];
+    },
+};
+
+// ============================================================================
+// SERVICE — WORK ORDERS
+// ============================================================================
+
+export const workOrderService = {
+
+    // ─── LIST ────────────────────────────────────────────────────────────
+
+    async getWorkOrders(
+        organizationId: string,
+        filters?: {
+            machineId?: string;
+            plantId?: string;
+            status?: WorkOrderStatus | WorkOrderStatus[];
+            assignedTo?: string;
+            workType?: WorkType;
+        }
+    ): Promise<WorkOrderWithRelations[]> {
+        let query = supabase
+            .from('work_orders')
+            .select(`
+                *,
+                machine:machines (id, name, internal_code),
+                plant:plants (id, name),
+                assignee:profiles!work_orders_assigned_to_fkey (id, display_name, email)
+            `)
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: false });
+
+        if (filters?.machineId) query = query.eq('machine_id', filters.machineId);
+        if (filters?.plantId) query = query.eq('plant_id', filters.plantId);
+        if (filters?.assignedTo) query = query.eq('assigned_to', filters.assignedTo);
+        if (filters?.workType) query = query.eq('work_type', filters.workType);
+
+        if (filters?.status) {
+            if (Array.isArray(filters.status)) {
+                query = query.in('status', filters.status);
+            } else {
+                query = query.eq('status', filters.status);
+            }
+        }
+
+        const { data, error } = await query;
+        if (error) {
+            console.error('Error fetching work orders:', error);
+            return [];
+        }
+        return (data as unknown as WorkOrderWithRelations[]) || [];
+    },
+
+    async getActiveWorkOrders(organizationId: string): Promise<WorkOrderWithRelations[]> {
+        return this.getWorkOrders(organizationId, {
+            status: ['draft', 'scheduled', 'in_progress', 'pending_review'],
+        });
+    },
+
+    async getMyWorkOrders(): Promise<WorkOrderWithRelations[]> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+
+        const { data, error } = await supabase
+            .from('work_orders')
+            .select(`
+                *,
+                machine:machines (id, name, internal_code),
+                plant:plants (id, name)
+            `)
+            .eq('assigned_to', user.id)
+            .not('status', 'in', '("completed","cancelled")')
+            .order('scheduled_date', { ascending: true, nullsFirst: false });
+
+        if (error) return [];
+        return (data as unknown as WorkOrderWithRelations[]) || [];
+    },
+
+    // ─── GET ─────────────────────────────────────────────────────────────
+
+    async getWorkOrderById(id: string): Promise<WorkOrderWithRelations | null> {
+        const { data, error } = await supabase
+            .from('work_orders')
+            .select(`
+                *,
+                machine:machines (id, name, internal_code, serial_number, plant_id),
+                plant:plants (id, name, code),
+                assignee:profiles!work_orders_assigned_to_fkey (id, display_name, email)
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) return null;
+        return data as unknown as WorkOrderWithRelations;
+    },
+
+    // ─── CREATE ──────────────────────────────────────────────────────────
+
+    async createWorkOrder(params: CreateWorkOrderParams): Promise<WorkOrder | null> {
+        const { data, error } = await supabase
+            .from('work_orders')
             .insert({
-                equipment_id: logData.equipment_id,
-                performed_by: logData.performed_by,
-                title: logData.title,
-                description: logData.description || null,
-                priority: logData.priority || "medium",
-                status: logData.status || "pending",
-                schedule_id: logData.schedule_id || null,
-                notes: logData.notes || null,
-                tenant_id: tenantId,
+                ...params,
+                status: 'draft' as WorkOrderStatus,
+                priority: params.priority || 'medium',
             })
             .select()
             .single();
 
         if (error) {
-            console.error("Error creating maintenance log:", error);
-            throw error;
+            console.error('Error creating work order:', error);
+            return null;
         }
-
         return data;
     },
 
-    // Update maintenance log
-    async updateLog(
-        id: string,
-        logData: {
-            title?: string;
-            description?: string;
-            priority?: string;
-            status?: string;
-            notes?: string;
-            completed_at?: string;
-        }
-    ) {
-        const { data, error } = await supabase
-            .from("maintenance_logs")
-            .update(logData)
-            .eq("id", id)
-            .select()
+    async createFromPlan(planId: string, machineId: string): Promise<WorkOrder | null> {
+        const plan = await maintenancePlanService.getPlanById(planId);
+        if (!plan) return null;
+
+        // Get machine to get plant_id
+        const { data: machine } = await supabase
+            .from('machines')
+            .select('plant_id')
+            .eq('id', machineId)
             .single();
 
-        if (error) {
-            console.error("Error updating maintenance log:", error);
-            throw error;
-        }
+        if (!machine) return null;
 
-        return data;
+        return this.createWorkOrder({
+            organization_id: plan.organization_id,
+            machine_id: machineId,
+            plant_id: machine.plant_id,
+            maintenance_plan_id: planId,
+            title: plan.title,
+            description: plan.instructions || plan.description || undefined,
+            work_type: 'preventive',
+            priority: plan.priority,
+            assigned_to: plan.default_assignee_id || undefined,
+        });
     },
 
-    // Get upcoming maintenance
-    async getUpcoming(days: number = 7): Promise<MaintenanceSchedule[]> {
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + days);
+    // ─── STATUS TRANSITIONS ──────────────────────────────────────────────
+
+    async scheduleWorkOrder(id: string, scheduledDate: string, assignedTo?: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('work_orders')
+            .update({
+                status: 'scheduled' as WorkOrderStatus,
+                scheduled_date: scheduledDate,
+                assigned_to: assignedTo || undefined,
+            })
+            .eq('id', id)
+            .in('status', ['draft']);
+
+        return !error;
+    },
+
+    async startWorkOrder(id: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('work_orders')
+            .update({
+                status: 'in_progress' as WorkOrderStatus,
+                started_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .in('status', ['draft', 'scheduled']);
+
+        return !error;
+    },
+
+    async completeWorkOrder(id: string, params: CompleteWorkOrderParams): Promise<boolean> {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return false;
+
+        const totalCost = (params.labor_cost || 0) + (params.parts_cost || 0);
+
+        const { error } = await supabase
+            .from('work_orders')
+            .update({
+                status: 'completed' as WorkOrderStatus,
+                completed_at: new Date().toISOString(),
+                completed_by: user.id,
+                work_performed: params.work_performed,
+                findings: params.findings || null,
+                actual_duration_minutes: params.actual_duration_minutes || null,
+                spare_parts_used: params.spare_parts_used || [],
+                labor_cost: params.labor_cost || null,
+                parts_cost: params.parts_cost || null,
+                total_cost: totalCost || null,
+                notes: params.notes || null,
+            })
+            .eq('id', id)
+            .in('status', ['in_progress', 'pending_review']);
+
+        // Note: DB trigger on_work_order_completed auto-generates machine event
+        return !error;
+    },
+
+    async cancelWorkOrder(id: string, reason?: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('work_orders')
+            .update({
+                status: 'cancelled' as WorkOrderStatus,
+                notes: reason || null,
+            })
+            .eq('id', id)
+            .not('status', 'eq', 'completed');
+
+        return !error;
+    },
+
+    // ─── STATISTICS ──────────────────────────────────────────────────────
+
+    async getWorkOrderStats(organizationId: string): Promise<{
+        total: number;
+        open: number;
+        overdue: number;
+        completedThisMonth: number;
+    }> {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
         const { data, error } = await supabase
-            .from("maintenance_schedules")
-            .select(
-                `
-        *,
-        equipment:equipment(id, name, equipment_code)
-      `
-            )
-            .lte("next_due_date", futureDate.toISOString())
-            .order("next_due_date", { ascending: true });
+            .from('work_orders')
+            .select('status, due_date, completed_at')
+            .eq('organization_id', organizationId);
 
-        if (error) {
-            console.error("Error fetching upcoming maintenance:", error);
-            throw error;
-        }
+        if (error || !data) return { total: 0, open: 0, overdue: 0, completedThisMonth: 0 };
 
-        return (data || []) as MaintenanceSchedule[];
-    },
+        const today = now.toISOString().split('T')[0];
 
-    // FIX: Start maintenance with linked checklist execution
-    async startMaintenanceWithChecklist(
-        scheduleId: string,
-        userId: string
-    ): Promise<{
-        log: MaintenanceLog;
-        execution: Record<string, unknown> | null;
-    }> {
-        // 1. Get schedule details
-        const schedule = await this.getScheduleById(scheduleId);
-
-        // 2. Create maintenance log
-        const log = (await this.createLog({
-            equipment_id: schedule.equipment_id,
-            performed_by: userId,
-            title: schedule.title,
-            description: schedule.description || undefined,
-            status: "in_progress",
-            schedule_id: scheduleId,
-        })) as MaintenanceLog;
-
-        // 3. If schedule has a linked checklist, create execution
-        let execution = null;
-        if (schedule.checklist_id) {
-            execution = await checklistService.createExecution({
-                checklist_id: schedule.checklist_id,
-                executed_by: userId,
-                equipment_id: schedule.equipment_id,
-                maintenance_log_id: log.id,
-                schedule_id: scheduleId,
-                status: "in_progress",
-            });
-        }
-
-        // 4. Update schedule's last_performed_at
-        await this.updateSchedule(scheduleId, {
-            last_performed_at: new Date().toISOString(),
-        });
-
-        return { log, execution };
-    },
-
-    // Complete maintenance (updates log + schedule next_due_date)
-    async completeMaintenance(
-        logId: string,
-        scheduleId?: string,
-        notes?: string
-    ) {
-        // 1. Update log status
-        const log = await this.updateLog(logId, {
-            status: "completed",
-            completed_at: new Date().toISOString(),
-            notes: notes || undefined,
-        });
-
-        // 2. If linked to schedule, calculate next due date
-        if (scheduleId) {
-            const schedule = await this.getScheduleById(scheduleId);
-            const nextDueDate = this.calculateNextDueDate(
-                schedule.frequency,
-                new Date()
-            );
-
-            await this.updateSchedule(scheduleId, {
-                next_due_date: nextDueDate.toISOString(),
-                last_performed_at: new Date().toISOString(),
-            });
-        }
-
-        return log;
-    },
-
-    // Helper: calculate next due date based on frequency
-    calculateNextDueDate(frequency: string, fromDate: Date): Date {
-        const next = new Date(fromDate);
-        switch (frequency) {
-            case "daily":
-                next.setDate(next.getDate() + 1);
-                break;
-            case "weekly":
-                next.setDate(next.getDate() + 7);
-                break;
-            case "monthly":
-                next.setMonth(next.getMonth() + 1);
-                break;
-            case "quarterly":
-                next.setMonth(next.getMonth() + 3);
-                break;
-            case "yearly":
-                next.setFullYear(next.getFullYear() + 1);
-                break;
-            default:
-                next.setMonth(next.getMonth() + 1);
-        }
-        return next;
+        return {
+            total: data.length,
+            open: data.filter(wo => !['completed', 'cancelled'].includes(wo.status)).length,
+            overdue: data.filter(wo =>
+                !['completed', 'cancelled'].includes(wo.status) &&
+                wo.due_date && wo.due_date < today
+            ).length,
+            completedThisMonth: data.filter(wo =>
+                wo.status === 'completed' &&
+                wo.completed_at && wo.completed_at >= monthStart
+            ).length,
+        };
     },
 };
-
-export default maintenanceService;
