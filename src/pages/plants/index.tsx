@@ -262,26 +262,26 @@ export default function PlantsPage() {
 
     return (
         <MainLayout userRole={userRole as any}>
-            <SEO title="Stabilimenti - Maint Ops" />
+            <SEO title="Stabilimenti - MACHINA" />
 
             <div className="space-y-6 max-w-5xl mx-auto">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Stabilimenti</h1>
-                        <p className="text-slate-400 mt-1">Gestisci stabilimenti, reparti e linee di produzione</p>
+                        <h1 className="text-2xl font-bold text-foreground">Stabilimenti</h1>
+                        <p className="text-muted-foreground mt-1">Gestisci stabilimenti, reparti e linee di produzione</p>
                     </div>
-                    <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => openCreate("plant")}>
+                    <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground" onClick={() => openCreate("plant")}>
                         <Plus className="w-4 h-4 mr-2" />
                         Nuovo Stabilimento
                     </Button>
                 </div>
 
                 {plants.length === 0 ? (
-                    <Card className="rounded-2xl border-slate-700 bg-slate-800/50 p-12 text-center">
-                        <Building2 className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-white mb-2">Nessuno stabilimento</h3>
-                        <p className="text-slate-400 mb-6">Crea il primo stabilimento per organizzare il parco macchine</p>
-                        <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => openCreate("plant")}>
+                    <Card className="rounded-2xl border-border bg-card/80 p-12 text-center">
+                        <Building2 className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-foreground mb-2">Nessuno stabilimento</h3>
+                        <p className="text-muted-foreground mb-6">Crea il primo stabilimento per organizzare il parco macchine</p>
+                        <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground" onClick={() => openCreate("plant")}>
                             <Plus className="w-4 h-4 mr-2" />
                             Crea Stabilimento
                         </Button>
@@ -293,18 +293,18 @@ export default function PlantsPage() {
                             const plantDepts = departments.filter((d) => d.plant_id === plant.id);
 
                             return (
-                                <Card key={plant.id} className="rounded-2xl border-slate-700 bg-slate-800/50 overflow-hidden">
+                                <Card key={plant.id} className="rounded-2xl border-border bg-card/80 overflow-hidden">
                                     {/* Plant Header */}
                                     <div
-                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                                         onClick={() => setExpandedPlant(isExpanded ? null : plant.id)}
                                     >
                                         <div className="flex items-center gap-3">
-                                            {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+                                            {isExpanded ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
                                             <Building2 className="w-5 h-5 text-blue-400" />
                                             <div>
-                                                <h3 className="font-bold text-white">{plant.name}</h3>
-                                                <div className="flex items-center gap-3 text-sm text-slate-400">
+                                                <h3 className="font-bold text-foreground">{plant.name}</h3>
+                                                <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                                     {plant.code && <span>{plant.code}</span>}
                                                     {plant.city && (
                                                         <span className="flex items-center gap-1">
@@ -317,10 +317,10 @@ export default function PlantsPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                            <button onClick={() => openEdit("plant", plant)} className="p-2 rounded-lg hover:bg-slate-600 text-slate-400 hover:text-white transition-colors">
+                                            <button onClick={() => openEdit("plant", plant)} className="p-2 rounded-lg hover:bg-slate-600 text-muted-foreground hover:text-foreground transition-colors">
                                                 <Edit className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => handleDelete("plant", plant.id, plant.name)} className="p-2 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
+                                            <button onClick={() => handleDelete("plant", plant.id, plant.name)} className="p-2 rounded-lg hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-colors">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -328,9 +328,9 @@ export default function PlantsPage() {
 
                                     {/* Departments */}
                                     {isExpanded && (
-                                        <div className="border-t border-slate-700 bg-slate-900/30">
+                                        <div className="border-t border-border bg-slate-900/30">
                                             <div className="p-3 pl-12">
-                                                <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 hover:bg-slate-700/50" onClick={() => openCreate("department", plant.id)}>
+                                                <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 hover:bg-muted/50" onClick={() => openCreate("department", plant.id)}>
                                                     <Plus className="w-3 h-3 mr-1" />
                                                     Aggiungi Reparto
                                                 </Button>
@@ -343,23 +343,23 @@ export default function PlantsPage() {
                                                 return (
                                                     <div key={dept.id} className="border-t border-slate-800">
                                                         <div
-                                                            className="flex items-center justify-between px-4 py-3 pl-12 cursor-pointer hover:bg-slate-700/20 transition-colors"
+                                                            className="flex items-center justify-between px-4 py-3 pl-12 cursor-pointer hover:bg-muted/20 transition-colors"
                                                             onClick={() => setExpandedDept(isDeptExpanded ? null : dept.id)}
                                                         >
                                                             <div className="flex items-center gap-3">
-                                                                {isDeptExpanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
+                                                                {isDeptExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
                                                                 <Factory className="w-4 h-4 text-amber-400" />
                                                                 <div>
-                                                                    <span className="text-white font-medium">{dept.name}</span>
-                                                                    {dept.code && <span className="text-slate-500 text-sm ml-2">({dept.code})</span>}
-                                                                    <span className="text-slate-500 text-sm ml-3">{deptLines.length} linee</span>
+                                                                    <span className="text-foreground font-medium">{dept.name}</span>
+                                                                    {dept.code && <span className="text-muted-foreground text-sm ml-2">({dept.code})</span>}
+                                                                    <span className="text-muted-foreground text-sm ml-3">{deptLines.length} linee</span>
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                                <button onClick={() => openEdit("department", dept)} className="p-1.5 rounded hover:bg-slate-600 text-slate-400 hover:text-white">
+                                                                <button onClick={() => openEdit("department", dept)} className="p-1.5 rounded hover:bg-slate-600 text-muted-foreground hover:text-foreground">
                                                                     <Edit className="w-3.5 h-3.5" />
                                                                 </button>
-                                                                <button onClick={() => handleDelete("department", dept.id, dept.name)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400">
+                                                                <button onClick={() => handleDelete("department", dept.id, dept.name)} className="p-1.5 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
                                                                     <Trash2 className="w-3.5 h-3.5" />
                                                                 </button>
                                                             </div>
@@ -369,23 +369,23 @@ export default function PlantsPage() {
                                                         {isDeptExpanded && (
                                                             <div className="bg-slate-900/50">
                                                                 <div className="p-2 pl-20">
-                                                                    <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 hover:bg-slate-700/50 text-xs" onClick={() => openCreate("line", dept.id)}>
+                                                                    <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 hover:bg-muted/50 text-xs" onClick={() => openCreate("line", dept.id)}>
                                                                         <Plus className="w-3 h-3 mr-1" />
                                                                         Aggiungi Linea
                                                                     </Button>
                                                                 </div>
                                                                 {deptLines.map((line) => (
-                                                                    <div key={line.id} className="flex items-center justify-between px-4 py-2 pl-20 border-t border-slate-800/50 hover:bg-slate-700/10">
+                                                                    <div key={line.id} className="flex items-center justify-between px-4 py-2 pl-20 border-t border-slate-800/50 hover:bg-muted/10">
                                                                         <div className="flex items-center gap-2">
                                                                             <Layers className="w-3.5 h-3.5 text-green-400" />
-                                                                            <span className="text-slate-300 text-sm">{line.name}</span>
-                                                                            {line.code && <span className="text-slate-600 text-xs">({line.code})</span>}
+                                                                            <span className="text-muted-foreground text-sm">{line.name}</span>
+                                                                            {line.code && <span className="text-muted-foreground/60 text-xs">({line.code})</span>}
                                                                         </div>
                                                                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                                                            <button onClick={() => openEdit("line", line)} className="p-1 rounded hover:bg-slate-600 text-slate-500 hover:text-white">
+                                                                            <button onClick={() => openEdit("line", line)} className="p-1 rounded hover:bg-slate-600 text-muted-foreground hover:text-foreground">
                                                                                 <Edit className="w-3 h-3" />
                                                                             </button>
-                                                                            <button onClick={() => handleDelete("line", line.id, line.name)} className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400">
+                                                                            <button onClick={() => handleDelete("line", line.id, line.name)} className="p-1 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
                                                                                 <Trash2 className="w-3 h-3" />
                                                                             </button>
                                                                         </div>
@@ -407,49 +407,49 @@ export default function PlantsPage() {
 
             {/* Create/Edit Dialog */}
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="bg-slate-800 border-slate-700 text-white">
+                <DialogContent className="bg-card border-border text-foreground">
                     <DialogHeader>
-                        <DialogTitle className="text-white">{dialogTitle()}</DialogTitle>
+                        <DialogTitle className="text-foreground">{dialogTitle()}</DialogTitle>
                     </DialogHeader>
 
                     <div className="space-y-4">
                         <div>
-                            <label className="text-sm text-slate-400">Nome *</label>
+                            <label className="text-sm text-muted-foreground">Nome *</label>
                             <Input
                                 value={formName}
                                 onChange={(e) => setFormName(e.target.value)}
                                 placeholder={dialogType === "plant" ? "es. Stabilimento Nord" : dialogType === "department" ? "es. Reparto Assemblaggio" : "es. Linea 1"}
-                                className="bg-slate-900 border-slate-600 text-white"
+                                className="bg-slate-900 border-border text-foreground"
                             />
                         </div>
                         <div>
-                            <label className="text-sm text-slate-400">Codice</label>
+                            <label className="text-sm text-muted-foreground">Codice</label>
                             <Input
                                 value={formCode}
                                 onChange={(e) => setFormCode(e.target.value)}
                                 placeholder="es. STAB-01"
-                                className="bg-slate-900 border-slate-600 text-white"
+                                className="bg-slate-900 border-border text-foreground"
                             />
                         </div>
 
                         {dialogType === "plant" && (
                             <>
                                 <div>
-                                    <label className="text-sm text-slate-400">Indirizzo</label>
+                                    <label className="text-sm text-muted-foreground">Indirizzo</label>
                                     <Input
                                         value={formAddress}
                                         onChange={(e) => setFormAddress(e.target.value)}
                                         placeholder="es. Via Roma 1"
-                                        className="bg-slate-900 border-slate-600 text-white"
+                                        className="bg-slate-900 border-border text-foreground"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-sm text-slate-400">Città</label>
+                                    <label className="text-sm text-muted-foreground">Città</label>
                                     <Input
                                         value={formCity}
                                         onChange={(e) => setFormCity(e.target.value)}
                                         placeholder="es. Milano"
-                                        className="bg-slate-900 border-slate-600 text-white"
+                                        className="bg-slate-900 border-border text-foreground"
                                     />
                                 </div>
                             </>
@@ -457,19 +457,19 @@ export default function PlantsPage() {
 
                         {(dialogType === "department" || dialogType === "line") && (
                             <div>
-                                <label className="text-sm text-slate-400">Descrizione</label>
+                                <label className="text-sm text-muted-foreground">Descrizione</label>
                                 <Input
                                     value={formDescription}
                                     onChange={(e) => setFormDescription(e.target.value)}
                                     placeholder="Descrizione opzionale"
-                                    className="bg-slate-900 border-slate-600 text-white"
+                                    className="bg-slate-900 border-border text-foreground"
                                 />
                             </div>
                         )}
                     </div>
 
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDialog(false)} className="border-slate-600 text-white hover:bg-slate-700">
+                        <Button variant="outline" onClick={() => setShowDialog(false)} className="border-border text-foreground hover:bg-muted">
                             Annulla
                         </Button>
                         <Button onClick={handleSave} disabled={!formName.trim()} className="bg-[#FF6B35] hover:bg-[#e55a2b]">
