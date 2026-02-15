@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { documentService, DocumentCategory } from '@/services/documentService';
 
 export interface ComplianceStatus {
-    category_code: string;
-    category_name_it: string;
-    category_name_en: string;
-    mandatory_for_ce: boolean;
-    active_count: number;
-    compliance_status: 'compliant' | 'missing' | 'optional';
-    last_updated: string | null;
+    category: DocumentCategory;
+    category_label: string;
+    mandatory: boolean;
+    exists: boolean;
+    documentId?: string;
 }
 
-export function useCompliance(organizationId: string) {
+const CATEGORY_LABELS: Record<string, { it: string; en: string }> = {
+    technical_manual: { it: 'Manuale Tecnico', en: 'Technical Manual' },
+    risk_assessment: { it: 'Valutazione dei Rischi', en: 'Risk Assessment' },
+    ce_declaration: { it: 'Dichiarazione CE', en: 'CE Declaration' },
+    electrical_schema: { it: 'Schema Elettrico', en: 'Electrical Schema' },
+    maintenance_manual: { it: 'Manuale di Manutenzione', en: 'Maintenance Manual' },
+};
+
+export function useCompliance(organizationId: string, machineId?: string) {
     const [status, setStatus] = useState < ComplianceStatus[] > ([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState < Error | null > (null);
@@ -20,23 +26,25 @@ export function useCompliance(organizationId: string) {
         if (organizationId) {
             loadCompliance();
         }
-    }, [organizationId]);
+    }, [organizationId, machineId]);
 
     async function loadCompliance() {
         setLoading(true);
         setError(null);
 
         try {
-            const { data, error: queryError } = await supabase
-                .from('document_compliance_status')
-                .select('*')
-                .eq('organization_id', organizationId)
-                .eq('mandatory_for_ce', true)
-                .order('category_code');
+            const result = await documentService.getMandatoryDocumentStatus(
+                organizationId,
+                machineId
+            );
 
-            if (queryError) throw queryError;
-
-            setStatus(data || []);
+            setStatus(result.map(r => ({
+                category: r.category,
+                category_label: CATEGORY_LABELS[r.category]?.it || r.category,
+                mandatory: true,
+                exists: r.exists,
+                documentId: r.documentId,
+            })));
         } catch (err: any) {
             setError(err);
             console.error('Error loading compliance:', err);
@@ -45,8 +53,8 @@ export function useCompliance(organizationId: string) {
         }
     }
 
-    const compliantCount = status.filter(s => s.compliance_status === 'compliant').length;
-    const missingCount = status.filter(s => s.compliance_status === 'missing').length;
+    const compliantCount = status.filter(s => s.exists).length;
+    const missingCount = status.filter(s => !s.exists).length;
     const totalRequired = status.length;
     const compliancePercentage = totalRequired > 0
         ? Math.round((compliantCount / totalRequired) * 100)
