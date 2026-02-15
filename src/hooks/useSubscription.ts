@@ -3,37 +3,35 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface SubscriptionInfo {
     plan: "starter" | "professional" | "enterprise" | null;
-    status: "trialing" | "active" | "past_due" | "canceled" | null;
-    period: "monthly" | "yearly" | null;
-    trialEndsAt: Date | null;
-    currentPeriodEnd: Date | null;
+    status: "trial" | "active" | "suspended" | "cancelled" | null;
     isTrialing: boolean;
     isActive: boolean;
-    isPastDue: boolean;
-    isCanceled: boolean;
-    trialDaysLeft: number;
+    isSuspended: boolean;
+    isCancelled: boolean;
     canAddUser: boolean;
-    canAddEquipment: boolean;
+    canAddMachine: boolean;
     maxUsers: number;
-    maxEquipment: number;
+    maxPlants: number;
+    maxMachines: number;
     currentUsers: number;
-    currentEquipment: number;
-    tenantId: string | null;
-    tenantName: string | null;
+    currentMachines: number;
+    organizationId: string | null;
+    organizationName: string | null;
 }
 
-const PLAN_LIMITS: Record<string, { maxUsers: number; maxEquipment: number }> = {
-    starter: { maxUsers: 6, maxEquipment: 100 },
-    professional: { maxUsers: 19, maxEquipment: 500 },
-    enterprise: { maxUsers: 9999, maxEquipment: 9999 },
+const PLAN_LIMITS: Record<string, { maxUsers: number; maxPlants: number; maxMachines: number }> = {
+    starter: { maxUsers: 6, maxPlants: 2, maxMachines: 100 },
+    professional: { maxUsers: 19, maxPlants: 10, maxMachines: 500 },
+    enterprise: { maxUsers: 9999, maxPlants: 9999, maxMachines: 9999 },
 };
 
 const defaultSubscription: SubscriptionInfo = {
-    plan: null, status: null, period: null, trialEndsAt: null, currentPeriodEnd: null,
-    isTrialing: false, isActive: false, isPastDue: false, isCanceled: false,
-    trialDaysLeft: 0, canAddUser: false, canAddEquipment: false,
-    maxUsers: 0, maxEquipment: 0, currentUsers: 0, currentEquipment: 0,
-    tenantId: null, tenantName: null,
+    plan: null, status: null,
+    isTrialing: false, isActive: false, isSuspended: false, isCancelled: false,
+    canAddUser: false, canAddMachine: false,
+    maxUsers: 0, maxPlants: 0, maxMachines: 0,
+    currentUsers: 0, currentMachines: 0,
+    organizationId: null, organizationName: null,
 };
 
 export function useSubscription() {
@@ -49,46 +47,67 @@ export function useSubscription() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { setSubscription(defaultSubscription); return; }
 
-            const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("id", user.id).single();
-            if (!profile?.tenant_id) { setSubscription(defaultSubscription); return; }
+            // Get user's default organization from profile
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("default_organization_id")
+                .eq("id", user.id)
+                .single();
 
-            const { data: tenant, error: tenantError } = await supabase.from("tenants").select("*").eq("id", profile.tenant_id).single();
-            if (tenantError || !tenant) { setError("Could not load subscription info"); return; }
+            if (!profile?.default_organization_id) {
+                setSubscription(defaultSubscription);
+                return;
+            }
 
-            const [usersResult, equipmentResult] = await Promise.all([
-                supabase.from("profiles").select("id", { count: "exact", head: true }).eq("tenant_id", profile.tenant_id),
-                supabase.from("equipment").select("id", { count: "exact", head: true }).eq("tenant_id", profile.tenant_id),
+            const orgId = profile.default_organization_id;
+
+            // Get organization details
+            const { data: org, error: orgError } = await supabase
+                .from("organizations")
+                .select("*")
+                .eq("id", orgId)
+                .single();
+
+            if (orgError || !org) {
+                setError("Could not load subscription info");
+                return;
+            }
+
+            // Count current users and machines
+            const [usersResult, machinesResult] = await Promise.all([
+                supabase
+                    .from("organization_memberships")
+                    .select("id", { count: "exact", head: true })
+                    .eq("organization_id", orgId)
+                    .eq("is_active", true),
+                supabase
+                    .from("machines")
+                    .select("id", { count: "exact", head: true })
+                    .eq("organization_id", orgId)
+                    .eq("is_archived", false),
             ]);
 
             const currentUsers = usersResult.count || 0;
-            const currentEquipment = equipmentResult.count || 0;
+            const currentMachines = machinesResult.count || 0;
 
-            let trialDaysLeft = 0;
-            if (tenant.trial_ends_at) {
-                const trialEnd = new Date(tenant.trial_ends_at);
-                trialDaysLeft = Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-            }
-
-            const planLimits = PLAN_LIMITS[tenant.subscription_plan || "starter"] || PLAN_LIMITS.starter;
-            const maxUsers = tenant.max_users || planLimits.maxUsers;
-            const maxEquipment = tenant.max_equipment || planLimits.maxEquipment;
+            const planLimits = PLAN_LIMITS[org.subscription_plan || "starter"] || PLAN_LIMITS.starter;
+            const maxUsers = org.max_users || planLimits.maxUsers;
+            const maxPlants = org.max_plants || planLimits.maxPlants;
+            const maxMachines = org.max_machines || planLimits.maxMachines;
 
             setSubscription({
-                plan: tenant.subscription_plan,
-                status: tenant.subscription_status,
-                period: tenant.subscription_period,
-                trialEndsAt: tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null,
-                currentPeriodEnd: tenant.current_period_end ? new Date(tenant.current_period_end) : null,
-                isTrialing: tenant.subscription_status === "trialing",
-                isActive: tenant.subscription_status === "active",
-                isPastDue: tenant.subscription_status === "past_due",
-                isCanceled: tenant.subscription_status === "canceled",
-                trialDaysLeft,
+                plan: org.subscription_plan,
+                status: org.subscription_status,
+                isTrialing: org.subscription_status === "trial",
+                isActive: org.subscription_status === "active",
+                isSuspended: org.subscription_status === "suspended",
+                isCancelled: org.subscription_status === "cancelled",
                 canAddUser: currentUsers < maxUsers,
-                canAddEquipment: currentEquipment < maxEquipment,
-                maxUsers, maxEquipment, currentUsers, currentEquipment,
-                tenantId: tenant.id,
-                tenantName: tenant.name,
+                canAddMachine: currentMachines < maxMachines,
+                maxUsers, maxPlants, maxMachines,
+                currentUsers, currentMachines,
+                organizationId: org.id,
+                organizationName: org.name,
             });
         } catch (err: any) {
             console.error("Error fetching subscription:", err);
@@ -101,14 +120,14 @@ export function useSubscription() {
     useEffect(() => { fetchSubscription(); }, [fetchSubscription]);
 
     const createCheckoutSession = async (plan: string, period: "monthly" | "yearly") => {
-        if (!subscription.tenantId) throw new Error("No tenant ID found");
+        if (!subscription.organizationId) throw new Error("No organization ID found");
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Not authenticated");
 
         const response = await fetch("/api/stripe/create-checkout-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tenantId: subscription.tenantId, userId: user.id, plan, period }),
+            body: JSON.stringify({ organizationId: subscription.organizationId, userId: user.id, plan, period }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Failed to create checkout session");
@@ -116,11 +135,11 @@ export function useSubscription() {
     };
 
     const openCustomerPortal = async () => {
-        if (!subscription.tenantId) throw new Error("No tenant ID found");
+        if (!subscription.organizationId) throw new Error("No organization ID found");
         const response = await fetch("/api/stripe/create-portal-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tenantId: subscription.tenantId }),
+            body: JSON.stringify({ organizationId: subscription.organizationId }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Failed to create portal session");
