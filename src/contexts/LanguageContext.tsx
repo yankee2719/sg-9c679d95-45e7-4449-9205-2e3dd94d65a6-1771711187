@@ -175,6 +175,9 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.performMaintenance": "Esegui Manutenzione",
         "maintenance.notFound": "Manutenzione non trovata",
         "maintenance.loadError": "Errore durante il caricamento",
+        "maintenance.confirmDelete": "Sei sicuro di voler eliminare questa manutenzione?",
+        "maintenance.deleteSuccess": "Manutenzione eliminata con successo",
+        "maintenance.deleteError": "Errore durante l'eliminazione",
 
         // Checklists
         "checklists.title": "Checklist",
@@ -232,6 +235,12 @@ const translations: Record<Language, Record<string, string>> = {
         "users.lastLogin": "Ultimo Accesso",
         "users.noUsers": "Nessun utente trovato",
         "users.deleteConfirm": "Sei sicuro di voler eliminare questo utente?",
+        "users.createNew": "Crea Nuovo Utente",
+        "users.createDescription": "Inserisci i dati del nuovo utente",
+        "users.fullName": "Nome Completo",
+        "users.supervisor": "Supervisore",
+        "user.role.Technician": "Tecnico",
+        "user.role.Supervisor": "Supervisore",
 
         // Settings
         "settings.title": "Impostazioni",
@@ -459,6 +468,9 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.performMaintenance": "Perform Maintenance",
         "maintenance.notFound": "Maintenance not found",
         "maintenance.loadError": "Error loading maintenance",
+        "maintenance.confirmDelete": "Are you sure you want to delete this maintenance?",
+        "maintenance.deleteSuccess": "Maintenance deleted successfully",
+        "maintenance.deleteError": "Error deleting maintenance",
 
         // Checklists
         "checklists.title": "Checklists",
@@ -516,6 +528,12 @@ const translations: Record<Language, Record<string, string>> = {
         "users.lastLogin": "Last Login",
         "users.noUsers": "No users found",
         "users.deleteConfirm": "Are you sure you want to delete this user?",
+        "users.createNew": "Create New User",
+        "users.createDescription": "Enter the new user details",
+        "users.fullName": "Full Name",
+        "users.supervisor": "Supervisor",
+        "user.role.Technician": "Technician",
+        "user.role.Supervisor": "Supervisor",
 
         // Settings
         "settings.title": "Settings",
@@ -740,6 +758,9 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.performMaintenance": "Effectuer la Maintenance",
         "maintenance.notFound": "Maintenance non trouvée",
         "maintenance.loadError": "Erreur lors du chargement",
+        "maintenance.confirmDelete": "Êtes-vous sûr de vouloir supprimer cette maintenance?",
+        "maintenance.deleteSuccess": "Maintenance supprimée avec succès",
+        "maintenance.deleteError": "Erreur lors de la suppression",
 
         // Checklists
         "checklists.title": "Checklists",
@@ -797,6 +818,12 @@ const translations: Record<Language, Record<string, string>> = {
         "users.lastLogin": "Dernière Connexion",
         "users.noUsers": "Aucun utilisateur trouvé",
         "users.deleteConfirm": "Êtes-vous sûr de vouloir supprimer cet utilisateur?",
+        "users.createNew": "Créer Nouvel Utilisateur",
+        "users.createDescription": "Entrez les données du nouvel utilisateur",
+        "users.fullName": "Nom Complet",
+        "users.supervisor": "Superviseur",
+        "user.role.Technician": "Technicien",
+        "user.role.Supervisor": "Superviseur",
 
         // Settings
         "settings.title": "Paramètres",
@@ -1025,6 +1052,9 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.performMaintenance": "Realizar Mantenimiento",
         "maintenance.notFound": "Mantenimiento no encontrado",
         "maintenance.loadError": "Error al cargar",
+        "maintenance.confirmDelete": "¿Está seguro de eliminar este mantenimiento?",
+        "maintenance.deleteSuccess": "Mantenimiento eliminado exitosamente",
+        "maintenance.deleteError": "Error al eliminar mantenimiento",
 
         // Checklists
         "checklists.title": "Checklist",
@@ -1082,6 +1112,12 @@ const translations: Record<Language, Record<string, string>> = {
         "users.lastLogin": "Último Acceso",
         "users.noUsers": "No se encontraron usuarios",
         "users.deleteConfirm": "¿Está seguro de que desea eliminar este usuario?",
+        "users.createNew": "Crear Nuevo Usuario",
+        "users.createDescription": "Ingrese los datos del nuevo usuario",
+        "users.fullName": "Nombre Completo",
+        "users.supervisor": "Supervisor",
+        "user.role.Technician": "Técnico",
+        "user.role.Supervisor": "Supervisor",
 
         // Settings
         "settings.title": "Configuración",
@@ -1142,7 +1178,7 @@ const translations: Record<Language, Record<string, string>> = {
     },
 };
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
 
 const languageNames: Record<Language, string> = {
     it: "Italiano",
@@ -1159,7 +1195,7 @@ export const languageFlags: Record<Language, string> = {
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState<Language>("it");
+    const [language, setLanguageState] = useState < Language > ("it");
 
     useEffect(() => {
         const savedLanguage = localStorage.getItem("app-language") as Language;
