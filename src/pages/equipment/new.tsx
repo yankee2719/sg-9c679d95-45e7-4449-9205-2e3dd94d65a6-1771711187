@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,11 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Building2, Factory } from "lucide-react";
 import { createEquipment } from "@/services/equipmentService";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+interface Plant {
+  id: string;
+  name: string;
+}
+
+interface Department {
+  id: string;
+  name: string;
+  plant_id: string;
+}
 
 export default function NewEquipment() {
   const router = useRouter();
@@ -19,6 +31,11 @@ export default function NewEquipment() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [showQRGenerator, setShowQRGenerator] = useState(false);
+
+  // Plants & departments
+  const [plants, setPlants] = useState<Plant[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -31,8 +48,41 @@ export default function NewEquipment() {
     location: "",
     status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
     technical_specs: "",
-    notes: ""
+    notes: "",
+    plant_id: "",
+    department_id: "",
   });
+
+  // Load plants & departments
+  useEffect(() => {
+    const loadHierarchy = async () => {
+      const { data: plantsData } = await supabase
+        .from("plants")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (plantsData) setPlants(plantsData);
+
+      const { data: deptsData } = await supabase
+        .from("departments")
+        .select("id, name, plant_id")
+        .eq("is_active", true)
+        .order("name");
+      if (deptsData) setDepartments(deptsData);
+    };
+    loadHierarchy();
+  }, []);
+
+  // Filter departments when plant changes
+  useEffect(() => {
+    if (formData.plant_id) {
+      setFilteredDepartments(departments.filter(d => d.plant_id === formData.plant_id));
+    } else {
+      setFilteredDepartments([]);
+    }
+    // Reset department if plant changes
+    setFormData(prev => ({ ...prev, department_id: "" }));
+  }, [formData.plant_id, departments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +100,9 @@ export default function NewEquipment() {
         model: formData.model.trim() || null,
         serial_number: formData.serial_number.trim() || null,
         technical_specs: formData.technical_specs.trim() || null,
-        notes: formData.notes.trim() || null
+        notes: formData.notes.trim() || null,
+        plant_id: formData.plant_id || null,
+        department_id: formData.department_id || null,
       });
 
       toast({
@@ -128,6 +180,59 @@ export default function NewEquipment() {
                     className="bg-slate-700 border-slate-600 text-white"
                     required
                   />
+                </div>
+
+                {/* Stabilimento */}
+                <div className="space-y-2">
+                  <Label className="text-white flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-blue-400" />
+                    Stabilimento
+                  </Label>
+                  <Select
+                    value={formData.plant_id}
+                    onValueChange={(value) => setFormData({ ...formData, plant_id: value })}
+                  >
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                      <SelectValue placeholder="Seleziona stabilimento..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      {plants.map((plant) => (
+                        <SelectItem key={plant.id} value={plant.id} className="text-white">
+                          {plant.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Reparto */}
+                <div className="space-y-2">
+                  <Label className="text-white flex items-center gap-2">
+                    <Factory className="w-4 h-4 text-amber-400" />
+                    Reparto
+                  </Label>
+                  <Select
+                    value={formData.department_id}
+                    onValueChange={(value) => setFormData({ ...formData, department_id: value })}
+                    disabled={!formData.plant_id || filteredDepartments.length === 0}
+                  >
+                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                      <SelectValue placeholder={
+                        !formData.plant_id
+                          ? "Seleziona prima uno stabilimento"
+                          : filteredDepartments.length === 0
+                            ? "Nessun reparto disponibile"
+                            : "Seleziona reparto..."
+                      } />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      {filteredDepartments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id} className="text-white">
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
