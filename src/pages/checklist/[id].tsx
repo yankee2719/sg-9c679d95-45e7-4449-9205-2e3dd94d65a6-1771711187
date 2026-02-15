@@ -417,7 +417,7 @@ export default function ChecklistExecutionPage() {
                     <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
                             <div className="space-y-1">
-                                <CardTitle className="text-2xl text-white">{checklist.name}</CardTitle>
+                                <CardTitle className="text-2xl text-foreground">{checklist.name}</CardTitle>
                                 <p className="text-sm text-gray-400">Esecuzione checklist</p>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -431,7 +431,7 @@ export default function ChecklistExecutionPage() {
                 <Card className="bg-gray-800 border-gray-700">
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-white">Progresso</CardTitle>
+                            <CardTitle className="text-foreground">Progresso</CardTitle>
                             <Badge
                                 variant={progress === 100 ? "default" : "secondary"}
                                 className={`text-lg px-3 py-1 ${progressBadgeClass}`}
@@ -463,7 +463,7 @@ export default function ChecklistExecutionPage() {
                                         />
                                         <div className="flex-1 space-y-2">
                                             <div className="flex items-start justify-between gap-2">
-                                                <p className={`font-medium ${item.checked ? "text-green-400 line-through" : "text-white"}`}>
+                                                <p className={`font-medium ${item.checked ? "text-green-400 line-through" : "text-foreground"}`}>
                                                     {item.title}
                                                 </p>
                                                 {item.is_required && (
@@ -505,7 +505,7 @@ export default function ChecklistExecutionPage() {
                                                     value={item.notes || ""}
                                                     onChange={(e) => handleNoteChange(index, e.target.value)}
                                                     placeholder="Aggiungi note..."
-                                                    className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500"
+                                                    className="bg-gray-900 border-gray-700 text-foreground placeholder:text-gray-500"
                                                     rows={2}
                                                 />
                                             </div>
@@ -523,7 +523,7 @@ export default function ChecklistExecutionPage() {
                     <Button
                         variant="outline"
                         onClick={() => router.push("/dashboard")}
-                        className="flex-1 bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+                        className="flex-1 bg-gray-800 border-gray-700 text-foreground hover:bg-gray-700"
                     >
                         <ChevronLeft className="h-4 w-4 mr-2" />
                         Annulla
@@ -540,30 +540,30 @@ export default function ChecklistExecutionPage() {
             </div>
 
             <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
-                <DialogContent className="bg-gray-800 border-gray-700 text-white">
+                <DialogContent className="bg-gray-800 border-gray-700 text-foreground">
                     <DialogHeader>
-                        <DialogTitle className="text-white">Conferma il completamento della checklist</DialogTitle>
+                        <DialogTitle className="text-foreground">Conferma il completamento della checklist</DialogTitle>
                     </DialogHeader>
 
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                                 <p className="text-gray-400">Tecnico</p>
-                                <p className="font-medium text-white">{technicianName}</p>
+                                <p className="font-medium text-foreground">{technicianName}</p>
                             </div>
                             <div>
                                 <p className="text-gray-400">Data e Ora</p>
-                                <p className="font-medium text-white">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                                <p className="font-medium text-foreground">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
                             </div>
                             <div>
                                 <p className="text-gray-400">Durata</p>
-                                <p className="font-medium text-white">
+                                <p className="font-medium text-foreground">
                                     {Math.round((new Date().getTime() - startTime.getTime()) / 1000 / 60)} minuti
                                 </p>
                             </div>
                             <div>
                                 <p className="text-gray-400">Checklist</p>
-                                <p className="font-medium text-white">{checklist.name}</p>
+                                <p className="font-medium text-foreground">{checklist.name}</p>
                             </div>
                         </div>
 
@@ -573,7 +573,7 @@ export default function ChecklistExecutionPage() {
                                 value={technicianName}
                                 onChange={(e) => setTechnicianName(e.target.value)}
                                 placeholder="Inserisci il tuo nome"
-                                className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500"
+                                className="bg-gray-900 border-gray-700 text-foreground placeholder:text-gray-500"
                             />
                         </div>
 
@@ -598,7 +598,7 @@ export default function ChecklistExecutionPage() {
                                 type="button"
                                 variant="outline"
                                 onClick={clearSignature}
-                                className="w-full bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+                                className="w-full bg-gray-700 border-gray-600 text-foreground hover:bg-gray-600"
                             >
                                 Cancella Firma
                             </Button>
@@ -624,7 +624,7 @@ export default function ChecklistExecutionPage() {
                             type="button"
                             variant="outline"
                             onClick={() => setShowSignatureDialog(false)}
-                            className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+                            className="bg-gray-700 border-gray-600 text-foreground hover:bg-gray-600"
                         >
                             Annulla
                         </Button>
