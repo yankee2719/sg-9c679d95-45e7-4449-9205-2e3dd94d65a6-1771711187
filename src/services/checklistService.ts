@@ -1,222 +1,179 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { User, Session } from "@supabase/supabase-js";
 
-async function getMyTenantId(): Promise<string | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", user.id)
-        .single();
-    return data?.tenant_id || null;
+export interface AuthUser {
+    id: string;
+    email: string;
+    user_metadata?: any;
+    created_at?: string;
 }
 
-export const checklistService = {
-    async getAllChecklists() {
-        const { data, error } = await supabase
-            .from("checklists")
-            .select(`
-        *,
-        items:checklist_items(*)
-      `)
-            .order("created_at", { ascending: false });
+export interface AuthError {
+    message: string;
+    code?: string;
+}
 
-        if (error) {
-            console.error("Error fetching checklists:", error);
-            throw error;
-        }
+// Dynamic URL Helper
+const getURL = () => {
+    let url = process?.env?.NEXT_PUBLIC_VERCEL_URL ??
+        process?.env?.NEXT_PUBLIC_SITE_URL ??
+        'http://localhost:3000'
 
-        return data || [];
+    if (!url) {
+        url = 'http://localhost:3000';
+    }
+
+    url = url.startsWith('http') ? url : `https://${url}`
+    url = url.endsWith('/') ? url : `${url}/`
+
+    return url
+}
+
+export const authService = {
+    async getCurrentUser(): Promise<AuthUser | null> {
+        const { data: { user } } = await supabase.auth.getUser();
+        return user ? {
+            id: user.id,
+            email: user.email || "",
+            user_metadata: user.user_metadata,
+            created_at: user.created_at
+        } : null;
     },
 
-    async getChecklistById(id: string) {
-        const { data, error } = await supabase
-            .from("checklists")
-            .select(`
-        *,
-        items:checklist_items(*)
-      `)
-            .eq("id", id)
-            .single();
-
-        if (error) {
-            console.error("Error fetching checklist:", error);
-            throw error;
-        }
-
-        return data;
+    async getCurrentSession(): Promise<Session | null> {
+        const { data: { session } } = await supabase.auth.getSession();
+        return session;
     },
 
-    async createChecklist(checklist: {
-        name: string;
-        description?: string;
-        is_active?: boolean;
-    }) {
-        const tenantId = await getMyTenantId();
-        const { data, error } = await supabase
-            .from("checklists")
-            .insert({ ...checklist, tenant_id: tenantId })
-            .select()
-            .single();
+    async signUp(email: string, password: string, fullName?: string): Promise<{ user: AuthUser | null; error: AuthError | null }> {
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${getURL()}auth/confirm-email`,
+                    data: {
+                        display_name: fullName || email.split("@")[0],
+                        first_name: fullName?.split(' ')[0] || email.split("@")[0],
+                        last_name: fullName?.split(' ').slice(1).join(' ') || null,
+                    }
+                }
+            });
 
-        if (error) {
-            console.error("Error creating checklist:", error);
-            throw error;
-        }
+            if (error) {
+                return { user: null, error: { message: error.message, code: error.status?.toString() } };
+            }
 
-        return data;
-    },
+            const authUser = data.user ? {
+                id: data.user.id,
+                email: data.user.email || "",
+                user_metadata: data.user.user_metadata,
+                created_at: data.user.created_at
+            } : null;
 
-    async updateChecklist(id: string, updates: {
-        name?: string;
-        description?: string;
-        is_active?: boolean;
-    }) {
-        const { data, error } = await supabase
-            .from("checklists")
-            .update(updates)
-            .eq("id", id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error updating checklist:", error);
-            throw error;
-        }
-
-        return data;
-    },
-
-    async deleteChecklist(id: string) {
-        await supabase
-            .from("checklist_items")
-            .delete()
-            .eq("checklist_id", id);
-
-        const { error } = await supabase
-            .from("checklists")
-            .delete()
-            .eq("id", id);
-
-        if (error) {
-            console.error("Error deleting checklist:", error);
-            throw error;
+            return { user: authUser, error: null };
+        } catch (error) {
+            return {
+                user: null,
+                error: { message: "An unexpected error occurred during sign up" }
+            };
         }
     },
 
-    async addChecklistItem(item: {
-        checklist_id: string;
-        title: string;
-        description?: string;
-        item_type: string;
-        is_required?: boolean;
-        order_index: number;
-    }) {
-        const tenantId = await getMyTenantId();
-        const { data, error } = await supabase
-            .from("checklist_items")
-            .insert({ ...item, tenant_id: tenantId })
-            .select()
-            .single();
+    async signIn(email: string, password: string): Promise<{ user: AuthUser | null; error: AuthError | null }> {
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-        if (error) {
-            console.error("Error adding checklist item:", error);
-            throw error;
-        }
+            if (error) {
+                return { user: null, error: { message: error.message, code: error.status?.toString() } };
+            }
 
-        return data;
-    },
+            const authUser = data.user ? {
+                id: data.user.id,
+                email: data.user.email || "",
+                user_metadata: data.user.user_metadata,
+                created_at: data.user.created_at
+            } : null;
 
-    async updateChecklistItem(id: string, updates: {
-        title?: string;
-        description?: string;
-        item_type?: string;
-        is_required?: boolean;
-        order_index?: number;
-    }) {
-        const { data, error } = await supabase
-            .from("checklist_items")
-            .update(updates)
-            .eq("id", id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error updating checklist item:", error);
-            throw error;
-        }
-
-        return data;
-    },
-
-    async deleteChecklistItem(id: string) {
-        const { error } = await supabase
-            .from("checklist_items")
-            .delete()
-            .eq("id", id);
-
-        if (error) {
-            console.error("Error deleting checklist item:", error);
-            throw error;
+            return { user: authUser, error: null };
+        } catch (error) {
+            return {
+                user: null,
+                error: { message: "An unexpected error occurred during sign in" }
+            };
         }
     },
 
-    async createExecution(execution: {
-        checklist_id: string;
-        executed_by: string;
-        equipment_id?: string;
-        status: string;
-    }) {
-        const tenantId = await getMyTenantId();
-        const { data, error } = await supabase
-            .from("checklist_executions")
-            .insert({ ...execution, tenant_id: tenantId })
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error creating execution:", error);
-            throw error;
+    async signOut(): Promise<{ error: AuthError | null }> {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                return { error: { message: error.message } };
+            }
+            return { error: null };
+        } catch (error) {
+            return {
+                error: { message: "An unexpected error occurred during sign out" }
+            };
         }
-
-        return data;
     },
 
-    async getExecutionById(id: string) {
-        const { data, error } = await supabase
-            .from("checklist_executions")
-            .select(`
-        *,
-        checklist:checklists(*),
-        equipment:equipment(*),
-        executor:profiles(*)
-      `)
-            .eq("id", id)
-            .single();
-
-        if (error) {
-            console.error("Error fetching execution:", error);
-            throw error;
-        }
-
-        return data;
+    async logout(): Promise<{ error: AuthError | null }> {
+        return this.signOut();
     },
 
-    async updateExecution(id: string, updates: any) {
-        const { data, error } = await supabase
-            .from("checklist_executions")
-            .update(updates)
-            .eq("id", id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error updating execution:", error);
-            throw error;
+    async resetPassword(email: string): Promise<{ error: AuthError | null }> {
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${getURL()}auth/reset-password`,
+            });
+            if (error) {
+                return { error: { message: error.message } };
+            }
+            return { error: null };
+        } catch (error) {
+            return {
+                error: { message: "An unexpected error occurred during password reset" }
+            };
         }
+    },
 
-        return data;
+    async confirmEmail(token: string, type: 'signup' | 'recovery' | 'email_change' = 'signup'): Promise<{ user: AuthUser | null; error: AuthError | null }> {
+        try {
+            const { data, error } = await supabase.auth.verifyOtp({
+                token_hash: token,
+                type: type
+            });
+
+            if (error) {
+                return { user: null, error: { message: error.message, code: error.status?.toString() } };
+            }
+
+            const authUser = data.user ? {
+                id: data.user.id,
+                email: data.user.email || "",
+                user_metadata: data.user.user_metadata,
+                created_at: data.user.created_at
+            } : null;
+
+            return { user: authUser, error: null };
+        } catch (error) {
+            return {
+                user: null,
+                error: { message: "An unexpected error occurred during email confirmation" }
+            };
+        }
+    },
+
+    onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+        return supabase.auth.onAuthStateChange(callback);
+    },
+
+    async ensureProfile(userId: string, email: string): Promise<{ error: AuthError | null }> {
+        // Profile is created automatically by handle_new_user trigger
+        return { error: null };
     }
 };
-
-export default checklistService;
