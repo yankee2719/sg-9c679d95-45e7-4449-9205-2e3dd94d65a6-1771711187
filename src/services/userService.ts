@@ -1,231 +1,134 @@
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+// src/services/userService.ts
+// ============================================================================
+// USER SERVICE — replaces old userService.ts
+// ============================================================================
+// Changes:
+//   - Removed: tenant_id, UserRole (admin/supervisor/technician)
+//   - Now: role comes from organization_memberships, not profiles
+//   - getUsersByTenant() → getOrganizationMembers() (in organizationService)
+//   - Role management is per-organization, not global
+//   - Profile is just personal info, no role field
+// ============================================================================
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
-type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
+import { supabase } from '@/integrations/supabase/client';
 
-export type UserRole = "admin" | "supervisor" | "technician";
-
-export interface UserWithTenant extends Profile {
-  tenants?: {
+export interface UserProfile {
     id: string;
-    name: string;
-  };
+    first_name: string | null;
+    last_name: string | null;
+    display_name: string | null;
+    email: string | null;
+    phone: string | null;
+    avatar_url: string | null;
+    language: string;
+    timezone: string;
+    default_organization_id: string | null;
+    last_sign_in_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UpdateProfileParams {
+    first_name?: string;
+    last_name?: string;
+    display_name?: string;
+    phone?: string;
+    avatar_url?: string;
+    language?: string;
+    timezone?: string;
 }
 
 export const userService = {
-  // Get current user profile
-  async getCurrentProfile(): Promise<Profile | null> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+    async getCurrentProfile(): Promise<UserProfile | null> {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error fetching current profile:", error);
-      return null;
-    }
-  },
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
 
-  // Get user by ID
-  async getUserById(id: string): Promise<Profile | null> {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", id)
-        .single();
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error fetching current profile:', error);
+            return null;
+        }
+    },
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error fetching user by ID:", error);
-      return null;
-    }
-  },
+    async getUserById(id: string): Promise<UserProfile | null> {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-  // Get current user role
-  async getCurrentUserRole(): Promise<UserRole | null> {
-    try {
-      const profile = await this.getCurrentProfile();
-      return (profile?.role as UserRole) || null;
-    } catch (error) {
-      console.error("Error fetching current user role:", error);
-      return null;
-    }
-  },
+        if (error) return null;
+        return data;
+    },
 
-  // Check if current user is admin
-  async isAdmin(): Promise<boolean> {
-    try {
-      const role = await this.getCurrentUserRole();
-      return role === "admin";
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-      return false;
-    }
-  },
+    async updateProfile(updates: UpdateProfileParams): Promise<UserProfile | null> {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
 
-  // Check if current user is supervisor or admin
-  async isSupervisorOrAdmin(): Promise<boolean> {
-    try {
-      const role = await this.getCurrentUserRole();
-      return role === "admin" || role === "supervisor";
-    } catch (error) {
-      console.error("Error checking supervisor status:", error);
-      return false;
-    }
-  },
+            const { data, error } = await supabase
+                .from('profiles')
+                .update(updates)
+                .eq('id', user.id)
+                .select()
+                .single();
 
-  // Get users by tenant
-  async getUsersByTenant(tenantId?: string): Promise<UserWithTenant[]> {
-    try {
-      let query = supabase
-        .from("profiles")
-        .select(`
-          *,
-          tenants (
-            id,
-            name
-          )
-        `)
-        .order("created_at", { ascending: false });
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            return null;
+        }
+    },
 
-      if (tenantId) {
-        query = query.eq("tenant_id", tenantId);
-      }
+    async updateAvatar(file: File): Promise<string | null> {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
 
-      const { data, error } = await query;
+            const ext = file.name.split('.').pop();
+            const path = `avatars/${user.id}.${ext}`;
 
-      if (error) throw error;
-      return (data as unknown as UserWithTenant[]) || [];
-    } catch (error) {
-      console.error("Error fetching users by tenant:", error);
-      return [];
-    }
-  },
+            const { error: uploadError } = await supabase.storage
+                .from('documents')
+                .upload(path, file, { upsert: true });
 
-  // Get users by role within tenant
-  async getUsersByRole(role: UserRole, tenantId?: string): Promise<UserWithTenant[]> {
-    try {
-      let query = supabase
-        .from("profiles")
-        .select(`
-          *,
-          tenants (
-            id,
-            name
-          )
-        `)
-        .eq("role", role)
-        .order("full_name");
+            if (uploadError) throw uploadError;
 
-      if (tenantId) {
-        query = query.eq("tenant_id", tenantId);
-      }
+            const { data: { publicUrl } } = supabase.storage
+                .from('documents')
+                .getPublicUrl(path);
 
-      const { data, error } = await query;
+            await this.updateProfile({ avatar_url: publicUrl });
+            return publicUrl;
+        } catch (error) {
+            console.error('Error updating avatar:', error);
+            return null;
+        }
+    },
 
-      if (error) throw error;
-      return (data as unknown as UserWithTenant[]) || [];
-    } catch (error) {
-      console.error("Error fetching users by role:", error);
-      return [];
-    }
-  },
+    async setDefaultOrganization(organizationId: string): Promise<boolean> {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return false;
 
-  // Get technicians (for supervisors to manage)
-  async getTechnicians(tenantId?: string): Promise<UserWithTenant[]> {
-    return this.getUsersByRole("technician", tenantId);
-  },
+            const { error } = await supabase
+                .from('profiles')
+                .update({ default_organization_id: organizationId })
+                .eq('id', user.id);
 
-  // Get supervisors (for admins to manage)
-  async getSupervisors(tenantId?: string): Promise<UserWithTenant[]> {
-    return this.getUsersByRole("supervisor", tenantId);
-  },
-
-  // Update user profile
-  async updateProfile(id: string, updates: ProfileUpdate): Promise<Profile | null> {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      return null;
-    }
-  },
-
-  // Update user role (admin only)
-  async updateUserRole(userId: string, role: UserRole): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ role })
-        .eq("id", userId);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error updating user role:", error);
-      return false;
-    }
-  },
-
-  // Assign user to tenant (admin only)
-  async assignUserToTenant(userId: string, tenantId: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ tenant_id: tenantId })
-        .eq("id", userId);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error assigning user to tenant:", error);
-      return false;
-    }
-  },
-
-  // Delete user (admin only)
-  async deleteUser(userId: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", userId);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error deleting user:", error);
-      return false;
-    }
-  },
-
-  // Check if user can manage another user (role hierarchy)
-  canManageUser(managerRole: UserRole, targetRole: UserRole): boolean {
-    if (managerRole === "admin") {
-      return true; // Admin can manage everyone
-    }
-    if (managerRole === "supervisor") {
-      return targetRole === "technician"; // Supervisors can only manage technicians
-    }
-    return false; // Technicians cannot manage anyone
-  },
+            return !error;
+        } catch {
+            return false;
+        }
+    },
 };
