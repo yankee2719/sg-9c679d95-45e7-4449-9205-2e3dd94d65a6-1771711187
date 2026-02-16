@@ -1,370 +1,351 @@
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
-import Link from "next/link";
-import { supabase } from "@/integrations/supabase/client";
-import { getProfileData, getNotificationCount } from "@/lib/supabaseHelpers";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
-import {
-    LayoutDashboard,
-    Wrench,
-    ClipboardList,
-    Settings,
-    LogOut,
-    Menu,
-    Bell,
-    Users,
-    QrCode,
-    ChevronDown,
-    BarChart3,
-    CalendarClock
-} from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+-- ============================================================
+    --MIGRATION: Simplify roles to admin / supervisor / technician
+--NUCLEAR VERSION: drops ALL RLS policies, rebuilds everything
+-- ============================================================
 
-// New schema roles
-type UserRole = "owner" | "admin" | "plant_manager" | "technician" | "viewer";
+    BEGIN;
 
-interface MainLayoutProps {
-    children: React.ReactNode;
-    userRole?: string;
-}
+-- ══════════════════════════════════════════════════════════════
+--PHASE 1: Convert membership role to text
+-- ══════════════════════════════════════════════════════════════
+ALTER TABLE organization_memberships 
+  ALTER COLUMN role DROP DEFAULT,
+    ALTER COLUMN role TYPE text USING role:: text;
 
-export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
-    const router = useRouter();
-    const { t } = useLanguage();
-    const [user, setUser] = useState < { id: string; email?: string } | null > (null);
-    const [profile, setProfile] = useState < { full_name?: string; role?: string } | null > (null);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [unreadNotifications, setUnreadNotifications] = useState(0);
+UPDATE organization_memberships SET role = CASE role
+    WHEN 'owner'         THEN 'admin'
+    WHEN 'plant_manager' THEN 'supervisor'
+    WHEN 'viewer'        THEN 'technician'
+    ELSE role
+END;
 
-    useEffect(() => {
-        const loadUser = async () => {
-            try {
-                const { data: { user: authUser } } = await supabase.auth.getUser();
-                if (!authUser) return;
+-- ══════════════════════════════════════════════════════════════
+--PHASE 2: Drop ALL policies(every single one)
+-- ══════════════════════════════════════════════════════════════
+DROP POLICY IF EXISTS "platform_admins_select" ON platform_admins;
+DROP POLICY IF EXISTS "org_select" ON organizations;
+DROP POLICY IF EXISTS "org_insert" ON organizations;
+DROP POLICY IF EXISTS "org_update" ON organizations;
+DROP POLICY IF EXISTS "membership_select" ON organization_memberships;
+DROP POLICY IF EXISTS "membership_insert" ON organization_memberships;
+DROP POLICY IF EXISTS "membership_update" ON organization_memberships;
+DROP POLICY IF EXISTS "membership_delete" ON organization_memberships;
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
+DROP POLICY IF EXISTS "plants_select" ON plants;
+DROP POLICY IF EXISTS "plants_insert" ON plants;
+DROP POLICY IF EXISTS "plants_update" ON plants;
+DROP POLICY IF EXISTS "plant_assign_select" ON plant_assignments;
+DROP POLICY IF EXISTS "plant_assign_insert" ON plant_assignments;
+DROP POLICY IF EXISTS "plant_assign_delete" ON plant_assignments;
+DROP POLICY IF EXISTS "machines_select" ON machines;
+DROP POLICY IF EXISTS "machines_insert" ON machines;
+DROP POLICY IF EXISTS "machines_update" ON machines;
+DROP POLICY IF EXISTS "events_select" ON machine_events;
+DROP POLICY IF EXISTS "events_insert" ON machine_events;
+DROP POLICY IF EXISTS "documents_select" ON documents;
+DROP POLICY IF EXISTS "documents_insert" ON documents;
+DROP POLICY IF EXISTS "documents_update" ON documents;
+DROP POLICY IF EXISTS "doc_versions_select" ON document_versions;
+DROP POLICY IF EXISTS "doc_versions_insert" ON document_versions;
+DROP POLICY IF EXISTS "doc_audit_select" ON document_audit_logs;
+DROP POLICY IF EXISTS "doc_audit_insert" ON document_audit_logs;
+DROP POLICY IF EXISTS "maint_plans_select" ON maintenance_plans;
+DROP POLICY IF EXISTS "maint_plans_insert" ON maintenance_plans;
+DROP POLICY IF EXISTS "maint_plans_update" ON maintenance_plans;
+DROP POLICY IF EXISTS "work_orders_select" ON work_orders;
+DROP POLICY IF EXISTS "work_orders_insert" ON work_orders;
+DROP POLICY IF EXISTS "work_orders_update" ON work_orders;
+DROP POLICY IF EXISTS "checklists_select" ON checklists;
+DROP POLICY IF EXISTS "checklists_insert" ON checklists;
+DROP POLICY IF EXISTS "checklists_update" ON checklists;
+DROP POLICY IF EXISTS "checklist_items_select" ON checklist_items;
+DROP POLICY IF EXISTS "checklist_items_insert" ON checklist_items;
+DROP POLICY IF EXISTS "checklist_items_update" ON checklist_items;
+DROP POLICY IF EXISTS "checklist_exec_select" ON checklist_executions;
+DROP POLICY IF EXISTS "checklist_exec_insert" ON checklist_executions;
+DROP POLICY IF EXISTS "notifications_select" ON notifications;
+DROP POLICY IF EXISTS "notifications_update" ON notifications;
+DROP POLICY IF EXISTS "notifications_insert" ON notifications;
+DROP POLICY IF EXISTS "storage_documents_select" ON storage.objects;
+DROP POLICY IF EXISTS "storage_documents_insert" ON storage.objects;
+DROP POLICY IF EXISTS "storage_documents_update" ON storage.objects;
+DROP POLICY IF EXISTS "storage_documents_delete" ON storage.objects;
 
-                setUser({ id: authUser.id, email: authUser.email });
+-- ══════════════════════════════════════════════════════════════
+--PHASE 3: Drop functions that reference org_role
+-- ══════════════════════════════════════════════════════════════
+DROP FUNCTION IF EXISTS has_org_role(UUID, org_role);
+DROP FUNCTION IF EXISTS has_plant_access(UUID);
 
-                const profileData = await getProfileData(authUser.id);
-                if (profileData) {
-                    setProfile({
-                        full_name: profileData.full_name || undefined,
-                        role: profileData.role || undefined
-                    });
-                }
+-- ══════════════════════════════════════════════════════════════
+--PHASE 4: Swap enum
+-- ══════════════════════════════════════════════════════════════
+DROP TYPE org_role;
+CREATE TYPE org_role AS ENUM('admin', 'supervisor', 'technician');
 
-                const count = await getNotificationCount(authUser.id);
-                setUnreadNotifications(count);
-            } catch (error) {
-                console.error("Error loading user:", error);
-            }
-        };
-        loadUser();
-    }, []);
+ALTER TABLE organization_memberships 
+  ALTER COLUMN role TYPE org_role USING role:: org_role,
+    ALTER COLUMN role SET DEFAULT 'technician':: org_role,
+        ALTER COLUMN role SET NOT NULL;
 
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/login");
-    };
+-- ══════════════════════════════════════════════════════════════
+--PHASE 5: Rebuild functions
+-- ══════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION has_org_role(
+    p_org_id UUID,
+    p_min_role org_role
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_role_rank INTEGER;
+    v_user_rank INTEGER;
+BEGIN
+v_role_rank:= CASE p_min_role
+        WHEN 'admin' THEN 3
+        WHEN 'supervisor' THEN 2
+        WHEN 'technician' THEN 1
+END;
+    SELECT CASE om.role
+        WHEN 'admin' THEN 3
+        WHEN 'supervisor' THEN 2
+        WHEN 'technician' THEN 1
+        ELSE 0
+    END INTO v_user_rank
+    FROM organization_memberships om
+    WHERE om.organization_id = p_org_id
+    AND om.user_id = auth.uid()
+    AND om.is_active = true;
+    RETURN COALESCE(v_user_rank >= v_role_rank, false);
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
-    const getInitials = (name: string) => {
-        if (!name) return "U";
-        return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    };
+CREATE OR REPLACE FUNCTION has_plant_access(p_plant_id UUID)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_org_id UUID;
+    v_user_role org_role;
+BEGIN
+    SELECT organization_id INTO v_org_id FROM plants WHERE id = p_plant_id;
+    IF v_org_id IS NULL THEN RETURN false; END IF;
+    SELECT role INTO v_user_role
+    FROM organization_memberships
+    WHERE organization_id = v_org_id AND user_id = auth.uid() AND is_active = true;
+    IF v_user_role IS NULL THEN RETURN false; END IF;
+    IF v_user_role = 'admin' THEN RETURN true; END IF;
+    RETURN EXISTS(
+    SELECT 1 FROM plant_assignments
+        WHERE plant_id = p_plant_id AND user_id = auth.uid() AND is_active = true
+);
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
-    // Helper: check if current role has admin-level access
-    const isAdminLevel = (role: string) => {
-        return ["owner", "admin"].includes(role);
-    };
+GRANT EXECUTE ON FUNCTION has_org_role TO authenticated;
+GRANT EXECUTE ON FUNCTION has_plant_access TO authenticated;
 
-    const isManagerLevel = (role: string) => {
-        return ["owner", "admin", "plant_manager"].includes(role);
-    };
+-- ══════════════════════════════════════════════════════════════
+--PHASE 6: Rebuild ALL policies(identical to original schema)
+-- ══════════════════════════════════════════════════════════════
 
-    // Navigation items based on role
-    const getNavigationItems = () => {
-        const currentRole = profile?.role || userRole;
+--Platform admins
+CREATE POLICY "platform_admins_select" ON platform_admins
+    FOR SELECT USING(user_id = auth.uid() OR is_platform_admin());
 
-        const allNav = [
-            { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, show: true },
-            { name: t("nav.equipment"), href: "/equipment", icon: Wrench, show: currentRole !== "viewer" },
-            { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, show: currentRole !== "viewer" },
-            { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, show: isManagerLevel(currentRole) },
-            { name: t("nav.scanner"), href: "/scanner", icon: QrCode, show: currentRole !== "viewer" },
-            { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, show: isManagerLevel(currentRole) },
-        ];
+--Organizations
+CREATE POLICY "org_select" ON organizations
+    FOR SELECT USING(id = ANY(get_user_org_ids()) OR is_platform_admin());
+CREATE POLICY "org_insert" ON organizations
+    FOR INSERT WITH CHECK(auth.uid() IS NOT NULL);
+CREATE POLICY "org_update" ON organizations
+    FOR UPDATE USING(has_org_role(id, 'admin') OR is_platform_admin());
 
-        return allNav.filter(item => item.show);
-    };
+--Memberships
+CREATE POLICY "membership_select" ON organization_memberships
+    FOR SELECT USING(
+    user_id = auth.uid()
+        OR organization_id = ANY(get_user_org_ids())
+        OR is_platform_admin()
+);
+CREATE POLICY "membership_insert" ON organization_memberships
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'admin') OR is_platform_admin());
+CREATE POLICY "membership_update" ON organization_memberships
+    FOR UPDATE USING(has_org_role(organization_id, 'admin') OR is_platform_admin());
+CREATE POLICY "membership_delete" ON organization_memberships
+    FOR DELETE USING(
+    user_id = auth.uid()
+        OR has_org_role(organization_id, 'admin')
+        OR is_platform_admin()
+);
 
-    const navigation = getNavigationItems();
+--Profiles
+CREATE POLICY "profiles_select" ON profiles
+    FOR SELECT USING(
+    id = auth.uid()
+        OR id IN(
+        SELECT om2.user_id FROM organization_memberships om2
+            WHERE om2.organization_id = ANY(get_user_org_ids()) AND om2.is_active = true
+    )
+        OR is_platform_admin()
+);
+CREATE POLICY "profiles_update" ON profiles
+    FOR UPDATE USING(id = auth.uid());
 
-    const adminNavigation = [
-        { name: t("nav.users"), href: "/admin/users", icon: Users },
-    ];
+--Plants
+CREATE POLICY "plants_select" ON plants
+    FOR SELECT USING(has_plant_access(id) OR is_platform_admin());
+CREATE POLICY "plants_insert" ON plants
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'admin') OR is_platform_admin());
+CREATE POLICY "plants_update" ON plants
+    FOR UPDATE USING(has_org_role(organization_id, 'admin') OR is_platform_admin());
 
-    const isActive = (href: string) => {
-        if (href === "/dashboard") return router.pathname === "/dashboard";
-        return router.pathname.startsWith(href);
-    };
+--Plant assignments
+CREATE POLICY "plant_assign_select" ON plant_assignments
+    FOR SELECT USING(
+    user_id = auth.uid()
+        OR plant_id IN(SELECT id FROM plants WHERE organization_id = ANY(get_user_org_ids()))
+        OR is_platform_admin()
+);
+CREATE POLICY "plant_assign_insert" ON plant_assignments
+    FOR INSERT WITH CHECK(
+    EXISTS(SELECT 1 FROM plants p WHERE p.id = plant_id AND has_org_role(p.organization_id, 'admin'))
+        OR is_platform_admin()
+);
+CREATE POLICY "plant_assign_delete" ON plant_assignments
+    FOR DELETE USING(
+    EXISTS(SELECT 1 FROM plants p WHERE p.id = plant_id AND has_org_role(p.organization_id, 'admin'))
+        OR is_platform_admin()
+);
 
-    const canAccessAdmin = () => {
-        const currentRole = profile?.role || userRole;
-        return isAdminLevel(currentRole);
-    };
+--Machines
+CREATE POLICY "machines_select" ON machines
+    FOR SELECT USING(has_plant_access(plant_id) OR is_platform_admin());
+CREATE POLICY "machines_insert" ON machines
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'admin') OR is_platform_admin());
+CREATE POLICY "machines_update" ON machines
+    FOR UPDATE USING(has_org_role(organization_id, 'technician') OR is_platform_admin());
 
-    const getRoleLabel = (role: string) => {
-        const labels: Record<string, string> = {
-            owner: "Proprietario",
-            admin: "Amministratore",
-            plant_manager: "Plant Manager",
-            technician: "Tecnico",
-            viewer: "Viewer",
-        };
-        return labels[role] || role;
-    };
+--Machine events
+CREATE POLICY "events_select" ON machine_events
+    FOR SELECT USING(organization_id = ANY(get_user_org_ids()) OR is_platform_admin());
+CREATE POLICY "events_insert" ON machine_events
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'technician') OR is_platform_admin());
 
-    const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
-        <nav className={`flex ${mobile ? "flex-col" : "flex-col"} gap-1`}>
-            {navigation.map((item) => {
-                const active = isActive(item.href);
-                return (
-                    <Link
-                        key={item.name}
-                        href={item.href}
-                        onClick={() => mobile && setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                ? "bg-primary text-primary-foreground shadow-lg"
-                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                            }`}
-                    >
-                        <item.icon className="w-5 h-5" />
-                        {item.name}
-                    </Link>
-                );
-            })}
+--Documents
+CREATE POLICY "documents_select" ON documents
+    FOR SELECT USING(organization_id = ANY(get_user_org_ids()) OR is_platform_admin());
+CREATE POLICY "documents_insert" ON documents
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'technician') OR is_platform_admin());
+CREATE POLICY "documents_update" ON documents
+    FOR UPDATE USING(has_org_role(organization_id, 'admin') OR is_platform_admin());
 
-            {canAccessAdmin() && (
-                <>
-                    <div className="my-3 px-4">
-                        <div className="h-px bg-border" />
-                    </div>
-                    <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        {t("nav.users")}
-                    </p>
-                    {adminNavigation.map((item) => {
-                        const active = isActive(item.href);
-                        return (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                onClick={() => mobile && setMobileMenuOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                        ? "bg-primary text-primary-foreground shadow-lg"
-                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                                    }`}
-                            >
-                                <item.icon className="w-5 h-5" />
-                                {item.name}
-                            </Link>
-                        );
-                    })}
-                </>
-            )}
-        </nav>
+--Document versions
+CREATE POLICY "doc_versions_select" ON document_versions
+    FOR SELECT USING(
+    EXISTS(SELECT 1 FROM documents d WHERE d.id = document_id
+            AND(d.organization_id = ANY(get_user_org_ids()) OR is_platform_admin()))
+);
+CREATE POLICY "doc_versions_insert" ON document_versions
+    FOR INSERT WITH CHECK(
+    EXISTS(SELECT 1 FROM documents d WHERE d.id = document_id
+            AND(has_org_role(d.organization_id, 'technician') OR is_platform_admin()))
+);
+
+--Document audit logs
+CREATE POLICY "doc_audit_select" ON document_audit_logs
+    FOR SELECT USING(
+    EXISTS(SELECT 1 FROM documents d WHERE d.id = document_id
+            AND(d.organization_id = ANY(get_user_org_ids()) OR is_platform_admin()))
+);
+CREATE POLICY "doc_audit_insert" ON document_audit_logs
+    FOR INSERT WITH CHECK(true);
+
+--Maintenance plans
+CREATE POLICY "maint_plans_select" ON maintenance_plans
+    FOR SELECT USING(organization_id = ANY(get_user_org_ids()) OR is_platform_admin());
+CREATE POLICY "maint_plans_insert" ON maintenance_plans
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'admin') OR is_platform_admin());
+CREATE POLICY "maint_plans_update" ON maintenance_plans
+    FOR UPDATE USING(has_org_role(organization_id, 'admin') OR is_platform_admin());
+
+--Work orders
+CREATE POLICY "work_orders_select" ON work_orders
+    FOR SELECT USING(organization_id = ANY(get_user_org_ids()) OR is_platform_admin());
+CREATE POLICY "work_orders_insert" ON work_orders
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'technician') OR is_platform_admin());
+CREATE POLICY "work_orders_update" ON work_orders
+    FOR UPDATE USING(
+    (assigned_to = auth.uid() OR has_org_role(organization_id, 'admin') OR is_platform_admin())
+        AND status != 'completed'
     );
 
-    return (
-        <div className="min-h-screen bg-background">
-            {/* Desktop Sidebar */}
-            <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-border bg-card">
-                {/* Logo */}
-                <div className="p-6 border-b border-border">
-                    <Link href="/dashboard" className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg">
-                            <Wrench className="w-5 h-5 text-primary-foreground" />
-                        </div>
-                        <div>
-                            <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                            <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
-                        </div>
-                    </Link>
-                </div>
+--Checklists
+CREATE POLICY "checklists_select" ON checklists
+    FOR SELECT USING(organization_id = ANY(get_user_org_ids()) OR is_platform_admin());
+CREATE POLICY "checklists_insert" ON checklists
+    FOR INSERT WITH CHECK(has_org_role(organization_id, 'admin') OR is_platform_admin());
+CREATE POLICY "checklists_update" ON checklists
+    FOR UPDATE USING(has_org_role(organization_id, 'admin') OR is_platform_admin());
 
-                {/* Navigation */}
-                <div className="flex-1 p-4 overflow-y-auto">
-                    <NavLinks />
-                </div>
+--Checklist items
+CREATE POLICY "checklist_items_select" ON checklist_items
+    FOR SELECT USING(
+    EXISTS(SELECT 1 FROM checklists c WHERE c.id = checklist_id
+            AND(c.organization_id = ANY(get_user_org_ids()) OR is_platform_admin()))
+);
+CREATE POLICY "checklist_items_insert" ON checklist_items
+    FOR INSERT WITH CHECK(
+    EXISTS(SELECT 1 FROM checklists c WHERE c.id = checklist_id
+            AND(has_org_role(c.organization_id, 'admin') OR is_platform_admin()))
+);
+CREATE POLICY "checklist_items_update" ON checklist_items
+    FOR UPDATE USING(
+    EXISTS(SELECT 1 FROM checklists c WHERE c.id = checklist_id
+            AND(has_org_role(c.organization_id, 'admin') OR is_platform_admin()))
+);
 
-                {/* User Section */}
-                <div className="p-4 border-t border-border">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent transition-colors">
-                                <Avatar className="w-10 h-10 bg-primary">
-                                    <AvatarFallback className="text-primary-foreground font-semibold">
-                                        {getInitials(profile?.full_name || user?.email || "")}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 text-left min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">
-                                        {profile?.full_name || user?.email?.split("@")[0] || "User"}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">{getRoleLabel(profile?.role || userRole)}</p>
-                                </div>
-                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem asChild className="cursor-pointer">
-                                <Link href="/settings" className="flex items-center gap-2">
-                                    <Settings className="w-4 h-4" />
-                                    {t("nav.settings")}
-                                </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={handleLogout}
-                                className="text-destructive focus:text-destructive cursor-pointer"
-                            >
-                                <LogOut className="w-4 h-4 mr-2" />
-                                {t("nav.logout")}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </aside>
+--Checklist executions
+CREATE POLICY "checklist_exec_select" ON checklist_executions
+    FOR SELECT USING(
+    EXISTS(SELECT 1 FROM checklists c WHERE c.id = checklist_id
+            AND(c.organization_id = ANY(get_user_org_ids()) OR is_platform_admin()))
+);
+CREATE POLICY "checklist_exec_insert" ON checklist_executions
+    FOR INSERT WITH CHECK(
+    EXISTS(SELECT 1 FROM checklists c WHERE c.id = checklist_id
+            AND(has_org_role(c.organization_id, 'technician') OR is_platform_admin()))
+);
 
-            {/* Mobile Header */}
-            <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-card border-b border-border flex items-center justify-between px-4">
-                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                    <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                            <Menu className="w-6 h-6" />
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="left" className="w-72 p-0 bg-card border-border">
-                        {/* Mobile Logo */}
-                        <div className="p-6 border-b border-border">
-                            <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
-                                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                                    <Wrench className="w-5 h-5 text-primary-foreground" />
-                                </div>
-                                <div>
-                                    <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                                    <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
-                                </div>
-                            </Link>
-                        </div>
+--Notifications
+CREATE POLICY "notifications_select" ON notifications
+    FOR SELECT USING(user_id = auth.uid());
+CREATE POLICY "notifications_update" ON notifications
+    FOR UPDATE USING(user_id = auth.uid());
+CREATE POLICY "notifications_insert" ON notifications
+    FOR INSERT WITH CHECK(true);
 
-                        {/* Mobile Navigation */}
-                        <div className="p-4">
-                            <NavLinks mobile />
-                        </div>
+--Storage
+CREATE POLICY "storage_documents_select" ON storage.objects
+    FOR SELECT USING(
+    bucket_id = 'documents' AND(storage.foldername(name))[1]:: uuid = ANY(get_user_org_ids())
+);
+CREATE POLICY "storage_documents_insert" ON storage.objects
+    FOR INSERT WITH CHECK(
+    bucket_id = 'documents' AND(storage.foldername(name))[1]:: uuid = ANY(get_user_org_ids())
+);
+CREATE POLICY "storage_documents_update" ON storage.objects
+    FOR UPDATE USING(
+    bucket_id = 'documents' AND(storage.foldername(name))[1]:: uuid = ANY(get_user_org_ids())
+);
+CREATE POLICY "storage_documents_delete" ON storage.objects
+    FOR DELETE USING(
+    bucket_id = 'documents' AND(storage.foldername(name))[1]:: uuid = ANY(get_user_org_ids())
+);
 
-                        {/* Mobile User Section */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
-                            <div className="flex items-center gap-3 mb-4">
-                                <Avatar className="w-10 h-10 bg-primary">
-                                    <AvatarFallback className="text-primary-foreground font-semibold">
-                                        {getInitials(profile?.full_name || user?.email || "")}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">
-                                        {profile?.full_name || user?.email?.split("@")[0] || "User"}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">{getRoleLabel(profile?.role || userRole)}</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1"
-                                    onClick={() => {
-                                        setMobileMenuOpen(false);
-                                        router.push("/settings");
-                                    }}
-                                >
-                                    <Settings className="w-4 h-4 mr-2" />
-                                    {t("nav.settings")}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={handleLogout}
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    </SheetContent>
-                </Sheet>
+COMMIT;
 
-                {/* Mobile Logo */}
-                <Link href="/dashboard" className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                        <Wrench className="w-4 h-4 text-primary-foreground" />
-                    </div>
-                    <span className="font-bold text-foreground">MACHINA</span>
-                </Link>
+-- ══════════════════════════════════════════════════════════════
+--VERIFY
+-- ══════════════════════════════════════════════════════════════
+SELECT unnest(enum_range(NULL:: org_role)) AS available_roles;
+SELECT user_id, role, is_active FROM organization_memberships;
 
-                {/* Mobile Actions */}
-                <div className="flex items-center gap-2">
-                    <ThemeSwitch />
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-foreground relative"
-                        onClick={() => router.push("/notifications")}
-                    >
-                        <Bell className="w-5 h-5" />
-                        {unreadNotifications > 0 && (
-                            <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
-                                {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                            </Badge>
-                        )}
-                    </Button>
-                </div>
-            </header>
-
-            {/* Main Content */}
-            <main className="lg:ml-64 min-h-screen">
-                {/* Desktop Top Bar */}
-                <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
-                    <ThemeSwitch />
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-foreground relative"
-                        onClick={() => router.push("/notifications")}
-                    >
-                        <Bell className="w-5 h-5" />
-                        {unreadNotifications > 0 && (
-                            <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
-                                {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                            </Badge>
-                        )}
-                    </Button>
-                </header>
-
-                {/* Page Content */}
-                <div className="p-4 lg:p-8 pt-20 lg:pt-8">
-                    {children}
-                </div>
-            </main>
-        </div>
-    );
-}
