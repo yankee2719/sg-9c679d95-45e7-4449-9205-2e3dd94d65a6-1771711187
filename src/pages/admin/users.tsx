@@ -186,10 +186,19 @@ export default function AdminUsersPage() {
 
         setCreating(true);
         try {
+            // Get current session token
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+                throw new Error("Sessione scaduta, effettua di nuovo il login");
+            }
+
             // Call API to create user + membership
             const res = await fetch("/api/users/create", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session.access_token}`,
+                },
                 body: JSON.stringify({
                     email: newUserData.email,
                     password: newUserData.password,
