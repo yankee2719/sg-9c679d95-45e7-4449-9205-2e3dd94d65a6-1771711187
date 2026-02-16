@@ -27,7 +27,8 @@ import {
     QrCode,
     ChevronDown,
     BarChart3,
-    CalendarClock
+    CalendarClock,
+    Building2
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -92,6 +93,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
         const allNav = [
             { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, show: true },
+            { name: "Stabilimenti", href: "/plants", icon: Building2, show: isManagerLevel(currentRole) },
             { name: t("nav.equipment"), href: "/equipment", icon: Wrench, show: true },
             { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, show: true },
             { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, show: isManagerLevel(currentRole) },
