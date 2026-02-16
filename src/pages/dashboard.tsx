@@ -47,11 +47,9 @@ export default function DashboardPage() {
     // User stats for admin
     const [userStats, setUserStats] = useState({
         total: 0,
-        owners: 0,
         admins: 0,
-        plant_managers: 0,
-        technicians: 0,
-        viewers: 0
+        supervisors: 0,
+        technicians: 0
     });
 
     const [machineList, setMachineList] = useState < any[] > ([]);
@@ -79,7 +77,7 @@ export default function DashboardPage() {
 
                 await Promise.all([
                     loadDashboardData(),
-                    (profileData?.role === "owner" || profileData?.role === "admin") ? loadUserStats() : Promise.resolve()
+                    profileData?.role === "admin" ? loadUserStats() : Promise.resolve()
                 ]);
             } catch (error) {
                 console.error("Error loading dashboard data:", error);
@@ -170,11 +168,9 @@ export default function DashboardPage() {
 
             setUserStats({
                 total: members?.length || 0,
-                owners: members?.filter(m => m.role === "owner").length || 0,
                 admins: members?.filter(m => m.role === "admin").length || 0,
-                plant_managers: members?.filter(m => m.role === "plant_manager").length || 0,
+                supervisors: members?.filter(m => m.role === "supervisor").length || 0,
                 technicians: members?.filter(m => m.role === "technician").length || 0,
-                viewers: members?.filter(m => m.role === "viewer").length || 0,
             });
         } catch (error) {
             console.error("Error loading user stats:", error);
@@ -183,11 +179,9 @@ export default function DashboardPage() {
 
     const getRoleLabel = (role: string) => {
         const labels: Record<string, string> = {
-            owner: "Proprietario",
             admin: t("users.admin"),
-            plant_manager: "Plant Manager",
+            supervisor: language === "it" ? "Supervisore" : language === "fr" ? "Superviseur" : language === "es" ? "Supervisor" : "Supervisor",
             technician: t("users.technician"),
-            viewer: "Viewer",
         };
         return labels[role] || role;
     };
@@ -276,7 +270,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* ADMIN CARD - Only visible for owner/admin */}
-                {(userRole === "owner" || userRole === "admin") && (
+                {userRole === "admin" && (
                     <div className="rounded-3xl bg-gradient-to-br from-purple-500 via-purple-600 to-indigo-600 p-8 text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-500/30"
                         onClick={() => router.push("/admin/users")}>
                         <div className="relative z-10">
@@ -296,7 +290,7 @@ export default function DashboardPage() {
                             </div>
 
                             {/* User Stats */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                                     <Users className="w-5 h-5 text-white/80 mb-2" />
                                     <div className="text-2xl font-bold mb-1">{userStats.total}</div>
@@ -304,18 +298,13 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                                     <Shield className="w-5 h-5 text-white/80 mb-2" />
-                                    <div className="text-2xl font-bold mb-1">{userStats.admins + userStats.owners}</div>
+                                    <div className="text-2xl font-bold mb-1">{userStats.admins}</div>
                                     <div className="text-sm text-purple-100 font-medium">{t("users.admin")}</div>
                                 </div>
                                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                                     <Users className="w-5 h-5 text-white/80 mb-2" />
-                                    <div className="text-2xl font-bold mb-1">{userStats.plant_managers}</div>
-                                    <div className="text-sm text-purple-100 font-medium">Plant Manager</div>
-                                </div>
-                                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
-                                    <Wrench className="w-5 h-5 text-white/80 mb-2" />
-                                    <div className="text-2xl font-bold mb-1">{userStats.technicians}</div>
-                                    <div className="text-sm text-purple-100 font-medium">{t("users.technician")}</div>
+                                    <div className="text-2xl font-bold mb-1">{userStats.supervisors}</div>
+                                    <div className="text-sm text-purple-100 font-medium">{getRoleLabel("supervisor")}</div>
                                 </div>
                             </div>
                         </div>
