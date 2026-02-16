@@ -123,13 +123,13 @@ export default async function handler(
 
         organizationId = org.id;
 
-        // ── Step 4: Create membership (user = owner) ─────────────────
+        // ── Step 4: Create membership (user = admin) ─────────────────
         const { error: membershipError } = await supabaseAdmin
             .from('organization_memberships')
             .insert({
                 organization_id: organizationId,
                 user_id: authUserId,
-                role: 'owner',
+                role: 'admin',
                 is_active: true,
                 accepted_at: new Date().toISOString(),
             });
