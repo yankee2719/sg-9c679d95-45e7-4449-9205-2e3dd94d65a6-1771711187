@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { getProfileData } from "@/lib/supabaseHelpers";
 import {
     Select,
     SelectContent,
@@ -32,7 +33,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { apiClient } from "@/lib/apiClient";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
     UserPlus,
@@ -48,19 +48,14 @@ import {
     Building2,
 } from "lucide-react";
 
-interface User {
+interface MemberUser {
     id: string;
+    user_id: string;
     email: string;
-    full_name: string | null;
+    display_name: string | null;
     role: "admin" | "supervisor" | "technician";
     is_active: boolean;
-    created_at: string;
-    tenant_id: string | null;
-}
-
-interface Tenant {
-    id: string;
-    name: string;
+    accepted_at: string | null;
 }
 
 export default function AdminUsersPage() {
@@ -68,14 +63,14 @@ export default function AdminUsersPage() {
     const { toast } = useToast();
     const { t } = useLanguage();
 
-    const [currentUserRole, setCurrentUserRole] = useState < "admin" | "supervisor" | "technician" | null > (null);
+    const [currentUserRole, setCurrentUserRole] = useState < string | null > (null);
     const [currentUserId, setCurrentUserId] = useState < string | null > (null);
-    const [currentTenantId, setCurrentTenantId] = useState < string | null > (null);
-    const [currentTenantName, setCurrentTenantName] = useState < string > ("");
+    const [currentOrgId, setCurrentOrgId] = useState < string | null > (null);
+    const [currentOrgName, setCurrentOrgName] = useState < string > ("");
     const [loading, setLoading] = useState(true);
-    const [users, setUsers] = useState < User[] > ([]);
+    const [members, setMembers] = useState < MemberUser[] > ([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [filteredUsers, setFilteredUsers] = useState < User[] > ([]);
+    const [filteredMembers, setFilteredMembers] = useState < MemberUser[] > ([]);
 
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -84,67 +79,48 @@ export default function AdminUsersPage() {
         password: "",
         full_name: "",
         role: "technician" as "admin" | "supervisor" | "technician",
-        phone: "",
     });
 
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editing, setEditing] = useState(false);
-    const [selectedUser, setSelectedUser] = useState < User | null > (null);
-    const [editUserData, setEditUserData] = useState({
-        full_name: "",
+    const [selectedMember, setSelectedMember] = useState < MemberUser | null > (null);
+    const [editData, setEditData] = useState({
+        display_name: "",
         role: "technician" as "admin" | "supervisor" | "technician",
         is_active: true,
     });
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
-    const [userToDelete, setUserToDelete] = useState < User | null > (null);
+    const [memberToDelete, setMemberToDelete] = useState < MemberUser | null > (null);
 
     useEffect(() => {
         const checkAccess = async () => {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                    router.push("/login");
-                    return;
-                }
+                if (!user) { router.push("/login"); return; }
 
-                // Get user profile with tenant info
-                const { data: profile, error: profileError } = await supabase
-                    .from("profiles")
-                    .select("role, tenant_id")
-                    .eq("id", user.id)
-                    .single();
-
-                if (profileError || !profile) {
-                    router.push("/login");
-                    return;
-                }
-
-                // Only admin and supervisor can access this page
-                if (profile.role !== "admin" && profile.role !== "supervisor") {
+                const profileData = await getProfileData(user.id);
+                if (!profileData || profileData.role !== "admin") {
                     router.push("/dashboard");
                     return;
                 }
 
-                setCurrentUserRole(profile.role as "admin" | "supervisor" | "technician");
+                setCurrentUserRole(profileData.role);
                 setCurrentUserId(user.id);
-                setCurrentTenantId(profile.tenant_id);
+                setCurrentOrgId(profileData.organizationId);
 
-                // Get tenant name
-                if (profile.tenant_id) {
-                    const { data: tenant } = await supabase
-                        .from("tenants")
+                // Get org name
+                if (profileData.organizationId) {
+                    const { data: org } = await supabase
+                        .from("organizations")
                         .select("name")
-                        .eq("id", profile.tenant_id)
+                        .eq("id", profileData.organizationId)
                         .single();
-
-                    if (tenant) {
-                        setCurrentTenantName(tenant.name);
-                    }
+                    if (org) setCurrentOrgName(org.name);
                 }
 
-                await loadUsers(profile.role as "admin" | "supervisor", profile.tenant_id);
+                await loadMembers(profileData.organizationId);
             } catch (error) {
                 console.error("Error checking access:", error);
                 router.push("/login");
@@ -152,162 +128,86 @@ export default function AdminUsersPage() {
                 setLoading(false);
             }
         };
-
         checkAccess();
     }, [router]);
 
     useEffect(() => {
-        if (searchQuery.trim() === "") {
-            setFilteredUsers(users);
+        if (!searchQuery.trim()) {
+            setFilteredMembers(members);
         } else {
-            const query = searchQuery.toLowerCase();
-            setFilteredUsers(
-                users.filter(
-                    (user) =>
-                        user.email?.toLowerCase().includes(query) ||
-                        user.full_name?.toLowerCase().includes(query) ||
-                        user.role?.toLowerCase().includes(query)
+            const q = searchQuery.toLowerCase();
+            setFilteredMembers(
+                members.filter(m =>
+                    m.email?.toLowerCase().includes(q) ||
+                    m.display_name?.toLowerCase().includes(q) ||
+                    m.role?.toLowerCase().includes(q)
                 )
             );
         }
-    }, [searchQuery, users]);
+    }, [searchQuery, members]);
 
-    const loadUsers = async (role: "admin" | "supervisor" | "technician", tenantId: string | null) => {
+    const loadMembers = async (orgId: string | null) => {
+        if (!orgId) return;
         try {
-            // Technicians shouldn't be on this page, but handle gracefully
-            if (role === "technician") {
-                setUsers([]);
-                return;
-            }
-
-            // Load users from same tenant only (RLS will enforce this)
+            // Get memberships with profile data via join
             const { data, error } = await supabase
-                .from("profiles")
-                .select("*")
-                .order("created_at", { ascending: false });
+                .from("organization_memberships")
+                .select("id, user_id, role, is_active, accepted_at, profiles!inner(display_name, email)")
+                .eq("organization_id", orgId)
+                .order("accepted_at", { ascending: false });
 
             if (error) throw error;
 
-            // Filter based on role hierarchy
-            let filteredData = data || [];
-
-            if (role === "supervisor") {
-                // Supervisors can only see technicians
-                filteredData = filteredData.filter(u => u.role === "technician");
-            }
-
-            setUsers(filteredData.map(u => ({
-                id: u.id,
-                email: u.email || "",
-                full_name: u.full_name,
-                role: u.role as "admin" | "supervisor" | "technician",
-                is_active: u.is_active ?? true,
-                created_at: u.created_at || "",
-                tenant_id: u.tenant_id,
+            setMembers((data || []).map((m: any) => ({
+                id: m.id,
+                user_id: m.user_id,
+                email: m.profiles?.email || "",
+                display_name: m.profiles?.display_name || null,
+                role: m.role,
+                is_active: m.is_active,
+                accepted_at: m.accepted_at,
             })));
         } catch (error) {
-            console.error("Error loading users:", error);
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.loadError"),
-            });
+            console.error("Error loading members:", error);
+            toast({ variant: "destructive", title: t("common.error"), description: t("users.loadError") });
         }
     };
 
-    // Get available roles based on current user's role
     const getAvailableRoles = (): ("admin" | "supervisor" | "technician")[] => {
-        if (currentUserRole === "admin") {
-            return ["supervisor", "technician"];
-        } else if (currentUserRole === "supervisor") {
-            return ["technician"];
-        }
-        return [];
+        return ["admin", "supervisor", "technician"];
     };
 
-    // ✅ FUNZIONE CORRETTA: Crea utente e aggiorna lista immediatamente
     const handleCreateUser = async () => {
         if (!newUserData.email || !newUserData.password) {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.emailPasswordRequired"),
-            });
+            toast({ variant: "destructive", title: t("common.error"), description: t("users.emailPasswordRequired") });
             return;
         }
-
-        // Validate role hierarchy
-        const availableRoles = getAvailableRoles();
-        if (!availableRoles.includes(newUserData.role)) {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotCreateRole"),
-            });
-            return;
-        }
+        if (!currentOrgId) return;
 
         setCreating(true);
         try {
-            console.log("🚀 Creazione utente:", newUserData.email);
-
-            const response = await apiClient.users.create({
-                email: newUserData.email,
-                password: newUserData.password,
-                full_name: newUserData.full_name || undefined,
-                role: newUserData.role,
+            // Call API to create user + membership
+            const res = await fetch("/api/users/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: newUserData.email,
+                    password: newUserData.password,
+                    full_name: newUserData.full_name || undefined,
+                    role: newUserData.role,
+                    organization_id: currentOrgId,
+                }),
             });
 
-            console.log("📥 Risposta API:", response);
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || "Creation failed");
 
-            if (!response.success || !response.data) {
-                throw new Error(response.error || "Errore creazione utente");
-            }
-
-            // ✅ CORRETTO: Estrai i dati dalla risposta (struttura: { message, user: { ... } })
-            const apiUser = response.data.user;
-
-            if (!apiUser) {
-                throw new Error("Risposta API non valida: manca user");
-            }
-
-            // ✅ Crea oggetto User per lo stato locale
-            const newUser: User = {
-                id: apiUser.id,
-                email: apiUser.email,
-                full_name: apiUser.full_name || newUserData.full_name || null,
-                role: apiUser.role || newUserData.role,
-                is_active: true,
-                created_at: new Date().toISOString(),
-                tenant_id: currentTenantId,
-            };
-
-            console.log("➕ Aggiungo utente alla lista:", newUser);
-
-            // ✅ AGGIUNGI SUBITO ALLA LISTA (ottimistico)
-            setUsers(prevUsers => [newUser, ...prevUsers]);
-
-            toast({
-                title: "✅ " + t("users.created"),
-                description: `${newUserData.email} ${t("users.createdSuccess")}`,
-            });
-
+            toast({ title: "✅ " + t("users.created"), description: `${newUserData.email}` });
             setCreateDialogOpen(false);
-            setNewUserData({
-                email: "",
-                password: "",
-                full_name: "",
-                role: "technician",
-                phone: "",
-            });
-
-            // Ricarica dopo un breve delay per sincronizzare
-            setTimeout(async () => {
-                await loadUsers(currentUserRole!, currentTenantId);
-            }, 500);
-
+            setNewUserData({ email: "", password: "", full_name: "", role: "technician" });
+            await loadMembers(currentOrgId);
         } catch (error: unknown) {
-            console.error("❌ Errore creazione utente:", error);
+            console.error("Error creating user:", error);
             toast({
                 variant: "destructive",
                 title: "❌ " + t("common.error"),
@@ -315,48 +215,39 @@ export default function AdminUsersPage() {
             });
         } finally {
             setCreating(false);
-            console.log("🏁 Fine handleCreateUser");
         }
     };
 
-    const handleEditUser = async () => {
-        if (!selectedUser) return;
-
-        // Validate role hierarchy
-        const availableRoles = getAvailableRoles();
-        if (editUserData.role !== selectedUser.role && !availableRoles.includes(editUserData.role)) {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotAssignRole"),
-            });
-            return;
-        }
-
+    const handleEditMember = async () => {
+        if (!selectedMember || !currentOrgId) return;
         setEditing(true);
         try {
-            const { error } = await supabase
-                .from("profiles")
+            // Update membership role + is_active
+            const { error: memError } = await supabase
+                .from("organization_memberships")
                 .update({
-                    full_name: editUserData.full_name,
-                    role: editUserData.role,
-                    is_active: editUserData.is_active,
+                    role: editData.role,
+                    is_active: editData.is_active,
+                    ...(editData.is_active ? {} : { deactivated_at: new Date().toISOString(), deactivated_by: currentUserId }),
                 })
-                .eq("id", selectedUser.id);
+                .eq("id", selectedMember.id);
 
-            if (error) throw error;
+            if (memError) throw memError;
 
-            toast({
-                title: "✅ " + t("users.updated"),
-                description: t("users.updatedSuccess"),
-            });
+            // Update profile display_name
+            if (editData.display_name !== selectedMember.display_name) {
+                await supabase
+                    .from("profiles")
+                    .update({ display_name: editData.display_name })
+                    .eq("id", selectedMember.user_id);
+            }
 
+            toast({ title: "✅ " + t("users.updated"), description: t("users.updatedSuccess") });
             setEditDialogOpen(false);
-            setSelectedUser(null);
-
-            await loadUsers(currentUserRole!, currentTenantId);
+            setSelectedMember(null);
+            await loadMembers(currentOrgId);
         } catch (error: unknown) {
-            console.error("Error updating user:", error);
+            console.error("Error updating member:", error);
             toast({
                 variant: "destructive",
                 title: "❌ " + t("common.error"),
@@ -367,50 +258,32 @@ export default function AdminUsersPage() {
         }
     };
 
-    const handleDeleteUser = async () => {
-        if (!userToDelete) return;
-
-        // Prevent deleting yourself
-        if (userToDelete.id === currentUserId) {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotDeleteSelf"),
-            });
-            return;
-        }
-
-        // Validate role hierarchy
-        if (currentUserRole === "supervisor" && userToDelete.role !== "technician") {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotDeleteRole"),
-            });
+    const handleDeactivateMember = async () => {
+        if (!memberToDelete || !currentOrgId) return;
+        if (memberToDelete.user_id === currentUserId) {
+            toast({ variant: "destructive", title: t("common.error"), description: t("users.cannotDeleteSelf") });
             return;
         }
 
         setDeleting(true);
         try {
-            // Deactivate user instead of deleting
             const { error } = await supabase
-                .from("profiles")
-                .update({ is_active: false })
-                .eq("id", userToDelete.id);
+                .from("organization_memberships")
+                .update({
+                    is_active: false,
+                    deactivated_at: new Date().toISOString(),
+                    deactivated_by: currentUserId,
+                })
+                .eq("id", memberToDelete.id);
 
             if (error) throw error;
 
-            toast({
-                title: "✅ " + t("users.deactivated"),
-                description: `${userToDelete.email} ${t("users.deactivatedSuccess")}`,
-            });
-
+            toast({ title: "✅ " + t("users.deactivated"), description: `${memberToDelete.email}` });
             setDeleteDialogOpen(false);
-            setUserToDelete(null);
-
-            await loadUsers(currentUserRole!, currentTenantId);
+            setMemberToDelete(null);
+            await loadMembers(currentOrgId);
         } catch (error: unknown) {
-            console.error("Error deactivating user:", error);
+            console.error("Error deactivating member:", error);
             toast({
                 variant: "destructive",
                 title: "❌ " + t("common.error"),
@@ -421,61 +294,45 @@ export default function AdminUsersPage() {
         }
     };
 
-    const openEditDialog = (user: User) => {
-        // Validate can edit this user
-        if (currentUserRole === "supervisor" && user.role !== "technician") {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotEditRole"),
-            });
-            return;
-        }
-
-        setSelectedUser(user);
-        setEditUserData({
-            full_name: user.full_name || "",
-            role: user.role,
-            is_active: user.is_active,
+    const openEditDialog = (member: MemberUser) => {
+        setSelectedMember(member);
+        setEditData({
+            display_name: member.display_name || "",
+            role: member.role,
+            is_active: member.is_active,
         });
         setEditDialogOpen(true);
     };
 
-    const openDeleteDialog = (user: User) => {
-        // Validate can delete this user
-        if (user.id === currentUserId) {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotDeleteSelf"),
-            });
+    const openDeleteDialog = (member: MemberUser) => {
+        if (member.user_id === currentUserId) {
+            toast({ variant: "destructive", title: t("common.error"), description: t("users.cannotDeleteSelf") });
             return;
         }
-
-        if (currentUserRole === "supervisor" && user.role !== "technician") {
-            toast({
-                variant: "destructive",
-                title: t("common.error"),
-                description: t("users.cannotDeleteRole"),
-            });
-            return;
-        }
-
-        setUserToDelete(user);
+        setMemberToDelete(member);
         setDeleteDialogOpen(true);
     };
 
     const getRoleBadge = (role: string) => {
         switch (role) {
             case "admin":
-                return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{t("users.roleAdmin")}</Badge>;
+                return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Amministratore</Badge>;
             case "supervisor":
-                return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">{t("users.roleSupervisor")}</Badge>;
+                return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Supervisore</Badge>;
             case "technician":
-                return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">{t("users.roleTechnician")}</Badge>;
+                return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Tecnico</Badge>;
             default:
                 return <Badge>{role}</Badge>;
         }
+    };
+
+    const getRoleLabel = (role: string) => {
+        const labels: Record<string, string> = {
+            admin: "Amministratore",
+            supervisor: "Supervisore",
+            technician: "Tecnico",
+        };
+        return labels[role] || role;
     };
 
     if (loading) {
@@ -490,7 +347,7 @@ export default function AdminUsersPage() {
 
     return (
         <MainLayout>
-            <SEO title={`${t("users.title")} - Maint Ops`} />
+            <SEO title={`${t("users.title")} - MACHINA`} />
 
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -500,22 +357,17 @@ export default function AdminUsersPage() {
                             {t("users.title")}
                         </h1>
                         <p className="text-muted-foreground mt-2 flex items-center gap-2">
-                            {currentTenantName && (
+                            {currentOrgName && (
                                 <>
                                     <Building2 className="h-4 w-4" />
-                                    <span className="font-medium">{currentTenantName}</span>
+                                    <span className="font-medium">{currentOrgName}</span>
                                     <span>•</span>
                                 </>
                             )}
-                            {currentUserRole === "admin"
-                                ? t("users.descriptionAdmin")
-                                : t("users.descriptionSupervisor")}
+                            Gestione membri organizzazione
                         </p>
                     </div>
-                    <Button
-                        onClick={() => setCreateDialogOpen(true)}
-                        className="bg-primary hover:bg-primary/90"
-                    >
+                    <Button onClick={() => setCreateDialogOpen(true)} className="bg-primary hover:bg-primary/90">
                         <UserPlus className="h-5 w-5 mr-2" />
                         {t("users.newUser")}
                     </Button>
@@ -527,50 +379,45 @@ export default function AdminUsersPage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-muted-foreground">{t("users.totalUsers")}</p>
-                                    <p className="text-3xl font-bold text-foreground mt-2">{users.length}</p>
+                                    <p className="text-3xl font-bold text-foreground mt-2">{members.length}</p>
                                 </div>
                                 <Users className="h-12 w-12 text-blue-500 opacity-20" />
                             </div>
                         </CardContent>
                     </Card>
-
-                    {currentUserRole === "admin" && (
-                        <Card className="bg-card border-border">
-                            <CardContent className="p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">{t("users.supervisors")}</p>
-                                        <p className="text-3xl font-bold text-foreground mt-2">
-                                            {users.filter((u) => u.role === "supervisor").length}
-                                        </p>
-                                    </div>
-                                    <Shield className="h-12 w-12 text-blue-500 opacity-20" />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
                     <Card className="bg-card border-border">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-muted-foreground">{t("users.technicians")}</p>
+                                    <p className="text-sm text-muted-foreground">Amministratori</p>
                                     <p className="text-3xl font-bold text-foreground mt-2">
-                                        {users.filter((u) => u.role === "technician").length}
+                                        {members.filter(m => m.role === "admin").length}
                                     </p>
                                 </div>
-                                <Users className="h-12 w-12 text-green-500 opacity-20" />
+                                <Shield className="h-12 w-12 text-red-500 opacity-20" />
                             </div>
                         </CardContent>
                     </Card>
-
+                    <Card className="bg-card border-border">
+                        <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Supervisori</p>
+                                    <p className="text-3xl font-bold text-foreground mt-2">
+                                        {members.filter(m => m.role === "supervisor").length}
+                                    </p>
+                                </div>
+                                <Shield className="h-12 w-12 text-blue-500 opacity-20" />
+                            </div>
+                        </CardContent>
+                    </Card>
                     <Card className="bg-card border-border">
                         <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-muted-foreground">{t("users.activeUsers")}</p>
                                     <p className="text-3xl font-bold text-foreground mt-2">
-                                        {users.filter((u) => u.is_active).length}
+                                        {members.filter(m => m.is_active).length}
                                     </p>
                                 </div>
                                 <CheckCircle className="h-12 w-12 text-green-500 opacity-20" />
@@ -596,7 +443,7 @@ export default function AdminUsersPage() {
                 <Card className="bg-card border-border">
                     <CardHeader>
                         <CardTitle className="text-foreground">
-                            {t("users.userList")} ({filteredUsers.length})
+                            Membri ({filteredMembers.length})
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -608,62 +455,45 @@ export default function AdminUsersPage() {
                                         <TableHead className="text-muted-foreground">{t("users.name")}</TableHead>
                                         <TableHead className="text-muted-foreground">{t("users.role")}</TableHead>
                                         <TableHead className="text-muted-foreground">{t("users.status")}</TableHead>
-                                        <TableHead className="text-muted-foreground">{t("users.createdAt")}</TableHead>
                                         <TableHead className="text-muted-foreground text-right">{t("users.actions")}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredUsers.length === 0 ? (
+                                    {filteredMembers.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                                 <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
                                                 <p>{t("users.noUsers")}</p>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredUsers.map((user) => (
-                                            <TableRow key={user.id} className="border-border">
-                                                <TableCell className="text-foreground">{user.email}</TableCell>
+                                        filteredMembers.map((member) => (
+                                            <TableRow key={member.id} className="border-border">
+                                                <TableCell className="text-foreground">{member.email}</TableCell>
                                                 <TableCell className="text-muted-foreground">
-                                                    {user.full_name || "-"}
+                                                    {member.display_name || "-"}
                                                 </TableCell>
-                                                <TableCell>{getRoleBadge(user.role)}</TableCell>
+                                                <TableCell>{getRoleBadge(member.role)}</TableCell>
                                                 <TableCell>
-                                                    {user.is_active ? (
+                                                    {member.is_active ? (
                                                         <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                                                            <CheckCircle className="h-3 w-3 mr-1" />
-                                                            {t("users.active")}
+                                                            <CheckCircle className="h-3 w-3 mr-1" /> Attivo
                                                         </Badge>
                                                     ) : (
                                                         <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
-                                                            <XCircle className="h-3 w-3 mr-1" />
-                                                            {t("users.inactive")}
+                                                            <XCircle className="h-3 w-3 mr-1" /> Disattivato
                                                         </Badge>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    {user.created_at
-                                                        ? new Date(user.created_at).toLocaleDateString("it-IT")
-                                                        : "-"}
-                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => openEditDialog(user)}
-                                                            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                                                            disabled={currentUserRole === "supervisor" && user.role !== "technician"}
-                                                        >
+                                                        <Button size="sm" variant="ghost" onClick={() => openEditDialog(member)}
+                                                            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
                                                             <Edit className="h-4 w-4" />
                                                         </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => openDeleteDialog(user)}
+                                                        <Button size="sm" variant="ghost" onClick={() => openDeleteDialog(member)}
                                                             className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                                            disabled={user.id === currentUserId || (currentUserRole === "supervisor" && user.role !== "technician")}
-                                                        >
+                                                            disabled={member.user_id === currentUserId}>
                                                             <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     </div>
@@ -684,228 +514,117 @@ export default function AdminUsersPage() {
                     <DialogHeader>
                         <DialogTitle className="text-foreground">{t("users.createNew")}</DialogTitle>
                         <DialogDescription className="text-muted-foreground">
-                            {t("users.createDescription")}
+                            Crea un nuovo utente per {currentOrgName}
                         </DialogDescription>
                     </DialogHeader>
-
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email">{t("users.email")} *</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                value={newUserData.email}
-                                onChange={(e) =>
-                                    setNewUserData({ ...newUserData, email: e.target.value })
-                                }
-                                placeholder="utente@example.com"
-                            />
+                            <Input id="email" type="email" value={newUserData.email}
+                                onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                                placeholder="utente@example.com" />
                         </div>
-
                         <div className="space-y-2">
-                            <Label htmlFor="password">{t("users.password")} *</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                value={newUserData.password}
-                                onChange={(e) =>
-                                    setNewUserData({ ...newUserData, password: e.target.value })
-                                }
-                                placeholder="••••••••"
-                            />
+                            <Label htmlFor="password">Password *</Label>
+                            <Input id="password" type="password" value={newUserData.password}
+                                onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                                placeholder="••••••••" />
                         </div>
-
                         <div className="space-y-2">
-                            <Label htmlFor="full_name">{t("users.fullName")}</Label>
-                            <Input
-                                id="full_name"
-                                value={newUserData.full_name}
-                                onChange={(e) =>
-                                    setNewUserData({ ...newUserData, full_name: e.target.value })
-                                }
-                                placeholder="Mario Rossi"
-                            />
+                            <Label htmlFor="full_name">Nome completo</Label>
+                            <Input id="full_name" value={newUserData.full_name}
+                                onChange={(e) => setNewUserData({ ...newUserData, full_name: e.target.value })}
+                                placeholder="Mario Rossi" />
                         </div>
-
                         <div className="space-y-2">
-                            <Label htmlFor="role">{t("users.role")} *</Label>
-                            <Select
-                                value={newUserData.role}
-                                onValueChange={(value: "admin" | "supervisor" | "technician") =>
-                                    setNewUserData({ ...newUserData, role: value })
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder={t("users.selectRole")} />
-                                </SelectTrigger>
+                            <Label htmlFor="role">Ruolo *</Label>
+                            <Select value={newUserData.role}
+                                onValueChange={(v: "admin" | "supervisor" | "technician") => setNewUserData({ ...newUserData, role: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {getAvailableRoles().map((role) => (
-                                        <SelectItem key={role} value={role}>
-                                            {role === "supervisor" ? t("users.roleSupervisor") : t("users.roleTechnician")}
-                                        </SelectItem>
+                                    {getAvailableRoles().map(r => (
+                                        <SelectItem key={r} value={r}>{getRoleLabel(r)}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="phone">{t("users.phone")}</Label>
-                            <Input
-                                id="phone"
-                                type="tel"
-                                value={newUserData.phone}
-                                onChange={(e) =>
-                                    setNewUserData({ ...newUserData, phone: e.target.value })
-                                }
-                                placeholder="+39 123 456 7890"
-                            />
-                        </div>
                     </div>
-
                     <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setCreateDialogOpen(false)}
-                            disabled={creating}
-                        >
+                        <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={creating}>
                             {t("common.cancel")}
                         </Button>
-                        <Button
-                            onClick={handleCreateUser}
-                            disabled={creating}
-                        >
-                            {creating ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    {t("common.creating")}
-                                </>
-                            ) : (
-                                t("users.createUser")
-                            )}
+                        <Button onClick={handleCreateUser} disabled={creating}>
+                            {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creazione...</> : "Crea utente"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Edit User Dialog */}
+            {/* Edit Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
                 <DialogContent className="bg-card border-border">
                     <DialogHeader>
-                        <DialogTitle className="text-foreground">{t("users.editUser")}</DialogTitle>
+                        <DialogTitle className="text-foreground">Modifica membro</DialogTitle>
                         <DialogDescription className="text-muted-foreground">
-                            {t("users.editDescription")} {selectedUser?.email}
+                            {selectedMember?.email}
                         </DialogDescription>
                     </DialogHeader>
-
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="edit_full_name">{t("users.fullName")}</Label>
-                            <Input
-                                id="edit_full_name"
-                                value={editUserData.full_name}
-                                onChange={(e) =>
-                                    setEditUserData({ ...editUserData, full_name: e.target.value })
-                                }
-                            />
+                            <Label>Nome</Label>
+                            <Input value={editData.display_name}
+                                onChange={(e) => setEditData({ ...editData, display_name: e.target.value })} />
                         </div>
-
                         <div className="space-y-2">
-                            <Label htmlFor="edit_role">{t("users.role")}</Label>
-                            <Select
-                                value={editUserData.role}
-                                onValueChange={(value: "admin" | "supervisor" | "technician") =>
-                                    setEditUserData({ ...editUserData, role: value })
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                            <Label>Ruolo</Label>
+                            <Select value={editData.role}
+                                onValueChange={(v: "admin" | "supervisor" | "technician") => setEditData({ ...editData, role: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {getAvailableRoles().map((role) => (
-                                        <SelectItem key={role} value={role}>
-                                            {role === "supervisor" ? t("users.roleSupervisor") : t("users.roleTechnician")}
-                                        </SelectItem>
+                                    {getAvailableRoles().map(r => (
+                                        <SelectItem key={r} value={r}>{getRoleLabel(r)}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-
                         <div className="space-y-2">
-                            <Label htmlFor="edit_is_active">{t("users.status")}</Label>
-                            <Select
-                                value={editUserData.is_active ? "active" : "inactive"}
-                                onValueChange={(value) =>
-                                    setEditUserData({ ...editUserData, is_active: value === "active" })
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                            <Label>Stato</Label>
+                            <Select value={editData.is_active ? "active" : "inactive"}
+                                onValueChange={(v) => setEditData({ ...editData, is_active: v === "active" })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="active">{t("users.active")}</SelectItem>
-                                    <SelectItem value="inactive">{t("users.inactive")}</SelectItem>
+                                    <SelectItem value="active">Attivo</SelectItem>
+                                    <SelectItem value="inactive">Disattivato</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
-
                     <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setEditDialogOpen(false)}
-                            disabled={editing}
-                        >
+                        <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={editing}>
                             {t("common.cancel")}
                         </Button>
-                        <Button
-                            onClick={handleEditUser}
-                            disabled={editing}
-                        >
-                            {editing ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    {t("common.saving")}
-                                </>
-                            ) : (
-                                t("common.save")
-                            )}
+                        <Button onClick={handleEditMember} disabled={editing}>
+                            {editing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvataggio...</> : "Salva"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Delete User Dialog */}
+            {/* Delete Dialog */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <DialogContent className="bg-card border-border">
                     <DialogHeader>
-                        <DialogTitle className="text-destructive">{t("users.deactivateUser")}</DialogTitle>
+                        <DialogTitle className="text-destructive">Disattiva membro</DialogTitle>
                         <DialogDescription className="text-muted-foreground">
-                            {t("users.deactivateConfirm")} <strong>{userToDelete?.email}</strong>?
-                            {t("users.deactivateNote")}
+                            Vuoi disattivare <strong>{memberToDelete?.email}</strong>? L'utente non potrà più accedere.
                         </DialogDescription>
                     </DialogHeader>
-
                     <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setDeleteDialogOpen(false)}
-                            disabled={deleting}
-                        >
+                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
                             {t("common.cancel")}
                         </Button>
-                        <Button
-                            onClick={handleDeleteUser}
-                            disabled={deleting}
-                            variant="destructive"
-                        >
-                            {deleting ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    {t("common.deactivating")}
-                                </>
-                            ) : (
-                                t("users.deactivate")
-                            )}
+                        <Button onClick={handleDeactivateMember} disabled={deleting} variant="destructive">
+                            {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Disattivazione...</> : "Disattiva"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
