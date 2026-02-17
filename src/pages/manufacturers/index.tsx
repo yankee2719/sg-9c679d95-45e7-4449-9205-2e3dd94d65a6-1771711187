@@ -202,7 +202,7 @@ export default function ManufacturersPage() {
                                 {isAdmin && (
                                     <div className="flex gap-1">
                                         <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}><Edit2 className="w-4 h-4" /></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(m.id, m.name)} className="text-red-400">
+                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(m.id, m.name)} className="text-red-600 dark:text-red-400">
                                             <Trash2 className="w-4 h-4" />
                                         </Button>
                                     </div>
