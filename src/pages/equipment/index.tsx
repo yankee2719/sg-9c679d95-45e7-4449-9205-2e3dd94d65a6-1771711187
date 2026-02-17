@@ -164,13 +164,13 @@ export default function EquipmentPage() {
 
     const getStatusConfig = (state: string | null) => {
         const configs: Record<string, { label: string; color: string }> = {
-            active: { label: "Attivo", color: "bg-green-500/20 text-green-400 border-green-500/30" },
-            commissioned: { label: "Attivo", color: "bg-green-500/20 text-green-400 border-green-500/30" },
-            inactive: { label: "Inattivo", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-            under_maintenance: { label: "In Manutenzione", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-            decommissioned: { label: "Dismesso", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+            active: { label: "Attivo", color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30" },
+            commissioned: { label: "Attivo", color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30" },
+            inactive: { label: "Inattivo", color: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30" },
+            under_maintenance: { label: "In Manutenzione", color: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-300 dark:border-amber-500/30" },
+            decommissioned: { label: "Dismesso", color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30" },
         };
-        return configs[state || "active"] || { label: state || "—", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" };
+        return configs[state || "active"] || { label: state || "—", color: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30" };
     };
 
     const isAdmin = ctx?.role === "admin" || ctx?.role === "supervisor";
@@ -198,21 +198,21 @@ export default function EquipmentPage() {
                         </div>
                     )}
                     {item._isAssigned && (
-                        <div className="absolute top-3 left-3 bg-purple-500/90 px-2 py-1 rounded-lg flex items-center gap-1">
+                        <div className="absolute top-3 left-3 bg-purple-600 dark:bg-purple-500/90 px-2 py-1 rounded-lg flex items-center gap-1">
                             <Factory className="w-3 h-3 text-white" />
                             <span className="text-white text-xs font-medium">{item._manufacturerName || "Costruttore"}</span>
                         </div>
                     )}
                     {item.qr_code_token && (
                         <div className="absolute top-3 right-3 bg-white/90 p-1.5 rounded-lg">
-                            <QrCode className="w-4 h-4 text-slate-800" />
+                            <QrCode className="w-4 h-4 text-gray-800 dark:text-slate-800" />
                         </div>
                     )}
                     {isAdmin && canEdit && (
                         <button
                             onClick={(e) => handleDelete(e, item.id, item.name)}
                             disabled={deleting === item.id}
-                            className="absolute top-3 left-3 bg-red-500/80 hover:bg-red-500 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            className="absolute top-3 left-3 bg-red-500 hover:bg-red-600 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
                         >
                             <Trash2 className="w-4 h-4 text-white" />
                         </button>
@@ -248,11 +248,11 @@ export default function EquipmentPage() {
             <div className="space-y-4">
                 {/* Assigned from manufacturer */}
                 {assignedMachines.length > 0 && (
-                    <div className="rounded-2xl border border-purple-500/30 bg-card/50 overflow-hidden">
+                    <div className="rounded-2xl border border-purple-300 dark:border-purple-500/30 bg-card/50 overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Factory className="w-5 h-5 text-purple-400" />
                             <span className="text-foreground font-bold text-lg">Macchine dal Costruttore</span>
-                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 ml-2">{assignedMachines.length}</Badge>
+                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-300 dark:border-purple-500/30 ml-2">{assignedMachines.length}</Badge>
                         </div>
                         <div className="px-4 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -268,12 +268,12 @@ export default function EquipmentPage() {
                     const isExpanded = expandedPlants.has(plant.id);
                     if (plantMachines.length === 0 && searchQuery) return null;
                     return (
-                        <div key={plant.id} className="rounded-2xl border border-blue-500/30 bg-card/50 overflow-hidden">
+                        <div key={plant.id} className="rounded-2xl border border-blue-300 dark:border-blue-500/30 bg-card/50 overflow-hidden">
                             <button onClick={() => togglePlant(plant.id)} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors">
                                 {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-400" /> : <ChevronRight className="w-5 h-5 text-blue-400" />}
                                 <Building2 className="w-5 h-5 text-blue-400" />
                                 <span className="text-foreground font-bold text-lg">{plant.name}</span>
-                                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 ml-2">{plantMachines.length}</Badge>
+                                <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-300 dark:border-blue-500/30 ml-2">{plantMachines.length}</Badge>
                             </button>
                             {isExpanded && plantMachines.length > 0 && (
                                 <div className="px-4 pb-4">
@@ -292,7 +292,7 @@ export default function EquipmentPage() {
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Wrench className="w-5 h-5 text-muted-foreground" />
                             <span className="text-muted-foreground font-bold text-lg">Non assegnate a stabilimento</span>
-                            <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/30 ml-2">{unassigned.length}</Badge>
+                            <Badge className="bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30 ml-2">{unassigned.length}</Badge>
                         </div>
                         <div className="px-4 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
