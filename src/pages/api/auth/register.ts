@@ -6,10 +6,14 @@ import { getServiceSupabase } from "@/lib/apiAuth";
  * Creates auth user + organization + membership atomically using service role.
  * No authentication required (this IS the signup flow).
  *
- * New schema flow:
+ * Supports two org types:
+ *   - "customer" (default): Utilizzatore finale - manages plants, lines, maintenance
+ *   - "manufacturer": Costruttore - creates machines, shares with customers
+ *
+ * Flow:
  *   1. Create auth user (trigger handle_new_user creates profile automatically)
- *   2. Create organization with slug
- *   3. Create organization_membership (role: owner)
+ *   2. Create organization with slug and type
+ *   3. Create organization_membership (role: admin)
  *   4. Update profile with default_organization_id
  */
 export default async function handler(
@@ -20,7 +24,7 @@ export default async function handler(
         return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const { companyName, fullName, email, password, plan } = req.body;
+    const { companyName, fullName, email, password, plan, orgType } = req.body;
 
     // Validation
     if (!companyName || !fullName || !email || !password) {
@@ -30,6 +34,10 @@ export default async function handler(
     if (password.length < 8) {
         return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
+
+    // Validate orgType
+    const validOrgTypes = ["customer", "manufacturer"];
+    const resolvedOrgType = validOrgTypes.includes(orgType) ? orgType : "customer";
 
     // Plan → subscription limits
     const planLimits: Record<string, { maxUsers: number; maxPlants: number; maxMachines: number }> = {
@@ -47,15 +55,14 @@ export default async function handler(
 
     try {
         // ── Step 1: Create auth user ─────────────────────────────────
-        // The DB trigger handle_new_user will auto-create a profile row
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
             password,
             email_confirm: true,
             user_metadata: {
                 display_name: fullName,
-                first_name: fullName.split(' ')[0] || fullName,
-                last_name: fullName.split(' ').slice(1).join(' ') || null,
+                first_name: fullName.split(" ")[0] || fullName,
+                last_name: fullName.split(" ").slice(1).join(" ") || null,
             },
         });
 
@@ -76,19 +83,18 @@ export default async function handler(
         // ── Step 2: Generate slug from company name ──────────────────
         let slug = companyName
             .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')  // Remove accents
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/(^-|-$)/g, '');
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "");
 
-        // Check uniqueness
         let slugCandidate = slug;
         let counter = 0;
         while (counter < 10) {
             const { data: existing } = await supabaseAdmin
-                .from('organizations')
-                .select('id')
-                .eq('slug', slugCandidate)
+                .from("organizations")
+                .select("id")
+                .eq("slug", slugCandidate)
                 .maybeSingle();
 
             if (!existing) break;
@@ -99,24 +105,23 @@ export default async function handler(
 
         // ── Step 3: Create organization ──────────────────────────────
         const { data: org, error: orgError } = await supabaseAdmin
-            .from('organizations')
+            .from("organizations")
             .insert({
                 name: companyName,
                 slug,
-                type: 'customer',
+                type: resolvedOrgType,
                 email,
-                subscription_status: 'trial',
-                subscription_plan: plan || 'professional',
+                subscription_status: "trial",
+                subscription_plan: plan || "professional",
                 max_users: limits.maxUsers,
                 max_plants: limits.maxPlants,
                 max_machines: limits.maxMachines,
             })
-            .select('id')
+            .select("id")
             .single();
 
         if (orgError) {
             console.error("Organization creation error:", orgError);
-            // Rollback: delete auth user
             await supabaseAdmin.auth.admin.deleteUser(authUserId);
             return res.status(500).json({ error: "Failed to create organization" });
         }
@@ -125,37 +130,35 @@ export default async function handler(
 
         // ── Step 4: Create membership (user = admin) ─────────────────
         const { error: membershipError } = await supabaseAdmin
-            .from('organization_memberships')
+            .from("organization_memberships")
             .insert({
                 organization_id: organizationId,
                 user_id: authUserId,
-                role: 'admin',
+                role: "admin",
                 is_active: true,
                 accepted_at: new Date().toISOString(),
             });
 
         if (membershipError) {
             console.error("Membership creation error:", membershipError);
-            // Rollback
-            await supabaseAdmin.from('organizations').delete().eq('id', organizationId);
+            await supabaseAdmin.from("organizations").delete().eq("id", organizationId);
             await supabaseAdmin.auth.admin.deleteUser(authUserId);
             return res.status(500).json({ error: "Failed to assign membership" });
         }
 
         // ── Step 5: Update profile with default org + name ───────────
         const { error: profileError } = await supabaseAdmin
-            .from('profiles')
+            .from("profiles")
             .update({
                 default_organization_id: organizationId,
-                first_name: fullName.split(' ')[0] || fullName,
-                last_name: fullName.split(' ').slice(1).join(' ') || null,
+                first_name: fullName.split(" ")[0] || fullName,
+                last_name: fullName.split(" ").slice(1).join(" ") || null,
                 display_name: fullName,
             })
-            .eq('id', authUserId);
+            .eq("id", authUserId);
 
         if (profileError) {
             console.error("Profile update error (non-fatal):", profileError);
-            // Non-fatal: user can update profile later
         }
 
         // ── Success ──────────────────────────────────────────────────
@@ -165,18 +168,24 @@ export default async function handler(
                 id: authUserId,
                 email,
                 organization_id: organizationId,
+                org_type: resolvedOrgType,
             },
         });
-
     } catch (error) {
         console.error("Registration error:", error);
 
         // Best-effort rollback
         if (organizationId) {
-            await supabaseAdmin.from('organization_memberships')
-                .delete().eq('organization_id', organizationId).catch(() => { });
-            await supabaseAdmin.from('organizations')
-                .delete().eq('id', organizationId).catch(() => { });
+            await supabaseAdmin
+                .from("organization_memberships")
+                .delete()
+                .eq("organization_id", organizationId)
+                .catch(() => { });
+            await supabaseAdmin
+                .from("organizations")
+                .delete()
+                .eq("id", organizationId)
+                .catch(() => { });
         }
         if (authUserId) {
             await supabaseAdmin.auth.admin.deleteUser(authUserId).catch(() => { });
