@@ -29,6 +29,8 @@ import {
     BarChart3,
     CalendarClock,
     Building2,
+    Factory,
+    Package,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -44,6 +46,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const { t } = useLanguage();
     const [user, setUser] = useState < { id: string; email?: string } | null > (null);
     const [profile, setProfile] = useState < { full_name?: string; role?: string } | null > (null);
+    const [orgType, setOrgType] = useState < string | null > (null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
 
@@ -61,6 +64,16 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         full_name: profileData.full_name || undefined,
                         role: profileData.role || undefined
                     });
+
+                    // Fetch org type
+                    if (profileData.tenant_id) {
+                        const { data: org } = await supabase
+                            .from("organizations")
+                            .select("type")
+                            .eq("id", profileData.tenant_id)
+                            .single();
+                        if (org?.type) setOrgType(org.type);
+                    }
                 }
 
                 const count = await getNotificationCount(authUser.id);
@@ -100,10 +113,21 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const navigation = getNavigationItems();
 
-    const adminNavigation = [
-        { name: "Stabilimenti", href: "/plants", icon: Building2 },
+    // Manufacturer-specific nav
+    const manufacturerNavigation = [
+        { name: "Clienti", href: "/customers", icon: Building2 },
+        { name: "Assegnazioni", href: "/assignments", icon: Package },
         { name: t("nav.users"), href: "/admin/users", icon: Users },
     ];
+
+    // Customer-specific admin nav
+    const customerAdminNavigation = [
+        { name: "Stabilimenti", href: "/plants", icon: Building2 },
+        { name: "Costruttori", href: "/manufacturers", icon: Factory },
+        { name: t("nav.users"), href: "/admin/users", icon: Users },
+    ];
+
+    const adminNavigation = orgType === "manufacturer" ? manufacturerNavigation : customerAdminNavigation;
 
     const isActive = (href: string) => {
         if (href === "/dashboard") return router.pathname === "/dashboard";
