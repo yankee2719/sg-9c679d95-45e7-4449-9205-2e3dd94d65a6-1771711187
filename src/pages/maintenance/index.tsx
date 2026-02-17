@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
-import { getProfileData } from "@/lib/supabaseHelpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,39 +18,42 @@ import {
     Plus,
     Search,
     Wrench,
-    MapPin,
     Filter,
-    ChevronRight,
-    QrCode
+    Clock,
+    AlertTriangle,
+    CheckCircle,
+    Calendar,
+    Trash2,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useToast } from "@/hooks/use-toast";
 
-interface Machine {
+interface MaintenanceTask {
     id: string;
-    name: string;
-    internal_code: string | null;
-    machine_type: string | null;
-    serial_number: string | null;
-    model: string | null;
-    manufacturer_name: string | null;
-    location: string | null;
-    lifecycle_state: string;
-    qr_code_token: string | null;
-    image_url: string | null;
-    is_archived: boolean;
+    title: string;
+    description: string | null;
+    next_due_date: string | null;
+    frequency: string | null;
+    equipment_id: string | null;
+    assigned_to: string | null;
+    checklist_id: string | null;
+    last_performed_at: string | null;
+    status: string;
+    priority: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
-export default function EquipmentPage() {
+export default function MaintenancePage() {
     const router = useRouter();
-    const { t } = useLanguage();
+    const { toast } = useToast();
     const [loading, setLoading] = useState(true);
-    const [userRole, setUserRole] = useState < string > ("technician");
-    const [machines, setMachines] = useState < Machine[] > ([]);
-    const [filteredMachines, setFilteredMachines] = useState < Machine[] > ([]);
+    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("technician");
+    const [tasks, setTasks] = useState < MaintenanceTask[] > ([]);
+    const [filteredTasks, setFilteredTasks] = useState < MaintenanceTask[] > ([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
-    const [typeFilter, setTypeFilter] = useState("all");
-    const [machineTypes, setMachineTypes] = useState < string[] > ([]);
+    const [priorityFilter, setPriorityFilter] = useState("all");
+    const [deleting, setDeleting] = useState < string | null > (null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -63,27 +64,29 @@ export default function EquipmentPage() {
                     return;
                 }
 
-                const profileData = await getProfileData(user.id);
-                if (profileData?.role) {
-                    setUserRole(profileData.role);
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("role")
+                    .eq("id", user.id)
+                    .single();
+
+                if (profile) {
+                    setUserRole(profile.role as "admin" | "supervisor" | "technician");
                 }
 
-                // Query machines instead of equipment
-                const { data: machineData } = await supabase
-                    .from("machines")
+                const { data, error } = await supabase
+                    .from("maintenance_schedules")
                     .select("*")
-                    .eq("is_archived", false)
-                    .order("name");
+                    .order("created_at", { ascending: false });
 
-                if (machineData) {
-                    setMachines(machineData as Machine[]);
-                    setFilteredMachines(machineData as Machine[]);
+                console.log("Maintenance data:", data, error);
 
-                    const uniqueTypes = [...new Set(machineData.map((e: any) => e.machine_type).filter(Boolean))];
-                    setMachineTypes(uniqueTypes as string[]);
+                if (data) {
+                    setTasks(data as unknown as MaintenanceTask[]);
+                    setFilteredTasks(data as unknown as MaintenanceTask[]);
                 }
             } catch (error) {
-                console.error("Error loading machines:", error);
+                console.error("Error loading maintenance:", error);
             } finally {
                 setLoading(false);
             }
@@ -93,105 +96,147 @@ export default function EquipmentPage() {
     }, [router]);
 
     useEffect(() => {
-        let filtered = machines;
+        let filtered = tasks;
 
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             filtered = filtered.filter(
-                (item) =>
-                    item.name.toLowerCase().includes(query) ||
-                    item.serial_number?.toLowerCase().includes(query) ||
-                    item.location?.toLowerCase().includes(query) ||
-                    item.manufacturer_name?.toLowerCase().includes(query) ||
-                    item.internal_code?.toLowerCase().includes(query)
+                (item) => item.title?.toLowerCase().includes(query)
             );
         }
 
         if (statusFilter !== "all") {
-            filtered = filtered.filter((item) => item.lifecycle_state === statusFilter);
+            filtered = filtered.filter((item) => item.status === statusFilter);
         }
 
-        if (typeFilter !== "all") {
-            filtered = filtered.filter((item) => item.machine_type === typeFilter);
+        if (priorityFilter !== "all") {
+            filtered = filtered.filter((item) => item.priority === priorityFilter);
         }
 
-        setFilteredMachines(filtered);
-    }, [searchQuery, statusFilter, typeFilter, machines]);
+        setFilteredTasks(filtered);
+    }, [searchQuery, statusFilter, priorityFilter, tasks]);
 
-    const getStatusConfig = (state: string) => {
-        const configs: Record<string, { label: string; color: string }> = {
-            commissioning: { label: "Commissioning", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-            active: { label: t("equipment.active"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
-            maintenance: { label: t("equipment.maintenance"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-            decommissioned: { label: t("equipment.decommissioned"), color: "bg-red-500/20 text-red-400 border-red-500/30" },
-            transferred: { label: "Trasferita", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
+    const handleDelete = async (e: React.MouseEvent, id: string, title: string) => {
+        e.stopPropagation();
+        if (!confirm(`Sei sicuro di voler eliminare "${title}"?`)) return;
+
+        setDeleting(id);
+        try {
+            const { error } = await supabase
+                .from("maintenance_schedules")
+                .delete()
+                .eq("id", id);
+
+            if (error) throw error;
+
+            setTasks((prev) => prev.filter((item) => item.id !== id));
+            toast({
+                title: "Eliminata",
+                description: `"${title}" è stata eliminata correttamente`,
+            });
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast({
+                title: "Errore",
+                description: error instanceof Error ? error.message : "Errore durante l'eliminazione",
+                variant: "destructive",
+            });
+        } finally {
+            setDeleting(null);
+        }
+    };
+
+    const getStatusConfig = (status: string) => {
+        const configs: Record<string, { label: string; color: string; icon: any }> = {
+            scheduled: { label: "Programmata", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Calendar },
+            pending: { label: "In attesa", color: "bg-amber-500/20 text-amber-400 border-amber-500/30", icon: Clock },
+            in_progress: { label: "In corso", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Wrench },
+            completed: { label: "Completata", color: "bg-green-500/20 text-green-400 border-green-500/30", icon: CheckCircle },
+            cancelled: { label: "Annullata", color: "bg-slate-500/20 text-muted-foreground border-slate-500/30", icon: AlertTriangle }
         };
-        return configs[state] || configs.active;
+        return configs[status] || configs.scheduled;
+    };
+
+    const getPriorityConfig = (priority: string | null) => {
+        const configs: Record<string, { label: string; color: string }> = {
+            low: { label: "Bassa", color: "bg-slate-500/20 text-muted-foreground" },
+            medium: { label: "Media", color: "bg-amber-500/20 text-amber-400" },
+            high: { label: "Alta", color: "bg-red-500/20 text-red-400" },
+            urgent: { label: "Urgente", color: "bg-red-600/20 text-red-500" }
+        };
+        return configs[priority || "medium"] || configs.medium;
+    };
+
+    const formatDate = (date: string | null) => {
+        if (!date) return "N/A";
+        return new Date(date).toLocaleDateString("it-IT", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        });
     };
 
     if (loading) return null;
 
     return (
         <MainLayout userRole={userRole}>
-            <SEO title={`${t("equipment.title")} - MACHINA`} />
+            <SEO title="Manutenzioni - MACHINA" />
 
             <div className="space-y-6 max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">{t("equipment.title")}</h1>
-                        <p className="text-slate-400 mt-1">{t("equipment.subtitle")}</p>
+                        <h1 className="text-2xl font-bold text-foreground">Manutenzioni</h1>
+                        <p className="text-muted-foreground mt-1">Gestisci le manutenzioni programmate</p>
                     </div>
                     {(userRole === "admin" || userRole === "supervisor") && (
                         <Button
-                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                            onClick={() => router.push("/equipment/new")}
+                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground"
+                            onClick={() => router.push("/maintenance/new")}
                         >
                             <Plus className="w-4 h-4 mr-2" />
-                            {t("equipment.addEquipment")}
+                            Nuova Manutenzione
                         </Button>
                     )}
                 </div>
 
                 {/* Filters */}
-                <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+                <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm">
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="flex-1 relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <Input
-                                    placeholder={t("common.search")}
+                                    placeholder="Cerca..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                                    className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
                                 />
                             </div>
                             <div className="flex gap-3">
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-[160px] bg-slate-700/50 border-slate-600 text-white">
-                                        <Filter className="w-4 h-4 mr-2 text-slate-400" />
-                                        <SelectValue placeholder={t("common.status")} />
+                                    <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
+                                        <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                                        <SelectValue placeholder="Stato" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="all" className="text-white hover:bg-slate-700">{t("common.all")}</SelectItem>
-                                        <SelectItem value="commissioning" className="text-white hover:bg-slate-700">Commissioning</SelectItem>
-                                        <SelectItem value="active" className="text-white hover:bg-slate-700">{t("equipment.active")}</SelectItem>
-                                        <SelectItem value="maintenance" className="text-white hover:bg-slate-700">{t("equipment.maintenance")}</SelectItem>
-                                        <SelectItem value="decommissioned" className="text-white hover:bg-slate-700">{t("equipment.decommissioned")}</SelectItem>
-                                        <SelectItem value="transferred" className="text-white hover:bg-slate-700">Trasferita</SelectItem>
+                                    <SelectContent className="bg-card border-border">
+                                        <SelectItem value="all" className="text-foreground hover:bg-muted">Tutti</SelectItem>
+                                        <SelectItem value="scheduled" className="text-foreground hover:bg-muted">Programmata</SelectItem>
+                                        <SelectItem value="pending" className="text-foreground hover:bg-muted">In attesa</SelectItem>
+                                        <SelectItem value="in_progress" className="text-foreground hover:bg-muted">In corso</SelectItem>
+                                        <SelectItem value="completed" className="text-foreground hover:bg-muted">Completata</SelectItem>
+                                        <SelectItem value="cancelled" className="text-foreground hover:bg-muted">Annullata</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                                    <SelectTrigger className="w-[160px] bg-slate-700/50 border-slate-600 text-white">
-                                        <SelectValue placeholder={t("equipment.category")} />
+                                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                                    <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
+                                        <SelectValue placeholder="Priorità" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="all" className="text-white hover:bg-slate-700">{t("common.all")}</SelectItem>
-                                        {machineTypes.map((type) => (
-                                            <SelectItem key={type} value={type} className="text-white hover:bg-slate-700">
-                                                {type}
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent className="bg-card border-border">
+                                        <SelectItem value="all" className="text-foreground hover:bg-muted">Tutte</SelectItem>
+                                        <SelectItem value="low" className="text-foreground hover:bg-muted">Bassa</SelectItem>
+                                        <SelectItem value="medium" className="text-foreground hover:bg-muted">Media</SelectItem>
+                                        <SelectItem value="high" className="text-foreground hover:bg-muted">Alta</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -199,51 +244,74 @@ export default function EquipmentPage() {
                     </CardContent>
                 </Card>
 
-                {/* Machine Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredMachines.map((item) => {
-                        const status = getStatusConfig(item.lifecycle_state);
+                {/* Tasks List */}
+                <div className="space-y-4">
+                    {filteredTasks.map((task) => {
+                        const status = getStatusConfig(task.status);
+                        const priority = getPriorityConfig(task.priority);
+                        const StatusIcon = status.icon;
+
                         return (
                             <Card
-                                key={item.id}
-                                className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
-                                onClick={() => router.push(`/equipment/${item.id}`)}
+                                key={task.id}
+                                className="rounded-2xl backdrop-blur-sm transition-all cursor-pointer group overflow-hidden border-border bg-card/80 hover:border-blue-500/50"
+                                onClick={() => router.push(`/maintenance/${task.id}`)}
                             >
-                                <div className="h-40 bg-slate-700/50 relative overflow-hidden">
-                                    {item.image_url ? (
-                                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <Wrench className="w-12 h-12 text-slate-600" />
+                                <CardContent className="p-5">
+                                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                                        {/* Status Icon */}
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${status.color.split(" ")[0]}`}>
+                                            <StatusIcon className={`w-6 h-6 ${status.color.split(" ")[1]}`} />
                                         </div>
-                                    )}
-                                    {item.qr_code_token && (
-                                        <div className="absolute top-3 right-3 bg-white/90 p-1.5 rounded-lg">
-                                            <QrCode className="w-4 h-4 text-slate-800" />
+
+                                        {/* Content */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-4 mb-2">
+                                                <h3 className="font-bold text-foreground text-lg">{task.title}</h3>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border-0 ${priority.color}`}>
+                                                        {priority.label}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                                {task.next_due_date && (
+                                                    <div className="flex items-center gap-2">
+                                                        <Calendar className="w-4 h-4" />
+                                                        <span>{formatDate(task.next_due_date)}</span>
+                                                    </div>
+                                                )}
+                                                {task.frequency && (
+                                                    <div className="flex items-center gap-2">
+                                                        <Clock className="w-4 h-4" />
+                                                        <span>{task.frequency}</span>
+                                                    </div>
+                                                )}
+                                                {task.description && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="truncate max-w-xs">{task.description}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
 
-                                <CardContent className="p-4">
-                                    <div className="flex items-start justify-between mb-2">
-                                        <h3 className="font-bold text-white text-lg truncate flex-1">{item.name}</h3>
-                                        <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-blue-400 transition-colors flex-shrink-0" />
-                                    </div>
-
-                                    {item.location && (
-                                        <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
-                                            <MapPin className="w-4 h-4" />
-                                            <span className="truncate">{item.location}</span>
+                                        {/* Status Badge + Delete */}
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <Badge className={`rounded-lg px-3 py-1.5 text-sm font-semibold border ${status.color}`}>
+                                                {status.label}
+                                            </Badge>
+                                            {(userRole === "admin" || userRole === "supervisor") && (
+                                                <button
+                                                    onClick={(e) => handleDelete(e, task.id, task.title)}
+                                                    disabled={deleting === task.id}
+                                                    className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                                                    title="Elimina manutenzione"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
-                                    )}
-
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs text-slate-500">
-                                            {item.machine_type || t("equipment.generic")}
-                                        </span>
-                                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>
-                                            {status.label}
-                                        </Badge>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -252,18 +320,18 @@ export default function EquipmentPage() {
                 </div>
 
                 {/* Empty State */}
-                {filteredMachines.length === 0 && (
-                    <Card className="rounded-2xl border-slate-700 bg-slate-800/50 backdrop-blur-sm p-12 text-center">
-                        <Wrench className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-white mb-2">{t("equipment.noEquipment")}</h3>
-                        <p className="text-slate-400 mb-6">{t("equipment.noEquipmentDesc")}</p>
+                {filteredTasks.length === 0 && (
+                    <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm p-12 text-center">
+                        <Wrench className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-foreground mb-2">Nessuna manutenzione</h3>
+                        <p className="text-muted-foreground mb-6">Non ci sono manutenzioni programmate</p>
                         {(userRole === "admin" || userRole === "supervisor") && (
                             <Button
-                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                                onClick={() => router.push("/equipment/new")}
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground"
+                                onClick={() => router.push("/maintenance/new")}
                             >
                                 <Plus className="w-4 h-4 mr-2" />
-                                {t("equipment.addFirst")}
+                                Crea la prima manutenzione
                             </Button>
                         )}
                     </Card>
