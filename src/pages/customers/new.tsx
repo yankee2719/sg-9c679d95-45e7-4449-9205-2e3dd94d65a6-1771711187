@@ -131,7 +131,7 @@ export default function NewCustomerPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <Alert className="bg-blue-500/10 border-blue-500/30">
+                            <Alert className="bg-blue-100 dark:bg-blue-500/10 border-blue-500/30">
                                 <Info className="w-4 h-4 text-blue-400" />
                                 <AlertDescription className="text-blue-300 text-sm">
                                     Il supervisor potrà accedere alla piattaforma, vedere le macchine assegnate, gestire manutenzioni e creare utenti tecnici.
