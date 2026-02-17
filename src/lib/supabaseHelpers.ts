@@ -1,108 +1,84 @@
 import { supabase } from "@/integrations/supabase/client";
 
-interface ProfileData {
-    full_name: string | null;
-    role: string | null;
-    organizationId: string | null;
+export interface UserContext {
+    userId: string;
+    orgId: string | null;
+    role: string;
+    displayName: string;
+    email: string;
 }
 
-/**
- * Fetch profile data adapted for new schema.
- * Handles the case where default_organization_id might be null
- * by falling back to the first active membership.
- */
-export async function getProfileData(userId: string): Promise<ProfileData | null> {
-    const { data: profile, error } = await supabase
+export async function getUserContext(): Promise<UserContext | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name, first_name, last_name, default_organization_id")
+        .select("default_organization_id, display_name, email, first_name, last_name")
+        .eq("id", user.id)
+        .single();
+
+    const orgId = profile?.default_organization_id || null;
+    let role = "technician";
+
+    if (orgId) {
+        const { data: membership } = await supabase
+            .from("organization_memberships")
+            .select("role")
+            .eq("user_id", user.id)
+            .eq("organization_id", orgId)
+            .eq("is_active", true)
+            .single();
+
+        if (membership?.role) role = membership.role;
+    }
+
+    return {
+        userId: user.id,
+        orgId,
+        role,
+        displayName: profile?.display_name || profile?.first_name || user.email?.split("@")[0] || "User",
+        email: profile?.email || user.email || "",
+    };
+}
+
+export async function getProfileData(userId: string) {
+    const { data } = await supabase
+        .from("profiles")
+        .select("display_name, first_name, last_name, default_organization_id, email")
         .eq("id", userId)
-        .maybeSingle();
+        .single();
 
-    if (error) {
-        console.error("getProfileData: error fetching profile:", error);
-        return null;
-    }
+    if (!data) return null;
 
-    if (!profile) {
-        console.warn("getProfileData: no profile found for", userId);
-        return null;
-    }
-
-    const full_name = profile.display_name
-        || [profile.first_name, profile.last_name].filter(Boolean).join(' ')
-        || null;
-
-    // ── Get role from organization_memberships ───────────────────
-    let role: string | null = null;
-    let organizationId: string | null = profile.default_organization_id;
-
-    if (organizationId) {
-        // Try default org first
-        const { data: membership, error: memErr } = await supabase
+    // Get role from membership
+    let role = "technician";
+    if (data.default_organization_id) {
+        const { data: membership } = await supabase
             .from("organization_memberships")
             .select("role")
             .eq("user_id", userId)
-            .eq("organization_id", organizationId)
+            .eq("organization_id", data.default_organization_id)
             .eq("is_active", true)
-            .maybeSingle();
+            .single();
 
-        if (memErr) {
-            console.error("getProfileData: membership query error:", memErr);
-        }
-
-        role = membership?.role || null;
+        if (membership?.role) role = membership.role;
     }
 
-    // Fallback: if no default org or no membership found, try ANY active membership
-    if (!role) {
-        const { data: anyMembership, error: anyErr } = await supabase
-            .from("organization_memberships")
-            .select("role, organization_id")
-            .eq("user_id", userId)
-            .eq("is_active", true)
-            .order("accepted_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        if (anyErr) {
-            console.error("getProfileData: fallback membership error:", anyErr);
-        }
-
-        if (anyMembership) {
-            role = anyMembership.role;
-            organizationId = anyMembership.organization_id;
-
-            // Auto-fix: set default_organization_id so this doesn't happen again
-            if (!profile.default_organization_id && organizationId) {
-                supabase
-                    .from("profiles")
-                    .update({ default_organization_id: organizationId })
-                    .eq("id", userId)
-                    .then(({ error: updateErr }) => {
-                        if (updateErr) {
-                            console.warn("getProfileData: could not auto-fix default_organization_id:", updateErr);
-                        } else {
-                            console.log("getProfileData: auto-fixed default_organization_id →", organizationId);
-                        }
-                    });
-            }
-        }
-    }
-
-    console.log("getProfileData:", { userId, full_name, role, organizationId });
-
-    return { full_name, role, organizationId };
+    return {
+        full_name: data.display_name || `${data.first_name || ""} ${data.last_name || ""}`.trim() || null,
+        role,
+        tenant_id: data.default_organization_id,
+    };
 }
 
-/**
- * Fetch unread notification count.
- */
 export async function getNotificationCount(userId: string): Promise<number> {
-    const { count } = await supabase
+    const { count, error } = await supabase
         .from("notifications")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId)
         .eq("is_read", false);
 
+    if (error) return 0;
     return count || 0;
 }
