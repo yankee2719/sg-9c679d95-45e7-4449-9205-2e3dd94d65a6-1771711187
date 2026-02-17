@@ -36,11 +36,11 @@ interface Machine {
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-    active: { label: "Attivo", className: "bg-green-500/20 text-green-400 border-green-500/30" },
-    commissioned: { label: "Attivo", className: "bg-green-500/20 text-green-400 border-green-500/30" },
-    inactive: { label: "Inattivo", className: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-    under_maintenance: { label: "In Manutenzione", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-    decommissioned: { label: "Dismesso", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+    active: { label: "Attivo", className: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30" },
+    commissioned: { label: "Attivo", className: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30" },
+    inactive: { label: "Inattivo", className: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30" },
+    under_maintenance: { label: "In Manutenzione", className: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30" },
+    decommissioned: { label: "Dismesso", className: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30" },
 };
 
 export default function EquipmentDetailPage() {
@@ -146,7 +146,7 @@ export default function EquipmentDetailPage() {
                         </div>
                         <Badge className={status.className}>{status.label}</Badge>
                         {isAssigned && (
-                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 flex items-center gap-1">
+                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-500/30 flex items-center gap-1">
                                 <Factory className="w-3 h-3" /> {manufacturerName || "Costruttore"}
                             </Badge>
                         )}
@@ -160,7 +160,7 @@ export default function EquipmentDetailPage() {
 
                 {/* Read-only notice for assigned machines */}
                 {isAssigned && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-100 dark:bg-purple-500/10 border border-purple-500/30">
                         <Lock className="w-5 h-5 text-purple-400 shrink-0" />
                         <div>
                             <p className="text-foreground font-medium">Macchina fornita da {manufacturerName || "costruttore"}</p>
