@@ -7,11 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Building2, Factory } from "lucide-react";
+import { ArrowLeft, Save, Building2, Factory, QrCode } from "lucide-react";
 import { createEquipment } from "@/services/equipmentService";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Plant {
@@ -30,7 +29,7 @@ export default function NewEquipment() {
     const { toast } = useToast();
     const { t } = useLanguage();
     const [loading, setLoading] = useState(false);
-    const [showQRGenerator, setShowQRGenerator] = useState(false);
+    const [userRole, setUserRole] = useState < string > ("technician");
 
     // Plants & departments
     const [plants, setPlants] = useState < Plant[] > ([]);
@@ -51,7 +50,20 @@ export default function NewEquipment() {
         notes: "",
         plant_id: "",
         department_id: "",
+        qr_code_url: "",
     });
+
+    // Load user role
+    useEffect(() => {
+        const loadRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+                if (profile) setUserRole(profile.role);
+            }
+        };
+        loadRole();
+    }, []);
 
     // Load plants & departments
     useEffect(() => {
@@ -103,6 +115,7 @@ export default function NewEquipment() {
                 notes: formData.notes.trim() || null,
                 plant_id: formData.plant_id || null,
                 department_id: formData.department_id || null,
+                qr_code_url: formData.qr_code_url.trim() || null,
             });
 
             toast({
@@ -137,21 +150,7 @@ export default function NewEquipment() {
                         </Button>
                         <h1 className="text-3xl font-bold text-foreground">{t("equipment.new")}</h1>
                     </div>
-                    <Button onClick={() => setShowQRGenerator(!showQRGenerator)}>
-                        {showQRGenerator ? t("equipment.hideQR") : t("equipment.showQR")}
-                    </Button>
                 </div>
-
-                {showQRGenerator && (
-                    <Card className="bg-card border-border">
-                        <CardHeader>
-                            <CardTitle className="text-foreground">{t("equipment.qrGenerator")}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <QRCodeGenerator value={formData.equipment_code || "new-equipment"} allowCustomLink />
-                        </CardContent>
-                    </Card>
-                )}
 
                 <Card className="bg-card border-border">
                     <CardHeader>
@@ -234,6 +233,25 @@ export default function NewEquipment() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* QR Code URL - solo admin/supervisor */}
+                                {(userRole === "admin" || userRole === "supervisor") && (
+                                    <div className="space-y-2 md:col-span-2">
+                                        <Label className="text-foreground flex items-center gap-2">
+                                            <QrCode className="w-4 h-4 text-primary" />
+                                            URL QR Code
+                                        </Label>
+                                        <Input
+                                            value={formData.qr_code_url}
+                                            onChange={(e) => setFormData({ ...formData, qr_code_url: e.target.value })}
+                                            placeholder="https://esempio.com/manuale-macchina.pdf"
+                                            className="bg-muted border-border text-foreground"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Inserisci l'URL che verrà codificato nel QR Code (es. link a manuale, scheda tecnica, pagina web)
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div className="space-y-2">
                                     <Label htmlFor="category" className="text-foreground">{t("equipment.category")}</Label>
@@ -360,4 +378,3 @@ export default function NewEquipment() {
         </MainLayout>
     );
 }
-
