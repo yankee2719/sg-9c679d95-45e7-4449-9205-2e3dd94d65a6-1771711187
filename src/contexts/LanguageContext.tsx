@@ -1178,7 +1178,7 @@ const translations: Record<Language, Record<string, string>> = {
     },
 };
 
-const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 const languageNames: Record<Language, string> = {
     it: "Italiano",
@@ -1195,7 +1195,7 @@ export const languageFlags: Record<Language, string> = {
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState < Language > ("it");
+    const [language, setLanguageState] = useState<Language>("it");
 
     useEffect(() => {
         const savedLanguage = localStorage.getItem("app-language") as Language;
