@@ -28,16 +28,15 @@ import {
     ChevronDown,
     BarChart3,
     CalendarClock,
-    Building2
+    Building2,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-// Simplified roles
 type UserRole = "admin" | "supervisor" | "technician";
 
 interface MainLayoutProps {
     children: React.ReactNode;
-    userRole?: string;
+    userRole?: UserRole;
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
@@ -83,30 +82,26 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
     };
 
-    // Helper: check role level
-    const isAdminLevel = (role: string) => role === "admin";
-    const isManagerLevel = (role: string) => ["admin", "supervisor"].includes(role);
-
     // Navigation items based on role
     const getNavigationItems = () => {
         const currentRole = profile?.role || userRole;
 
-        const allNav = [
-            { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, show: true },
-            { name: "Stabilimenti", href: "/plants", icon: Building2, show: isManagerLevel(currentRole) },
-            { name: t("nav.equipment"), href: "/equipment", icon: Wrench, show: true },
-            { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, show: true },
-            { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, show: isManagerLevel(currentRole) },
-            { name: t("nav.scanner"), href: "/scanner", icon: QrCode, show: true },
-            { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, show: isManagerLevel(currentRole) },
+        const baseNav = [
+            { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.equipment"), href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
+            { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
         ];
 
-        return allNav.filter(item => item.show);
+        return baseNav.filter(item => item.roles.includes(currentRole));
     };
 
     const navigation = getNavigationItems();
 
     const adminNavigation = [
+        { name: "Stabilimenti", href: "/plants", icon: Building2 },
         { name: t("nav.users"), href: "/admin/users", icon: Users },
     ];
 
@@ -117,16 +112,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const canAccessAdmin = () => {
         const currentRole = profile?.role || userRole;
-        return isAdminLevel(currentRole);
-    };
-
-    const getRoleLabel = (role: string) => {
-        const labels: Record<string, string> = {
-            admin: "Amministratore",
-            supervisor: "Supervisore",
-            technician: "Tecnico",
-        };
-        return labels[role] || role;
+        return currentRole === "admin" || currentRole === "supervisor";
     };
 
     const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
@@ -155,7 +141,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         <div className="h-px bg-border" />
                     </div>
                     <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        {t("nav.users")}
+                        Gestione
                     </p>
                     {adminNavigation.map((item) => {
                         const active = isActive(item.href);
@@ -215,7 +201,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     <p className="text-sm font-medium text-foreground truncate">
                                         {profile?.full_name || user?.email?.split("@")[0] || "User"}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">{getRoleLabel(profile?.role || userRole)}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
                                 </div>
                                 <ChevronDown className="w-4 h-4 text-muted-foreground" />
                             </button>
@@ -279,7 +265,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     <p className="text-sm font-medium text-foreground truncate">
                                         {profile?.full_name || user?.email?.split("@")[0] || "User"}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">{getRoleLabel(profile?.role || userRole)}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
                                 </div>
                             </div>
                             <div className="flex gap-2">
