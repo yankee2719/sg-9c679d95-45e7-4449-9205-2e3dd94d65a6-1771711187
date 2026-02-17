@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface UserContext {
     userId: string;
     orgId: string | null;
+    orgType: string | null;
     role: string;
     displayName: string;
     email: string;
@@ -20,6 +21,7 @@ export async function getUserContext(): Promise<UserContext | null> {
 
     const orgId = profile?.default_organization_id || null;
     let role = "technician";
+    let orgType: string | null = null;
 
     if (orgId) {
         const { data: membership } = await supabase
@@ -31,11 +33,20 @@ export async function getUserContext(): Promise<UserContext | null> {
             .single();
 
         if (membership?.role) role = membership.role;
+
+        const { data: org } = await supabase
+            .from("organizations")
+            .select("type")
+            .eq("id", orgId)
+            .single();
+
+        if (org?.type) orgType = org.type;
     }
 
     return {
         userId: user.id,
         orgId,
+        orgType,
         role,
         displayName: profile?.display_name || profile?.first_name || user.email?.split("@")[0] || "User",
         email: profile?.email || user.email || "",
