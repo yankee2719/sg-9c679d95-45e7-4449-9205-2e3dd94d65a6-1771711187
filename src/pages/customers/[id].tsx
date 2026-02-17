@@ -283,19 +283,19 @@ export default function CustomerDetailPage() {
 
     const getLifecycleColor = (state: string | null) => {
         const map: Record<string, string> = {
-            active: "bg-green-500/20 text-green-400 border-green-500/30",
-            inactive: "bg-slate-500/20 text-slate-400 border-slate-500/30",
-            under_maintenance: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-            decommissioned: "bg-red-500/20 text-red-400 border-red-500/30",
+            active: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30",
+            inactive: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
+            under_maintenance: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30",
+            decommissioned: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30",
         };
         return map[state || "active"] || map.active;
     };
 
     const getRoleBadge = (role: string) => {
         const map: Record<string, { label: string; color: string }> = {
-            admin: { label: "Admin", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-            supervisor: { label: "Supervisor", color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
-            technician: { label: "Tecnico", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+            admin: { label: "Admin", color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30" },
+            supervisor: { label: "Supervisor", color: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-500/30" },
+            technician: { label: "Tecnico", color: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/30" },
         };
         return map[role] || map.technician;
     };
@@ -327,8 +327,8 @@ export default function CustomerDetailPage() {
                         </div>
                         <Badge className={
                             customer.subscription_status === "trial" || customer.subscription_status === "active"
-                                ? "bg-green-500/20 text-green-400 border-green-500/30"
-                                : "bg-slate-500/20 text-slate-400 border-slate-500/30"
+                                ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
+                                : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
                         }>
                             {customer.subscription_status || "—"}
                         </Badge>
@@ -414,7 +414,7 @@ export default function CustomerDetailPage() {
                             <div key={m.assignment_id || m.machine_id}
                                 className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 group">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-500/10 rounded-lg flex items-center justify-center">
                                         <Wrench className="w-5 h-5 text-purple-400" />
                                     </div>
                                     <div>
@@ -431,7 +431,7 @@ export default function CustomerDetailPage() {
                                         {new Date(m.assigned_at).toLocaleDateString("it-IT")}
                                     </span>
                                     <button onClick={() => handleUnassign(m.assignment_id, m.machine_name)}
-                                        className="p-1.5 rounded-lg bg-red-500/80 hover:bg-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        className="p-1.5 rounded-lg bg-red-500 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Trash2 className="w-3 h-3 text-white" />
                                     </button>
                                 </div>
@@ -508,7 +508,7 @@ export default function CustomerDetailPage() {
                             return (
                                 <div key={m.id || m.user_id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center">
+                                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/10 rounded-full flex items-center justify-center">
                                             <span className="text-blue-400 font-bold text-sm">
                                                 {(m.display_name || m.email || "U").charAt(0).toUpperCase()}
                                             </span>
@@ -521,8 +521,8 @@ export default function CustomerDetailPage() {
                                     <div className="flex items-center gap-2">
                                         <Badge className={`text-xs border ${roleBadge.color}`}>{roleBadge.label}</Badge>
                                         <Badge className={m.is_active
-                                            ? "bg-green-500/20 text-green-400 border-green-500/30 text-xs"
-                                            : "bg-slate-500/20 text-slate-400 border-slate-500/30 text-xs"
+                                            ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30 text-xs"
+                                            : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30 text-xs"
                                         }>
                                             {m.is_active ? "Attivo" : "Inattivo"}
                                         </Badge>
