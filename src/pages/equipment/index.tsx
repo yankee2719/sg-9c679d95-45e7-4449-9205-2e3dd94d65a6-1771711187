@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import { getUserContext, UserContext } from "@/lib/supabaseHelpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import {
     Plus, Search, Wrench, MapPin, Filter, ChevronRight, ChevronDown,
-    QrCode, Trash2, Building2, LayoutGrid, List,
+    QrCode, Trash2, Building2, LayoutGrid, List, Factory,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -31,24 +31,26 @@ interface Machine {
     qr_code_token: string | null;
     plant_id: string | null;
     photo_url: string | null;
+    organization_id: string | null;
+    // UI-only flags
+    _isAssigned?: boolean;      // true if this comes from machine_assignments
+    _manufacturerName?: string; // manufacturer org name
 }
 
-interface Plant {
-    id: string;
-    name: string;
-}
+interface Plant { id: string; name: string; }
 
 export default function EquipmentPage() {
     const router = useRouter();
     const { t } = useLanguage();
     const { toast } = useToast();
     const [loading, setLoading] = useState(true);
-    const [userRole, setUserRole] = useState("technician");
+    const [ctx, setCtx] = useState < UserContext | null > (null);
     const [machines, setMachines] = useState < Machine[] > ([]);
     const [filteredMachines, setFilteredMachines] = useState < Machine[] > ([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [categoryFilter, setCategoryFilter] = useState("all");
+    const [sourceFilter, setSourceFilter] = useState("all"); // all | own | assigned
     const [categories, setCategories] = useState < string[] > ([]);
     const [deleting, setDeleting] = useState < string | null > (null);
     const [plants, setPlants] = useState < Plant[] > ([]);
@@ -58,20 +60,57 @@ export default function EquipmentPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const ctx = await getUserContext();
-                if (!ctx) { router.push("/login"); return; }
-                setUserRole(ctx.role);
+                const userCtx = await getUserContext();
+                if (!userCtx) { router.push("/login"); return; }
+                setCtx(userCtx);
 
+                // 1. Load own machines (RLS handles org filter)
                 const { data: machineData } = await supabase
                     .from("machines").select("*").order("name");
 
-                if (machineData) {
-                    setMachines(machineData);
-                    setFilteredMachines(machineData);
-                    const cats = [...new Set(machineData.map(m => m.category).filter(Boolean))] as string[];
-                    setCategories(cats);
-                    if (machineData.some(m => m.plant_id)) setGroupedView(true);
+                let allMachines: Machine[] = (machineData || []).map(m => ({
+                    ...m,
+                    _isAssigned: m.organization_id !== userCtx.orgId,
+                }));
+
+                // 2. For customer orgs: also load assigned machines and tag them
+                if (userCtx.orgType === "customer" && userCtx.orgId) {
+                    const { data: assignments } = await supabase
+                        .from("machine_assignments")
+                        .select("machine_id, machines(organization_id)")
+                        .eq("customer_org_id", userCtx.orgId)
+                        .eq("is_active", true);
+
+                    if (assignments) {
+                        const assignedIds = new Set(assignments.map((a: any) => a.machine_id));
+                        allMachines = allMachines.map(m => ({
+                            ...m,
+                            _isAssigned: assignedIds.has(m.id) && m.organization_id !== userCtx.orgId,
+                        }));
+                    }
+
+                    // Get manufacturer name for assigned machines
+                    if (allMachines.some(m => m._isAssigned)) {
+                        const mfrOrgIds = [...new Set(allMachines.filter(m => m._isAssigned).map(m => m.organization_id).filter(Boolean))];
+                        if (mfrOrgIds.length > 0) {
+                            const { data: mfrOrgs } = await supabase
+                                .from("organizations").select("id, name").in("id", mfrOrgIds);
+                            if (mfrOrgs) {
+                                const mfrMap = new Map(mfrOrgs.map(o => [o.id, o.name]));
+                                allMachines = allMachines.map(m => ({
+                                    ...m,
+                                    _manufacturerName: m._isAssigned && m.organization_id ? mfrMap.get(m.organization_id) || null : null,
+                                })) as Machine[];
+                            }
+                        }
+                    }
                 }
+
+                setMachines(allMachines);
+                setFilteredMachines(allMachines);
+                const cats = [...new Set(allMachines.map(m => m.category).filter(Boolean))] as string[];
+                setCategories(cats);
+                if (allMachines.some(m => m.plant_id)) setGroupedView(true);
 
                 const { data: plantsData } = await supabase
                     .from("plants").select("id, name").eq("is_archived", false).order("name");
@@ -102,12 +141,14 @@ export default function EquipmentPage() {
         }
         if (statusFilter !== "all") filtered = filtered.filter(m => m.lifecycle_state === statusFilter);
         if (categoryFilter !== "all") filtered = filtered.filter(m => m.category === categoryFilter);
+        if (sourceFilter === "own") filtered = filtered.filter(m => !m._isAssigned);
+        if (sourceFilter === "assigned") filtered = filtered.filter(m => m._isAssigned);
         setFilteredMachines(filtered);
-    }, [searchQuery, statusFilter, categoryFilter, machines]);
+    }, [searchQuery, statusFilter, categoryFilter, sourceFilter, machines]);
 
     const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
         e.stopPropagation();
-        if (!confirm(`Sei sicuro di voler eliminare "${name}"?\n\nVerranno eliminati anche tutti i documenti e manutenzioni associati.`)) return;
+        if (!confirm(`Sei sicuro di voler eliminare "${name}"?`)) return;
         setDeleting(id);
         try {
             const { error } = await supabase.from("machines").delete().eq("id", id);
@@ -128,21 +169,24 @@ export default function EquipmentPage() {
             inactive: { label: "Inattivo", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
             under_maintenance: { label: "In Manutenzione", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
             decommissioned: { label: "Dismesso", color: "bg-red-500/20 text-red-400 border-red-500/30" },
-            retired: { label: "Dismesso", color: "bg-red-500/20 text-red-400 border-red-500/30" },
         };
         return configs[state || "active"] || { label: state || "—", color: "bg-slate-500/20 text-slate-400 border-slate-500/30" };
     };
 
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
+    const isAdmin = ctx?.role === "admin" || ctx?.role === "supervisor";
+    const isCustomer = ctx?.orgType === "customer";
+    const hasAssigned = machines.some(m => m._isAssigned);
+
     const togglePlant = (id: string) => {
         setExpandedPlants(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
     };
 
     const MachineCard = ({ item }: { item: Machine }) => {
         const status = getStatusConfig(item.lifecycle_state);
+        const canEdit = !item._isAssigned; // Can't edit manufacturer's machines
         return (
             <Card
-                className="rounded-2xl border-border bg-card/80 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
+                className={`rounded-2xl border-border bg-card/80 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden ${item._isAssigned ? "border-purple-500/20" : ""}`}
                 onClick={() => router.push(`/equipment/${item.id}`)}
             >
                 <div className="h-32 bg-muted/50 relative overflow-hidden">
@@ -150,7 +194,13 @@ export default function EquipmentPage() {
                         <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            <Wrench className="w-10 h-10 text-muted-foreground/60" />
+                            <Wrench className={`w-10 h-10 ${item._isAssigned ? "text-purple-400/60" : "text-muted-foreground/60"}`} />
+                        </div>
+                    )}
+                    {item._isAssigned && (
+                        <div className="absolute top-3 left-3 bg-purple-500/90 px-2 py-1 rounded-lg flex items-center gap-1">
+                            <Factory className="w-3 h-3 text-white" />
+                            <span className="text-white text-xs font-medium">{item._manufacturerName || "Costruttore"}</span>
                         </div>
                     )}
                     {item.qr_code_token && (
@@ -158,7 +208,7 @@ export default function EquipmentPage() {
                             <QrCode className="w-4 h-4 text-slate-800" />
                         </div>
                     )}
-                    {isAdmin && (
+                    {isAdmin && canEdit && (
                         <button
                             onClick={(e) => handleDelete(e, item.id, item.name)}
                             disabled={deleting === item.id}
@@ -190,11 +240,31 @@ export default function EquipmentPage() {
     };
 
     const renderGroupedView = () => {
-        const unassigned = filteredMachines.filter(m => !m.plant_id);
+        const unassigned = filteredMachines.filter(m => !m.plant_id && !m._isAssigned);
+        const assignedMachines = filteredMachines.filter(m => m._isAssigned);
+        const plantMachinesList = filteredMachines.filter(m => m.plant_id && !m._isAssigned);
+
         return (
             <div className="space-y-4">
+                {/* Assigned from manufacturer */}
+                {assignedMachines.length > 0 && (
+                    <div className="rounded-2xl border border-purple-500/30 bg-card/50 overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <Factory className="w-5 h-5 text-purple-400" />
+                            <span className="text-foreground font-bold text-lg">Macchine dal Costruttore</span>
+                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 ml-2">{assignedMachines.length}</Badge>
+                        </div>
+                        <div className="px-4 pb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {assignedMachines.map(m => <MachineCard key={m.id} item={m} />)}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* By plant */}
                 {plants.map(plant => {
-                    const plantMachines = filteredMachines.filter(m => m.plant_id === plant.id);
+                    const plantMachines = plantMachinesList.filter(m => m.plant_id === plant.id);
                     const isExpanded = expandedPlants.has(plant.id);
                     if (plantMachines.length === 0 && searchQuery) return null;
                     return (
@@ -205,7 +275,7 @@ export default function EquipmentPage() {
                                 <span className="text-foreground font-bold text-lg">{plant.name}</span>
                                 <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 ml-2">{plantMachines.length}</Badge>
                             </button>
-                            {isExpanded && (
+                            {isExpanded && plantMachines.length > 0 && (
                                 <div className="px-4 pb-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                         {plantMachines.map(m => <MachineCard key={m.id} item={m} />)}
@@ -215,11 +285,13 @@ export default function EquipmentPage() {
                         </div>
                     );
                 })}
+
+                {/* Unassigned to plant */}
                 {unassigned.length > 0 && (
                     <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Wrench className="w-5 h-5 text-muted-foreground" />
-                            <span className="text-muted-foreground font-bold text-lg">Non assegnate</span>
+                            <span className="text-muted-foreground font-bold text-lg">Non assegnate a stabilimento</span>
                             <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/30 ml-2">{unassigned.length}</Badge>
                         </div>
                         <div className="px-4 pb-4">
@@ -236,7 +308,7 @@ export default function EquipmentPage() {
     if (loading) return null;
 
     return (
-        <MainLayout userRole={userRole as any}>
+        <MainLayout userRole={ctx?.role as any}>
             <SEO title={`${t("equipment.title")} - MACHINA`} />
             <div className="space-y-6 max-w-7xl mx-auto">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -259,6 +331,7 @@ export default function EquipmentPage() {
                     </div>
                 </div>
 
+                {/* Filters */}
                 <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm">
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-4">
@@ -267,34 +340,48 @@ export default function EquipmentPage() {
                                 <Input placeholder={t("common.search")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                                     className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground" />
                             </div>
-                            <div className="flex gap-3">
+                            <div className="flex gap-3 flex-wrap">
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
+                                    <SelectTrigger className="w-[150px] bg-muted/50 border-border text-foreground">
                                         <Filter className="w-4 h-4 mr-2 text-muted-foreground" /><SelectValue placeholder={t("common.status")} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">{t("common.all")}</SelectItem>
                                         <SelectItem value="active">Attivo</SelectItem>
-                                        <SelectItem value="commissioned">Commissionato</SelectItem>
                                         <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
                                         <SelectItem value="inactive">Inattivo</SelectItem>
                                         <SelectItem value="decommissioned">Dismesso</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                    <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
-                                        <SelectValue placeholder={t("equipment.category")} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">{t("common.all")}</SelectItem>
-                                        {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                                {categories.length > 0 && (
+                                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                        <SelectTrigger className="w-[150px] bg-muted/50 border-border text-foreground">
+                                            <SelectValue placeholder="Categoria" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">{t("common.all")}</SelectItem>
+                                            {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                                {hasAssigned && (
+                                    <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                                        <SelectTrigger className="w-[150px] bg-muted/50 border-border text-foreground">
+                                            <SelectValue placeholder="Provenienza" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Tutte</SelectItem>
+                                            <SelectItem value="own">Proprie</SelectItem>
+                                            <SelectItem value="assigned">Dal Costruttore</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
+                {/* Machine list */}
                 {groupedView ? renderGroupedView() : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredMachines.map(m => <MachineCard key={m.id} item={m} />)}
