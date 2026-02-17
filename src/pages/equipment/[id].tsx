@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import { getUserContext, UserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import {
     ArrowLeft, Wrench, Building2, MapPin, Calendar, Hash, Tag,
-    QrCode, FileText, ClipboardList, Pencil, Save, X,
+    QrCode, FileText, ClipboardList, Pencil, Save, X, Factory, Lock,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +32,7 @@ interface Machine {
     qr_code_token: string | null;
     photo_url: string | null;
     year_of_manufacture: number | null;
+    organization_id: string | null;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -40,7 +41,6 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     inactive: { label: "Inattivo", className: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
     under_maintenance: { label: "In Manutenzione", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
     decommissioned: { label: "Dismesso", className: "bg-red-500/20 text-red-400 border-red-500/30" },
-    retired: { label: "Dismesso", className: "bg-red-500/20 text-red-400 border-red-500/30" },
 };
 
 export default function EquipmentDetailPage() {
@@ -51,11 +51,17 @@ export default function EquipmentDetailPage() {
 
     const [machine, setMachine] = useState < Machine | null > (null);
     const [plantName, setPlantName] = useState < string | null > (null);
+    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
     const [loading, setLoading] = useState(true);
-    const [userRole, setUserRole] = useState("technician");
+    const [ctx, setCtx] = useState < UserContext | null > (null);
     const [editingQR, setEditingQR] = useState(false);
     const [qrUrlDraft, setQrUrlDraft] = useState("");
     const [savingQR, setSavingQR] = useState(false);
+
+    // Derived
+    const isAssigned = machine && ctx ? machine.organization_id !== ctx.orgId : false;
+    const isAdmin = ctx?.role === "admin" || ctx?.role === "supervisor";
+    const canEdit = isAdmin && !isAssigned;
 
     useEffect(() => {
         if (id) loadAll(id as string);
@@ -63,8 +69,8 @@ export default function EquipmentDetailPage() {
 
     async function loadAll(machineId: string) {
         try {
-            const ctx = await getUserContext();
-            if (ctx) setUserRole(ctx.role);
+            const userCtx = await getUserContext();
+            if (userCtx) setCtx(userCtx);
 
             const { data, error } = await supabase.from("machines").select("*").eq("id", machineId).single();
             if (error) throw error;
@@ -75,14 +81,18 @@ export default function EquipmentDetailPage() {
                 const { data: plant } = await supabase.from("plants").select("name").eq("id", data.plant_id).single();
                 if (plant) setPlantName(plant.name);
             }
+
+            // If machine belongs to another org (manufacturer), get their name
+            if (userCtx && data.organization_id && data.organization_id !== userCtx.orgId) {
+                const { data: mfrOrg } = await supabase.from("organizations").select("name").eq("id", data.organization_id).single();
+                if (mfrOrg) setManufacturerName(mfrOrg.name);
+            }
         } catch (err) {
             console.error("Error:", err);
         } finally {
             setLoading(false);
         }
     }
-
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
 
     const handleSaveQR = async () => {
         if (!machine) return;
@@ -107,7 +117,7 @@ export default function EquipmentDetailPage() {
     if (!machine) return (
         <MainLayout>
             <div className="container mx-auto py-6 text-center">
-                <p className="text-red-400 text-lg">Attrezzatura non trovata</p>
+                <p className="text-red-400 text-lg">Macchina non trovata</p>
                 <Button variant="outline" className="mt-4" onClick={() => router.push("/equipment")}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> Torna alla lista
                 </Button>
@@ -135,13 +145,29 @@ export default function EquipmentDetailPage() {
                             <p className="text-sm text-muted-foreground">{machine.internal_code}</p>
                         </div>
                         <Badge className={status.className}>{status.label}</Badge>
+                        {isAssigned && (
+                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 flex items-center gap-1">
+                                <Factory className="w-3 h-3" /> {manufacturerName || "Costruttore"}
+                            </Badge>
+                        )}
                     </div>
-                    {isAdmin && (
+                    {canEdit && (
                         <Button onClick={() => router.push(`/equipment/edit/${machine.id}`)} className="bg-blue-600 hover:bg-blue-700">
                             <Pencil className="mr-2 h-4 w-4" /> Modifica
                         </Button>
                     )}
                 </div>
+
+                {/* Read-only notice for assigned machines */}
+                {isAssigned && (
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                        <Lock className="w-5 h-5 text-purple-400 shrink-0" />
+                        <div>
+                            <p className="text-foreground font-medium">Macchina fornita da {manufacturerName || "costruttore"}</p>
+                            <p className="text-muted-foreground text-sm">Documentazione e specifiche gestite dal costruttore. Puoi creare manutenzioni e checklist.</p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
@@ -173,10 +199,12 @@ export default function EquipmentDetailPage() {
                             <CardContent className="space-y-4">
                                 <InfoRow icon={<Building2 className="w-4 h-4 text-blue-400" />} label="Stabilimento" value={plantName} fallback="Non assegnato" />
                                 <InfoRow icon={<MapPin className="w-4 h-4" />} label="Posizione" value={machine.position} />
+                                {isAssigned && manufacturerName && (
+                                    <InfoRow icon={<Factory className="w-4 h-4 text-purple-400" />} label="Costruttore" value={manufacturerName} />
+                                )}
                             </CardContent>
                         </Card>
 
-                        {/* Specifiche */}
                         {specsText && (
                             <Card className="bg-card border-border">
                                 <CardHeader>
@@ -188,7 +216,6 @@ export default function EquipmentDetailPage() {
                             </Card>
                         )}
 
-                        {/* Note */}
                         {machine.notes && (
                             <Card className="bg-card border-border">
                                 <CardHeader>
@@ -221,7 +248,7 @@ export default function EquipmentDetailPage() {
                                             <p className="text-sm text-foreground font-mono break-all bg-muted/50 rounded-lg p-2">
                                                 {machine.qr_code_token || <span className="text-muted-foreground italic">Default: link alla scheda</span>}
                                             </p>
-                                            {isAdmin && (
+                                            {canEdit && (
                                                 <Button variant="outline" size="sm" onClick={() => { setEditingQR(true); setQrUrlDraft(machine.qr_code_token || ""); }} className="w-full mt-2">
                                                     <Pencil className="w-3 h-3 mr-2" />
                                                     {machine.qr_code_token ? "Modifica URL" : "Imposta URL personalizzato"}
@@ -264,4 +291,3 @@ function InfoRow({ icon, label, value, fallback = "\u2014" }: { icon: React.Reac
         </div>
     );
 }
-
