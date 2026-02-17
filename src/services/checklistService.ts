@@ -1,5 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 
+async function getMyTenantId(): Promise<string | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single();
+    return data?.tenant_id || null;
+}
+
 export const checklistService = {
     async getAllChecklists() {
         const { data, error } = await supabase
@@ -8,24 +19,6 @@ export const checklistService = {
         *,
         items:checklist_items(*)
       `)
-            .order("created_at", { ascending: false });
-
-        if (error) {
-            console.error("Error fetching checklists:", error);
-            throw error;
-        }
-
-        return data || [];
-    },
-
-    async getChecklistsByOrganization(organizationId: string) {
-        const { data, error } = await supabase
-            .from("checklists")
-            .select(`
-        *,
-        items:checklist_items(*)
-      `)
-            .eq("organization_id", organizationId)
             .order("created_at", { ascending: false });
 
         if (error) {
@@ -55,17 +48,14 @@ export const checklistService = {
     },
 
     async createChecklist(checklist: {
-        organization_id: string;
-        machine_id?: string;
-        title: string;
+        name: string;
         description?: string;
-        checklist_type?: string;
-        is_template?: boolean;
         is_active?: boolean;
     }) {
+        const tenantId = await getMyTenantId();
         const { data, error } = await supabase
             .from("checklists")
-            .insert(checklist)
+            .insert({ ...checklist, tenant_id: tenantId })
             .select()
             .single();
 
@@ -78,9 +68,8 @@ export const checklistService = {
     },
 
     async updateChecklist(id: string, updates: {
-        title?: string;
+        name?: string;
         description?: string;
-        checklist_type?: string;
         is_active?: boolean;
     }) {
         const { data, error } = await supabase
@@ -99,7 +88,6 @@ export const checklistService = {
     },
 
     async deleteChecklist(id: string) {
-        // First delete all items
         await supabase
             .from("checklist_items")
             .delete()
@@ -120,16 +108,14 @@ export const checklistService = {
         checklist_id: string;
         title: string;
         description?: string;
-        item_order: number;
+        item_type: string;
         is_required?: boolean;
-        expected_value?: string;
-        measurement_unit?: string;
-        min_value?: number;
-        max_value?: number;
+        order_index: number;
     }) {
+        const tenantId = await getMyTenantId();
         const { data, error } = await supabase
             .from("checklist_items")
-            .insert(item)
+            .insert({ ...item, tenant_id: tenantId })
             .select()
             .single();
 
@@ -144,11 +130,9 @@ export const checklistService = {
     async updateChecklistItem(id: string, updates: {
         title?: string;
         description?: string;
+        item_type?: string;
         is_required?: boolean;
-        item_order?: number;
-        expected_value?: string;
-        min_value?: number;
-        max_value?: number;
+        order_index?: number;
     }) {
         const { data, error } = await supabase
             .from("checklist_items")
@@ -179,14 +163,14 @@ export const checklistService = {
 
     async createExecution(execution: {
         checklist_id: string;
-        machine_id: string;
         executed_by: string;
-        work_order_id?: string;
-        overall_status?: string;
+        equipment_id?: string;
+        status: string;
     }) {
+        const tenantId = await getMyTenantId();
         const { data, error } = await supabase
             .from("checklist_executions")
-            .insert(execution)
+            .insert({ ...execution, tenant_id: tenantId })
             .select()
             .single();
 
@@ -204,8 +188,8 @@ export const checklistService = {
             .select(`
         *,
         checklist:checklists(*),
-        machine:machines(id, name, internal_code),
-        executor:profiles(id, display_name, email)
+        equipment:equipment(*),
+        executor:profiles(*)
       `)
             .eq("id", id)
             .single();
