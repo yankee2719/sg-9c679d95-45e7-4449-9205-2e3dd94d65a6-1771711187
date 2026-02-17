@@ -147,7 +147,7 @@ export default function AssignmentsPage() {
 
                 {/* Grouped by customer */}
                 {Object.entries(byCustomer).map(([customerName, custAssignments]) => (
-                    <div key={customerName} className="rounded-2xl border border-blue-500/30 bg-card/50 overflow-hidden">
+                    <div key={customerName} className="rounded-2xl border border-blue-300 dark:border-blue-500/30 bg-card/50 overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4 border-b border-border cursor-pointer"
                             onClick={() => {
                                 const cid = custAssignments[0]?.customer_org_id;
@@ -155,7 +155,7 @@ export default function AssignmentsPage() {
                             }}>
                             <Building2 className="w-5 h-5 text-blue-400" />
                             <span className="text-foreground font-bold text-lg">{customerName}</span>
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">{custAssignments.length} macchine</Badge>
+                            <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-300 dark:border-blue-500/30">{custAssignments.length} macchine</Badge>
                             <ChevronRight className="w-5 h-5 text-muted-foreground ml-auto" />
                         </div>
                         <div className="p-4 space-y-2">
@@ -169,7 +169,7 @@ export default function AssignmentsPage() {
                                     <div className="flex items-center gap-3">
                                         <span className="text-xs text-muted-foreground">{new Date(a.assigned_at).toLocaleDateString("it-IT")}</span>
                                         <button onClick={() => handleDeactivate(a.id)}
-                                            className="p-1 rounded bg-red-500/80 hover:bg-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            className="p-1 rounded bg-red-500 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <Trash2 className="w-3 h-3 text-white" />
                                         </button>
                                     </div>
