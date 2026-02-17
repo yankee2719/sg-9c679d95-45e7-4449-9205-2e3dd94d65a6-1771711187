@@ -2,253 +2,221 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Save, Building2, QrCode } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { getUserContext } from "@/lib/supabaseHelpers";
 import { useToast } from "@/hooks/use-toast";
-import { getEquipmentById, updateEquipment } from "@/services/equipmentService";
-import { ArrowLeft, Save } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+interface Plant { id: string; name: string; }
 
 export default function EditEquipment() {
-  const router = useRouter();
-  const { id } = router.query;
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    equipment_code: "",
-    category: "",
-    manufacturer: "",
-    model: "",
-    serial_number: "",
-    purchase_date: "",
-    location: "",
-    status: "active" as "active" | "inactive" | "under_maintenance" | "retired",
-    technical_specs: "",
-    notes: ""
-  });
+    const router = useRouter();
+    const { id } = router.query;
+    const { toast } = useToast();
+    const { t } = useLanguage();
+    const [loading, setLoading] = useState(false);
+    const [userRole, setUserRole] = useState("technician");
+    const [plants, setPlants] = useState < Plant[] > ([]);
 
-  useEffect(() => {
-    if (id && typeof id === "string") {
-      loadEquipment(id);
-    }
-  }, [id]);
+    const [formData, setFormData] = useState({
+        name: "",
+        internal_code: "",
+        category: "",
+        brand: "",
+        model: "",
+        serial_number: "",
+        position: "",
+        lifecycle_state: "active",
+        specifications: "",
+        notes: "",
+        plant_id: "",
+        qr_code_token: "",
+    });
 
-  const loadEquipment = async (equipmentId: string) => {
-    try {
-      const equipment = await getEquipmentById(equipmentId);
-      setFormData({
-        name: equipment.name,
-        equipment_code: equipment.equipment_code,
-        category: equipment.category || "",
-        status: equipment.status as "active" | "inactive" | "under_maintenance" | "retired",
-        location: equipment.location || "",
-        purchase_date: equipment.purchase_date || "",
-        manufacturer: equipment.manufacturer || "",
-        model: equipment.model || "",
-        serial_number: equipment.serial_number || "",
-        technical_specs: JSON.stringify(equipment.technical_specs || ""),
-        notes: equipment.notes || ""
-      });
-    } catch (error) {
-      console.error("Error loading equipment:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load equipment data",
-        variant: "destructive",
-      });
-    }
-  };
+    useEffect(() => {
+        const init = async () => {
+            const ctx = await getUserContext();
+            if (ctx) setUserRole(ctx.role);
+            const { data } = await supabase.from("plants").select("id, name").eq("is_archived", false).order("name");
+            if (data) setPlants(data);
+            if (id && typeof id === "string") loadMachine(id);
+        };
+        init();
+    }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!id || typeof id !== "string") return;
+    const loadMachine = async (machineId: string) => {
+        try {
+            const { data, error } = await supabase.from("machines").select("*").eq("id", machineId).single();
+            if (error) throw error;
+            const specs = data.specifications
+                ? (typeof data.specifications === "string" ? data.specifications : data.specifications?.text || JSON.stringify(data.specifications))
+                : "";
+            setFormData({
+                name: data.name || "",
+                internal_code: data.internal_code || "",
+                category: data.category || "",
+                brand: data.brand || "",
+                model: data.model || "",
+                serial_number: data.serial_number || "",
+                position: data.position || "",
+                lifecycle_state: data.lifecycle_state || "active",
+                specifications: specs,
+                notes: data.notes || "",
+                plant_id: data.plant_id || "",
+                qr_code_token: data.qr_code_token || "",
+            });
+        } catch (error) {
+            toast({ title: t("common.error"), description: "Impossibile caricare", variant: "destructive" });
+        }
+    };
 
-    setLoading(true);
-    try {
-      await updateEquipment(id, formData);
-      toast({
-        title: "Success",
-        description: "Equipment updated successfully",
-      });
-      router.push(`/equipment/${id}`);
-    } catch (error) {
-      console.error("Error updating equipment:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update equipment",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!id || typeof id !== "string") return;
+        setLoading(true);
+        try {
+            const { error } = await supabase.from("machines").update({
+                name: formData.name.trim(),
+                internal_code: formData.internal_code.trim(),
+                category: formData.category.trim() || null,
+                brand: formData.brand.trim() || null,
+                model: formData.model.trim() || null,
+                serial_number: formData.serial_number.trim() || null,
+                position: formData.position.trim() || null,
+                lifecycle_state: formData.lifecycle_state,
+                specifications: formData.specifications.trim() ? { text: formData.specifications.trim() } : null,
+                notes: formData.notes.trim() || null,
+                plant_id: formData.plant_id || null,
+                qr_code_token: formData.qr_code_token.trim() || null,
+                updated_at: new Date().toISOString(),
+            }).eq("id", id);
+            if (error) throw error;
+            toast({ title: t("common.success"), description: "Attrezzatura aggiornata" });
+            router.push(`/equipment/${id}`);
+        } catch (error: any) {
+            toast({ title: t("common.error"), description: error?.message || "Errore", variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+    const isAdmin = userRole === "admin" || userRole === "supervisor";
 
-  return (
-    <MainLayout>
-      <SEO title="Edit Equipment - Industrial Maintenance" />
-      <div className="container mx-auto p-6 max-w-4xl">
-        <div className="mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-            className="mb-4"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <h1 className="text-3xl font-bold">Edit Equipment</h1>
-        </div>
-
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-white">Equipment Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-white">Equipment Name *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                    required
-                  />
+    return (
+        <MainLayout>
+            <SEO title="Modifica Attrezzatura - MACHINA" />
+            <div className="container mx-auto p-6 max-w-4xl">
+                <div className="mb-6">
+                    <Button variant="ghost" onClick={() => router.back()} className="mb-4">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> {t("common.back")}
+                    </Button>
+                    <h1 className="text-3xl font-bold text-foreground">{t("equipment.edit")}</h1>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="equipment_code" className="text-white">Equipment Code *</Label>
-                  <Input
-                    id="equipment_code"
-                    value={formData.equipment_code}
-                    onChange={(e) => handleChange("equipment_code", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-white">Category</Label>
-                  <Input
-                    id="category"
-                    value={formData.category}
-                    onChange={(e) => handleChange("category", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="manufacturer" className="text-white">Manufacturer</Label>
-                  <Input
-                    id="manufacturer"
-                    value={formData.manufacturer}
-                    onChange={(e) => handleChange("manufacturer", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="model" className="text-white">Model</Label>
-                  <Input
-                    id="model"
-                    value={formData.model}
-                    onChange={(e) => handleChange("model", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="serial_number" className="text-white">Serial Number</Label>
-                  <Input
-                    id="serial_number"
-                    value={formData.serial_number}
-                    onChange={(e) => handleChange("serial_number", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location" className="text-white">Location</Label>
-                  <Input
-                    id="location"
-                    value={formData.location}
-                    onChange={(e) => handleChange("location", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="status" className="text-white">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: "active" | "inactive" | "under_maintenance" | "retired") =>
-                      setFormData({ ...formData, status: value })
-                    }
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="active" className="text-white">Active</SelectItem>
-                      <SelectItem value="inactive" className="text-white">Inactive</SelectItem>
-                      <SelectItem value="under_maintenance" className="text-white">Under Maintenance</SelectItem>
-                      <SelectItem value="retired" className="text-white">Retired</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="technical_specs" className="text-white">Technical Specifications</Label>
-                <Textarea
-                  id="technical_specs"
-                  value={formData.technical_specs}
-                  onChange={(e) => handleChange("technical_specs", e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  rows={4}
-                  placeholder="Enter technical specifications..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes" className="text-white">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => handleChange("notes", e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  rows={3}
-                  placeholder="Additional notes..."
-                />
-              </div>
-
-              <div className="flex gap-4">
-                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <Save className="mr-2 h-4 w-4" />
-                  {loading ? "Saving..." : "Save Changes"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.back()}
-                  className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </MainLayout>
-  );
+                <Card className="bg-card border-border">
+                    <CardHeader><CardTitle className="text-foreground">{t("equipment.information")}</CardTitle></CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("equipment.name")} *</Label>
+                                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        className="bg-muted border-border text-foreground" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("equipment.code")} *</Label>
+                                    <Input value={formData.internal_code} onChange={(e) => setFormData({ ...formData, internal_code: e.target.value })}
+                                        className="bg-muted border-border text-foreground" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground flex items-center gap-2">
+                                        <Building2 className="w-4 h-4 text-blue-400" /> Stabilimento
+                                    </Label>
+                                    <Select value={formData.plant_id} onValueChange={(v) => setFormData({ ...formData, plant_id: v })}>
+                                        <SelectTrigger className="bg-muted border-border text-foreground">
+                                            <SelectValue placeholder="Seleziona stabilimento..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {plants.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {isAdmin && (
+                                    <div className="space-y-2">
+                                        <Label className="text-foreground flex items-center gap-2">
+                                            <QrCode className="w-4 h-4 text-primary" /> URL QR Code
+                                        </Label>
+                                        <Input value={formData.qr_code_token} onChange={(e) => setFormData({ ...formData, qr_code_token: e.target.value })}
+                                            placeholder="https://esempio.com/manuale.pdf" className="bg-muted border-border text-foreground" />
+                                        <p className="text-xs text-muted-foreground">Lascia vuoto per usare il link alla scheda</p>
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("equipment.category")}</Label>
+                                    <Input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                        className="bg-muted border-border text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">Marca</Label>
+                                    <Input value={formData.brand} onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                        className="bg-muted border-border text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("equipment.model")}</Label>
+                                    <Input value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                                        className="bg-muted border-border text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("equipment.serialNumber")}</Label>
+                                    <Input value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                                        className="bg-muted border-border text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">Posizione</Label>
+                                    <Input value={formData.position} onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                                        className="bg-muted border-border text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("equipment.status")}</Label>
+                                    <Select value={formData.lifecycle_state} onValueChange={(v) => setFormData({ ...formData, lifecycle_state: v })}>
+                                        <SelectTrigger className="bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Attivo</SelectItem>
+                                            <SelectItem value="inactive">Inattivo</SelectItem>
+                                            <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
+                                            <SelectItem value="decommissioned">Dismesso</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-foreground">{t("equipment.technicalSpecs")}</Label>
+                                <Textarea value={formData.specifications} onChange={(e) => setFormData({ ...formData, specifications: e.target.value })}
+                                    className="bg-muted border-border text-foreground" rows={4} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-foreground">{t("common.notes")}</Label>
+                                <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                    className="bg-muted border-border text-foreground" rows={3} />
+                            </div>
+                            <div className="flex gap-4">
+                                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+                                    <Save className="mr-2 h-4 w-4" />{loading ? t("equipment.saving") : t("common.save")}
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => router.back()}>{t("common.cancel")}</Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+            </div>
+        </MainLayout>
+    );
 }
+
