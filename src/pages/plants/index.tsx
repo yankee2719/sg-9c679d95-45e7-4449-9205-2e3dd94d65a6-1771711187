@@ -1,14 +1,19 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { getProfileData } from "@/lib/supabaseHelpers";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import {
     Select,
     SelectContent,
@@ -17,619 +22,458 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
-import {
-    Building2,
     Plus,
-    Edit,
-    Trash2,
-    Loader2,
-    MapPin,
-    AlertCircle,
-    Search,
+    Building2,
     Factory,
-    Users,
-    Phone,
-    Mail,
+    Layers,
+    Trash2,
+    Edit,
+    ChevronRight,
+    ChevronDown,
+    MapPin,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Plant {
     id: string;
     name: string;
     code: string | null;
-    description: string | null;
-    plant_type: "plant" | "customer";
-    address_line1: string | null;
-    address_line2: string | null;
+    address: string | null;
     city: string | null;
-    province: string | null;
-    postal_code: string | null;
-    country: string | null;
-    plant_manager_name: string | null;
-    plant_manager_email: string | null;
-    plant_manager_phone: string | null;
-    is_archived: boolean;
-    created_at: string;
-    machine_count?: number;
+    country: string;
+    is_active: boolean;
+    tenant_id: string;
+}
+
+interface Department {
+    id: string;
+    name: string;
+    code: string | null;
+    description: string | null;
+    plant_id: string;
+    tenant_id: string;
+    is_active: boolean;
+}
+
+interface ProductionLine {
+    id: string;
+    name: string;
+    code: string | null;
+    description: string | null;
+    department_id: string;
+    tenant_id: string;
+    is_active: boolean;
 }
 
 export default function PlantsPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { t } = useLanguage();
-
-    const [userRole, setUserRole] = useState < string | null > (null);
-    const [orgId, setOrgId] = useState < string | null > (null);
     const [loading, setLoading] = useState(true);
+    const [userRole, setUserRole] = useState < string > ("technician");
+    const [tenantId, setTenantId] = useState < string | null > (null);
+
     const [plants, setPlants] = useState < Plant[] > ([]);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [viewMode, setViewMode] = useState < "plant" | "customer" > ("plant");
+    const [departments, setDepartments] = useState < Department[] > ([]);
+    const [lines, setLines] = useState < ProductionLine[] > ([]);
 
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [editingPlant, setEditingPlant] = useState < Plant | null > (null);
-    const [formData, setFormData] = useState({
-        name: "",
-        code: "",
-        description: "",
-        plant_type: "plant" as "plant" | "customer",
-        address_line1: "",
-        address_line2: "",
-        city: "",
-        province: "",
-        postal_code: "",
-        country: "IT",
-        plant_manager_name: "",
-        plant_manager_email: "",
-        plant_manager_phone: "",
-    });
+    const [expandedPlant, setExpandedPlant] = useState < string | null > (null);
+    const [expandedDept, setExpandedDept] = useState < string | null > (null);
 
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [deleting, setDeleting] = useState(false);
-    const [plantToDelete, setPlantToDelete] = useState < Plant | null > (null);
+    // Dialog state
+    const [showDialog, setShowDialog] = useState(false);
+    const [dialogType, setDialogType] = useState < "plant" | "department" | "line" > ("plant");
+    const [dialogMode, setDialogMode] = useState < "create" | "edit" > ("create");
+    const [editId, setEditId] = useState < string | null > (null);
+    const [parentId, setParentId] = useState < string | null > (null);
+    const [formName, setFormName] = useState("");
+    const [formCode, setFormCode] = useState("");
+    const [formAddress, setFormAddress] = useState("");
+    const [formCity, setFormCity] = useState("");
+    const [formDescription, setFormDescription] = useState("");
 
     useEffect(() => {
-        const init = async () => {
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) { router.push("/login"); return; }
+        loadData();
+    }, []);
 
-                const profileData = await getProfileData(user.id);
-                if (!profileData) { router.push("/login"); return; }
-
-                if (!["admin", "supervisor"].includes(profileData.role || "")) {
-                    router.push("/dashboard");
-                    return;
-                }
-
-                setUserRole(profileData.role);
-                setOrgId(profileData.organizationId);
-                await loadPlants(profileData.organizationId);
-            } catch (error) {
-                console.error("Init error:", error);
-                router.push("/login");
-            } finally {
-                setLoading(false);
-            }
-        };
-        init();
-    }, [router]);
-
-    const loadPlants = async (organizationId: string | null) => {
-        if (!organizationId) return;
+    const loadData = async () => {
         try {
-            const { data, error } = await supabase
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { router.push("/login"); return; }
+
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("role, tenant_id")
+                .eq("id", user.id)
+                .single();
+
+            if (!profile) return;
+            setUserRole(profile.role);
+            setTenantId(profile.tenant_id);
+
+            if (profile.role === "technician") {
+                router.push("/dashboard");
+                return;
+            }
+
+            const { data: plantsData } = await supabase
                 .from("plants")
                 .select("*")
-                .eq("organization_id", organizationId)
-                .eq("is_archived", false)
-                .order("name", { ascending: true });
+                .eq("tenant_id", profile.tenant_id)
+                .order("name");
 
-            if (error) throw error;
+            const { data: deptsData } = await supabase
+                .from("departments")
+                .select("*")
+                .eq("tenant_id", profile.tenant_id)
+                .order("name");
 
-            // Machine counts
-            const { data: machineCounts } = await supabase
-                .from("machines")
-                .select("plant_id")
-                .eq("organization_id", organizationId)
-                .eq("is_archived", false);
+            const { data: linesData } = await supabase
+                .from("production_lines")
+                .select("*")
+                .eq("tenant_id", profile.tenant_id)
+                .order("name");
 
-            const countMap: Record<string, number> = {};
-            machineCounts?.forEach(m => {
-                if (m.plant_id) countMap[m.plant_id] = (countMap[m.plant_id] || 0) + 1;
-            });
-
-            setPlants((data || []).map(p => ({
-                ...p,
-                plant_type: p.plant_type || "plant",
-                machine_count: countMap[p.id] || 0,
-            })));
+            setPlants(plantsData || []);
+            setDepartments(deptsData || []);
+            setLines(linesData || []);
         } catch (error) {
             console.error("Error loading plants:", error);
-            toast({ variant: "destructive", title: "Errore", description: "Impossibile caricare i dati" });
+        } finally {
+            setLoading(false);
         }
     };
 
-    const displayedPlants = plants
-        .filter(p => p.plant_type === viewMode)
-        .filter(p => {
-            if (!searchQuery.trim()) return true;
-            const q = searchQuery.toLowerCase();
-            return p.name.toLowerCase().includes(q) ||
-                p.code?.toLowerCase().includes(q) ||
-                p.city?.toLowerCase().includes(q) ||
-                p.plant_manager_name?.toLowerCase().includes(q);
-        });
-
-    const plantCount = plants.filter(p => p.plant_type === "plant").length;
-    const customerCount = plants.filter(p => p.plant_type === "customer").length;
-
-    const openCreateDialog = () => {
-        setEditingPlant(null);
-        setFormData({
-            name: "", code: "", description: "",
-            plant_type: viewMode,
-            address_line1: "", address_line2: "", city: "", province: "", postal_code: "", country: "IT",
-            plant_manager_name: "", plant_manager_email: "", plant_manager_phone: "",
-        });
-        setDialogOpen(true);
+    const openCreate = (type: "plant" | "department" | "line", parent?: string) => {
+        setDialogType(type);
+        setDialogMode("create");
+        setEditId(null);
+        setParentId(parent || null);
+        setFormName("");
+        setFormCode("");
+        setFormAddress("");
+        setFormCity("");
+        setFormDescription("");
+        setShowDialog(true);
     };
 
-    const openEditDialog = (plant: Plant) => {
-        setEditingPlant(plant);
-        setFormData({
-            name: plant.name,
-            code: plant.code || "",
-            description: plant.description || "",
-            plant_type: plant.plant_type || "plant",
-            address_line1: plant.address_line1 || "",
-            address_line2: plant.address_line2 || "",
-            city: plant.city || "",
-            province: plant.province || "",
-            postal_code: plant.postal_code || "",
-            country: plant.country || "IT",
-            plant_manager_name: plant.plant_manager_name || "",
-            plant_manager_email: plant.plant_manager_email || "",
-            plant_manager_phone: plant.plant_manager_phone || "",
-        });
-        setDialogOpen(true);
+    const openEdit = (type: "plant" | "department" | "line", item: any) => {
+        setDialogType(type);
+        setDialogMode("edit");
+        setEditId(item.id);
+        setFormName(item.name || "");
+        setFormCode(item.code || "");
+        setFormAddress(item.address || "");
+        setFormCity(item.city || "");
+        setFormDescription(item.description || "");
+        setShowDialog(true);
     };
-
-    const buildPayload = () => ({
-        name: formData.name.trim(),
-        code: formData.code.trim() || null,
-        description: formData.description.trim() || null,
-        plant_type: formData.plant_type,
-        address_line1: formData.address_line1.trim() || null,
-        address_line2: formData.address_line2.trim() || null,
-        city: formData.city.trim() || null,
-        province: formData.province.trim() || null,
-        postal_code: formData.postal_code.trim() || null,
-        country: formData.country.trim() || "IT",
-        plant_manager_name: formData.plant_manager_name.trim() || null,
-        plant_manager_email: formData.plant_manager_email.trim() || null,
-        plant_manager_phone: formData.plant_manager_phone.trim() || null,
-    });
 
     const handleSave = async () => {
-        if (!formData.name.trim()) {
-            toast({ variant: "destructive", title: "Errore", description: "Il nome è obbligatorio" });
-            return;
-        }
-        if (!orgId) return;
+        if (!formName.trim() || !tenantId) return;
 
-        setSaving(true);
         try {
-            const payload = buildPayload();
+            if (dialogType === "plant") {
+                const payload = {
+                    name: formName.trim(),
+                    code: formCode.trim() || null,
+                    address: formAddress.trim() || null,
+                    city: formCity.trim() || null,
+                    tenant_id: tenantId,
+                    is_active: true,
+                };
 
-            if (editingPlant) {
-                const { error } = await supabase
-                    .from("plants")
-                    .update(payload)
-                    .eq("id", editingPlant.id);
-                if (error) throw error;
-                toast({ title: "✅ Aggiornato con successo" });
-            } else {
-                const { error } = await supabase
-                    .from("plants")
-                    .insert({ ...payload, organization_id: orgId });
-                if (error) throw error;
-                toast({ title: viewMode === "plant" ? "✅ Stabilimento creato" : "✅ Cliente creato" });
+                if (dialogMode === "create") {
+                    const { error } = await supabase.from("plants").insert(payload);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabase.from("plants").update(payload).eq("id", editId!);
+                    if (error) throw error;
+                }
+            } else if (dialogType === "department") {
+                const payload = {
+                    name: formName.trim(),
+                    code: formCode.trim() || null,
+                    description: formDescription.trim() || null,
+                    plant_id: parentId!,
+                    tenant_id: tenantId,
+                    is_active: true,
+                };
+
+                if (dialogMode === "create") {
+                    const { error } = await supabase.from("departments").insert(payload);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabase.from("departments").update(payload).eq("id", editId!);
+                    if (error) throw error;
+                }
+            } else if (dialogType === "line") {
+                const payload = {
+                    name: formName.trim(),
+                    code: formCode.trim() || null,
+                    description: formDescription.trim() || null,
+                    department_id: parentId!,
+                    tenant_id: tenantId,
+                    is_active: true,
+                };
+
+                if (dialogMode === "create") {
+                    const { error } = await supabase.from("production_lines").insert(payload);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabase.from("production_lines").update(payload).eq("id", editId!);
+                    if (error) throw error;
+                }
             }
 
-            setDialogOpen(false);
-            await loadPlants(orgId);
+            toast({ title: "Salvato", description: `${formName} salvato correttamente` });
+            setShowDialog(false);
+            loadData();
         } catch (error: any) {
             console.error("Save error:", error);
-            toast({ variant: "destructive", title: "Errore", description: error.message || "Salvataggio fallito" });
-        } finally {
-            setSaving(false);
+            toast({ title: "Errore", description: error.message, variant: "destructive" });
         }
     };
 
-    const handleDelete = async () => {
-        if (!plantToDelete || !orgId) return;
+    const handleDelete = async (type: "plant" | "department" | "line", id: string, name: string) => {
+        const warnings: Record<string, string> = {
+            plant: "Verranno eliminati anche tutti i reparti e le linee associate.",
+            department: "Verranno eliminate anche tutte le linee associate.",
+            line: "",
+        };
+        if (!confirm(`Eliminare "${name}"? ${warnings[type]}`)) return;
 
-        if ((plantToDelete.machine_count || 0) > 0) {
-            toast({ variant: "destructive", title: "Errore", description: "Non puoi eliminare con macchine associate. Rimuovi prima le macchine." });
-            setDeleteDialogOpen(false);
-            return;
-        }
-
-        setDeleting(true);
         try {
-            // Soft delete
-            const { error } = await supabase
-                .from("plants")
-                .update({ is_archived: true })
-                .eq("id", plantToDelete.id);
+            const table = type === "plant" ? "plants" : type === "department" ? "departments" : "production_lines";
+            const { error } = await supabase.from(table).delete().eq("id", id);
             if (error) throw error;
-
-            toast({ title: "✅ Eliminato" });
-            setDeleteDialogOpen(false);
-            setPlantToDelete(null);
-            await loadPlants(orgId);
+            toast({ title: "Eliminato", description: `"${name}" eliminato` });
+            loadData();
         } catch (error: any) {
-            console.error("Delete error:", error);
-            toast({ variant: "destructive", title: "Errore", description: error.message });
-        } finally {
-            setDeleting(false);
+            toast({ title: "Errore", description: error.message, variant: "destructive" });
         }
     };
 
-    const getTypeLabel = () => viewMode === "plant" ? "Stabilimento" : "Cliente";
-    const getTypeLabelPlural = () => viewMode === "plant" ? "Stabilimenti" : "Clienti";
-    const getTypeIcon = () => viewMode === "plant" ? Building2 : Users;
-    const TypeIcon = getTypeIcon();
+    const dialogTitle = () => {
+        const labels = { plant: "Stabilimento", department: "Reparto", line: "Linea di produzione" };
+        return `${dialogMode === "create" ? "Nuovo" : "Modifica"} ${labels[dialogType]}`;
+    };
 
-    if (loading) {
-        return (
-            <MainLayout>
-                <div className="flex items-center justify-center min-h-[60vh]">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            </MainLayout>
-        );
-    }
+    if (loading) return null;
 
     return (
-        <MainLayout>
-            <SEO title={`${getTypeLabelPlural()} - MACHINA`} />
+        <MainLayout userRole={userRole as any}>
+            <SEO title="Stabilimenti - MACHINA" />
 
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
+            <div className="space-y-6 max-w-5xl mx-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-                            <TypeIcon className="h-8 w-8 text-primary" />
-                            {getTypeLabelPlural()}
-                        </h1>
-                        <p className="text-muted-foreground mt-2">
-                            {viewMode === "plant"
-                                ? "Gestisci gli stabilimenti e le sedi operative"
-                                : "Gestisci le sedi dei clienti"}
-                        </p>
+                        <h1 className="text-2xl font-bold text-foreground">Stabilimenti</h1>
+                        <p className="text-muted-foreground mt-1">Gestisci stabilimenti, reparti e linee di produzione</p>
                     </div>
-                    {userRole === "admin" && (
-                        <Button onClick={openCreateDialog} className="bg-primary hover:bg-primary/90">
-                            <Plus className="h-5 w-5 mr-2" />
-                            Nuovo {getTypeLabel().toLowerCase()}
+                    <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground" onClick={() => openCreate("plant")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nuovo Stabilimento
+                    </Button>
+                </div>
+
+                {plants.length === 0 ? (
+                    <Card className="rounded-2xl border-border bg-card/80 p-12 text-center">
+                        <Building2 className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-foreground mb-2">Nessuno stabilimento</h3>
+                        <p className="text-muted-foreground mb-6">Crea il primo stabilimento per organizzare il parco macchine</p>
+                        <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-foreground" onClick={() => openCreate("plant")}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Crea Stabilimento
                         </Button>
-                    )}
-                </div>
-
-                {/* Toggle Stabilimenti / Clienti */}
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant={viewMode === "plant" ? "default" : "outline"}
-                        onClick={() => setViewMode("plant")}
-                        className="gap-2"
-                    >
-                        <Building2 className="h-4 w-4" />
-                        Stabilimenti ({plantCount})
-                    </Button>
-                    <Button
-                        variant={viewMode === "customer" ? "default" : "outline"}
-                        onClick={() => setViewMode("customer")}
-                        className="gap-2"
-                    >
-                        <Users className="h-4 w-4" />
-                        Clienti ({customerCount})
-                    </Button>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card className="bg-card border-border">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Totale {getTypeLabelPlural().toLowerCase()}</p>
-                                    <p className="text-3xl font-bold text-foreground mt-2">{displayedPlants.length}</p>
-                                </div>
-                                <TypeIcon className="h-12 w-12 text-blue-500 opacity-20" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-card border-border">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Macchine associate</p>
-                                    <p className="text-3xl font-bold text-foreground mt-2">
-                                        {displayedPlants.reduce((sum, p) => sum + (p.machine_count || 0), 0)}
-                                    </p>
-                                </div>
-                                <Factory className="h-12 w-12 text-orange-500 opacity-20" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-card border-border">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Con referente</p>
-                                    <p className="text-3xl font-bold text-foreground mt-2">
-                                        {displayedPlants.filter(p => p.plant_manager_name).length}
-                                    </p>
-                                </div>
-                                <Users className="h-12 w-12 text-green-500 opacity-20" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Search */}
-                <Card className="bg-card border-border">
-                    <CardContent className="p-6">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                            <Input
-                                placeholder={`Cerca ${getTypeLabel().toLowerCase()} per nome, codice, città o referente...`}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* List */}
-                {displayedPlants.length === 0 ? (
-                    <Card className="bg-card border-border">
-                        <CardContent className="p-12 text-center">
-                            <AlertCircle className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                            <h3 className="text-xl font-semibold text-foreground mb-2">
-                                {plants.filter(p => p.plant_type === viewMode).length === 0
-                                    ? `Nessun ${getTypeLabel().toLowerCase()}`
-                                    : "Nessun risultato"}
-                            </h3>
-                            <p className="text-muted-foreground mb-6">
-                                {plants.filter(p => p.plant_type === viewMode).length === 0
-                                    ? `Crea il primo ${getTypeLabel().toLowerCase()} per iniziare`
-                                    : "Prova a cambiare i criteri di ricerca"}
-                            </p>
-                            {plants.filter(p => p.plant_type === viewMode).length === 0 && userRole === "admin" && (
-                                <Button onClick={openCreateDialog}>
-                                    <Plus className="h-5 w-5 mr-2" />
-                                    Crea {getTypeLabel().toLowerCase()}
-                                </Button>
-                            )}
-                        </CardContent>
                     </Card>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {displayedPlants.map((plant) => (
-                            <Card key={plant.id} className="bg-card border-border hover:border-primary/50 transition-colors">
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-start justify-between">
+                    <div className="space-y-4">
+                        {plants.map((plant) => {
+                            const isExpanded = expandedPlant === plant.id;
+                            const plantDepts = departments.filter((d) => d.plant_id === plant.id);
+
+                            return (
+                                <Card key={plant.id} className="rounded-2xl border-border bg-card/80 overflow-hidden">
+                                    {/* Plant Header */}
+                                    <div
+                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                                        onClick={() => setExpandedPlant(isExpanded ? null : plant.id)}
+                                    >
                                         <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${viewMode === "plant" ? "bg-primary/10" : "bg-blue-500/10"}`}>
-                                                <TypeIcon className={`h-5 w-5 ${viewMode === "plant" ? "text-primary" : "text-blue-500"}`} />
-                                            </div>
+                                            {isExpanded ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
+                                            <Building2 className="w-5 h-5 text-blue-400" />
                                             <div>
-                                                <CardTitle className="text-lg text-foreground">{plant.name}</CardTitle>
-                                                {plant.code && (
-                                                    <p className="text-sm text-muted-foreground">Cod. {plant.code}</p>
-                                                )}
+                                                <h3 className="font-bold text-foreground">{plant.name}</h3>
+                                                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                                    {plant.code && <span>{plant.code}</span>}
+                                                    {plant.city && (
+                                                        <span className="flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" />
+                                                            {plant.city}
+                                                        </span>
+                                                    )}
+                                                    <span>{plantDepts.length} reparti</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {(plant.address_line1 || plant.city) && (
-                                        <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                                            <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                                            <span>
-                                                {[plant.address_line1, plant.city, plant.province].filter(Boolean).join(", ")}
-                                            </span>
+                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                            <button onClick={() => openEdit("plant", plant)} className="p-2 rounded-lg hover:bg-slate-600 text-muted-foreground hover:text-foreground transition-colors">
+                                                <Edit className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleDelete("plant", plant.id, plant.name)} className="p-2 rounded-lg hover:bg-red-500/20 text-muted-foreground hover:text-red-400 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
-                                    )}
-
-                                    {plant.plant_manager_name && (
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <Users className="h-4 w-4 shrink-0" />
-                                            <span>{plant.plant_manager_name}</span>
-                                        </div>
-                                    )}
-
-                                    {plant.plant_manager_phone && (
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <Phone className="h-4 w-4 shrink-0" />
-                                            <span>{plant.plant_manager_phone}</span>
-                                        </div>
-                                    )}
-
-                                    <div className="flex items-center gap-2 text-sm">
-                                        <Factory className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-foreground font-medium">{plant.machine_count || 0}</span>
-                                        <span className="text-muted-foreground">macchine</span>
                                     </div>
 
-                                    {plant.description && (
-                                        <p className="text-sm text-muted-foreground line-clamp-2">{plant.description}</p>
-                                    )}
+                                    {/* Departments */}
+                                    {isExpanded && (
+                                        <div className="border-t border-border bg-slate-900/30">
+                                            <div className="p-3 pl-12">
+                                                <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 hover:bg-muted/50" onClick={() => openCreate("department", plant.id)}>
+                                                    <Plus className="w-3 h-3 mr-1" />
+                                                    Aggiungi Reparto
+                                                </Button>
+                                            </div>
 
-                                    {userRole === "admin" && (
-                                        <div className="flex items-center gap-2 pt-2 border-t border-border">
-                                            <Button size="sm" variant="ghost" onClick={() => openEditDialog(plant)}
-                                                className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
-                                                <Edit className="h-4 w-4 mr-1" /> Modifica
-                                            </Button>
-                                            <Button size="sm" variant="ghost"
-                                                onClick={() => { setPlantToDelete(plant); setDeleteDialogOpen(true); }}
-                                                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                                disabled={(plant.machine_count || 0) > 0}>
-                                                <Trash2 className="h-4 w-4 mr-1" /> Elimina
-                                            </Button>
+                                            {plantDepts.map((dept) => {
+                                                const isDeptExpanded = expandedDept === dept.id;
+                                                const deptLines = lines.filter((l) => l.department_id === dept.id);
+
+                                                return (
+                                                    <div key={dept.id} className="border-t border-slate-800">
+                                                        <div
+                                                            className="flex items-center justify-between px-4 py-3 pl-12 cursor-pointer hover:bg-muted/20 transition-colors"
+                                                            onClick={() => setExpandedDept(isDeptExpanded ? null : dept.id)}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                {isDeptExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                                                <Factory className="w-4 h-4 text-amber-400" />
+                                                                <div>
+                                                                    <span className="text-foreground font-medium">{dept.name}</span>
+                                                                    {dept.code && <span className="text-muted-foreground text-sm ml-2">({dept.code})</span>}
+                                                                    <span className="text-muted-foreground text-sm ml-3">{deptLines.length} linee</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                                <button onClick={() => openEdit("department", dept)} className="p-1.5 rounded hover:bg-slate-600 text-muted-foreground hover:text-foreground">
+                                                                    <Edit className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <button onClick={() => handleDelete("department", dept.id, dept.name)} className="p-1.5 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Production Lines */}
+                                                        {isDeptExpanded && (
+                                                            <div className="bg-slate-900/50">
+                                                                <div className="p-2 pl-20">
+                                                                    <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 hover:bg-muted/50 text-xs" onClick={() => openCreate("line", dept.id)}>
+                                                                        <Plus className="w-3 h-3 mr-1" />
+                                                                        Aggiungi Linea
+                                                                    </Button>
+                                                                </div>
+                                                                {deptLines.map((line) => (
+                                                                    <div key={line.id} className="flex items-center justify-between px-4 py-2 pl-20 border-t border-slate-800/50 hover:bg-muted/10">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Layers className="w-3.5 h-3.5 text-green-400" />
+                                                                            <span className="text-muted-foreground text-sm">{line.name}</span>
+                                                                            {line.code && <span className="text-muted-foreground/60 text-xs">({line.code})</span>}
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                                                            <button onClick={() => openEdit("line", line)} className="p-1 rounded hover:bg-slate-600 text-muted-foreground hover:text-foreground">
+                                                                                <Edit className="w-3 h-3" />
+                                                                            </button>
+                                                                            <button onClick={() => handleDelete("line", line.id, line.name)} className="p-1 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400">
+                                                                                <Trash2 className="w-3 h-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
-                        ))}
+                                </Card>
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
             {/* Create/Edit Dialog */}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
+            <Dialog open={showDialog} onOpenChange={setShowDialog}>
+                <DialogContent className="bg-card border-border text-foreground">
                     <DialogHeader>
-                        <DialogTitle className="text-foreground">
-                            {editingPlant ? `Modifica ${getTypeLabel().toLowerCase()}` : `Nuovo ${getTypeLabel().toLowerCase()}`}
-                        </DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                            {editingPlant ? "Aggiorna i dati" : `Crea un nuovo ${getTypeLabel().toLowerCase()}`}
-                        </DialogDescription>
+                        <DialogTitle className="text-foreground">{dialogTitle()}</DialogTitle>
                     </DialogHeader>
+
                     <div className="space-y-4">
-                        {/* Type selector */}
-                        <div className="space-y-2">
-                            <Label>Tipo *</Label>
-                            <Select value={formData.plant_type}
-                                onValueChange={(v: "plant" | "customer") => setFormData({ ...formData, plant_type: v })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="plant">Stabilimento</SelectItem>
-                                    <SelectItem value="customer">Cliente</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        <div>
+                            <label className="text-sm text-muted-foreground">Nome *</label>
+                            <Input
+                                value={formName}
+                                onChange={(e) => setFormName(e.target.value)}
+                                placeholder={dialogType === "plant" ? "es. Stabilimento Nord" : dialogType === "department" ? "es. Reparto Assemblaggio" : "es. Linea 1"}
+                                className="bg-slate-900 border-border text-foreground"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm text-muted-foreground">Codice</label>
+                            <Input
+                                value={formCode}
+                                onChange={(e) => setFormCode(e.target.value)}
+                                placeholder="es. STAB-01"
+                                className="bg-slate-900 border-border text-foreground"
+                            />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Nome *</Label>
-                                <Input value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder={formData.plant_type === "plant" ? "es. Stabilimento Nord" : "es. Acme S.r.l."} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Codice</Label>
-                                <Input value={formData.code}
-                                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                                    placeholder={formData.plant_type === "plant" ? "es. STAB-01" : "es. CLI-001"} />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Indirizzo</Label>
-                            <Input value={formData.address_line1}
-                                onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
-                                placeholder="Via/Piazza..." />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                                <Label>Città</Label>
-                                <Input value={formData.city}
-                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                    placeholder="es. Milano" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Provincia</Label>
-                                <Input value={formData.province}
-                                    onChange={(e) => setFormData({ ...formData, province: e.target.value })}
-                                    placeholder="es. MI" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>CAP</Label>
-                                <Input value={formData.postal_code}
-                                    onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-                                    placeholder="es. 20100" />
-                            </div>
-                        </div>
-
-                        <div className="border-t border-border pt-4">
-                            <p className="text-sm font-medium text-foreground mb-3">
-                                {formData.plant_type === "plant" ? "Responsabile stabilimento" : "Referente cliente"}
-                            </p>
-                            <div className="space-y-3">
-                                <div className="space-y-2">
-                                    <Label>Nome referente</Label>
-                                    <Input value={formData.plant_manager_name}
-                                        onChange={(e) => setFormData({ ...formData, plant_manager_name: e.target.value })}
-                                        placeholder="es. Mario Rossi" />
+                        {dialogType === "plant" && (
+                            <>
+                                <div>
+                                    <label className="text-sm text-muted-foreground">Indirizzo</label>
+                                    <Input
+                                        value={formAddress}
+                                        onChange={(e) => setFormAddress(e.target.value)}
+                                        placeholder="es. Via Roma 1"
+                                        className="bg-slate-900 border-border text-foreground"
+                                    />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Email</Label>
-                                        <Input type="email" value={formData.plant_manager_email}
-                                            onChange={(e) => setFormData({ ...formData, plant_manager_email: e.target.value })}
-                                            placeholder="email@example.com" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Telefono</Label>
-                                        <Input type="tel" value={formData.plant_manager_phone}
-                                            onChange={(e) => setFormData({ ...formData, plant_manager_phone: e.target.value })}
-                                            placeholder="+39 ..." />
-                                    </div>
+                                <div>
+                                    <label className="text-sm text-muted-foreground">Città</label>
+                                    <Input
+                                        value={formCity}
+                                        onChange={(e) => setFormCity(e.target.value)}
+                                        placeholder="es. Milano"
+                                        className="bg-slate-900 border-border text-foreground"
+                                    />
                                 </div>
-                            </div>
-                        </div>
+                            </>
+                        )}
 
-                        <div className="space-y-2">
-                            <Label>Note</Label>
-                            <Textarea value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                placeholder="Note aggiuntive..." rows={2} />
-                        </div>
+                        {(dialogType === "department" || dialogType === "line") && (
+                            <div>
+                                <label className="text-sm text-muted-foreground">Descrizione</label>
+                                <Input
+                                    value={formDescription}
+                                    onChange={(e) => setFormDescription(e.target.value)}
+                                    placeholder="Descrizione opzionale"
+                                    className="bg-slate-900 border-border text-foreground"
+                                />
+                            </div>
+                        )}
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
-                            Annulla
-                        </Button>
-                        <Button onClick={handleSave} disabled={saving}>
-                            {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvataggio...</>
-                                : editingPlant ? "Salva modifiche" : `Crea ${getTypeLabel().toLowerCase()}`}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
-            {/* Delete Dialog */}
-            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent className="bg-card border-border">
-                    <DialogHeader>
-                        <DialogTitle className="text-destructive">Elimina {getTypeLabel().toLowerCase()}</DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                            Vuoi eliminare <strong>{plantToDelete?.name}</strong>? Verrà archiviato.
-                        </DialogDescription>
-                    </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+                        <Button variant="outline" onClick={() => setShowDialog(false)} className="border-border text-foreground hover:bg-muted">
                             Annulla
                         </Button>
-                        <Button onClick={handleDelete} disabled={deleting} variant="destructive">
-                            {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Eliminazione...</> : "Elimina"}
+                        <Button onClick={handleSave} disabled={!formName.trim()} className="bg-[#FF6B35] hover:bg-[#e55a2b]">
+                            {dialogMode === "create" ? "Crea" : "Salva"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
