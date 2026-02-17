@@ -97,9 +97,9 @@ export default function MaintenancePage() {
 
     const getPriorityConfig = (priority: string | null) => {
         const map: Record<string, { label: string; color: string }> = {
-            high: { label: t("common.high"), color: "bg-red-500/20 text-red-400 border-red-500/30" },
-            medium: { label: t("common.medium"), color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-            low: { label: t("common.low"), color: "bg-green-500/20 text-green-400 border-green-500/30" },
+            high: { label: t("common.high"), color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30" },
+            medium: { label: t("common.medium"), color: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500/30" },
+            low: { label: t("common.low"), color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30" },
         };
         return map[priority || "medium"] || map.medium;
     };
@@ -169,7 +169,7 @@ export default function MaintenancePage() {
                                 <CardContent className="p-4 flex items-center justify-between">
                                     <div className="flex items-center gap-4 flex-1 min-w-0">
                                         <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
-                                            <Calendar className="w-5 h-5 text-blue-400" />
+                                            <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <h3 className="text-foreground font-bold truncate">{plan.title}</h3>
@@ -178,7 +178,7 @@ export default function MaintenancePage() {
                                                     <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{plan.machine_name}</span>
                                                 )}
                                                 {plan.next_due_date && (
-                                                    <span className={`flex items-center gap-1 ${isOverdue ? "text-red-400" : ""}`}>
+                                                    <span className={`flex items-center gap-1 ${isOverdue ? "text-red-600 dark:text-red-400" : ""}`}>
                                                         <Calendar className="w-3 h-3" />
                                                         {new Date(plan.next_due_date).toLocaleDateString("it-IT")}
                                                     </span>
@@ -191,7 +191,7 @@ export default function MaintenancePage() {
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
                                         <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${priority.color}`}>{priority.label}</Badge>
-                                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${plan.is_active ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-slate-500/20 text-slate-400 border-slate-500/30"}`}>
+                                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${plan.is_active ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30" : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"}`}>
                                             {plan.is_active ? "Attivo" : "Inattivo"}
                                         </Badge>
                                         {isAdmin && (
@@ -200,7 +200,7 @@ export default function MaintenancePage() {
                                                 <Trash2 className="w-4 h-4 text-white" />
                                             </button>
                                         )}
-                                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-blue-400" />
+                                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-blue-600 dark:text-blue-400" />
                                     </div>
                                 </CardContent>
                             </Card>
@@ -224,4 +224,3 @@ export default function MaintenancePage() {
         </MainLayout>
     );
 }
-
