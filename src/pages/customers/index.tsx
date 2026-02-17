@@ -148,7 +148,7 @@ export default function CustomersPage() {
                             onClick={() => router.push(`/customers/${customer.id}`)}>
                             <CardContent className="p-5 flex items-center justify-between">
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                                    <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0">
+                                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0">
                                         <Building2 className="w-6 h-6 text-blue-400" />
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -165,13 +165,13 @@ export default function CustomersPage() {
                                 <div className="flex items-center gap-3 shrink-0">
                                     <Badge className={
                                         customer.subscription_status === "active" || customer.subscription_status === "trial"
-                                            ? "bg-green-500/20 text-green-400 border-green-500/30"
-                                            : "bg-slate-500/20 text-slate-400 border-slate-500/30"
+                                            ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
+                                            : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
                                     }>
                                         {customer.subscription_status === "trial" ? "Trial" : customer.subscription_status === "active" ? "Attivo" : customer.subscription_status || "—"}
                                     </Badge>
                                     <button onClick={(e) => handleDelete(e, customer.id, customer.name)}
-                                        className="bg-red-500/80 hover:bg-red-500 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                        className="bg-red-500 hover:bg-red-600 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Trash2 className="w-4 h-4 text-white" />
                                     </button>
                                     <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-blue-400" />
