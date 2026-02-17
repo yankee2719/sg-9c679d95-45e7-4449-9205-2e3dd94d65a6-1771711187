@@ -146,8 +146,8 @@ export default function ChecklistsPage() {
                                     </div>
                                     <Badge
                                         className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${checklist.is_active
-                                                ? "bg-green-500/20 text-green-400 border-green-500/30"
-                                                : "bg-slate-500/20 text-slate-400 border-slate-500/30"
+                                                ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
+                                                : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
                                             }`}
                                     >
                                         {checklist.is_active ? t("checklists.active") : t("checklists.inactive")}
