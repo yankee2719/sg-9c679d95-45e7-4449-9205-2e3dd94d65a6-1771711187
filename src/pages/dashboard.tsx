@@ -231,7 +231,7 @@ export default function DashboardPage() {
                             {machineList.map(item => {
                                 const lc = getLifecycleConfig(item.lifecycle_state || "active");
                                 return (
-                                    <Card key={item.id} className="hover:shadow-md transition-all overflow-hidden cursor-pointer group" onClick={() => router.push(`/equipment/${item.id}`)}>
+                                    <Card key={item.id} className="border-0 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer group" onClick={() => router.push(`/equipment/${item.id}`)}>
                                         <div className="p-4 flex items-center gap-4">
                                             <div className="w-16 h-16 bg-muted rounded-xl flex-shrink-0 overflow-hidden">
                                                 {item.photo_url ? <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Wrench className="w-6 h-6 text-muted-foreground" /></div>}
@@ -262,7 +262,7 @@ export default function DashboardPage() {
 
 function KPICard({ icon, iconColor, iconBg, value, label, onClick }: { icon: React.ReactNode; iconColor: string; iconBg: string; value: number; label: string; onClick: () => void }) {
     return (
-        <Card className="rounded-2xl hover:shadow-md cursor-pointer transition-all" onClick={onClick}>
+        <Card className="rounded-2xl border-0 shadow-sm hover:shadow-md cursor-pointer transition-all" onClick={onClick}>
             <CardContent className="p-6">
                 <div className={`w-12 h-12 ${iconBg} rounded-xl flex items-center justify-center mb-4`}>
                     <span className={`w-6 h-6 ${iconColor}`}>{icon}</span>
@@ -307,3 +307,4 @@ function ListSection({ title, linkHref, linkText, children }: { title: string; l
         </div>
     );
 }
+
