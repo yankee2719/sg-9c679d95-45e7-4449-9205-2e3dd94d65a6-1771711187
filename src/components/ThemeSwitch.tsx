@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 export function ThemeSwitch() {
     const [mounted, setMounted] = useState(false);
 
+    // ✅ useTheme viene SEMPRE chiamato, non condizionalmente
+    const { theme, toggleTheme } = useTheme();
+
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    // Non chiamare useTheme durante SSR - ritorna placeholder
+    // Placeholder durante SSR (prima del mount)
     if (!mounted) {
         return (
             <Button
@@ -24,8 +27,6 @@ export function ThemeSwitch() {
             </Button>
         );
     }
-
-    const { theme, toggleTheme } = useTheme();
 
     return (
         <Button
