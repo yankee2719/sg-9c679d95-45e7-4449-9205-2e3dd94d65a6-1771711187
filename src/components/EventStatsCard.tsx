@@ -2,7 +2,7 @@
 // Compatible with Next.js Pages Router
 
 import { useEffect, useState } from 'react';
-import { machineEventsService } from '@/services/machineEventsService';
+import { machineEventService } from '@/services/machineEventsService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity, TrendingUp } from 'lucide-react';
@@ -28,7 +28,7 @@ export function EventStatsCard({
             const dateFrom = new Date();
             dateFrom.setDate(dateFrom.getDate() - daysBack);
 
-            const data = await machineEventsService.getStats(organizationId, dateFrom);
+            const data = await machineEventService.getStats(organizationId, dateFrom);
             setStats(data);
         } catch (error) {
             console.error('Failed to load stats:', error);
