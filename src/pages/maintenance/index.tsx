@@ -115,6 +115,21 @@ export default function MaintenancePage() {
         return value && value > 1 ? `${label} (ogni ${value})` : label;
     };
 
+    const getPriorityBorderColor = (priority: string | null) => {
+        const map: Record<string, string> = {
+            high: "border-l-red-500",
+            medium: "border-l-amber-500",
+            low: "border-l-green-500",
+        };
+        return map[priority || "medium"] || map.medium;
+    };
+
+    const getStatusBadgeConfig = (isActive: boolean, isOverdue: boolean) => {
+        if (isOverdue) return "bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/30";
+        if (isActive) return "bg-green-50 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/30";
+        return "bg-gray-50 dark:bg-slate-500/20 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-500/30";
+    };
+
     const isAdmin = userRole === "admin" || userRole === "supervisor";
     if (loading) return null;
 
@@ -134,16 +149,16 @@ export default function MaintenancePage() {
                     )}
                 </div>
 
-                <Card className="rounded-2xl border-border bg-card/80">
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <Input placeholder={t("common.search")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground" />
+                                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl" />
                             </div>
                             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                                <SelectTrigger className="w-[160px] bg-muted/50 border-border text-foreground">
+                                <SelectTrigger className="w-[160px] bg-background border-border text-foreground rounded-xl">
                                     <Filter className="w-4 h-4 mr-2 text-muted-foreground" /><SelectValue placeholder={t("common.priority")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -162,14 +177,15 @@ export default function MaintenancePage() {
                         const priority = getPriorityConfig(plan.priority);
                         const freq = getFrequencyLabel(plan.frequency_type, plan.frequency_value);
                         const isOverdue = plan.next_due_date && new Date(plan.next_due_date) < new Date();
+                        const borderColor = getPriorityBorderColor(plan.priority);
                         return (
                             <Card key={plan.id}
-                                className={`rounded-2xl border-border bg-card/80 hover:border-blue-500/50 transition-all cursor-pointer group ${isOverdue ? "border-red-500/30" : ""}`}
+                                className={`rounded-2xl border-0 border-l-4 ${borderColor} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group`}
                                 onClick={() => router.push(`/maintenance/${plan.id}`)}>
                                 <CardContent className="p-4 flex items-center justify-between">
                                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                                        <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
-                                            <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isOverdue ? "bg-red-50 dark:bg-red-500/10" : "bg-orange-50 dark:bg-orange-500/10"}`}>
+                                            <Wrench className={`w-5 h-5 ${isOverdue ? "text-red-500 dark:text-red-400" : "text-orange-500 dark:text-orange-400"}`} />
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <h3 className="text-foreground font-bold truncate">{plan.title}</h3>
@@ -178,7 +194,7 @@ export default function MaintenancePage() {
                                                     <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{plan.machine_name}</span>
                                                 )}
                                                 {plan.next_due_date && (
-                                                    <span className={`flex items-center gap-1 ${isOverdue ? "text-red-600 dark:text-red-400" : ""}`}>
+                                                    <span className={`flex items-center gap-1 ${isOverdue ? "text-red-600 dark:text-red-400 font-medium" : ""}`}>
                                                         <Calendar className="w-3 h-3" />
                                                         {new Date(plan.next_due_date).toLocaleDateString("it-IT")}
                                                     </span>
@@ -190,17 +206,17 @@ export default function MaintenancePage() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
-                                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${priority.color}`}>{priority.label}</Badge>
-                                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${plan.is_active ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30" : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"}`}>
-                                            {plan.is_active ? "Attivo" : "Inattivo"}
+                                        <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${priority.color}`}>{priority.label}</Badge>
+                                        <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${getStatusBadgeConfig(plan.is_active, !!isOverdue)}`}>
+                                            {isOverdue ? "Scaduto" : plan.is_active ? "Attivo" : "Inattivo"}
                                         </Badge>
                                         {isAdmin && (
                                             <button onClick={(e) => handleDelete(e, plan.id, plan.title)} disabled={deleting === plan.id}
-                                                className="bg-red-500/80 hover:bg-red-500 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50">
-                                                <Trash2 className="w-4 h-4 text-white" />
+                                                className="p-1.5 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50">
+                                                <Trash2 className="w-4 h-4 text-red-500" />
                                             </button>
                                         )}
-                                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-blue-600 dark:text-blue-400" />
+                                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                                     </div>
                                 </CardContent>
                             </Card>
@@ -209,7 +225,7 @@ export default function MaintenancePage() {
                 </div>
 
                 {filtered.length === 0 && (
-                    <Card className="rounded-2xl border-border bg-card/80 p-12 text-center">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
                         <Calendar className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-foreground mb-2">Nessuna manutenzione programmata</h3>
                         <p className="text-muted-foreground mb-6">Inizia creando il primo piano di manutenzione</p>
