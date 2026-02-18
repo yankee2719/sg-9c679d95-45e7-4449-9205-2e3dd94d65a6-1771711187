@@ -1,4 +1,4 @@
-iimport { useRouter } from "next/router";
+import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
