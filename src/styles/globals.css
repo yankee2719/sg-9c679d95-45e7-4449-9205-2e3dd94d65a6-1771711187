@@ -5,136 +5,142 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* Light Mode - Professional Blue/Gray Theme */
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 85%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 60%;
-    --radius: 0.5rem;
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 84% 39%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+    :root {
+        /* Light Mode - Soft Blue/Gray Theme (matching reference design) */
+        --background: 216 25% 95%;
+        --foreground: 222 47% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 47% 11%;
+        --primary: 217 91% 60%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 214 32% 96%;
+        --secondary-foreground: 222 47% 11%;
+        --muted: 216 20% 95%;
+        --muted-foreground: 215 16% 47%;
+        --accent: 214 32% 96%;
+        --accent-foreground: 222 47% 11%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 214 20% 90%;
+        --input: 0 0% 100%;
+        --ring: 217 91% 60%;
+        --radius: 0.75rem;
+        --chart-1: 217 91% 60%;
+        --chart-2: 160 84% 39%;
+        --chart-3: 30 80% 55%;
+        --chart-4: 280 65% 60%;
+        --chart-5: 340 75% 55%;
+    }
 
-  .dark {
-    /* Dark Mode - Slate Professional Theme */
-    --background: 222 47% 11%;
-    --foreground: 210 20% 98%;
-    --card: 217 33% 17%;
-    --card-foreground: 210 20% 98%;
-    --popover: 217 33% 17%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 25 95% 53%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 25%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 217 33% 25%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 25%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 217 33% 25%;
-    --input: 217 33% 25%;
-    --ring: 25 95% 53%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+    .dark {
+        /* Dark Mode - Slate Professional Theme */
+        --background: 222 47% 11%;
+        --foreground: 210 20% 98%;
+        --card: 217 33% 17%;
+        --card-foreground: 210 20% 98%;
+        --popover: 217 33% 17%;
+        --popover-foreground: 210 20% 98%;
+        --primary: 25 95% 53%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 217 33% 25%;
+        --secondary-foreground: 210 20% 98%;
+        --muted: 217 33% 25%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 217 33% 25%;
+        --accent-foreground: 210 20% 98%;
+        --destructive: 0 62% 50%;
+        --destructive-foreground: 210 20% 98%;
+        --border: 217 33% 25%;
+        --input: 217 33% 25%;
+        --ring: 25 95% 53%;
+        --chart-1: 220 70% 50%;
+        --chart-2: 160 60% 45%;
+        --chart-3: 30 80% 55%;
+        --chart-4: 280 65% 60%;
+        --chart-5: 340 75% 55%;
+    }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-  }
+    * {
+        @apply border-border;
+    }
 
-  /* Professional Form Styling - Using CSS Variables */
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="number"],
-  input[type="date"],
-  input[type="time"],
-  textarea,
-  select {
-    @apply bg-input text-foreground border-border;
-    @apply focus:border-primary focus:ring-primary focus:ring-2 focus:ring-opacity-20;
-    @apply placeholder:text-muted-foreground;
-  }
+    body {
+        @apply bg-background text-foreground font-sans antialiased;
+    }
 
-  /* Card Styling */
-  .card-professional {
-    @apply bg-card border-border rounded-lg;
-  }
+    /* Professional Form Styling - Using CSS Variables */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    textarea,
+    select {
+        @apply bg-input text-foreground border-border;
+        @apply focus:border-primary focus:ring-primary focus:ring-2 focus:ring-opacity-20;
+        @apply placeholder:text-muted-foreground;
+    }
 
-  /* Button Variants */
-  .btn-primary {
-    @apply bg-primary hover:bg-primary/90 text-primary-foreground;
-  }
+    /* Card Styling */
+    .card-professional {
+        @apply bg-card rounded-lg;
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+    }
 
-  .btn-secondary {
-    @apply bg-secondary hover:bg-secondary/80 text-secondary-foreground;
-  }
+    :root .card-professional,
+    :root [data-slot="card"] {
+        border-color: transparent;
+    }
 
-  /* Table Styling */
-  table {
-    @apply w-full border-collapse;
-  }
+    /* Button Variants */
+    .btn-primary {
+        @apply bg-primary hover:bg-primary/90 text-primary-foreground;
+    }
 
-  thead {
-    @apply bg-muted;
-  }
+    .btn-secondary {
+        @apply bg-secondary hover:bg-secondary/80 text-secondary-foreground;
+    }
 
-  tbody tr {
-    @apply border-b border-border hover:bg-muted/50;
-  }
+    /* Table Styling */
+    table {
+        @apply w-full border-collapse;
+    }
 
-  th {
-    @apply text-foreground;
-  }
+    thead {
+        @apply bg-muted;
+    }
 
-  td {
-    @apply text-foreground;
-  }
+    tbody tr {
+        @apply border-b border-border hover:bg-muted/50;
+    }
 
-  /* Custom Scrollbar */
-  .custom-scrollbar::-webkit-scrollbar {
-    @apply w-2 h-2;
-  }
+    th {
+        @apply text-foreground;
+    }
 
-  .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-muted;
-  }
+    td {
+        @apply text-foreground;
+    }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 rounded-full;
-  }
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar {
+        @apply w-2 h-2;
+    }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
-  }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-muted;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-muted-foreground/30 rounded-full;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-muted-foreground/50;
+    }
 }
