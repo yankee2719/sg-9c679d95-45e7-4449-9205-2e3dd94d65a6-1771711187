@@ -112,32 +112,32 @@ export default function AssignmentsPage() {
                 </div>
 
                 {/* Search */}
-                <Card className="rounded-2xl border-border bg-card/80">
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
                     <CardContent className="p-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input placeholder="Cerca per macchina o cliente..." value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground" />
+                                className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl" />
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <Card className="rounded-2xl border-border bg-card/80">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm">
                         <CardContent className="p-4 text-center">
                             <p className="text-3xl font-bold text-foreground">{assignments.length}</p>
                             <p className="text-sm text-muted-foreground">Assegnazioni attive</p>
                         </CardContent>
                     </Card>
-                    <Card className="rounded-2xl border-border bg-card/80">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm">
                         <CardContent className="p-4 text-center">
                             <p className="text-3xl font-bold text-foreground">{Object.keys(byCustomer).length}</p>
                             <p className="text-sm text-muted-foreground">Clienti con macchine</p>
                         </CardContent>
                     </Card>
-                    <Card className="rounded-2xl border-border bg-card/80">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm">
                         <CardContent className="p-4 text-center">
                             <p className="text-3xl font-bold text-foreground">{new Set(assignments.map(a => a.machine_id)).size}</p>
                             <p className="text-sm text-muted-foreground">Macchine uniche</p>
@@ -147,7 +147,7 @@ export default function AssignmentsPage() {
 
                 {/* Grouped by customer */}
                 {Object.entries(byCustomer).map(([customerName, custAssignments]) => (
-                    <div key={customerName} className="rounded-2xl border border-blue-300 dark:border-blue-500/30 bg-card/50 overflow-hidden">
+                    <div key={customerName} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4 border-b border-border cursor-pointer"
                             onClick={() => {
                                 const cid = custAssignments[0]?.customer_org_id;
@@ -180,7 +180,7 @@ export default function AssignmentsPage() {
                 ))}
 
                 {filtered.length === 0 && (
-                    <Card className="rounded-2xl border-border bg-card/80 p-12 text-center">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
                         <Package className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-foreground mb-2">Nessuna assegnazione</h3>
                         <p className="text-muted-foreground mb-6">Vai nella scheda di un cliente per assegnare le macchine</p>
@@ -193,3 +193,4 @@ export default function AssignmentsPage() {
         </MainLayout>
     );
 }
+
