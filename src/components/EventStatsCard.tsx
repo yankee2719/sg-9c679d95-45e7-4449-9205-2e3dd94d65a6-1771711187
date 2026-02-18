@@ -2,7 +2,7 @@
 // Compatible with Next.js Pages Router
 
 import { useEffect, useState } from 'react';
-import { machineEventService } from '@/services/machineEventsService';
+import { machineEventsService } from '@/services/machineEventsService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity, TrendingUp } from 'lucide-react';
