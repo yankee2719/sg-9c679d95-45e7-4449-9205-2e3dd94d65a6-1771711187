@@ -208,4 +208,27 @@ export const machineEventsService = {
         if (error) return null;
         return data;
     },
+
+    // ─── STATS ───────────────────────────────────────────────────────────
+
+    async getStats(organizationId: string, dateFrom: Date): Promise<Record<string, number>> {
+        const { data, error } = await supabase
+            .from('machine_events')
+            .select('event_type')
+            .eq('organization_id', organizationId)
+            .gte('created_at', dateFrom.toISOString());
+
+        if (error) {
+            console.error('Error fetching stats:', error);
+            return {};
+        }
+
+        // Conta gli eventi per tipo
+        const stats: Record<string, number> = {};
+        data?.forEach((event) => {
+            stats[event.event_type] = (stats[event.event_type] || 0) + 1;
+        });
+
+        return stats;
+    },
 };
