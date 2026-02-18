@@ -161,7 +161,7 @@ export default function CustomerDetailPage() {
         // Load manufacturer's machines not yet assigned to this customer
         const assignedIds = assignedMachines.map(a => a.machine_id);
 
-        let query = supabase
+        const query = supabase
             .from("machines")
             .select("id, name, internal_code, category")
             .eq("organization_id", mfrOrgId)
