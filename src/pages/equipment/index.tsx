@@ -186,54 +186,60 @@ export default function EquipmentPage() {
         const canEdit = !item._isAssigned; // Can't edit manufacturer's machines
         return (
             <Card
-                className={`rounded-2xl border-border bg-card/80 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden ${item._isAssigned ? "border-purple-500/20" : ""}`}
+                className={`rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden ${item._isAssigned ? "ring-1 ring-purple-200 dark:ring-purple-500/20" : ""}`}
                 onClick={() => router.push(`/equipment/${item.id}`)}
             >
-                <div className="h-32 bg-muted/50 relative overflow-hidden">
-                    {item.photo_url ? (
-                        <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <Wrench className={`w-10 h-10 ${item._isAssigned ? "text-purple-400/60" : "text-muted-foreground/60"}`} />
+                <CardContent className="p-5">
+                    <div className="flex items-start gap-4 mb-3">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${item._isAssigned ? "bg-purple-50 dark:bg-purple-500/10" : "bg-blue-50 dark:bg-blue-500/10"}`}>
+                            {item.photo_url ? (
+                                <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
+                            ) : (
+                                <Wrench className={`w-6 h-6 ${item._isAssigned ? "text-purple-500 dark:text-purple-400" : "text-blue-500 dark:text-blue-400"}`} />
+                            )}
                         </div>
-                    )}
-                    {item._isAssigned && (
-                        <div className="absolute top-3 left-3 bg-purple-600 dark:bg-purple-500/90 px-2 py-1 rounded-lg flex items-center gap-1">
-                            <Factory className="w-3 h-3 text-white" />
-                            <span className="text-white text-xs font-medium">{item._manufacturerName || "Costruttore"}</span>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <h3 className="font-bold text-foreground text-sm truncate">{item.name}</h3>
+                                    <p className="text-xs text-muted-foreground font-mono">{item.internal_code}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                    {item.qr_code_token && (
+                                        <div className="p-1 rounded-md bg-muted/60">
+                                            <QrCode className="w-3.5 h-3.5 text-muted-foreground" />
+                                        </div>
+                                    )}
+                                    {isAdmin && canEdit && (
+                                        <button
+                                            onClick={(e) => handleDelete(e, item.id, item.name)}
+                                            disabled={deleting === item.id}
+                                            className="p-1 rounded-md bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    )}
-                    {item.qr_code_token && (
-                        <div className="absolute top-3 right-3 bg-white/90 p-1.5 rounded-lg">
-                            <QrCode className="w-4 h-4 text-gray-800 dark:text-slate-800" />
-                        </div>
-                    )}
-                    {isAdmin && canEdit && (
-                        <button
-                            onClick={(e) => handleDelete(e, item.id, item.name)}
-                            disabled={deleting === item.id}
-                            className="absolute top-3 left-3 bg-red-500 hover:bg-red-600 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                        >
-                            <Trash2 className="w-4 h-4 text-white" />
-                        </button>
-                    )}
-                </div>
-                <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-1">
-                        <h3 className="font-bold text-foreground text-sm truncate flex-1">{item.name}</h3>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-blue-400 transition-colors flex-shrink-0 ml-1" />
                     </div>
-                    <p className="text-xs text-muted-foreground mb-2 font-mono">{item.internal_code}</p>
+
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${status.color}`}>{status.label}</Badge>
+                        <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-medium text-muted-foreground border-border">{item.category || "Generico"}</Badge>
+                        {item._isAssigned && (
+                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
+                                <Factory className="w-3 h-3 mr-1" />{item._manufacturerName || "Costruttore"}
+                            </Badge>
+                        )}
+                    </div>
+
                     {item.position && (
-                        <div className="flex items-center gap-1 text-muted-foreground text-xs mb-2">
-                            <MapPin className="w-3 h-3" />
+                        <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                            <MapPin className="w-3.5 h-3.5 text-red-400" />
                             <span className="truncate">{item.position}</span>
                         </div>
                     )}
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{item.category || "Generico"}</span>
-                        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${status.color}`}>{status.label}</Badge>
-                    </div>
                 </CardContent>
             </Card>
         );
@@ -248,7 +254,7 @@ export default function EquipmentPage() {
             <div className="space-y-4">
                 {/* Assigned from manufacturer */}
                 {assignedMachines.length > 0 && (
-                    <div className="rounded-2xl border border-purple-300 dark:border-purple-500/30 bg-card/50 overflow-hidden">
+                    <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Factory className="w-5 h-5 text-purple-400" />
                             <span className="text-foreground font-bold text-lg">Macchine dal Costruttore</span>
@@ -268,7 +274,7 @@ export default function EquipmentPage() {
                     const isExpanded = expandedPlants.has(plant.id);
                     if (plantMachines.length === 0 && searchQuery) return null;
                     return (
-                        <div key={plant.id} className="rounded-2xl border border-blue-300 dark:border-blue-500/30 bg-card/50 overflow-hidden">
+                        <div key={plant.id} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                             <button onClick={() => togglePlant(plant.id)} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors">
                                 {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-400" /> : <ChevronRight className="w-5 h-5 text-blue-400" />}
                                 <Building2 className="w-5 h-5 text-blue-400" />
@@ -288,7 +294,7 @@ export default function EquipmentPage() {
 
                 {/* Unassigned to plant */}
                 {unassigned.length > 0 && (
-                    <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
+                    <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Wrench className="w-5 h-5 text-muted-foreground" />
                             <span className="text-muted-foreground font-bold text-lg">Non assegnate a stabilimento</span>
@@ -332,17 +338,17 @@ export default function EquipmentPage() {
                 </div>
 
                 {/* Filters */}
-                <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm">
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <Input placeholder={t("common.search")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground" />
+                                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl" />
                             </div>
                             <div className="flex gap-3 flex-wrap">
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-[150px] bg-muted/50 border-border text-foreground">
+                                    <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
                                         <Filter className="w-4 h-4 mr-2 text-muted-foreground" /><SelectValue placeholder={t("common.status")} />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -355,7 +361,7 @@ export default function EquipmentPage() {
                                 </Select>
                                 {categories.length > 0 && (
                                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                        <SelectTrigger className="w-[150px] bg-muted/50 border-border text-foreground">
+                                        <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
                                             <SelectValue placeholder="Categoria" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -366,7 +372,7 @@ export default function EquipmentPage() {
                                 )}
                                 {hasAssigned && (
                                     <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                                        <SelectTrigger className="w-[150px] bg-muted/50 border-border text-foreground">
+                                        <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
                                             <SelectValue placeholder="Provenienza" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -389,7 +395,7 @@ export default function EquipmentPage() {
                 )}
 
                 {filteredMachines.length === 0 && (
-                    <Card className="rounded-2xl border-border bg-card/80 p-12 text-center">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
                         <Wrench className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-foreground mb-2">{t("equipment.noEquipment")}</h3>
                         <p className="text-muted-foreground mb-6">{t("equipment.noEquipmentDesc")}</p>
@@ -404,3 +410,4 @@ export default function EquipmentPage() {
         </MainLayout>
     );
 }
+
