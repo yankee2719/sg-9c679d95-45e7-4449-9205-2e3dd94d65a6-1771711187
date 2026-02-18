@@ -17,6 +17,7 @@ export interface ImpersonationStatus {
     originalUser?: any;
     organizationId?: string;
     organizationName?: string;
+    sessionId?: string;
 }
 
 export const platformService = {
@@ -133,5 +134,10 @@ export const platformService = {
 
     async stopImpersonation(): Promise<void> {
         // Non implementato - feature futura
+    },
+
+    async endImpersonation(sessionId: string): Promise<{ success: boolean }> {
+        // Non implementato - feature futura
+        return { success: true };
     },
 };
