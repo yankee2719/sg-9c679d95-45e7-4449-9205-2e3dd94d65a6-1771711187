@@ -12,6 +12,13 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Organization } from './organizationService';
 
+export interface ImpersonationStatus {
+    active: boolean;
+    originalUser?: any;
+    organizationId?: string;
+    organizationName?: string;
+}
+
 export const platformService = {
 
     // ─── AUTH CHECK ──────────────────────────────────────────────────────
@@ -108,7 +115,7 @@ export const platformService = {
 
     // ─── IMPERSONATION (future feature) ──────────────────────────────────
 
-    async isImpersonating(): Promise<{ active: boolean; originalUser?: any }> {
+    async isImpersonating(): Promise<ImpersonationStatus> {
         // Non implementato - feature futura
         return { active: false };
     },
