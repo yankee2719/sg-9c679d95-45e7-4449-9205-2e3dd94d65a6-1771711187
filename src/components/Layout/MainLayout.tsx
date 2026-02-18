@@ -53,8 +53,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const [orgType, setOrgType] = useState < string | null > (null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
+    const [mounted, setMounted] = useState(false); // ✅ AGGIUNTO
 
     useEffect(() => {
+        setMounted(true); // ✅ AGGIUNTO
         const loadUser = async () => {
             try {
                 const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -332,7 +334,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {/* Mobile Actions */}
                 <div className="flex items-center gap-2">
-                    <ThemeSwitch />
+                    {mounted ? <ThemeSwitch /> : <div className="w-9 h-9" />}  {/* ✅ MODIFICATO */}
                     <Button
                         variant="ghost"
                         size="icon"
@@ -353,7 +355,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             <main className="lg:ml-64 min-h-screen">
                 {/* Desktop Top Bar */}
                 <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border/60 bg-card/80 backdrop-blur-sm sticky top-0 z-30">
-                    <ThemeSwitch />
+                    {mounted ? <ThemeSwitch /> : <div className="w-9 h-9" />}  {/* ✅ MODIFICATO */}
                     <Button
                         variant="ghost"
                         size="icon"
