@@ -19,7 +19,6 @@ const ThemeSwitch = dynamic(
     { ssr: false }
 );
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
 import {
     LayoutDashboard,
     Wrench,
