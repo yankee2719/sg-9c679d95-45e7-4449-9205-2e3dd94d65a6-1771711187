@@ -13,6 +13,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import dynamic from "next/dynamic";
+const ThemeSwitch = dynamic(
+    () => import("@/components/ThemeSwitch").then(m => m.ThemeSwitch),
+    { ssr: false }
+);
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import {
