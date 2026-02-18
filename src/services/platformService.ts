@@ -53,6 +53,17 @@ export const platformService = {
         return data || [];
     },
 
+    async getOrganizationById(id: string): Promise<Organization | null> {
+        const { data, error } = await supabase
+            .from('organizations')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) return null;
+        return data;
+    },
+
     async getOrganizationStats(): Promise<{
         total: number;
         byType: Record<string, number>;
