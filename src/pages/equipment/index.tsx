@@ -178,7 +178,7 @@ export default function EquipmentPage() {
     const hasAssigned = machines.some(m => m._isAssigned);
 
     const togglePlant = (id: string) => {
-        setExpandedPlants(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+        setExpandedPlants(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
     };
 
     const MachineCard = ({ item }: { item: Machine }) => {
@@ -410,4 +410,3 @@ export default function EquipmentPage() {
         </MainLayout>
     );
 }
-
