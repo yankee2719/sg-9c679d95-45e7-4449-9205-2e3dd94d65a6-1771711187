@@ -149,8 +149,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         href={item.href}
                         onClick={() => mobile && setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                ? "bg-primary text-primary-foreground shadow-lg"
-                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            ? "bg-primary text-primary-foreground shadow-lg"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                             }`}
                     >
                         <item.icon className="w-5 h-5" />
@@ -175,8 +175,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 href={item.href}
                                 onClick={() => mobile && setMobileMenuOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                        ? "bg-primary text-primary-foreground shadow-lg"
-                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                    ? "bg-primary text-primary-foreground shadow-lg"
+                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                     }`}
                             >
                                 <item.icon className="w-5 h-5" />
@@ -192,7 +192,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     return (
         <div className="min-h-screen bg-background">
             {/* Desktop Sidebar */}
-            <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-border bg-card">
+            <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-border/60 bg-card shadow-sm">
                 {/* Logo */}
                 <div className="p-6 border-b border-border">
                     <Link href="/dashboard" className="flex items-center gap-3">
@@ -348,7 +348,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             {/* Main Content */}
             <main className="lg:ml-64 min-h-screen">
                 {/* Desktop Top Bar */}
-                <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
+                <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border/60 bg-card/80 backdrop-blur-sm sticky top-0 z-30">
                     <ThemeSwitch />
                     <Button
                         variant="ghost"
