@@ -1,4 +1,4 @@
-/// src/services/organizationService.ts
+// src/services/organizationService.ts
 // ============================================================================
 // ORGANIZATION SERVICE — connects to real organizations + memberships tables
 // ============================================================================
