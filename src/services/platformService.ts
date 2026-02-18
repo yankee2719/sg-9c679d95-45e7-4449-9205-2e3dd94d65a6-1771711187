@@ -105,4 +105,15 @@ export const platformService = {
 
         return !error;
     },
+
+    // ─── IMPERSONATION (future feature) ──────────────────────────────────
+
+    async isImpersonating(): Promise<{ active: boolean; originalUser?: any }> {
+        // Non implementato - feature futura
+        return { active: false };
+    },
+
+    async stopImpersonation(): Promise<void> {
+        // Non implementato - feature futura
+    },
 };
