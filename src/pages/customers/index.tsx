@@ -130,12 +130,12 @@ export default function CustomersPage() {
                 </div>
 
                 {/* Search */}
-                <Card className="rounded-2xl border-border bg-card/80">
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
                     <CardContent className="p-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input placeholder="Cerca clienti..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground" />
+                                className="pl-10 bg-background border-border rounded-xl text-foreground placeholder:text-muted-foreground" />
                         </div>
                     </CardContent>
                 </Card>
@@ -144,7 +144,7 @@ export default function CustomersPage() {
                 <div className="space-y-3">
                     {filtered.map(customer => (
                         <Card key={customer.id}
-                            className="rounded-2xl border-border bg-card/80 hover:border-blue-500/50 transition-all cursor-pointer group"
+                            className="rounded-2xl border-0 bg-card shadow-sm hover:border-blue-500/50 transition-all cursor-pointer group"
                             onClick={() => router.push(`/customers/${customer.id}`)}>
                             <CardContent className="p-5 flex items-center justify-between">
                                 <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -182,7 +182,7 @@ export default function CustomersPage() {
                 </div>
 
                 {filtered.length === 0 && (
-                    <Card className="rounded-2xl border-border bg-card/80 p-12 text-center">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
                         <Building2 className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-foreground mb-2">Nessun cliente</h3>
                         <p className="text-muted-foreground mb-6">Crea la prima organizzazione cliente per condividere macchine e documentazione</p>
@@ -195,3 +195,4 @@ export default function CustomersPage() {
         </MainLayout>
     );
 }
+
