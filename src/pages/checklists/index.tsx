@@ -118,7 +118,7 @@ export default function ChecklistsPage() {
                     )}
                 </div>
 
-                <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm">
+                <Card className="rounded-2xl border-0 bg-card shadow-sm backdrop-blur-sm">
                     <CardContent className="p-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -126,7 +126,7 @@ export default function ChecklistsPage() {
                                 placeholder={t("common.search")}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10 bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
+                                className="pl-10 bg-background border-border rounded-xl text-foreground placeholder:text-muted-foreground"
                             />
                         </div>
                     </CardContent>
@@ -136,7 +136,7 @@ export default function ChecklistsPage() {
                     {filteredChecklists.map((checklist) => (
                         <Card
                             key={checklist.id}
-                            className="rounded-2xl border-border bg-card/80 backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
+                            className="rounded-2xl border-0 bg-card shadow-sm backdrop-blur-sm hover:border-blue-500/50 transition-all cursor-pointer group overflow-hidden"
                             onClick={() => router.push(`/checklists/edit/${checklist.id}`)}
                         >
                             <CardContent className="p-5">
@@ -146,8 +146,8 @@ export default function ChecklistsPage() {
                                     </div>
                                     <Badge
                                         className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${checklist.is_active
-                                                ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
-                                                : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
+                                            ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
+                                            : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
                                             }`}
                                     >
                                         {checklist.is_active ? t("checklists.active") : t("checklists.inactive")}
@@ -194,7 +194,7 @@ export default function ChecklistsPage() {
                 </div>
 
                 {filteredChecklists.length === 0 && (
-                    <Card className="rounded-2xl border-border bg-card/80 backdrop-blur-sm p-12 text-center">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm backdrop-blur-sm p-12 text-center">
                         <ClipboardList className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-foreground mb-2">{t("checklists.noChecklists")}</h3>
                         <p className="text-muted-foreground mb-6">{t("checklists.noChecklistsDesc")}</p>
@@ -213,3 +213,4 @@ export default function ChecklistsPage() {
         </MainLayout>
     );
 }
+
