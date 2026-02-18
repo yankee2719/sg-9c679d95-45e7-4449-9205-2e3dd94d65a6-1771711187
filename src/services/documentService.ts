@@ -163,6 +163,24 @@ export const documentService = {
         return (data as unknown as DocumentWithVersion[]) || [];
     },
 
+    // ✅ NUOVO: Helper per ottenere documenti per equipment (machine)
+    async getDocumentsByEquipment(equipmentId: string): Promise<DocumentWithVersion[]> {
+        // Ottieni l'organization_id dalla macchina
+        const { data: machine, error: machineError } = await supabase
+            .from('machines')
+            .select('organization_id')
+            .eq('id', equipmentId)
+            .single();
+
+        if (machineError || !machine) {
+            console.error('Error fetching machine:', machineError);
+            return [];
+        }
+
+        // Usa il metodo esistente con il filtro machineId
+        return this.getDocuments(machine.organization_id, { machineId: equipmentId });
+    },
+
     async getDocumentById(id: string): Promise<DocumentWithVersion | null> {
         const { data, error } = await supabase
             .from('documents')
