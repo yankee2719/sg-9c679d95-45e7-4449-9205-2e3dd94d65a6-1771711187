@@ -1,4 +1,4 @@
-// src/services/organizationService.ts
+/// src/services/organizationService.ts
 // ============================================================================
 // ORGANIZATION SERVICE — connects to real organizations + memberships tables
 // ============================================================================
@@ -115,7 +115,7 @@ export const organizationService = {
     },
 
     async generateUniqueSlug(name: string): Promise<string> {
-        let slug = name
+        const slug = name
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/(^-|-$)/g, '');
