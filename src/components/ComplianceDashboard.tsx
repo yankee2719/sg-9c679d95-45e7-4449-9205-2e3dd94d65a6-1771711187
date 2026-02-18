@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle, AlertCircle, FileText, TrendingUp, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, FileText, AlertTriangle } from 'lucide-react';
 import { useCompliance } from '@/hooks/useCompliance';
 
 interface ComplianceDashboardProps {
@@ -67,10 +67,10 @@ export function ComplianceDashboard({ organizationId, className = '' }: Complian
                             </p>
                         </div>
                         <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isFullyCompliant
-                                ? 'bg-green-500'
-                                : compliancePercentage >= 50
-                                    ? 'bg-amber-500'
-                                    : 'bg-red-500'
+                            ? 'bg-green-500'
+                            : compliancePercentage >= 50
+                                ? 'bg-amber-500'
+                                : 'bg-red-500'
                             }`}>
                             <span className="text-2xl font-bold text-white">
                                 {compliancePercentage}%
@@ -83,10 +83,10 @@ export function ComplianceDashboard({ organizationId, className = '' }: Complian
                         <div className="w-full bg-white/60 rounded-full h-3 overflow-hidden">
                             <div
                                 className={`h-3 rounded-full transition-all duration-500 ease-out ${isFullyCompliant
-                                        ? 'bg-green-600'
-                                        : compliancePercentage >= 50
-                                            ? 'bg-amber-500'
-                                            : 'bg-red-500'
+                                    ? 'bg-green-600'
+                                    : compliancePercentage >= 50
+                                        ? 'bg-amber-500'
+                                        : 'bg-red-500'
                                     }`}
                                 style={{ width: `${compliancePercentage}%` }}
                             />
@@ -121,14 +121,14 @@ export function ComplianceDashboard({ organizationId, className = '' }: Complian
 
                     {status.map((item) => (
                         <div
-                            key={item.category_code}
-                            className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${item.compliance_status === 'compliant'
-                                    ? 'bg-green-50 border-green-200'
-                                    : 'bg-red-50 border-red-200'
+                            key={item.category}
+                            className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${item.exists
+                                ? 'bg-green-50 border-green-200'
+                                : 'bg-red-50 border-red-200'
                                 }`}
                         >
                             <div className="flex items-center gap-3">
-                                {item.compliance_status === 'compliant' ? (
+                                {item.exists ? (
                                     <div className="flex-shrink-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                                         <CheckCircle className="w-5 h-5 text-white" />
                                     </div>
@@ -140,27 +140,27 @@ export function ComplianceDashboard({ organizationId, className = '' }: Complian
 
                                 <div>
                                     <p className="font-medium text-gray-900">
-                                        {item.category_name_it}
+                                        {item.category_label}
                                     </p>
                                     <p className="text-xs text-gray-600 font-mono">
-                                        {item.category_code}
+                                        {item.category}
                                     </p>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {item.active_count > 0 && (
+                                {item.documentId && (
                                     <span className="text-sm text-gray-600">
-                                        {item.active_count} {item.active_count === 1 ? 'documento' : 'documenti'}
+                                        ID: {item.documentId.slice(0, 8)}...
                                     </span>
                                 )}
                                 <span
-                                    className={`px-3 py-1 rounded-full text-xs font-semibold ${item.compliance_status === 'compliant'
-                                            ? 'bg-green-600 text-white'
-                                            : 'bg-red-600 text-white'
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold ${item.exists
+                                        ? 'bg-green-600 text-white'
+                                        : 'bg-red-600 text-white'
                                         }`}
                                 >
-                                    {item.compliance_status === 'compliant' ? 'Presente' : 'Mancante'}
+                                    {item.exists ? 'Presente' : 'Mancante'}
                                 </span>
                             </div>
                         </div>
