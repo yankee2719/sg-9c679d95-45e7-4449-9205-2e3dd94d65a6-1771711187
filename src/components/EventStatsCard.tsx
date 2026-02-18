@@ -28,7 +28,7 @@ export function EventStatsCard({
             const dateFrom = new Date();
             dateFrom.setDate(dateFrom.getDate() - daysBack);
 
-            const data = await machineEventService.getStats(organizationId, dateFrom);
+            const data = await machineEventsService.getStats(organizationId, dateFrom);
             setStats(data);
         } catch (error) {
             console.error('Failed to load stats:', error);
