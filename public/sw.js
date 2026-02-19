@@ -1,33 +1,40 @@
-const CACHE_NAME = "maintops-v1";
-const STATIC_CACHE = "maintops-static-v1";
-const API_CACHE = "maintops-api-v1";
+// =============================================================================
+// MACHINA — Service Worker
+// =============================================================================
 
-// Pages to pre-cache for offline shell
+const CACHE_VERSION = "v2";
+const STATIC_CACHE = `machina-static-${CACHE_VERSION}`;
+const API_CACHE = `machina-api-${CACHE_VERSION}`;
+const IMAGE_CACHE = `machina-images-${CACHE_VERSION}`;
+
 const PRECACHE_URLS = [
     "/dashboard",
     "/equipment",
     "/maintenance",
+    "/work-orders",
     "/offline",
 ];
 
-// Install: pre-cache app shell
+// INSTALL
 self.addEventListener("install", (event) => {
     event.waitUntil(
         caches.open(STATIC_CACHE).then((cache) => {
             console.log("[SW] Pre-caching app shell");
-            return cache.addAll(PRECACHE_URLS);
+            return cache.addAll(PRECACHE_URLS).catch(() => {
+                console.warn("[SW] Some precache URLs failed");
+            });
         })
     );
     self.skipWaiting();
 });
 
-// Activate: clean old caches
+// ACTIVATE
 self.addEventListener("activate", (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((key) => key !== STATIC_CACHE && key !== API_CACHE && key !== CACHE_NAME)
+                    .filter((key) => key !== STATIC_CACHE && key !== API_CACHE && key !== IMAGE_CACHE)
                     .map((key) => caches.delete(key))
             )
         )
@@ -35,57 +42,59 @@ self.addEventListener("activate", (event) => {
     self.clients.claim();
 });
 
-// Fetch strategy
+// FETCH
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     const url = new URL(request.url);
+    if (!url.protocol.startsWith("http")) return;
 
-    // Skip non-GET for caching (mutations handled separately)
+    // Non-GET: queue failed mutations
     if (request.method !== "GET") {
-        // Queue failed POST/PATCH/DELETE for offline sync
-        if (request.method === "POST" || request.method === "PATCH" || request.method === "DELETE") {
+        if (["POST", "PATCH", "PUT", "DELETE"].includes(request.method)) {
             event.respondWith(
                 fetch(request.clone()).catch(async () => {
-                    // Store failed mutation for later sync
                     await queueOfflineMutation(request);
                     return new Response(
-                        JSON.stringify({ offline: true, message: "Operazione salvata. Verrà sincronizzata quando torni online." }),
+                        JSON.stringify({ offline: true, queued: true, message: "Operazione salvata offline." }),
                         { status: 200, headers: { "Content-Type": "application/json" } }
                     );
                 })
             );
-            return;
         }
         return;
     }
 
-    // Supabase REST API: network-first, fallback to cache
+    // Supabase REST API: network-first
     if (url.hostname.includes("supabase.co") && url.pathname.includes("/rest/")) {
-        event.respondWith(networkFirstWithCache(request, API_CACHE));
+        event.respondWith(networkFirst(request, API_CACHE));
         return;
     }
 
-    // Next.js static assets (_next/static): cache-first
+    // Supabase Storage: cache-first
+    if (url.hostname.includes("supabase.co") && url.pathname.includes("/storage/")) {
+        event.respondWith(cacheFirst(request, IMAGE_CACHE));
+        return;
+    }
+
+    // Next.js static: cache-first
     if (url.pathname.startsWith("/_next/static/")) {
         event.respondWith(cacheFirst(request, STATIC_CACHE));
         return;
     }
 
-    // Next.js pages and data: network-first
-    if (url.pathname.startsWith("/_next/data/") || url.origin === self.location.origin) {
-        event.respondWith(networkFirstWithCache(request, STATIC_CACHE));
+    // Same origin: network-first
+    if (url.origin === self.location.origin) {
+        event.respondWith(networkFirst(request, STATIC_CACHE));
         return;
     }
 
-    // Default: network with cache fallback
-    event.respondWith(networkFirstWithCache(request, CACHE_NAME));
+    event.respondWith(networkFirst(request, STATIC_CACHE));
 });
 
-// Cache-first strategy (for immutable static assets)
+// STRATEGIES
 async function cacheFirst(request, cacheName) {
     const cached = await caches.match(request);
     if (cached) return cached;
-
     try {
         const response = await fetch(request);
         if (response.ok) {
@@ -98,8 +107,7 @@ async function cacheFirst(request, cacheName) {
     }
 }
 
-// Network-first with cache fallback
-async function networkFirstWithCache(request, cacheName) {
+async function networkFirst(request, cacheName) {
     try {
         const response = await fetch(request);
         if (response.ok) {
@@ -111,27 +119,25 @@ async function networkFirstWithCache(request, cacheName) {
         const cached = await caches.match(request);
         if (cached) return cached;
 
-        // For navigation requests, show offline page
         if (request.mode === "navigate") {
             const offlinePage = await caches.match("/offline");
             if (offlinePage) return offlinePage;
         }
 
         return new Response(
-            JSON.stringify({ error: "offline", message: "Sei offline. Dati dalla cache non disponibili." }),
+            JSON.stringify({ error: "offline", message: "Sei offline." }),
             { status: 503, headers: { "Content-Type": "application/json" } }
         );
     }
 }
 
-// Offline mutation queue using IndexedDB
+// OFFLINE QUEUE (IndexedDB)
 async function queueOfflineMutation(request) {
     try {
         const db = await openDB();
         const body = await request.clone().text();
         const tx = db.transaction("mutations", "readwrite");
-        const store = tx.objectStore("mutations");
-        store.add({
+        tx.objectStore("mutations").add({
             url: request.url,
             method: request.method,
             headers: Object.fromEntries(request.headers.entries()),
@@ -139,64 +145,61 @@ async function queueOfflineMutation(request) {
             timestamp: Date.now(),
         });
     } catch (err) {
-        console.error("[SW] Failed to queue mutation:", err);
+        console.error("[SW] Queue failed:", err);
     }
 }
 
 function openDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open("maintops-offline", 1);
-        request.onupgradeneeded = () => {
-            const db = request.result;
+        const req = indexedDB.open("maintops-offline", 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
             if (!db.objectStoreNames.contains("mutations")) {
                 db.createObjectStore("mutations", { keyPath: "id", autoIncrement: true });
             }
         };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
     });
 }
 
-// Sync queued mutations when back online
+// SYNC
 self.addEventListener("message", async (event) => {
-    if (event.data && event.data.type === "SYNC_OFFLINE") {
-        await syncOfflineMutations();
-        // Notify all clients
+    if (event.data?.type === "SYNC_OFFLINE") {
+        const result = await syncOfflineMutations();
         const clients = await self.clients.matchAll();
-        clients.forEach((client) => {
-            client.postMessage({ type: "SYNC_COMPLETE" });
-        });
+        clients.forEach((c) => c.postMessage({ type: "SYNC_COMPLETE", result }));
     }
 });
 
 async function syncOfflineMutations() {
+    const result = { synced: 0, failed: 0 };
     try {
         const db = await openDB();
-        const tx = db.transaction("mutations", "readwrite");
-        const store = tx.objectStore("mutations");
-        const getAllRequest = store.getAll();
+        const mutations = await new Promise((resolve, reject) => {
+            const tx = db.transaction("mutations", "readonly");
+            const req = tx.objectStore("mutations").getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
 
-        getAllRequest.onsuccess = async () => {
-            const mutations = getAllRequest.result;
-            console.log(`[SW] Syncing ${mutations.length} offline mutations`);
-
-            for (const mutation of mutations) {
-                try {
-                    await fetch(mutation.url, {
-                        method: mutation.method,
-                        headers: mutation.headers,
-                        body: mutation.body,
-                    });
-                    // Remove synced mutation
-                    const deleteTx = db.transaction("mutations", "readwrite");
-                    deleteTx.objectStore("mutations").delete(mutation.id);
-                    console.log(`[SW] Synced mutation ${mutation.id}`);
-                } catch (err) {
-                    console.error(`[SW] Failed to sync mutation ${mutation.id}:`, err);
+        for (const m of mutations) {
+            try {
+                const resp = await fetch(m.url, { method: m.method, headers: m.headers, body: m.body });
+                if (resp.ok || resp.status < 500) {
+                    const dtx = db.transaction("mutations", "readwrite");
+                    dtx.objectStore("mutations").delete(m.id);
+                    result.synced++;
+                } else {
+                    result.failed++;
                 }
+            } catch {
+                result.failed++;
             }
-        };
+        }
     } catch (err) {
-        console.error("[SW] Sync failed:", err);
+        console.error("[SW] Sync error:", err);
     }
+    return result;
 }
+
