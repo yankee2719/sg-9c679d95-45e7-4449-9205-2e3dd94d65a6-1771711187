@@ -182,14 +182,14 @@ export default function NewChecklistTemplate() {
                 return;
             }
 
-            // Get user profile for tenant_id
+            // Get user organization
             const { data: profile } = await supabase
                 .from("profiles")
-                .select("tenant_id")
+                .select("default_organization_id")
                 .eq("id", user.id)
                 .single();
 
-            if (!profile?.tenant_id) {
+            if (!profile?.default_organization_id) {
                 toast({
                     title: "Errore",
                     description: "Profilo utente non configurato correttamente",
@@ -206,7 +206,7 @@ export default function NewChecklistTemplate() {
                     description: formData.description.trim() || null,
                     category: formData.category || formData.equipment_type?.trim() || null,
                     created_by: user.id,
-                    tenant_id: profile.tenant_id
+                    tenant_id: profile.default_organization_id
                 })
                 .select()
                 .single();
