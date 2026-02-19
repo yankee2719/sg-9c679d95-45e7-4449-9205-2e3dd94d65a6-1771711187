@@ -202,11 +202,12 @@ export default function NewChecklistTemplate() {
             const { data: checklist, error: checklistError } = await supabase
                 .from("checklists")
                 .insert({
-                    name: formData.title.trim(),
+                    title: formData.title.trim(),
                     description: formData.description.trim() || null,
-                    category: formData.category || formData.equipment_type?.trim() || null,
                     created_by: user.id,
-                    tenant_id: profile.default_organization_id
+                    organization_id: profile.default_organization_id,
+                    is_template: true,
+                    is_active: true,
                 })
                 .select()
                 .single();
