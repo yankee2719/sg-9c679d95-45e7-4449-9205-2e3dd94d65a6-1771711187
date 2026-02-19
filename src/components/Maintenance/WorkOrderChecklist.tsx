@@ -8,7 +8,6 @@
 'use client';
 
 import { useState } from 'react';
-import { ChecklistItem } from '@/services/maintenanceService';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,8 +17,16 @@ import { CheckCircle2, Circle, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 // ============================================================================
-// TYPES
+// TYPES (definiti localmente)
 // ============================================================================
+
+export interface ChecklistItem {
+    id: string;
+    task: string;
+    completed: boolean;
+    completed_at?: string;
+    notes?: string;
+}
 
 interface WorkOrderChecklistProps {
     workOrderId: string;
@@ -38,14 +45,14 @@ export function WorkOrderChecklist({
     readonly = false,
     onUpdate,
 }: WorkOrderChecklistProps) {
-    const [checklist, setChecklist] = useState < ChecklistItem[] > (initialChecklist);
-    const [editingNotes, setEditingNotes] = useState < string | null > (null);
+    const [checklist, setChecklist] = useState<ChecklistItem[]>(initialChecklist);
+    const [editingNotes, setEditingNotes] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
     // Calculate progress
     const completedCount = checklist.filter(item => item.completed).length;
     const totalCount = checklist.length;
-    const percentage = Math.round((completedCount / totalCount) * 100);
+    const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
     // --------------------------------------------------------------------------
     // HANDLERS
