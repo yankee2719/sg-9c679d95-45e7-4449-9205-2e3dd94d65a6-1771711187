@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
+import { MachineEventTimeline } from "@/components/MachineEventTimeline";
 import {
     ArrowLeft, Wrench, Building2, MapPin, Calendar, Hash, Tag,
     QrCode, FileText, ClipboardList, Pencil, Save, X, Factory, Lock,
-    ChevronRight, CheckCircle2, AlertCircle, Loader2,
+    ChevronRight, CheckCircle2, AlertCircle, Loader2, History,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -117,19 +118,19 @@ export default function EquipmentDetailPage() {
     const { toast } = useToast();
     const { id, tab } = router.query;
 
-    const [machine, setMachine] = useState < Machine | null > (null);
-    const [plantName, setPlantName] = useState < string | null > (null);
-    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
+    const [machine, setMachine] = useState<Machine | null>(null);
+    const [plantName, setPlantName] = useState<string | null>(null);
+    const [manufacturerName, setManufacturerName] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [ctx, setCtx] = useState < UserContext | null > (null);
+    const [ctx, setCtx] = useState<UserContext | null>(null);
     const [editingQR, setEditingQR] = useState(false);
     const [qrUrlDraft, setQrUrlDraft] = useState("");
     const [savingQR, setSavingQR] = useState(false);
     const [activeTab, setActiveTab] = useState("general");
 
     // Maintenance data
-    const [plans, setPlans] = useState < MaintenancePlan[] > ([]);
-    const [workOrders, setWorkOrders] = useState < WorkOrder[] > ([]);
+    const [plans, setPlans] = useState<MaintenancePlan[]>([]);
+    const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
     const [loadingMaint, setLoadingMaint] = useState(false);
 
     const isAssigned = machine && ctx ? machine.organization_id !== ctx.orgId : false;
@@ -283,7 +284,7 @@ export default function EquipmentDetailPage() {
 
                 {/* Tabs */}
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+                    <TabsList className="grid w-full grid-cols-5 max-w-3xl">
                         <TabsTrigger value="general" className="gap-1.5">
                             <Wrench className="w-4 h-4" />
                             <span className="hidden sm:inline">Generale</span>
@@ -301,9 +302,13 @@ export default function EquipmentDetailPage() {
                             <FileText className="w-4 h-4" />
                             <span className="hidden sm:inline">Documenti</span>
                         </TabsTrigger>
+                        <TabsTrigger value="timeline" className="gap-1.5">
+                            <History className="w-4 h-4" />
+                            <span className="hidden sm:inline">Timeline</span>
+                        </TabsTrigger>
                         <TabsTrigger value="qr" className="gap-1.5">
                             <QrCode className="w-4 h-4" />
-                            <span className="hidden sm:inline">QR Code</span>
+                            <span className="hidden sm:inline">QR</span>
                         </TabsTrigger>
                     </TabsList>
 
@@ -502,6 +507,26 @@ export default function EquipmentDetailPage() {
                     </TabsContent>
 
                     {/* ============================================================ */}
+                    {/* TAB: TIMELINE                                                */}
+                    {/* ============================================================ */}
+                    <TabsContent value="timeline" className="mt-4">
+                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-foreground flex items-center gap-2">
+                                    <History className="w-5 h-5 text-primary" /> Cronologia Eventi
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <MachineEventTimeline
+                                    machineId={machine.id}
+                                    limit={50}
+                                    showIntegrityCheck={isAdmin}
+                                />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* ============================================================ */}
                     {/* TAB: QR CODE                                                 */}
                     {/* ============================================================ */}
                     <TabsContent value="qr" className="mt-4">
@@ -577,4 +602,3 @@ function InfoRow({ icon, label, value, fallback = "\u2014" }: { icon: React.Reac
         </div>
     );
 }
-
