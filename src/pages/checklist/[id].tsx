@@ -431,7 +431,7 @@ export default function ChecklistExecutionPage() {
 
             // Smart redirect: back to WO detail if linked, otherwise /maintenance
             if (execution?.work_order_id) {
-                router.push(`/maintenance/wo/${execution.work_order_id}`);
+                router.push(`/work-orders/${execution.work_order_id}`);
             } else {
                 router.push("/maintenance");
             }
