@@ -94,11 +94,11 @@ export function DocumentUpload({
 
             const { data: profile } = await supabase
                 .from("profiles")
-                .select("tenant_id")
+                .select("default_organization_id")
                 .eq("id", user.id)
                 .single();
 
-            const tenantId = profile?.tenant_id;
+            const tenantId = profile?.default_organization_id;
 
             // 2. Generate storage path: tenantId/equipmentId/timestamp_filename
             const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
