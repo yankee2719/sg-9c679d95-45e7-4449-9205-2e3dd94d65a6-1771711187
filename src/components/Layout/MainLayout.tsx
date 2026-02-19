@@ -79,6 +79,26 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 const count = await getNotificationCount(authUser.id);
                 setUnreadNotifications(count);
+
+                // Realtime subscription for new notifications
+                const channel = supabase
+                    .channel(`layout-notif-${authUser.id}`)
+                    .on(
+                        "postgres_changes",
+                        {
+                            event: "INSERT",
+                            schema: "public",
+                            table: "notifications",
+                            filter: `user_id=eq.${authUser.id}`,
+                        },
+                        () => {
+                            setUnreadNotifications(prev => prev + 1);
+                        }
+                    )
+                    .subscribe();
+
+                // Cleanup on unmount
+                return () => { supabase.removeChannel(channel); };
             } catch (error) {
                 console.error("Error loading user:", error);
             }
