@@ -188,4 +188,4 @@ export default function MaintenanceScheduleDetail() {
             </div>
         </MainLayout>
     );
-}
+} 
