@@ -126,15 +126,20 @@ export interface WorkOrder {
 }
 
 export interface CreateWorkOrderParams {
-    organization_id: string;
-    machine_id: string;
+    organization_id?: string;
+    machine_id?: string;
+    equipment_id?: string;
     plant_id: string;
     maintenance_plan_id?: string;
     title: string;
     description?: string;
-    work_type: WorkType;
+    work_type?: WorkType;
+    wo_type?: string;
     priority?: WorkOrderPriority;
     scheduled_date?: string;
+    scheduled_start?: string;
+    scheduled_end?: string;
+    estimated_duration_minutes?: number;
     due_date?: string;
     assigned_to?: string;
 }
