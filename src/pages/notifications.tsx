@@ -35,7 +35,7 @@ const typeConfig: Record<string, { label: string; icon: any; color: string; bgCo
 function getEntityRoute(n: Notification): string | null {
     if (!n.related_entity_type || !n.related_entity_id) return null;
     switch (n.related_entity_type) {
-        case "work_order": return `/maintenance/wo/${n.related_entity_id}`;
+        case "work_order": return `/work-orders/${n.related_entity_id}`;
         case "maintenance_plan": return `/maintenance/${n.related_entity_id}`;
         case "machine": return `/equipment/${n.related_entity_id}`;
         case "checklist_execution": return `/checklist/${n.related_entity_id}`;
@@ -62,11 +62,11 @@ function formatRelative(d: string): string {
 export default function NotificationsPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("technician");
+    const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
     const [loading, setLoading] = useState(true);
-    const [notifications, setNotifications] = useState < Notification[] > ([]);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [activeFilter, setActiveFilter] = useState < "all" | "unread" | NotificationType > ("all");
+    const [activeFilter, setActiveFilter] = useState<"all" | "unread" | NotificationType>("all");
 
     // =========================================================================
     // LOAD
