@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import { getProfileData, getNotificationCount } from "@/lib/supabaseHelpers";
+import { OfflineStatusBar } from "@/components/Offline/OfflineStatusBar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -388,6 +389,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         )}
                     </Button>
                 </header>
+
+                {/* Offline/Sync Status Bar */}
+                <OfflineStatusBar />
 
                 {/* Page Content */}
                 <div className="p-4 lg:p-8 pt-20 lg:pt-8">
