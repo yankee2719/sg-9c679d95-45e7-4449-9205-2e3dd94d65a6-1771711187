@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
-import { organizationService } from "@/services/organizationService";
 import { getProfileData, getNotificationCount } from "@/lib/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,12 +13,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import dynamic from "next/dynamic";
-const ThemeSwitch = dynamic(
-    () => import("@/components/ThemeSwitch").then(m => m.ThemeSwitch),
-    { ssr: false }
-);
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import {
     LayoutDashboard,
     Wrench,
@@ -36,6 +31,7 @@ import {
     Building2,
     Factory,
     Package,
+    ClipboardCheck,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -54,10 +50,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const [orgType, setOrgType] = useState < string | null > (null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
-    const [mounted, setMounted] = useState(false); // ✅ AGGIUNTO
 
     useEffect(() => {
-        setMounted(true); // ✅ AGGIUNTO
         const loadUser = async () => {
             try {
                 const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -74,7 +68,11 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                     // Fetch org type
                     if (profileData.tenant_id) {
-                        const org = await organizationService.getOrganizationById(profileData.tenant_id);
+                        const { data: org } = await supabase
+                            .from("organizations")
+                            .select("type")
+                            .eq("id", profileData.tenant_id)
+                            .single();
                         if (org?.type) setOrgType(org.type);
                     }
                 }
@@ -106,6 +104,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
             { name: t("nav.equipment"), href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
             { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.workOrders") || "Ordini di Lavoro", href: "/work-orders", icon: ClipboardCheck, roles: ["admin", "supervisor", "technician"] },
             { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
             { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
             { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
@@ -331,7 +330,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {/* Mobile Actions */}
                 <div className="flex items-center gap-2">
-                    {mounted ? <ThemeSwitch /> : <div className="w-9 h-9" />}  {/* ✅ MODIFICATO */}
+                    <ThemeSwitch />
                     <Button
                         variant="ghost"
                         size="icon"
@@ -352,7 +351,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             <main className="lg:ml-64 min-h-screen">
                 {/* Desktop Top Bar */}
                 <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border/60 bg-card/80 backdrop-blur-sm sticky top-0 z-30">
-                    {mounted ? <ThemeSwitch /> : <div className="w-9 h-9" />}  {/* ✅ MODIFICATO */}
+                    <ThemeSwitch />
                     <Button
                         variant="ghost"
                         size="icon"
