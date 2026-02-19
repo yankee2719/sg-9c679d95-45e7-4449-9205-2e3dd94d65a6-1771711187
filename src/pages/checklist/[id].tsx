@@ -266,7 +266,7 @@ export default function ChecklistExecutionPage() {
                 // Recupera info complete dello schedule
                 const { data: schedData } = await supabase
                     .from("maintenance_schedules")
-                    .select("equipment_id, title, tenant_id, frequency, next_due_date")
+                    .select("equipment_id, title, frequency, next_due_date")
                     .eq("id", execution.schedule_id)
                     .single();
 
@@ -338,7 +338,6 @@ export default function ChecklistExecutionPage() {
                             status: "completed",
                             completed_at: new Date().toISOString(),
                             schedule_id: execution.schedule_id,
-                            tenant_id: schedData.tenant_id,
                         });
 
                     if (logError) {
