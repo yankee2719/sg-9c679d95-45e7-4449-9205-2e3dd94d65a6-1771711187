@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
+import { MachinePhotoUpload } from "@/components/Equipment/MachinePhotoUpload";
 import { MachineEventTimeline } from "@/components/MachineEventTimeline";
 import { exportMachinePassport, exportTechnicalSheet, exportMaintenanceReport, type MachineData, type MaintenanceReportData } from "@/services/pdfExportService";
 import {
     ArrowLeft, Wrench, Building2, MapPin, Calendar, Hash, Tag,
     QrCode, FileText, ClipboardList, Pencil, Save, X, Factory, Lock,
-    ChevronRight, CheckCircle2, AlertCircle, Loader2, History, Download,
+    ChevronRight, CheckCircle2, AlertCircle, Loader2, History, Download, Camera,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -339,6 +340,24 @@ export default function EquipmentDetailPage() {
                     {/* TAB: GENERALE                                                */}
                     {/* ============================================================ */}
                     <TabsContent value="general" className="space-y-6 mt-4">
+                        {/* Photo */}
+                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-foreground flex items-center gap-2">
+                                    <Camera className="w-5 h-5 text-primary" /> Foto Macchina
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <MachinePhotoUpload
+                                    machineId={machine.id}
+                                    currentPhotoUrl={machine.photo_url}
+                                    onPhotoChange={(url) => setMachine(prev => prev ? { ...prev, photo_url: url } : null)}
+                                    readonly={!canEdit}
+                                />
+                            </CardContent>
+                        </Card>
+
+                        {/* Info */}
                         <Card className="rounded-2xl border-0 bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-foreground flex items-center gap-2">
