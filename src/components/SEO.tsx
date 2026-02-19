@@ -20,6 +20,13 @@ export function SEOElements({
       <meta name="description" content={description} />
       <link rel="icon" href="/favicon.ico" />
 
+      {/* PWA */}
+      <link rel="manifest" href="/manifest.json" />
+      <meta name="theme-color" content="#FF6B35" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+
       {/* Open Graph */}
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
@@ -65,3 +72,4 @@ export function SEO({
     </Head>
   );
 }
+
