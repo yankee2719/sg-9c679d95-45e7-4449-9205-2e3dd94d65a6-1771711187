@@ -4,6 +4,7 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { getPermissions } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +90,8 @@ export default function WorkOrdersPage() {
     const [typeFilter, setTypeFilter] = useState("all");
     const [assigneeFilter, setAssigneeFilter] = useState("all"); // "all" | "mine" | "unassigned"
 
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
+    const perms = getPermissions({ role: userRole, orgType: null });
+    const isAdmin = perms.isAdminOrSupervisor;
 
     // =========================================================================
     // LOAD
@@ -408,3 +410,4 @@ export default function WorkOrdersPage() {
         </MainLayout>
     );
 }
+
