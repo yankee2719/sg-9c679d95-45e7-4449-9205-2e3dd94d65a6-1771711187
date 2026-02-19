@@ -75,7 +75,7 @@ export function MachinePhotoUpload({
             const publicUrl = urlData.publicUrl;
 
             // Update machine record
-            const { error: updateError } = await supabase
+            const { error: updateError } = await (supabase as any)
                 .from("machines")
                 .update({ photo_url: publicUrl, updated_at: new Date().toISOString() })
                 .eq("id", machineId);
@@ -105,7 +105,7 @@ export function MachinePhotoUpload({
             }
 
             // Update machine
-            await supabase
+            await (supabase as any)
                 .from("machines")
                 .update({ photo_url: null, updated_at: new Date().toISOString() })
                 .eq("id", machineId);
