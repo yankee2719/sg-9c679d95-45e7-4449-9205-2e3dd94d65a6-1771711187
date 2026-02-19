@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
+import { getPermissions } from "@/hooks/usePermissions";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -122,6 +123,7 @@ export default function WorkOrderDetailPage() {
     const [planTitle, setPlanTitle] = useState < string | null > (null);
     const [loading, setLoading] = useState(true);
     const [userRole, setUserRole] = useState("technician");
+    const [userId, setUserId] = useState("");
     const [transitioning, setTransitioning] = useState(false);
 
     // Checklist state
@@ -131,7 +133,9 @@ export default function WorkOrderDetailPage() {
     const [selectedChecklistId, setSelectedChecklistId] = useState < string > ("");
     const [startingChecklist, setStartingChecklist] = useState(false);
 
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
+    const perms = getPermissions({ role: userRole, orgType: null });
+    const isAdmin = perms.isAdminOrSupervisor;
+    const canEditThisWO = wo ? perms.canEditWOIfAssigned(wo.assigned_to, userId) : false;
 
     // =========================================================================
     // LOAD
@@ -146,6 +150,7 @@ export default function WorkOrderDetailPage() {
             const ctx = await getUserContext();
             if (!ctx) { router.push("/login"); return; }
             setUserRole(ctx.role);
+            setUserId(ctx.userId);
 
             // Load WO
             const { data: woData, error: woError } = await supabase
