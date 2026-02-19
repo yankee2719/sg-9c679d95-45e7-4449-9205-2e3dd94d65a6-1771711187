@@ -27,8 +27,6 @@ export default function NewChecklistTemplate() {
     const [formData, setFormData] = useState({
         title: "",
         description: "",
-        category: "",
-        equipment_type: "",
     });
     const [items, setItems] = useState < ChecklistItem[] > ([
         {
@@ -60,76 +58,49 @@ export default function NewChecklistTemplate() {
     };
 
     const updateItem = (id: string, field: keyof ChecklistItem, value: string | boolean) => {
-        setItems(
-            items.map((item) =>
-                item.id === id ? { ...item, [field]: value } : item
-            )
-        );
+        setItems(items.map((item) => item.id === id ? { ...item, [field]: value } : item));
     };
 
     const handleImageUpload = async (itemId: string, file: File) => {
         try {
             const fileExt = file.name.split('.').pop();
             const fileName = `${itemId}-${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('checklist-images')
-                .upload(filePath, file);
+                .upload(fileName, file);
 
             if (uploadError) throw uploadError;
 
-            // Per bucket privato, usa createSignedUrl
             const { data: signedUrlData, error: signedUrlError } = await supabase.storage
                 .from('checklist-images')
-                .createSignedUrl(filePath, 60 * 60 * 24 * 365); // URL valido per 1 anno
+                .createSignedUrl(fileName, 60 * 60 * 24 * 365);
 
             if (signedUrlError) throw signedUrlError;
 
-            const imageUrl = signedUrlData.signedUrl;
+            setItems(items.map((item) =>
+                item.id === itemId
+                    ? { ...item, images: [...item.images, signedUrlData.signedUrl] }
+                    : item
+            ));
 
-            setItems(
-                items.map((item) =>
-                    item.id === itemId
-                        ? { ...item, images: [...item.images, imageUrl] }
-                        : item
-                )
-            );
-
-            toast({
-                title: "Successo",
-                description: "Immagine caricata con successo",
-            });
+            toast({ title: "Successo", description: "Immagine caricata con successo" });
         } catch (error: any) {
             console.error('Error uploading image:', error);
-            toast({
-                title: "Errore",
-                description: "Errore durante il caricamento dell'immagine",
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: "Errore durante il caricamento dell'immagine", variant: "destructive" });
         }
     };
 
     const removeImage = async (itemId: string, imageUrl: string) => {
         try {
-            // Estrai il nome del file dall'URL
             const urlParts = imageUrl.split('/');
-            const fileNameWithParams = urlParts[urlParts.length - 1];
-            const fileName = fileNameWithParams.split('?')[0];
-
-            // Rimuovi dal storage
-            await supabase.storage
-                .from('checklist-images')
-                .remove([fileName]);
-
-            // Rimuovi dallo state
-            setItems(
-                items.map((item) =>
-                    item.id === itemId
-                        ? { ...item, images: item.images.filter(img => img !== imageUrl) }
-                        : item
-                )
-            );
+            const fileName = urlParts[urlParts.length - 1].split('?')[0];
+            await supabase.storage.from('checklist-images').remove([fileName]);
+            setItems(items.map((item) =>
+                item.id === itemId
+                    ? { ...item, images: item.images.filter(img => img !== imageUrl) }
+                    : item
+            ));
         } catch (error) {
             console.error('Error removing image:', error);
         }
@@ -141,48 +112,25 @@ export default function NewChecklistTemplate() {
 
         try {
             if (!formData.title.trim()) {
-                toast({
-                    title: "Errore",
-                    description: "Il titolo è obbligatorio",
-                    variant: "destructive",
-                });
-                setLoading(false);
-                return;
-            }
-
-            if (!formData.category) {
-                toast({
-                    title: "Errore",
-                    description: "La categoria è obbligatoria",
-                    variant: "destructive",
-                });
+                toast({ title: "Errore", description: "Il titolo è obbligatorio", variant: "destructive" });
                 setLoading(false);
                 return;
             }
 
             const validItems = items.filter((item) => item.title.trim());
             if (validItems.length === 0) {
-                toast({
-                    title: "Errore",
-                    description: "Aggiungi almeno un elemento alla checklist",
-                    variant: "destructive",
-                });
+                toast({ title: "Errore", description: "Aggiungi almeno un elemento alla checklist", variant: "destructive" });
                 setLoading(false);
                 return;
             }
 
             const { data: { user }, error: userError } = await supabase.auth.getUser();
             if (userError || !user) {
-                toast({
-                    title: "Errore",
-                    description: "Devi essere autenticato",
-                    variant: "destructive",
-                });
+                toast({ title: "Errore", description: "Devi essere autenticato", variant: "destructive" });
                 router.push("/login");
                 return;
             }
 
-            // Get user organization
             const { data: profile } = await supabase
                 .from("profiles")
                 .select("default_organization_id")
@@ -190,11 +138,7 @@ export default function NewChecklistTemplate() {
                 .single();
 
             if (!profile?.default_organization_id) {
-                toast({
-                    title: "Errore",
-                    description: "Profilo utente non configurato correttamente",
-                    variant: "destructive",
-                });
+                toast({ title: "Errore", description: "Profilo utente non configurato correttamente", variant: "destructive" });
                 setLoading(false);
                 return;
             }
@@ -221,7 +165,7 @@ export default function NewChecklistTemplate() {
                 is_required: item.is_required,
                 order_index: index,
                 input_type: "checkbox",
-                images: item.images
+                images: item.images,
             }));
 
             const { error: itemsError } = await supabase
@@ -230,19 +174,11 @@ export default function NewChecklistTemplate() {
 
             if (itemsError) throw itemsError;
 
-            toast({
-                title: "Successo",
-                description: "Checklist creata con successo",
-            });
-
+            toast({ title: "Successo", description: "Checklist creata con successo" });
             router.push("/checklists");
         } catch (error: any) {
             console.error("Error creating checklist template:", error);
-            toast({
-                title: "Errore",
-                description: "Errore durante la creazione della checklist",
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: error.message || "Errore durante la creazione della checklist", variant: "destructive" });
         } finally {
             setLoading(false);
         }
@@ -277,29 +213,6 @@ export default function NewChecklistTemplate() {
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                     placeholder="es. Controllo giornaliero pressa"
                                     required
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="category" className="text-slate-200">Categoria *</Label>
-                                <Input
-                                    id="category"
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    placeholder="es. Manutenzione preventiva"
-                                    required
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="equipment_type" className="text-slate-200">Tipo Attrezzatura</Label>
-                                <Input
-                                    id="equipment_type"
-                                    value={formData.equipment_type}
-                                    onChange={(e) => setFormData({ ...formData, equipment_type: e.target.value })}
-                                    placeholder="es. Pressa idraulica"
                                     className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                                 />
                             </div>
