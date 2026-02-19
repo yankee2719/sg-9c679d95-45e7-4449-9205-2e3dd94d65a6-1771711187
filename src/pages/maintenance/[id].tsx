@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { maintenanceService } from "@/services/maintenanceService";
+import { maintenancePlanService } from "@/services/maintenanceService";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Edit, Trash2, CheckCircle } from "lucide-react";
 import { SEO } from "@/components/SEO";
@@ -37,24 +37,24 @@ export default function MaintenanceScheduleDetail() {
 
     const loadSchedule = async (scheduleId: string) => {
         try {
-            // Get user role
+            // Get user role from organization_memberships
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const { data: profile } = await supabase
-                    .from("profiles")
+                const { data: membership } = await supabase
+                    .from("organization_memberships")
                     .select("role")
-                    .eq("id", user.id)
+                    .eq("user_id", user.id)
+                    .eq("is_active", true)
                     .single();
-                if (profile) {
-                    setUserRole(profile.role as "admin" | "supervisor" | "technician");
+                if (membership) {
+                    setUserRole(membership.role as "admin" | "supervisor" | "technician");
                 }
             }
 
-            const schedules = await maintenanceService.getSchedules();
-            const found = schedules.find((s: any) => s.id === scheduleId);
-            setSchedule(found || null);
+            const plan = await maintenancePlanService.getPlanById(scheduleId);
+            setSchedule(plan);
         } catch (error) {
-            console.error("Error loading schedule:", error);
+            console.error("Error loading maintenance plan:", error);
             toast({
                 title: t("common.error"),
                 description: t("maintenance.loadError"),
@@ -68,7 +68,7 @@ export default function MaintenanceScheduleDetail() {
     const handleDelete = async () => {
         if (!confirm(t("maintenance.confirmDelete"))) return;
         try {
-            await maintenanceService.deleteSchedule(id as string);
+            await maintenancePlanService.deactivatePlan(id as string);
             toast({
                 title: t("common.success"),
                 description: t("maintenance.deleteSuccess"),
