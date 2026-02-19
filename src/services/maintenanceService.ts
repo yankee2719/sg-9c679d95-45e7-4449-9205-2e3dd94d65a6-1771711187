@@ -91,6 +91,7 @@ export interface WorkOrder {
     total_cost: number | null;
     notes: string | null;
     photos: string[];
+    is_closed: boolean;
     created_at: string;
     updated_at: string;
 }
