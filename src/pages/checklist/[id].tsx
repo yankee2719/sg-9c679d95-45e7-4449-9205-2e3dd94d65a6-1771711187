@@ -396,22 +396,25 @@ export default function ChecklistExecutionPage() {
                 const { data: { user: currentUser } } = await supabase.auth.getUser();
                 const { data: currentProfile } = await supabase
                     .from("profiles")
-                    .select("display_name, first_name, last_name, tenant_id")
+                    .select("display_name, first_name, last_name, default_organization_id")
                     .eq("id", currentUser?.id || "")
                     .single();
 
                 const executorName = currentProfile?.display_name ||
                     [currentProfile?.first_name, currentProfile?.last_name].filter(Boolean).join(" ") || "Tecnico";
 
-                if (currentProfile?.tenant_id) {
-                    const { data: supervisors } = await supabase
-                        .from("profiles")
-                        .select("id")
-                        .eq("tenant_id", currentProfile.tenant_id)
+                if (currentProfile?.default_organization_id) {
+                    const { data: supervisorMemberships } = await supabase
+                        .from("organization_memberships")
+                        .select("user_id")
+                        .eq("organization_id", currentProfile.default_organization_id)
                         .in("role", ["admin", "supervisor"])
-                        .neq("id", currentUser?.id || "");
+                        .eq("is_active", true)
+                        .neq("user_id", currentUser?.id || "");
 
-                    if (supervisors && supervisors.length > 0) {
+                    const supervisors = supervisorMemberships?.map(m => ({ id: m.user_id })) || [];
+
+                    if (supervisors.length > 0) {
                         await notificationService.notifyChecklistCompleted(
                             checklist?.name || "Checklist",
                             executionId as string,
