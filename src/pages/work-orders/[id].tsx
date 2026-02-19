@@ -268,14 +268,16 @@ export default function WorkOrderDetailPage() {
             if (newStatus === "completed" && wo) {
                 try {
                     const { data: { user: me } } = await supabase.auth.getUser();
-                    const { data: myProfile } = await supabase.from("profiles").select("tenant_id").eq("id", me?.id || "").single();
-                    if (myProfile?.tenant_id) {
-                        const { data: supervisors } = await supabase
-                            .from("profiles").select("id")
-                            .eq("tenant_id", myProfile.tenant_id)
+                    const { data: myProfile } = await supabase.from("profiles").select("default_organization_id").eq("id", me?.id || "").single();
+                    if (myProfile?.default_organization_id) {
+                        const { data: supervisorMemberships } = await supabase
+                            .from("organization_memberships").select("user_id")
+                            .eq("organization_id", myProfile.default_organization_id)
                             .in("role", ["admin", "supervisor"])
-                            .neq("id", me?.id || "");
-                        if (supervisors?.length) {
+                            .eq("is_active", true)
+                            .neq("user_id", me?.id || "");
+                        const supervisors = supervisorMemberships?.map(m => ({ id: m.user_id })) || [];
+                        if (supervisors.length) {
                             await notificationService.notifyWOCompleted(wo.id, wo.title, supervisors.map(s => s.id));
                         }
                     }
