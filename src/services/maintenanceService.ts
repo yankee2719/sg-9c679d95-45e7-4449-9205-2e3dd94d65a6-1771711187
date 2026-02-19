@@ -16,7 +16,16 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type WorkOrderStatus = 'draft' | 'assigned' | 'scheduled' | 'in_progress' | 'paused' | 'pending_review' | 'completed' | 'approved' | 'cancelled';
 export type WorkOrderPriority = 'low' | 'medium' | 'high' | 'critical';
+export type MaintenancePriority = WorkOrderPriority;
 export type WorkType = 'preventive' | 'corrective' | 'predictive' | 'inspection' | 'emergency';
+export type MaintenancePlanType = 'time_based' | 'usage_based' | 'condition_based';
+
+export interface ChecklistItem {
+    id: string;
+    label: string;
+    checked: boolean;
+    notes?: string;
+}
 
 // ============================================================================
 // TYPES — MAINTENANCE PLANS
@@ -119,6 +128,7 @@ export interface CreateWorkOrderParams {
     due_date?: string;
     assigned_to?: string;
 }
+export type CreateWorkOrderInput = CreateWorkOrderParams;
 
 export interface CompleteWorkOrderParams {
     work_performed: string;
