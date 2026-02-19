@@ -14,7 +14,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-export type WorkOrderStatus = 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled';
+export type WorkOrderStatus = 'draft' | 'assigned' | 'scheduled' | 'in_progress' | 'paused' | 'pending_review' | 'completed' | 'approved' | 'cancelled';
 export type WorkOrderPriority = 'low' | 'medium' | 'high' | 'critical';
 export type WorkType = 'preventive' | 'corrective' | 'predictive' | 'inspection' | 'emergency';
 
