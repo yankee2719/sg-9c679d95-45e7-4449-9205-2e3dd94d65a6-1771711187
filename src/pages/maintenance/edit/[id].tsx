@@ -8,14 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import maintenanceService from "@/services/maintenanceService";
-import { getAllEquipment } from "@/services/equipmentService";
-import { checklistService } from "@/services/checklistService";
+import { maintenancePlanService } from "@/services/maintenanceService";
 import { ArrowLeft, Save } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-export default function EditMaintenanceSchedule() {
+export default function EditMaintenancePlan() {
     const router = useRouter();
     const { id } = router.query;
     const { toast } = useToast();
@@ -23,67 +21,40 @@ export default function EditMaintenanceSchedule() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [equipmentList, setEquipmentList] = useState < any[] > ([]);
-    const [checklists, setChecklists] = useState < any[] > ([]);
 
     const [formData, setFormData] = useState({
-        equipment_id: "",
         title: "",
         description: "",
-        frequency: "monthly",
+        frequency_type: "months",
+        frequency_value: 1,
         next_due_date: "",
-        assigned_to: "",
-        checklist_id: ""
+        priority: "medium",
     });
 
     useEffect(() => {
-        loadEquipment();
-        loadChecklists();
         if (id && typeof id === "string") {
-            loadSchedule(id);
+            loadPlan(id);
         }
     }, [id]);
 
-    const loadEquipment = async () => {
+    const loadPlan = async (planId: string) => {
         try {
-            const data = await getAllEquipment();
-            setEquipmentList(data);
-        } catch (error) {
-            console.error("Error loading equipment:", error);
-        }
-    };
-
-    const loadChecklists = async () => {
-        try {
-            const data = await checklistService.getAllChecklists();
-            setChecklists(data);
-        } catch (error) {
-            console.error("Error loading checklists:", error);
-        }
-    };
-
-    const loadSchedule = async (scheduleId: string) => {
-        try {
-            const schedules = await maintenanceService.getSchedules();
-            const data = schedules.find((s: any) => s.id === scheduleId);
-            if (data) {
+            const plan = await maintenancePlanService.getPlanById(planId);
+            if (plan) {
                 setFormData({
-                    equipment_id: data.equipment_id,
-                    title: data.title,
-                    description: data.description || "",
-                    frequency: data.frequency,
-                    next_due_date: data.next_due_date ? new Date(data.next_due_date).toISOString().split("T")[0] : "",
-                    assigned_to: data.assigned_to || "",
-                    checklist_id: data.checklist_id || ""
+                    title: plan.title || "",
+                    description: plan.description || "",
+                    frequency_type: plan.frequency_type || "months",
+                    frequency_value: plan.frequency_value || 1,
+                    next_due_date: plan.next_due_date
+                        ? new Date(plan.next_due_date).toISOString().split("T")[0]
+                        : "",
+                    priority: plan.priority || "medium",
                 });
             }
         } catch (error) {
-            console.error("Error loading schedule:", error);
-            toast({
-                title: t("common.error"),
-                description: t("maintenance.loadError"),
-                variant: "destructive",
-            });
+            console.error("Error loading plan:", error);
+            toast({ title: t("common.error"), description: t("maintenance.loadError"), variant: "destructive" });
         } finally {
             setLoading(false);
         }
@@ -93,131 +64,114 @@ export default function EditMaintenanceSchedule() {
         e.preventDefault();
         setSaving(true);
         try {
-            await maintenanceService.updateSchedule(id as string, {
+            await maintenancePlanService.updatePlan(id as string, {
                 ...formData,
-                checklist_id: formData.checklist_id || null
-            });
-            toast({
-                title: t("common.success"),
-                description: t("maintenance.updateSuccess"),
-            });
+                frequency_value: Number(formData.frequency_value),
+                next_due_date: formData.next_due_date || null,
+            } as any);
+            toast({ title: t("common.success"), description: t("maintenance.updateSuccess") });
             router.push("/maintenance");
         } catch (error) {
             console.error(error);
-            toast({
-                title: t("common.error"),
-                description: t("maintenance.updateError"),
-                variant: "destructive",
-            });
+            toast({ title: t("common.error"), description: t("maintenance.updateError"), variant: "destructive" });
         } finally {
             setSaving(false);
         }
     };
 
-    if (loading) return <MainLayout><div className="text-white">{t("common.loading")}</div></MainLayout>;
+    if (loading) return <MainLayout><div className="text-foreground">{t("common.loading")}</div></MainLayout>;
 
     return (
         <MainLayout>
-            <SEO title={`${t("maintenance.editMaintenance")} - Maint Ops`} />
+            <SEO title={`${t("maintenance.editMaintenance")} - Machina`} />
             <div className="max-w-2xl mx-auto space-y-6">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-slate-400 hover:text-white">
+                    <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-foreground hover:bg-muted">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
-                    <h1 className="text-2xl font-bold text-white">{t("maintenance.editMaintenance")}</h1>
+                    <h1 className="text-2xl font-bold text-foreground">{t("maintenance.editMaintenance")}</h1>
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                    <Card className="bg-slate-800/50 border-slate-700">
+                    <Card className="bg-card border-border">
                         <CardHeader>
-                            <CardTitle className="text-white">{t("maintenance.details")}</CardTitle>
+                            <CardTitle className="text-foreground">{t("maintenance.details")}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="equipment" className="text-white">{t("equipment.title")}</Label>
-                                <Select
-                                    value={formData.equipment_id}
-                                    onValueChange={(value) => setFormData({ ...formData, equipment_id: value })}
-                                >
-                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                                        <SelectValue placeholder={t("maintenance.selectEquipment")} />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        {equipmentList.map((eq) => (
-                                            <SelectItem key={eq.id} value={eq.id} className="text-white">
-                                                {eq.name} ({eq.equipment_code})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="title" className="text-white">{t("common.title")}</Label>
+                                <Label className="text-foreground">{t("common.title")}</Label>
                                 <Input
-                                    id="title"
                                     value={formData.title}
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    placeholder={t("maintenance.titlePlaceholder")}
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                                    required
+                                    className="bg-background border-border text-foreground"
                                 />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="description" className="text-white">{t("common.description")}</Label>
+                                <Label className="text-foreground">{t("common.description")}</Label>
                                 <Textarea
-                                    id="description"
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                                    className="bg-background border-border text-foreground"
                                 />
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="frequency" className="text-white">{t("maintenance.frequency")}</Label>
-                                <Select
-                                    value={formData.frequency}
-                                    onValueChange={(value) => setFormData({ ...formData, frequency: value })}
-                                >
-                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="daily" className="text-white">{t("maintenance.daily")}</SelectItem>
-                                        <SelectItem value="weekly" className="text-white">{t("maintenance.weekly")}</SelectItem>
-                                        <SelectItem value="monthly" className="text-white">{t("maintenance.monthly")}</SelectItem>
-                                        <SelectItem value="quarterly" className="text-white">{t("maintenance.quarterly")}</SelectItem>
-                                        <SelectItem value="yearly" className="text-white">{t("maintenance.yearly")}</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="text-foreground">{t("maintenance.frequency")}</Label>
+                                    <Select
+                                        value={formData.frequency_type}
+                                        onValueChange={(v) => setFormData({ ...formData, frequency_type: v })}
+                                    >
+                                        <SelectTrigger className="bg-background border-border text-foreground">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="days">Giorni</SelectItem>
+                                            <SelectItem value="weeks">Settimane</SelectItem>
+                                            <SelectItem value="months">Mesi</SelectItem>
+                                            <SelectItem value="hours">Ore</SelectItem>
+                                            <SelectItem value="cycles">Cicli</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="text-foreground">Valore</Label>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={formData.frequency_value}
+                                        onChange={(e) => setFormData({ ...formData, frequency_value: Number(e.target.value) })}
+                                        className="bg-background border-border text-foreground"
+                                    />
+                                </div>
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="date" className="text-white">{t("maintenance.nextDue")}</Label>
+                                <Label className="text-foreground">{t("maintenance.nextDue")}</Label>
                                 <Input
-                                    id="date"
                                     type="date"
                                     value={formData.next_due_date}
                                     onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })}
-                                    className="bg-slate-700 border-slate-600 text-white"
+                                    className="bg-background border-border text-foreground"
                                 />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="checklist" className="text-white">{t("checklists.associatedChecklist")}</Label>
+                                <Label className="text-foreground">Priorità</Label>
                                 <Select
-                                    value={formData.checklist_id}
-                                    onValueChange={(value) => setFormData({ ...formData, checklist_id: value })}
+                                    value={formData.priority}
+                                    onValueChange={(v) => setFormData({ ...formData, priority: v })}
                                 >
-                                    <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                                        <SelectValue placeholder={t("checklists.selectChecklist")} />
+                                    <SelectTrigger className="bg-background border-border text-foreground">
+                                        <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        {checklists.map((checklist) => (
-                                            <SelectItem key={checklist.id} value={checklist.id} className="text-white">
-                                                {checklist.name}
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent>
+                                        <SelectItem value="low">Bassa</SelectItem>
+                                        <SelectItem value="medium">Media</SelectItem>
+                                        <SelectItem value="high">Alta</SelectItem>
+                                        <SelectItem value="critical">Critica</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -225,7 +179,9 @@ export default function EditMaintenanceSchedule() {
                     </Card>
 
                     <div className="flex justify-end gap-4 mt-6">
-                        <Button type="button" variant="outline" onClick={() => router.back()} className="border-slate-600 text-slate-300 hover:bg-slate-700">{t("common.cancel")}</Button>
+                        <Button type="button" variant="outline" onClick={() => router.back()}>
+                            {t("common.cancel")}
+                        </Button>
                         <Button type="submit" disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
                             <Save className="mr-2 h-4 w-4" />
                             {saving ? t("common.saving") : t("common.save")}
