@@ -506,7 +506,7 @@ export default function EquipmentDetailPage() {
                                                 return (
                                                     <Card key={wo.id}
                                                         className={`rounded-2xl border-0 border-l-4 ${prio.border} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group ${isClosed ? "opacity-60" : ""}`}
-                                                        onClick={() => router.push(`/maintenance/wo/${wo.id}`)}>
+                                                        onClick={() => router.push(`/work-orders/${wo.id}`)}>
                                                         <CardContent className="p-3 flex items-center justify-between">
                                                             <div className="flex items-center gap-3 min-w-0 flex-1">
                                                                 <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-50 dark:bg-blue-500/10">
@@ -644,4 +644,5 @@ function InfoRow({ icon, label, value, fallback = "\u2014" }: { icon: React.Reac
         </div>
     );
 }
+
 
