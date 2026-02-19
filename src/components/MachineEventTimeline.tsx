@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-    MachineEventService,
+    machineEventsService,
     type MachineEvent,
     EVENT_TYPES,
 } from '@/services/machineEventsService';
@@ -196,18 +196,16 @@ export function MachineEventTimeline({
         setError(null);
         try {
             // Load events
-            const eventsData = await MachineEventService.getTimeline(
+            const eventsData = await machineEventsService.getTimeline(
                 machineId,
-                organizationId,
-                limit
+                { limit }
             );
             setEvents(eventsData);
 
             // Check integrity if enabled
             if (showIntegrityCheck) {
-                const integrity = await MachineEventService.verifyIntegrity(
-                    machineId,
-                    organizationId
+                const integrity = await machineEventsService.verifyChain(
+                    machineId
                 );
                 setIsValid(integrity.isValid);
                 setIntegrityChecked(true);
@@ -306,7 +304,7 @@ export function MachineEventTimeline({
                                 const config = EVENT_CONFIG[event.event_type] || DEFAULT_CONFIG;
 
                                 return (
-                                    <div key={event.event_id} className="relative pl-8">
+                                    <div key={event.id} className="relative pl-8">
                                         {/* Timeline line */}
                                         {index < events.length - 1 && (
                                             <div className="absolute left-[11px] top-8 bottom-0 w-0.5 bg-border" />
