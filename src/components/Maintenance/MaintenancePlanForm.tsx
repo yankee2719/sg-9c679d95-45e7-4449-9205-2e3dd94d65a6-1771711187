@@ -2,18 +2,17 @@
 // MAINTENANCE PLAN FORM COMPONENT
 // ============================================================================
 // File: src/components/Maintenance/MaintenancePlanForm.tsx
-// Form per creare/editare maintenance plans
+// Form per creare/editare maintenance plans (allineato al service)
 // ============================================================================
 
 'use client';
 
 import { useState } from 'react';
-import { MaintenancePlan, MaintenancePlanType, MaintenancePriority } from '@/services/maintenanceService';
+import { MaintenancePlan, WorkOrderPriority } from '@/services/maintenanceService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import {
     Select,
     SelectContent,
@@ -23,21 +22,16 @@ import {
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+// Tipo per la frequenza (puoi esportarlo in un file separato se necessario)
+type FrequencyType = 'time_based' | 'usage_based' | 'condition_based' | 'predictive';
 
 interface MaintenancePlanFormProps {
-    equipmentId: string;
-    plantId?: string;
+    equipmentId: string;        // corrisponde a machine_id
+    plantId?: string;            // serve per eventuali relazioni (non usato direttamente nel piano)
     initialData?: Partial<MaintenancePlan>;
     onSubmit: (data: any) => Promise<void>;
     onCancel: () => void;
 }
-
-// ============================================================================
-// COMPONENT
-// ============================================================================
 
 export function MaintenancePlanForm({
     equipmentId,
@@ -50,18 +44,15 @@ export function MaintenancePlanForm({
     const [formData, setFormData] = useState({
         title: initialData?.title || '',
         description: initialData?.description || '',
-        plan_type: (initialData?.plan_type || 'time_based') as MaintenancePlanType,
-        priority: (initialData?.priority || 'medium') as MaintenancePriority,
-        frequency_days: initialData?.frequency_days || 30,
-        frequency_hours: initialData?.frequency_hours || undefined,
-        usage_threshold: initialData?.usage_threshold || undefined,
-        usage_unit: initialData?.usage_unit || 'hours',
+        frequency_type: (initialData?.frequency_type || 'time_based') as FrequencyType,
+        frequency_value: initialData?.frequency_value || 30,
+        priority: (initialData?.priority || 'medium') as WorkOrderPriority,
         estimated_duration_minutes: initialData?.estimated_duration_minutes || 120,
-        required_skills: initialData?.required_skills || [],
-        required_tools: initialData?.required_tools || [],
+        instructions: initialData?.instructions || '',
         safety_notes: initialData?.safety_notes || '',
-        requires_shutdown: initialData?.requires_shutdown || false,
-        compliance_tags: initialData?.compliance_tags || [],
+        required_skills: initialData?.required_skills?.join(', ') || '',   // gestito come stringa CSV
+        default_assignee_id: initialData?.default_assignee_id || '',
+        // is_active: initialData?.is_active ?? true,  // eventualmente
     });
 
     // --------------------------------------------------------------------------
@@ -76,12 +67,27 @@ export function MaintenancePlanForm({
         e.preventDefault();
         setLoading(true);
 
+        // Converte i campi nel formato atteso dal service
+        const payload = {
+            machine_id: equipmentId,          // corrisponde a machine_id
+            // plant_id non è nel MaintenancePlan, lo omettiamo (o lo passi se serve altrove)
+            title: formData.title,
+            description: formData.description || null,
+            frequency_type: formData.frequency_type,
+            frequency_value: formData.frequency_value,
+            priority: formData.priority,
+            estimated_duration_minutes: formData.estimated_duration_minutes || null,
+            instructions: formData.instructions || null,
+            safety_notes: formData.safety_notes || null,
+            required_skills: formData.required_skills
+                ? formData.required_skills.split(',').map(s => s.trim()).filter(Boolean)
+                : null,
+            default_assignee_id: formData.default_assignee_id || null,
+            // spare_parts: [], // se vuoi gestirli, aggiungi un campo dedicato
+        };
+
         try {
-            await onSubmit({
-                equipment_id: equipmentId,
-                plant_id: plantId,
-                ...formData,
-            });
+            await onSubmit(payload);
         } catch (error) {
             console.error('Form submission error:', error);
         } finally {
@@ -117,20 +123,20 @@ export function MaintenancePlanForm({
                     value={formData.description}
                     onChange={(e) => handleChange('description', e.target.value)}
                     placeholder="Detailed description of maintenance activities..."
-                    rows={3}
+                    rows={2}
                 />
             </div>
 
-            {/* Row: Plan Type + Priority */}
+            {/* Row: Frequency Type + Priority */}
             <div className="grid grid-cols-2 gap-4">
-                {/* Plan Type */}
+                {/* Frequency Type */}
                 <div className="space-y-2">
                     <Label>
                         Plan Type <span className="text-red-500">*</span>
                     </Label>
                     <Select
-                        value={formData.plan_type}
-                        onValueChange={(value) => handleChange('plan_type', value)}
+                        value={formData.frequency_type}
+                        onValueChange={(value: FrequencyType) => handleChange('frequency_type', value)}
                     >
                         <SelectTrigger>
                             <SelectValue />
@@ -151,7 +157,7 @@ export function MaintenancePlanForm({
                     </Label>
                     <Select
                         value={formData.priority}
-                        onValueChange={(value) => handleChange('priority', value)}
+                        onValueChange={(value: WorkOrderPriority) => handleChange('priority', value)}
                     >
                         <SelectTrigger>
                             <SelectValue />
@@ -166,62 +172,28 @@ export function MaintenancePlanForm({
                 </div>
             </div>
 
-            {/* Frequency Section */}
-            <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-                <h3 className="font-medium">Frequency Configuration</h3>
-
-                {formData.plan_type === 'time_based' && (
-                    <div className="space-y-2">
-                        <Label htmlFor="frequency_days">Frequency (days)</Label>
-                        <Input
-                            id="frequency_days"
-                            type="number"
-                            min="1"
-                            value={formData.frequency_days}
-                            onChange={(e) => handleChange('frequency_days', parseInt(e.target.value))}
-                        />
-                        <p className="text-sm text-gray-500">
-                            Maintenance will be scheduled every {formData.frequency_days} days
-                        </p>
-                    </div>
-                )}
-
-                {formData.plan_type === 'usage_based' && (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="usage_threshold">Usage Threshold</Label>
-                            <Input
-                                id="usage_threshold"
-                                type="number"
-                                min="1"
-                                value={formData.usage_threshold || ''}
-                                onChange={(e) => handleChange('usage_threshold', parseInt(e.target.value))}
-                                placeholder="e.g., 1000"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="usage_unit">Usage Unit</Label>
-                            <Select
-                                value={formData.usage_unit}
-                                onValueChange={(value) => handleChange('usage_unit', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="hours">Operating Hours</SelectItem>
-                                    <SelectItem value="cycles">Cycles</SelectItem>
-                                    <SelectItem value="km">Kilometers</SelectItem>
-                                    <SelectItem value="pieces">Pieces Produced</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                )}
-
-                {(formData.plan_type === 'condition_based' || formData.plan_type === 'predictive') && (
+            {/* Frequency Value */}
+            <div className="space-y-2">
+                <Label htmlFor="frequency_value">
+                    {formData.frequency_type === 'time_based' && 'Frequency (days)'}
+                    {formData.frequency_type === 'usage_based' && 'Usage Threshold'}
+                    {(formData.frequency_type === 'condition_based' || formData.frequency_type === 'predictive') && 'Trigger Value (optional)'}
+                </Label>
+                <Input
+                    id="frequency_value"
+                    type="number"
+                    min="1"
+                    value={formData.frequency_value}
+                    onChange={(e) => handleChange('frequency_value', parseInt(e.target.value) || 0)}
+                />
+                {formData.frequency_type === 'time_based' && (
                     <p className="text-sm text-gray-500">
-                        This plan type requires sensor integration or manual triggering.
+                        Maintenance will be scheduled every {formData.frequency_value} days
+                    </p>
+                )}
+                {formData.frequency_type === 'usage_based' && (
+                    <p className="text-sm text-gray-500">
+                        Trigger after {formData.frequency_value} units of usage
                     </p>
                 )}
             </div>
@@ -234,7 +206,19 @@ export function MaintenancePlanForm({
                     type="number"
                     min="1"
                     value={formData.estimated_duration_minutes}
-                    onChange={(e) => handleChange('estimated_duration_minutes', parseInt(e.target.value))}
+                    onChange={(e) => handleChange('estimated_duration_minutes', parseInt(e.target.value) || undefined)}
+                />
+            </div>
+
+            {/* Instructions (sostituisce required_tools, ecc.) */}
+            <div className="space-y-2">
+                <Label htmlFor="instructions">Instructions / Tools Needed</Label>
+                <Textarea
+                    id="instructions"
+                    value={formData.instructions}
+                    onChange={(e) => handleChange('instructions', e.target.value)}
+                    placeholder="Step-by-step instructions, tools, parts, etc."
+                    rows={3}
                 />
             </div>
 
@@ -246,20 +230,31 @@ export function MaintenancePlanForm({
                     value={formData.safety_notes}
                     onChange={(e) => handleChange('safety_notes', e.target.value)}
                     placeholder="Important safety considerations..."
-                    rows={3}
+                    rows={2}
                 />
             </div>
 
-            {/* Requires Shutdown */}
-            <div className="flex items-center gap-2">
-                <Switch
-                    checked={formData.requires_shutdown}
-                    onCheckedChange={(checked) => handleChange('requires_shutdown', checked)}
-                    id="requires_shutdown"
+            {/* Required Skills (CSV) */}
+            <div className="space-y-2">
+                <Label htmlFor="skills">Required Skills (comma separated)</Label>
+                <Input
+                    id="skills"
+                    value={formData.required_skills}
+                    onChange={(e) => handleChange('required_skills', e.target.value)}
+                    placeholder="e.g., Electrical, Mechanical, HVAC"
                 />
-                <Label htmlFor="requires_shutdown" className="cursor-pointer">
-                    Requires machine shutdown
-                </Label>
+            </div>
+
+            {/* Default Assignee */}
+            <div className="space-y-2">
+                <Label htmlFor="assignee">Default Assignee (user ID)</Label>
+                <Input
+                    id="assignee"
+                    value={formData.default_assignee_id}
+                    onChange={(e) => handleChange('default_assignee_id', e.target.value)}
+                    placeholder="User ID"
+                />
+                <p className="text-sm text-gray-500">Optional: user to automatically assign work orders</p>
             </div>
 
             {/* Actions */}
