@@ -27,6 +27,7 @@ import {
     QrCode,
     ChevronDown,
     BarChart3,
+    ShieldCheck,
     CalendarClock,
     Building2,
     Factory,
@@ -128,6 +129,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
             { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
             { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
+            { name: "Compliance", href: "/compliance", icon: ShieldCheck, roles: ["admin", "supervisor"] },
         ];
 
         return baseNav.filter(item => item.roles.includes(currentRole));
