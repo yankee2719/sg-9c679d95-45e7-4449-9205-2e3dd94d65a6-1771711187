@@ -4,6 +4,7 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext, UserContext } from "@/lib/supabaseHelpers";
+import { getPermissions } from "@/hooks/usePermissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,7 +174,8 @@ export default function EquipmentPage() {
         return configs[state || "active"] || { label: state || "—", color: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30" };
     };
 
-    const isAdmin = ctx?.role === "admin" || ctx?.role === "supervisor";
+    const perms = ctx ? getPermissions({ role: ctx.role, orgType: ctx.orgType as any }) : null;
+    const isAdmin = perms?.isAdminOrSupervisor ?? false;
     const isCustomer = ctx?.orgType === "customer";
     const hasAssigned = machines.some(m => m._isAssigned);
 
@@ -410,3 +412,4 @@ export default function EquipmentPage() {
         </MainLayout>
     );
 }
+
