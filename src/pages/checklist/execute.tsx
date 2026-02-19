@@ -7,20 +7,110 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ExecuteChecklistPage() {
     const router = useRouter();
-    const { schedule, equipment } = router.query;
+    const { schedule, equipment, work_order_id, checklist_id: directChecklistId } = router.query;
     const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState < string | null > (null);
 
     useEffect(() => {
-        if (router.isReady && schedule && equipment) {
+        if (!router.isReady) return;
+
+        // Mode 1: Direct checklist execution from a Work Order
+        if (directChecklistId && work_order_id) {
+            createDirectExecution();
+        }
+        // Mode 2: Legacy — from maintenance schedule
+        else if (schedule && equipment) {
             createExecution();
-        } else if (router.isReady && (!schedule || !equipment)) {
-            setError("Parametri mancanti: schedule o equipment non forniti");
+        } else {
+            setError("Parametri mancanti");
             setLoading(false);
         }
-    }, [router.isReady, schedule, equipment]);
+    }, [router.isReady, schedule, equipment, directChecklistId, work_order_id]);
 
+    // =========================================================================
+    // MODE 1: Direct execution from Work Order
+    // =========================================================================
+    const createDirectExecution = async () => {
+        try {
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError || !user) {
+                setError("Utente non autenticato");
+                setLoading(false);
+                return;
+            }
+
+            // Verify checklist exists
+            const { data: checklistData, error: checklistError } = await supabase
+                .from("checklists")
+                .select("id, name")
+                .eq("id", directChecklistId as string)
+                .single();
+
+            if (checklistError || !checklistData) {
+                setError("Checklist non trovata");
+                setLoading(false);
+                return;
+            }
+
+            // Get machine_id from work order if available
+            let machineId = null;
+            const { data: woData } = await supabase
+                .from("work_orders")
+                .select("machine_id")
+                .eq("id", work_order_id as string)
+                .single();
+            if (woData) machineId = woData.machine_id;
+
+            // Create execution linked to work order
+            const { data: executionData, error: executionError } = await supabase
+                .from("checklist_executions")
+                .insert({
+                    checklist_id: directChecklistId as string,
+                    machine_id: machineId,
+                    work_order_id: work_order_id as string,
+                    executed_by: user.id,
+                    status: "in_progress",
+                    overall_status: "in_progress",
+                    results: {},
+                    started_at: new Date().toISOString(),
+                })
+                .select("id")
+                .single();
+
+            if (executionError) {
+                console.error("Error creating execution:", executionError);
+                setError("Impossibile creare l'esecuzione della checklist");
+                setLoading(false);
+                return;
+            }
+
+            // Auto-transition WO to in_progress if still pending
+            const { data: wo } = await supabase
+                .from("work_orders")
+                .select("status, started_at")
+                .eq("id", work_order_id as string)
+                .single();
+
+            if (wo && ["draft", "scheduled", "assigned"].includes(wo.status)) {
+                await supabase.from("work_orders").update({
+                    status: "in_progress",
+                    started_at: wo.started_at || new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                }).eq("id", work_order_id as string);
+            }
+
+            router.replace(`/checklist/${executionData.id}`);
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            setError("Si è verificato un errore imprevisto");
+            setLoading(false);
+        }
+    };
+
+    // =========================================================================
+    // MODE 2: Legacy — from maintenance schedule
+    // =========================================================================
     const createExecution = async () => {
         try {
             // Get current user
