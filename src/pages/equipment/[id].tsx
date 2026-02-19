@@ -11,10 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
 import { MachineEventTimeline } from "@/components/MachineEventTimeline";
+import { exportMachinePassport, exportTechnicalSheet, exportMaintenanceReport, type MachineData, type MaintenanceReportData } from "@/services/pdfExportService";
 import {
     ArrowLeft, Wrench, Building2, MapPin, Calendar, Hash, Tag,
     QrCode, FileText, ClipboardList, Pencil, Save, X, Factory, Lock,
-    ChevronRight, CheckCircle2, AlertCircle, Loader2, History,
+    ChevronRight, CheckCircle2, AlertCircle, Loader2, History, Download,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -118,19 +119,19 @@ export default function EquipmentDetailPage() {
     const { toast } = useToast();
     const { id, tab } = router.query;
 
-    const [machine, setMachine] = useState<Machine | null>(null);
-    const [plantName, setPlantName] = useState<string | null>(null);
-    const [manufacturerName, setManufacturerName] = useState<string | null>(null);
+    const [machine, setMachine] = useState < Machine | null > (null);
+    const [plantName, setPlantName] = useState < string | null > (null);
+    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
     const [loading, setLoading] = useState(true);
-    const [ctx, setCtx] = useState<UserContext | null>(null);
+    const [ctx, setCtx] = useState < UserContext | null > (null);
     const [editingQR, setEditingQR] = useState(false);
     const [qrUrlDraft, setQrUrlDraft] = useState("");
     const [savingQR, setSavingQR] = useState(false);
     const [activeTab, setActiveTab] = useState("general");
 
     // Maintenance data
-    const [plans, setPlans] = useState<MaintenancePlan[]>([]);
-    const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+    const [plans, setPlans] = useState < MaintenancePlan[] > ([]);
+    const [workOrders, setWorkOrders] = useState < WorkOrder[] > ([]);
     const [loadingMaint, setLoadingMaint] = useState(false);
 
     const isAssigned = machine && ctx ? machine.organization_id !== ctx.orgId : false;
@@ -270,6 +271,28 @@ export default function EquipmentDetailPage() {
                             <Pencil className="mr-2 h-4 w-4" /> Modifica
                         </Button>
                     )}
+                    <div className="flex gap-1">
+                        <Button variant="outline" size="sm" title="Scheda Tecnica PDF" onClick={() => {
+                            exportTechnicalSheet({ ...machine, plant_name: plantName, organization_name: manufacturerName } as MachineData);
+                        }}>
+                            <Download className="w-4 h-4 mr-1" /> Scheda
+                        </Button>
+                        <Button variant="outline" size="sm" title="Passaporto Macchina PDF" onClick={() => {
+                            exportMachinePassport({ ...machine, plant_name: plantName, organization_name: manufacturerName } as MachineData);
+                        }}>
+                            <Download className="w-4 h-4 mr-1" /> Passaporto
+                        </Button>
+                        <Button variant="outline" size="sm" title="Report Manutenzione PDF" onClick={() => {
+                            exportMaintenanceReport({
+                                machine: { ...machine, plant_name: plantName, organization_name: manufacturerName } as MachineData,
+                                plans: plans,
+                                workOrders: workOrders.map(wo => ({ ...wo, assignee_name: null })),
+                                checklistExecutions: [],
+                            });
+                        }}>
+                            <Download className="w-4 h-4 mr-1" /> Report
+                        </Button>
+                    </div>
                 </div>
 
                 {isAssigned && (
@@ -602,3 +625,4 @@ function InfoRow({ icon, label, value, fallback = "\u2014" }: { icon: React.Reac
         </div>
     );
 }
+
