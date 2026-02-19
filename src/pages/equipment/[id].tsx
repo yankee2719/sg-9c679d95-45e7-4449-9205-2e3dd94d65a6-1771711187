@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext, UserContext } from "@/lib/supabaseHelpers";
+import { getPermissions } from "@/hooks/usePermissions";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,24 +121,26 @@ export default function EquipmentDetailPage() {
     const { toast } = useToast();
     const { id, tab } = router.query;
 
-    const [machine, setMachine] = useState < Machine | null > (null);
-    const [plantName, setPlantName] = useState < string | null > (null);
-    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
+    const [machine, setMachine] = useState<Machine | null>(null);
+    const [plantName, setPlantName] = useState<string | null>(null);
+    const [manufacturerName, setManufacturerName] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [ctx, setCtx] = useState < UserContext | null > (null);
+    const [ctx, setCtx] = useState<UserContext | null>(null);
     const [editingQR, setEditingQR] = useState(false);
     const [qrUrlDraft, setQrUrlDraft] = useState("");
     const [savingQR, setSavingQR] = useState(false);
     const [activeTab, setActiveTab] = useState("general");
 
     // Maintenance data
-    const [plans, setPlans] = useState < MaintenancePlan[] > ([]);
-    const [workOrders, setWorkOrders] = useState < WorkOrder[] > ([]);
+    const [plans, setPlans] = useState<MaintenancePlan[]>([]);
+    const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
     const [loadingMaint, setLoadingMaint] = useState(false);
 
+    // Permissions
+    const perms = ctx ? getPermissions({ role: ctx.role, orgType: ctx.orgType as any }) : null;
     const isAssigned = machine && ctx ? machine.organization_id !== ctx.orgId : false;
-    const isAdmin = ctx?.role === "admin" || ctx?.role === "supervisor";
-    const canEdit = isAdmin && !isAssigned;
+    const canEdit = perms ? perms.canEditIfOwner(machine?.organization_id || null, ctx?.orgId || null) : false;
+    const isAdmin = perms?.isAdminOrSupervisor ?? false;
 
     // Handle tab from URL query
     useEffect(() => {
@@ -644,5 +647,4 @@ function InfoRow({ icon, label, value, fallback = "\u2014" }: { icon: React.Reac
         </div>
     );
 }
-
 
