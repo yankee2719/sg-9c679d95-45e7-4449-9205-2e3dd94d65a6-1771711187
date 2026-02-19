@@ -511,7 +511,7 @@ export default function MaintenancePage() {
                                 return (
                                     <Card key={wo.id}
                                         className={`rounded-2xl border-0 border-l-4 ${prio.border} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group`}
-                                        onClick={() => router.push(`/maintenance/wo/${wo.id}`)}>
+                                        onClick={() => router.push(`/work-orders/${wo.id}`)}>
                                         <CardContent className="p-4 flex items-center justify-between">
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-blue-50 dark:bg-blue-500/10`}>
@@ -615,4 +615,3 @@ export default function MaintenancePage() {
         </MainLayout>
     );
 }
-
