@@ -13,6 +13,7 @@ import { Loader2, ChevronLeft, Clock, Flag, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { notificationService } from "@/services/notificationService";
 
 interface ChecklistItem {
     id: string;
@@ -35,6 +36,7 @@ interface ChecklistExecution {
     signature?: string;
     results?: any;
     schedule_id?: string;
+    work_order_id?: string;
 }
 
 interface Checklist {
@@ -357,12 +359,82 @@ export default function ChecklistExecutionPage() {
                 console.log("No schedule_id found, skipping maintenance update");
             }
 
+            // ============================================================
+            // UPDATE LINKED WORK ORDER (if work_order_id is present)
+            // ============================================================
+            if (execution?.work_order_id) {
+                console.log("Updating linked work order:", execution.work_order_id);
+
+                // Count total and completed checklist executions for this WO
+                const { data: allExecs } = await supabase
+                    .from("checklist_executions")
+                    .select("id, status, overall_status")
+                    .eq("work_order_id", execution.work_order_id);
+
+                const totalExecs = allExecs?.length || 0;
+                const completedExecs = allExecs?.filter(
+                    (e: any) => (e.overall_status || e.status) === "completed"
+                ).length || 0;
+
+                console.log(`WO checklist progress: ${completedExecs}/${totalExecs} completed`);
+
+                // Update WO notes with checklist completion info
+                const { error: woUpdateError } = await supabase
+                    .from("work_orders")
+                    .update({
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", execution.work_order_id);
+
+                if (woUpdateError) {
+                    console.error("Error updating work order:", woUpdateError);
+                }
+            }
+
+            // ── NOTIFY SUPERVISORS ──
+            try {
+                const { data: { user: currentUser } } = await supabase.auth.getUser();
+                const { data: currentProfile } = await supabase
+                    .from("profiles")
+                    .select("display_name, first_name, last_name, tenant_id")
+                    .eq("id", currentUser?.id || "")
+                    .single();
+
+                const executorName = currentProfile?.display_name ||
+                    [currentProfile?.first_name, currentProfile?.last_name].filter(Boolean).join(" ") || "Tecnico";
+
+                if (currentProfile?.tenant_id) {
+                    const { data: supervisors } = await supabase
+                        .from("profiles")
+                        .select("id")
+                        .eq("tenant_id", currentProfile.tenant_id)
+                        .in("role", ["admin", "supervisor"])
+                        .neq("id", currentUser?.id || "");
+
+                    if (supervisors && supervisors.length > 0) {
+                        await notificationService.notifyChecklistCompleted(
+                            checklist?.name || "Checklist",
+                            executionId as string,
+                            executorName,
+                            supervisors.map(s => s.id)
+                        );
+                    }
+                }
+            } catch (notifErr) {
+                console.error("Error sending notifications:", notifErr);
+            }
+
             toast({
                 title: "Successo",
                 description: "Checklist completata con successo"
             });
 
-            router.push("/maintenance");
+            // Smart redirect: back to WO detail if linked, otherwise /maintenance
+            if (execution?.work_order_id) {
+                router.push(`/maintenance/wo/${execution.work_order_id}`);
+            } else {
+                router.push("/maintenance");
+            }
         } catch (error: any) {
             console.error("Error completing checklist:", error);
             toast({
