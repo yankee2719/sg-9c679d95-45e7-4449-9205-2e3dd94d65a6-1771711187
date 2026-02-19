@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
+import { organizationService } from "@/services/organizationService";
 import { getProfileData, getNotificationCount } from "@/lib/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -73,11 +74,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                     // Fetch org type
                     if (profileData.tenant_id) {
-                        const { data: org } = await supabase
-                            .from("organizations")
-                            .select("type")
-                            .eq("id", profileData.tenant_id)
-                            .single();
+                        const org = await organizationService.getOrganizationById(profileData.tenant_id);
                         if (org?.type) setOrgType(org.type);
                     }
                 }
