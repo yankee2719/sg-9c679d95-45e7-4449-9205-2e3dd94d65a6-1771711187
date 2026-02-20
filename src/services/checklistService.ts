@@ -1,127 +1,116 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Get current user's organization_id
+export type ChecklistInputType = "text" | "number" | "boolean" | "select" | "photo";
+
 async function getMyOrgId(): Promise<string | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
 
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("default_organization_id")
-        .eq("id", user.id)
-        .single();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("default_organization_id")
+    .eq("id", user.id)
+    .single();
 
-    return profile?.default_organization_id || null;
+  if (error) throw error;
+  return profile?.default_organization_id ?? null;
 }
 
-export async function getChecklists() {
-    const { data, error } = await supabase
-        .from("checklists")
-        .select("*, checklist_items(count)")
-        .order("created_at", { ascending: false });
+export async function listTemplates() {
+  const orgId = await getMyOrgId();
+  if (!orgId) throw new Error("Organization not found on profile.");
 
-    if (error) throw error;
-    return data;
+  const { data, error } = await supabase
+    .from("checklist_templates")
+    .select("*, checklist_template_items(count)")
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
 }
 
-export async function getChecklistById(id: string) {
-    const { data, error } = await supabase
-        .from("checklists")
-        .select("*, checklist_items(*)")
-        .eq("id", id)
-        .single();
+export async function getTemplateById(templateId: string) {
+  const orgId = await getMyOrgId();
+  if (!orgId) throw new Error("Organization not found on profile.");
 
-    if (error) throw error;
-    return data;
+  const { data, error } = await supabase
+    .from("checklist_templates")
+    .select("*, checklist_template_items(*)")
+    .eq("id", templateId)
+    .eq("organization_id", orgId)
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
-export async function createChecklist(checklist: {
-    title: string;
-    description?: string;
-    checklist_type?: string;
-    machine_id?: string | null;
-    is_template?: boolean;
+export async function createTemplate(payload: {
+  name: string;
+  description?: string | null;
+  target_type?: "machine" | "production_line";
 }) {
-    const { data: { user } } = await supabase.auth.getUser();
-    const orgId = await getMyOrgId();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
 
-    const { data, error } = await supabase
-        .from("checklists")
-        .insert({
-            ...checklist,
-            created_by: user?.id,
-            organization_id: orgId,
-            is_active: true,
-        })
-        .select()
-        .single();
+  const orgId = await getMyOrgId();
+  if (!orgId) throw new Error("Organization not found on profile.");
 
-    if (error) throw error;
-    return data;
+  const { data, error } = await supabase
+    .from("checklist_templates")
+    .insert({
+      organization_id: orgId,
+      name: payload.name,
+      description: payload.description ?? null,
+      target_type: payload.target_type ?? "machine",
+      version: 1,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
-export async function addChecklistItem(item: {
-    checklist_id: string;
-    title: string;
-    description?: string;
-    item_order?: number;
-    is_required?: boolean;
-    expected_value?: string;
-    min_value?: number;
-    max_value?: number;
-    measurement_unit?: string;
-}) {
-    const { data, error } = await supabase
-        .from("checklist_items")
-        .insert(item)
-        .select()
-        .single();
+export async function addTemplateItems(items: Array<{
+  template_id: string;
+  title: string;
+  description?: string | null;
+  input_type: ChecklistInputType;
+  is_required?: boolean;
+  order_index: number;
+  metadata?: any;
+}>) {
+  const orgId = await getMyOrgId();
+  if (!orgId) throw new Error("Organization not found on profile.");
 
-    if (error) throw error;
-    return data;
+  const rows = items.map(i => ({
+    template_id: i.template_id,
+    organization_id: orgId,
+    title: i.title,
+    description: i.description ?? null,
+    input_type: i.input_type,
+    is_required: i.is_required ?? true,
+    order_index: i.order_index,
+    metadata: i.metadata ?? {},
+    created_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from("checklist_template_items")
+    .insert(rows);
+
+  if (error) throw error;
 }
 
-export async function createExecution(execution: {
-    checklist_id: string;
-    machine_id?: string | null;
-    work_order_id?: string | null;
-}) {
-    const { data: { user } } = await supabase.auth.getUser();
+export async function deleteTemplate(templateId: string) {
+  // ON DELETE CASCADE su checklist_template_items se l'hai impostato: ottimo.
+  const { error } = await supabase
+    .from("checklist_templates")
+    .delete()
+    .eq("id", templateId);
 
-    const { data, error } = await supabase
-        .from("checklist_executions")
-        .insert({
-            ...execution,
-            executed_by: user?.id,
-            executed_at: new Date().toISOString(),
-            overall_status: "in_progress",
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
-    return data;
-}
-
-export async function completeExecution(executionId: string, results: any, notes?: string) {
-    const { data, error } = await supabase
-        .from("checklist_executions")
-        .update({
-            overall_status: "completed",
-            completed_at: new Date().toISOString(),
-            results,
-            notes,
-        })
-        .eq("id", executionId)
-        .select()
-        .single();
-
-    if (error) throw error;
-    return data;
-}
-
-export async function deleteChecklist(id: string) {
-    await supabase.from("checklist_items").delete().eq("checklist_id", id);
-    const { error } = await supabase.from("checklists").delete().eq("id", id);
-    if (error) throw error;
+  if (error) throw error;
 }
