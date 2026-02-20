@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Plant { id: string; name: string; }
+interface ProductionLine { id: string; name: string; plant_id: string; is_archived: boolean; }
 
 export default function NewEquipment() {
     const router = useRouter();
@@ -22,6 +23,7 @@ export default function NewEquipment() {
     const [loading, setLoading] = useState(false);
     const [userRole, setUserRole] = useState("technician");
     const [plants, setPlants] = useState < Plant[] > ([]);
+    const [lines, setLines] = useState < ProductionLine[] > ([]);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -35,6 +37,7 @@ export default function NewEquipment() {
         specifications: "",
         notes: "",
         plant_id: "",
+        production_line_id: "",
         qr_code_token: "",
     });
 
@@ -47,6 +50,42 @@ export default function NewEquipment() {
         };
         init();
     }, []);
+
+    // Load production lines when plant changes (optional field)
+    useEffect(() => {
+        const loadLines = async () => {
+            if (!formData.plant_id) {
+                setLines([]);
+                if (formData.production_line_id) {
+                    setFormData(prev => ({ ...prev, production_line_id: "" }));
+                }
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from("production_lines")
+                .select("id, name, plant_id, is_archived")
+                .eq("plant_id", formData.plant_id)
+                .eq("is_archived", false)
+                .order("name");
+
+            if (error) {
+                console.error(error);
+                setLines([]);
+                return;
+            }
+
+            setLines((data as any) ?? []);
+
+            // If the currently selected line doesn't belong to this plant, reset it
+            if (formData.production_line_id && !(data ?? []).some((l: any) => l.id === formData.production_line_id)) {
+                setFormData(prev => ({ ...prev, production_line_id: "" }));
+            }
+        };
+
+        loadLines();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.plant_id]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,6 +104,7 @@ export default function NewEquipment() {
                 specifications: formData.specifications.trim() ? { text: formData.specifications.trim() } : null,
                 notes: formData.notes.trim() || null,
                 plant_id: formData.plant_id || null,
+                production_line_id: formData.production_line_id || null,
                 qr_code_token: formData.qr_code_token.trim() || null,
                 organization_id: ctx?.orgId,
                 created_by: ctx?.userId,
@@ -119,6 +159,27 @@ export default function NewEquipment() {
                                             {plants.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-foreground flex items-center gap-2">
+                                        Linea (opzionale)
+                                    </Label>
+                                    <Select
+                                        value={formData.production_line_id}
+                                        onValueChange={(v) => setFormData({ ...formData, production_line_id: v })}
+                                        disabled={!formData.plant_id}
+                                    >
+                                        <SelectTrigger className="bg-muted border-border text-foreground">
+                                            <SelectValue placeholder={formData.plant_id ? "Seleziona linea..." : "Seleziona prima lo stabilimento"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {lines.map(l => (
+                                                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">Se non selezioni la linea, la macchina sarà solo associata allo stabilimento.</p>
                                 </div>
 
                                 {isAdmin && (
