@@ -36,7 +36,10 @@ export default function ChecklistsPage() {
         const load = async () => {
             try {
                 const ctx = await getUserContext();
-                if (!ctx) { router.push("/login"); return; }
+                if (!ctx) {
+                    router.push("/login");
+                    return;
+                }
                 setUserRole(ctx.role);
 
                 const data = await listTemplates();
@@ -44,7 +47,11 @@ export default function ChecklistsPage() {
                 setFiltered(data as any);
             } catch (e) {
                 console.error(e);
-                toast({ title: t("common.error"), description: "Errore caricamento templates", variant: "destructive" });
+                toast({
+                    title: t("common.error"),
+                    description: "Errore caricamento templates",
+                    variant: "destructive",
+                });
             } finally {
                 setLoading(false);
             }
@@ -56,9 +63,8 @@ export default function ChecklistsPage() {
         if (!searchQuery) return setFiltered(templates);
         const q = searchQuery.toLowerCase();
         setFiltered(
-            templates.filter(x =>
-                x.name.toLowerCase().includes(q) ||
-                (x.description ?? "").toLowerCase().includes(q)
+            templates.filter(
+                (x) => x.name.toLowerCase().includes(q) || (x.description ?? "").toLowerCase().includes(q)
             )
         );
     }, [searchQuery, templates]);
@@ -67,14 +73,17 @@ export default function ChecklistsPage() {
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Confermi eliminazione template?")) return;
-
+        if (!confirm(t("checklists.confirmDelete"))) return;
         try {
             await deleteTemplate(id);
-            setTemplates(prev => prev.filter(x => x.id !== id));
-            toast({ title: t("common.success"), description: "Template eliminato" });
+            setTemplates((prev) => prev.filter((x) => x.id !== id));
+            toast({ title: t("common.success"), description: t("checklists.deleteSuccess") });
         } catch (err: any) {
-            toast({ title: t("common.error"), description: err.message ?? "Errore eliminazione", variant: "destructive" });
+            toast({
+                title: t("common.error"),
+                description: err.message || t("checklists.deleteError"),
+                variant: "destructive",
+            });
         }
     };
 
@@ -97,7 +106,7 @@ export default function ChecklistsPage() {
                             onClick={() => router.push("/checklists/new")}
                         >
                             <Plus className="w-4 h-4 mr-2" />
-                            Nuovo Template
+                            {t("checklists.addChecklist")}
                         </Button>
                     )}
                 </div>
@@ -119,7 +128,6 @@ export default function ChecklistsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filtered.map((tpl) => {
                         const itemsCount = tpl.checklist_template_items?.[0]?.count ?? 0;
-
                         return (
                             <Card
                                 key={tpl.id}
@@ -131,6 +139,7 @@ export default function ChecklistsPage() {
                                         <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
                                             <ClipboardList className="w-6 h-6 text-blue-400" />
                                         </div>
+
                                         <Badge
                                             className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${tpl.is_active
                                                     ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
@@ -149,7 +158,9 @@ export default function ChecklistsPage() {
                                     <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
                                         <div className="flex items-center gap-2">
                                             <CheckCircle className="w-4 h-4" />
-                                            <span>{itemsCount} {t("checklists.items")}</span>
+                                            <span>
+                                                {itemsCount} {t("checklists.items")}
+                                            </span>
                                         </div>
                                     </div>
 
