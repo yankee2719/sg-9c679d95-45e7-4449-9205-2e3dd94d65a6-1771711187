@@ -1,258 +1,289 @@
-import { useState, useEffect } from "react";
+// src/pages/equipment/new.tsx
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SEO } from "@/components/SEO";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Building2, QrCode } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { getUserContext } from "@/lib/supabaseHelpers";
+import { ArrowLeft, Save } from "lucide-react";
 
-interface Plant { id: string; name: string; }
-interface ProductionLine { id: string; name: string; plant_id: string; is_archived: boolean; }
+type Plant = {
+  id: string;
+  name?: string | null;
+  code?: string | null;
+};
 
-export default function NewEquipment() {
-    const router = useRouter();
-    const { toast } = useToast();
-    const { t } = useLanguage();
-    const [loading, setLoading] = useState(false);
-    const [userRole, setUserRole] = useState("technician");
-    const [plants, setPlants] = useState < Plant[] > ([]);
-    const [lines, setLines] = useState < ProductionLine[] > ([]);
+type ProductionLine = {
+  id: string;
+  name?: string | null;
+  code?: string | null;
+  plant_id: string;
+};
 
-    const [formData, setFormData] = useState({
-        name: "",
-        internal_code: "",
-        category: "",
-        brand: "",
-        model: "",
-        serial_number: "",
-        position: "",
-        lifecycle_state: "active",
-        specifications: "",
-        notes: "",
-        plant_id: "",
-        production_line_id: "",
-        qr_code_token: "",
-    });
+async function getDefaultOrgId(): Promise<string | null> {
+  // Prova a usare il tuo helper di contesto (se ritorna org)
+  try {
+    const ctx: any = await getUserContext();
+    if (ctx?.organization_id) return ctx.organization_id;
+    if (ctx?.organizationId) return ctx.organizationId;
+    if (ctx?.orgId) return ctx.orgId;
+  } catch {
+    // ignore
+  }
 
-    useEffect(() => {
-        const init = async () => {
-            const ctx = await getUserContext();
-            if (ctx) setUserRole(ctx.role);
-            const { data } = await supabase.from("plants").select("id, name").eq("is_archived", false).order("name");
-            if (data) setPlants(data);
-        };
-        init();
-    }, []);
+  // Fallback: profiles.default_organization_id
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
 
-    // Load production lines when plant changes (optional field)
-    useEffect(() => {
-        const loadLines = async () => {
-            if (!formData.plant_id) {
-                setLines([]);
-                if (formData.production_line_id) {
-                    setFormData(prev => ({ ...prev, production_line_id: "" }));
-                }
-                return;
-            }
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("default_organization_id")
+    .eq("id", user.id)
+    .single();
 
-            const { data, error } = await supabase
-                .from("production_lines")
-                .select("id, name, plant_id, is_archived")
-                .eq("plant_id", formData.plant_id)
-                .eq("is_archived", false)
-                .order("name");
+  if (error) throw error;
+  return (data as any)?.default_organization_id ?? null;
+}
 
-            if (error) {
-                console.error(error);
-                setLines([]);
-                return;
-            }
+export default function NewEquipmentPage() {
+  const router = useRouter();
+  const { toast } = useToast();
 
-            setLines((data as any) ?? []);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-            // If the currently selected line doesn't belong to this plant, reset it
-            if (formData.production_line_id && !(data ?? []).some((l: any) => l.id === formData.production_line_id)) {
-                setFormData(prev => ({ ...prev, production_line_id: "" }));
-            }
-        };
+  const [userRole, setUserRole] = useState<string>("technician");
 
-        loadLines();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.plant_id]);
+  // Form base (adatta i nomi se nel tuo form attuale sono diversi)
+  const [name, setName] = useState("");
+  const [internalCode, setInternalCode] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [notes, setNotes] = useState("");
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const ctx = await getUserContext();
-            const { error } = await supabase.from("machines").insert({
-                name: formData.name.trim(),
-                internal_code: formData.internal_code.trim(),
-                category: formData.category.trim() || null,
-                brand: formData.brand.trim() || null,
-                model: formData.model.trim() || null,
-                serial_number: formData.serial_number.trim() || null,
-                position: formData.position.trim() || null,
-                lifecycle_state: formData.lifecycle_state || "active",
-                specifications: formData.specifications.trim() ? { text: formData.specifications.trim() } : null,
-                notes: formData.notes.trim() || null,
-                plant_id: formData.plant_id || null,
-                production_line_id: formData.production_line_id || null,
-                qr_code_token: formData.qr_code_token.trim() || null,
-                organization_id: ctx?.orgId,
-                created_by: ctx?.userId,
-            });
-            if (error) throw error;
-            toast({ title: t("common.success"), description: t("equipment.saveEquipment") });
-            router.push("/equipment");
-        } catch (error: any) {
-            toast({ title: t("common.error"), description: error?.message || "Errore", variant: "destructive" });
-        } finally {
-            setLoading(false);
+  // Plant + Line
+  const [plants, setPlants] = useState<Plant[]>([]);
+  const [selectedPlantId, setSelectedPlantId] = useState<string>("");
+  const [lines, setLines] = useState<ProductionLine[]>([]);
+  const [selectedLineId, setSelectedLineId] = useState<string>(""); // opzionale
+  const [loadingLines, setLoadingLines] = useState(false);
+
+  const canCreate = useMemo(() => true, []); // se vuoi limitare per ruolo dimmelo
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const ctx: any = await getUserContext();
+        if (!ctx) {
+          router.push("/login");
+          return;
         }
+        setUserRole(ctx.role ?? "technician");
+
+        // Carica plants visibili all'utente (RLS)
+        const { data, error } = await supabase
+          .from("plants")
+          .select("id,name,code")
+          .eq("is_archived", false)
+          .order("name", { ascending: true });
+
+        if (error) throw error;
+        setPlants((data ?? []) as any);
+      } catch (e: any) {
+        console.error(e);
+        toast({ title: "Errore", description: e.message ?? "Errore caricamento stabilimenti", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
+    init();
+  }, [router]);
 
-    return (
-        <MainLayout>
-            <div className="container mx-auto py-6 space-y-6">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => router.push("/equipment")}>
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                    <h1 className="text-3xl font-bold text-foreground">{t("equipment.new")}</h1>
-                </div>
+  // Quando cambia plant, carica linee
+  useEffect(() => {
+    const loadLines = async () => {
+      if (!selectedPlantId) {
+        setLines([]);
+        setSelectedLineId("");
+        return;
+      }
 
-                <Card className="bg-card border-border">
-                    <CardHeader><CardTitle className="text-foreground">{t("equipment.information")}</CardTitle></CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.name")} *</Label>
-                                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        className="bg-muted border-border text-foreground" required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.code")} *</Label>
-                                    <Input value={formData.internal_code} onChange={(e) => setFormData({ ...formData, internal_code: e.target.value })}
-                                        className="bg-muted border-border text-foreground" required />
-                                </div>
+      setLoadingLines(true);
+      try {
+        const { data, error } = await supabase
+          .from("production_lines")
+          .select("id,name,code,plant_id")
+          .eq("plant_id", selectedPlantId)
+          .order("name", { ascending: true });
 
-                                <div className="space-y-2">
-                                    <Label className="text-foreground flex items-center gap-2">
-                                        <Building2 className="w-4 h-4 text-blue-400" /> Stabilimento
-                                    </Label>
-                                    <Select value={formData.plant_id} onValueChange={(v) => setFormData({ ...formData, plant_id: v })}>
-                                        <SelectTrigger className="bg-muted border-border text-foreground">
-                                            <SelectValue placeholder="Seleziona stabilimento..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {plants.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+        if (error) throw error;
+        setLines((data ?? []) as any);
+        setSelectedLineId(""); // reset quando cambi plant
+      } catch (e: any) {
+        console.error(e);
+        // Se qui hai errori, molto spesso è RLS su production_lines
+        toast({
+          title: "Errore",
+          description: e.message ?? "Errore caricamento linee (controlla RLS su production_lines)",
+          variant: "destructive",
+        });
+        setLines([]);
+        setSelectedLineId("");
+      } finally {
+        setLoadingLines(false);
+      }
+    };
 
-                                <div className="space-y-2">
-                                    <Label className="text-foreground flex items-center gap-2">
-                                        Linea (opzionale)
-                                    </Label>
-                                    <Select
-                                        value={formData.production_line_id}
-                                        onValueChange={(v) => setFormData({ ...formData, production_line_id: v })}
-                                        disabled={!formData.plant_id}
-                                    >
-                                        <SelectTrigger className="bg-muted border-border text-foreground">
-                                            <SelectValue placeholder={formData.plant_id ? "Seleziona linea..." : "Seleziona prima lo stabilimento"} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {lines.map(l => (
-                                                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">Se non selezioni la linea, la macchina sarà solo associata allo stabilimento.</p>
-                                </div>
+    loadLines();
+  }, [selectedPlantId]);
 
-                                {isAdmin && (
-                                    <div className="space-y-2">
-                                        <Label className="text-foreground flex items-center gap-2">
-                                            <QrCode className="w-4 h-4 text-primary" /> URL QR Code
-                                        </Label>
-                                        <Input value={formData.qr_code_token} onChange={(e) => setFormData({ ...formData, qr_code_token: e.target.value })}
-                                            placeholder="https://esempio.com/manuale.pdf" className="bg-muted border-border text-foreground" />
-                                        <p className="text-xs text-muted-foreground">URL codificato nel QR Code</p>
-                                    </div>
-                                )}
+  const handleSave = async () => {
+    if (!canCreate) return;
 
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.category")}</Label>
-                                    <Input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                        className="bg-muted border-border text-foreground" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Marca</Label>
-                                    <Input value={formData.brand} onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                                        className="bg-muted border-border text-foreground" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.model")}</Label>
-                                    <Input value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                                        className="bg-muted border-border text-foreground" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.serialNumber")}</Label>
-                                    <Input value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                                        className="bg-muted border-border text-foreground" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Posizione</Label>
-                                    <Input value={formData.position} onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                                        className="bg-muted border-border text-foreground" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.status")}</Label>
-                                    <Select value={formData.lifecycle_state} onValueChange={(v) => setFormData({ ...formData, lifecycle_state: v })}>
-                                        <SelectTrigger className="bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="active">Attivo</SelectItem>
-                                            <SelectItem value="inactive">Inattivo</SelectItem>
-                                            <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
-                                            <SelectItem value="decommissioned">Dismesso</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
+    if (!selectedPlantId) {
+      toast({ title: "Errore", description: "Seleziona uno stabilimento", variant: "destructive" });
+      return;
+    }
+    if (!name.trim()) {
+      toast({ title: "Errore", description: "Inserisci un nome per la macchina/attrezzatura", variant: "destructive" });
+      return;
+    }
 
-                            <div className="space-y-2">
-                                <Label className="text-foreground">{t("equipment.technicalSpecs")}</Label>
-                                <Textarea value={formData.specifications} onChange={(e) => setFormData({ ...formData, specifications: e.target.value })}
-                                    className="bg-muted border-border text-foreground min-h-[100px]" placeholder={t("equipment.technicalSpecsPlaceholder")} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-foreground">{t("common.notes")}</Label>
-                                <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="bg-muted border-border text-foreground min-h-[100px]" placeholder={t("equipment.notesPlaceholder")} />
-                            </div>
+    setSaving(true);
+    try {
+      const orgId = await getDefaultOrgId();
+      if (!orgId) throw new Error("Organization non trovata (profiles.default_organization_id).");
 
-                            <div className="flex justify-end gap-4">
-                                <Button type="button" variant="outline" onClick={() => router.push("/equipment")}>{t("common.cancel")}</Button>
-                                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-                                    <Save className="mr-2 h-4 w-4" />{loading ? t("equipment.saving") : t("equipment.saveEquipment")}
-                                </Button>
-                            </div>
-                        </form>
-                    </CardContent>
-                </Card>
+      // Payload minimo e robusto
+      const payload: any = {
+        organization_id: orgId,
+        plant_id: selectedPlantId,
+        production_line_id: selectedLineId || null, // ✅ LINEA OPZIONALE
+        name: name.trim(),
+        internal_code: internalCode.trim() || null,
+        serial_number: serialNumber.trim() || null,
+        notes: notes.trim() || null,
+        is_archived: false,
+      };
+
+      const { error } = await supabase.from("machines").insert(payload);
+      if (error) throw error;
+
+      toast({ title: "OK", description: "Attrezzatura creata" });
+      router.push("/equipment"); // se la tua lista è su /machines dimmelo e lo cambio
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Errore salvataggio",
+        description: e.message ?? "Errore creazione macchina",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <MainLayout userRole={userRole as any}>
+      <SEO title="Nuova attrezzatura - MACHINA" />
+
+      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Indietro
+        </Button>
+
+        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-foreground">Nuova attrezzatura</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Seleziona lo stabilimento e, se serve, la linea (opzionale)
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-5">
+            {/* Stabilimento */}
+            <div className="space-y-2">
+              <Label>Stabilimento *</Label>
+              <select
+                value={selectedPlantId}
+                onChange={(e) => setSelectedPlantId(e.target.value)}
+                className="w-full border border-border bg-background rounded-md px-3 py-2"
+              >
+                <option value="">— Seleziona —</option>
+                {plants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name ?? p.code ?? p.id}
+                  </option>
+                ))}
+              </select>
             </div>
-        </MainLayout>
-    );
+
+            {/* Linea (opzionale) */}
+            <div className="space-y-2">
+              <Label>Linea (opzionale)</Label>
+              <select
+                value={selectedLineId}
+                onChange={(e) => setSelectedLineId(e.target.value)}
+                disabled={!selectedPlantId || loadingLines}
+                className="w-full border border-border bg-background rounded-md px-3 py-2 disabled:opacity-60"
+              >
+                <option value="">— Nessuna —</option>
+                {lines.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name ?? l.code ?? l.id}
+                  </option>
+                ))}
+              </select>
+              {!selectedPlantId && (
+                <p className="text-xs text-muted-foreground">Seleziona prima lo stabilimento per vedere le linee.</p>
+              )}
+            </div>
+
+            {/* Dati macchina */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nome *</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Pressa B1" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Codice interno</Label>
+                <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="es. PRS-B1" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Matricola</Label>
+                <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="es. SN-12345" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Note</Label>
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Note..." />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? "Salvataggio..." : "Salva"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </MainLayout>
+  );
 }
