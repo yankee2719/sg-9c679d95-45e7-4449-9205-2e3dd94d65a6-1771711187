@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,676 +7,706 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { Loader2, ChevronLeft, Clock, Flag, MessageSquare } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+import { Loader2, ChevronLeft, Clock, Flag, MessageSquare, Camera } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-interface ChecklistItem {
-    id: string;
-    title: string;
-    description: string | null;
-    is_required: boolean;
-    order_index: number;
-    checked?: boolean;
-    notes?: string;
-    images?: string[];
+// NOTE
+// This page supports BOTH:
+// - Legacy executions that point to `checklists/checklist_items`
+// - New executions that point to `checklist_assignments` -> `checklist_templates` -> `checklist_template_items`
+
+type InputType = "text" | "number" | "boolean" | "select" | "photo";
+
+interface ExecutionItemUI {
+  id: string;
+  title: string;
+  description: string | null;
+  input_type: InputType;
+  is_required: boolean;
+  order_index: number;
+  metadata?: any;
+
+  // UI state
+  value?: string; // for text/number/select
+  checked?: boolean; // for boolean
+  notes?: string;
+  files?: File[]; // for photo
+  uploadedPaths?: string[]; // storage paths
 }
 
 interface ChecklistExecution {
-    id: string;
-    checklist_id: string;
-    executed_by: string;
-    started_at: string;
-    completed_at?: string;
-    status: string;
-    signature?: string;
-    results?: any;
-    schedule_id?: string;
-    work_order_id?: string;
-}
+  id: string;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  executed_by: string;
+  signature?: string | null;
+  schedule_id?: string | null;
+  work_order_id?: string | null;
+  notes?: string | null;
+  results?: any;
 
-interface Checklist {
-    id: string;
-    name: string;
-    description: string | null;
+  // legacy
+  checklist_id?: string;
+
+  // new (may not exist yet in DB; we treat as any)
+  assignment_id?: string | null;
 }
 
 export default function ChecklistExecutionPage() {
-    const router = useRouter();
-    const { id } = router.query;
-    const { toast } = useToast();
+  const router = useRouter();
+  const { id, assignmentId } = router.query;
+  const { toast } = useToast();
 
-    const [execution, setExecution] = useState < ChecklistExecution | null > (null);
-    const [checklist, setChecklist] = useState < Checklist | null > (null);
-    const [items, setItems] = useState < ChecklistItem[] > ([]);
-    const [loading, setLoading] = useState(true);
-    const [completing, setCompleting] = useState(false);
-    const [showSignatureDialog, setShowSignatureDialog] = useState(false);
-    const [technicianName, setTechnicianName] = useState("");
-    const [signatureDataUrl, setSignatureDataUrl] = useState < string | null > (null);
-    const [saveSignature, setSaveSignature] = useState(false);
-    const canvasRef = useRef < HTMLCanvasElement > (null);
-    const [isDrawing, setIsDrawing] = useState(false);
+  const [execution, setExecution] = useState<ChecklistExecution | null>(null);
+  const [checklistTitle, setChecklistTitle] = useState<string>("");
+  const [checklistDescription, setChecklistDescription] = useState<string | null>(null);
+  const [items, setItems] = useState<ExecutionItemUI[]>([]);
 
-    useEffect(() => {
-        if (id && typeof id === "string") {
-            loadExecution();
-        }
-    }, [id]);
+  const [loading, setLoading] = useState(true);
+  const [completing, setCompleting] = useState(false);
 
-    const loadExecution = async () => {
-        try {
-            setLoading(true);
+  const [showSignatureDialog, setShowSignatureDialog] = useState(false);
+  const [technicianName, setTechnicianName] = useState("");
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [saveSignature, setSaveSignature] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
-            const executionId = Array.isArray(id) ? id[0] : id;
-            if (!executionId) return;
+  const effectiveExecutionId = useMemo(() => {
+    const raw = Array.isArray(id) ? id[0] : id;
+    return typeof raw === "string" ? raw : null;
+  }, [id]);
 
-            const { data: executionData, error: executionError } = await supabase
-                .from("checklist_executions")
-                .select("*")
-                .eq("id", executionId)
-                .single();
+  const effectiveAssignmentId = useMemo(() => {
+    const raw = Array.isArray(assignmentId) ? assignmentId[0] : assignmentId;
+    return typeof raw === "string" ? raw : null;
+  }, [assignmentId]);
 
-            if (executionError) throw executionError;
-
-            console.log("Loaded execution data:", executionData);
-            console.log("Schedule ID from execution:", executionData?.schedule_id);
-
-            setExecution(executionData);
-
-            if (executionData.checklist_id) {
-                const { data: checklistData, error: checklistError } = await supabase
-                    .from("checklists")
-                    .select("id, name, description")
-                    .eq("id", executionData.checklist_id)
-                    .single();
-
-                if (checklistError) throw checklistError;
-                setChecklist(checklistData);
-
-                const { data: itemsData, error: itemsError } = await supabase
-                    .from("checklist_items")
-                    .select("*")
-                    .eq("checklist_id", executionData.checklist_id)
-                    .order("order_index");
-
-                if (itemsError) throw itemsError;
-
-                const initializedItems = (itemsData || []).map((item: any) => ({
-                    ...item,
-                    checked: false,
-                    notes: ""
-                }));
-                setItems(initializedItems);
-            }
-
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data: profile } = await supabase
-                    .from("profiles")
-                    .select("full_name")
-                    .eq("id", user.id)
-                    .single();
-
-                if (profile?.full_name) {
-                    setTechnicianName(profile.full_name);
-                }
-            }
-        } catch (error: any) {
-            console.error("Error loading execution:", error);
-            toast({
-                title: "Errore",
-                description: "Impossibile caricare l'esecuzione della checklist",
-                variant: "destructive"
-            });
-        } finally {
-            setLoading(false);
-        }
+  useEffect(() => {
+    // If the page is opened with ?assignmentId=... and no execution id, create an execution.
+    const bootstrap = async () => {
+      if (!effectiveExecutionId && effectiveAssignmentId) {
+        await createExecutionFromAssignment(effectiveAssignmentId);
+        return;
+      }
+      if (effectiveExecutionId) {
+        await loadExecution(effectiveExecutionId);
+      }
     };
+    bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveExecutionId, effectiveAssignmentId]);
 
-    const handleItemCheck = (index: number) => {
-        const newItems = [...items];
-        newItems[index].checked = !newItems[index].checked;
-        setItems(newItems);
-    };
+  const createExecutionFromAssignment = async (aid: string) => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
 
-    const handleNoteChange = (index: number, notes: string) => {
-        const newItems = [...items];
-        newItems[index].notes = notes;
-        setItems(newItems);
-    };
+      // We keep legacy `checklist_id` NULL for new executions.
+      const { data, error } = await supabase
+        .from("checklist_executions")
+        // using `as any` because DB types may lag behind migrations
+        .insert({
+          executed_by: user.id,
+          status: "in_progress",
+          started_at: new Date().toISOString(),
+          assignment_id: aid,
+        } as any)
+        .select("id")
+        .single();
 
-    const calculateProgress = () => {
-        if (items.length === 0) return 0;
-        const checkedItems = items.filter(item => item.checked).length;
-        return Math.round((checkedItems / items.length) * 100);
-    };
+      if (error) throw error;
+      router.replace(`/checklist/execute?id=${data.id}`);
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Errore",
+        description: e.message ?? "Errore creazione esecuzione",
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
 
-    const handleComplete = () => {
-        const allChecked = items.every(item => item.checked);
-        if (!allChecked) {
-            toast({
-                title: "Attenzione",
-                description: "Completa tutti gli item prima di finalizzare",
-                variant: "destructive"
-            });
-            return;
-        }
-        setShowSignatureDialog(true);
-    };
+  const loadExecution = async (executionId: string) => {
+    try {
+      setLoading(true);
 
-    const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-        setIsDrawing(true);
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+      const { data: executionData, error: executionError } = await supabase
+        .from("checklist_executions")
+        .select("*")
+        .eq("id", executionId)
+        .single();
 
-        const rect = canvas.getBoundingClientRect();
-        const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-        const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+      if (executionError) throw executionError;
 
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        }
-    };
+      const exec = executionData as any as ChecklistExecution;
+      setExecution(exec);
 
-    const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-        if (!isDrawing) return;
+      // Prefer new model if assignment_id exists
+      const aid = (executionData as any)?.assignment_id as string | null | undefined;
+      if (aid) {
+        await loadFromAssignment(aid);
+      } else if (exec.checklist_id) {
+        await loadLegacy(exec.checklist_id);
+      } else {
+        setChecklistTitle("Checklist");
+        setChecklistDescription(null);
+        setItems([]);
+      }
 
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+      // Technician name prefill
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+        if (profile?.full_name) setTechnicianName(profile.full_name);
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "Errore", description: e.message ?? "Errore caricamento", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const rect = canvas.getBoundingClientRect();
-        const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-        const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+  const loadFromAssignment = async (aid: string) => {
+    // assignment -> template -> items
+    const { data: assignment, error: aErr } = await supabase
+      .from("checklist_assignments")
+      .select(`
+        id,
+        organization_id,
+        template_id,
+        checklist_templates:template_id (
+          id,
+          name,
+          description,
+          version,
+          target_type
+        )
+      `)
+      .eq("id", aid)
+      .single();
 
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-            ctx.lineTo(x, y);
-            ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-    };
+    if (aErr) throw aErr;
 
-    const stopDrawing = () => {
-        setIsDrawing(false);
-    };
+    const tpl = (assignment as any).checklist_templates;
+    setChecklistTitle(tpl?.name ?? "Checklist");
+    setChecklistDescription(tpl?.description ?? null);
 
-    const clearSignature = () => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        }
-        setSignatureDataUrl(null);
-    };
+    const { data: tplItems, error: iErr } = await supabase
+      .from("checklist_template_items")
+      .select("id,title,description,input_type,is_required,order_index,metadata")
+      .eq("template_id", (assignment as any).template_id)
+      .order("order_index", { ascending: true });
 
-    const confirmComplete = async () => {
-        try {
-            setCompleting(true);
+    if (iErr) throw iErr;
 
-            const canvas = canvasRef.current;
-            if (!canvas) {
-                toast({
-                    title: "Errore",
-                    description: "Firma mancante",
-                    variant: "destructive"
-                });
-                return;
-            }
+    const uiItems: ExecutionItemUI[] = (tplItems ?? []).map((it: any) => ({
+      id: it.id,
+      title: it.title,
+      description: it.description,
+      input_type: (it.input_type ?? "boolean") as InputType,
+      is_required: Boolean(it.is_required),
+      order_index: it.order_index ?? 0,
+      metadata: it.metadata ?? {},
+      checked: false,
+      value: "",
+      notes: "",
+      files: [],
+      uploadedPaths: [],
+    }));
 
-            const signatureData = canvas.toDataURL();
-            setSignatureDataUrl(signatureData);
+    setItems(uiItems);
+  };
 
-            const executionId = Array.isArray(id) ? id[0] : id;
+  const loadLegacy = async (checklistId: string) => {
+    // Legacy schema (may be partially broken if DB diverged)
+    const { data: checklistData, error: checklistError } = await supabase
+      .from("checklists")
+      .select("id, title, description")
+      .eq("id", checklistId)
+      .single();
+    if (checklistError) throw checklistError;
 
-            console.log("Completing checklist execution:", executionId);
-            console.log("Schedule ID to update:", execution?.schedule_id);
+    setChecklistTitle((checklistData as any)?.title ?? "Checklist");
+    setChecklistDescription((checklistData as any)?.description ?? null);
 
-            // 1. Aggiorna l'esecuzione della checklist
-            const { error: updateError } = await supabase
-                .from("checklist_executions")
-                .update({
-                    status: "completed",
-                    completed_at: new Date().toISOString(),
-                    signature: signatureData,
-                    results: JSON.stringify(items)
-                })
-                .eq("id", executionId);
+    const { data: itemsData, error: itemsError } = await supabase
+      .from("checklist_items")
+      .select("*")
+      .eq("checklist_id", checklistId)
+      // try both columns
+      .order("order_index", { ascending: true });
 
-            if (updateError) {
-                console.error("Error updating checklist execution:", updateError);
-                throw updateError;
-            }
+    if (itemsError) throw itemsError;
 
-            console.log("Checklist execution updated successfully");
+    const initializedItems: ExecutionItemUI[] = (itemsData || []).map((item: any, idx: number) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      input_type: (item.input_type ?? "boolean") as InputType,
+      is_required: Boolean(item.is_required ?? true),
+      order_index: item.order_index ?? item.item_order ?? idx,
+      metadata: { images: item.images ?? [] },
+      checked: false,
+      value: "",
+      notes: "",
+      files: [],
+      uploadedPaths: [],
+    }));
 
-            // 2. Aggiorna lo stato della manutenzione collegata
-            if (execution?.schedule_id) {
-                console.log("Updating maintenance schedule:", execution.schedule_id);
+    setItems(initializedItems);
+  };
 
-                // Recupera info complete dello schedule
-                const { data: schedData } = await supabase
-                    .from("maintenance_schedules")
-                    .select("equipment_id, title, frequency, next_due_date")
-                    .eq("id", execution.schedule_id)
-                    .single();
+  const handleFileChange = (itemId: string, fileList: FileList | null) => {
+    if (!fileList) return;
+    const files = Array.from(fileList);
+    setItems(prev => prev.map(i => (i.id === itemId ? { ...i, files } : i)));
+  };
 
-                // Calcola prossima scadenza per manutenzioni ricorrenti
-                const calcNextDueDate = (frequency: string | null, currentDue: string | null): string | null => {
-                    if (!frequency) return null;
-                    const base = currentDue ? new Date(currentDue) : new Date();
-                    const now = new Date();
-                    const start = base > now ? base : now;
+  const uploadPhotosIfAny = async (execId: string, item: ExecutionItemUI) => {
+    if (!item.files || item.files.length === 0) return [] as string[];
 
-                    const freqLower = frequency.toLowerCase();
-                    if (freqLower === "daily" || freqLower === "giornaliera") {
-                        start.setDate(start.getDate() + 1);
-                    } else if (freqLower === "weekly" || freqLower === "settimanale") {
-                        start.setDate(start.getDate() + 7);
-                    } else if (freqLower === "biweekly" || freqLower === "bisettimanale") {
-                        start.setDate(start.getDate() + 14);
-                    } else if (freqLower === "monthly" || freqLower === "mensile") {
-                        start.setMonth(start.getMonth() + 1);
-                    } else if (freqLower === "quarterly" || freqLower === "trimestrale") {
-                        start.setMonth(start.getMonth() + 3);
-                    } else if (freqLower === "semiannual" || freqLower === "semestrale") {
-                        start.setMonth(start.getMonth() + 6);
-                    } else if (freqLower === "annual" || freqLower === "annuale" || freqLower === "yearly") {
-                        start.setFullYear(start.getFullYear() + 1);
-                    } else {
-                        // Frequenza non riconosciuta, non rischedulare
-                        return null;
-                    }
-                    return start.toISOString();
-                };
+    // We store files in Supabase Storage bucket: checklist-photos
+    // Path: executions/<executionId>/<templateItemId>/<timestamp>_<filename>
+    const bucket = "checklist-photos";
 
-                const nextDue = calcNextDueDate(schedData?.frequency || null, schedData?.next_due_date || null);
-                const isRecurring = nextDue !== null;
+    const uploaded: string[] = [];
+    for (const file of item.files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `executions/${execId}/${item.id}/${Date.now()}_${safeName}`;
 
-                // Aggiorna schedule: se ricorrente → rischedula, altrimenti → completed
-                const updatePayload: any = {
-                    last_performed_at: new Date().toISOString(),
-                };
+      const { error: upErr } = await supabase
+        .storage
+        .from(bucket)
+        .upload(path, file, { upsert: false, contentType: file.type });
 
-                if (isRecurring) {
-                    updatePayload.status = "scheduled";
-                    updatePayload.next_due_date = nextDue;
-                } else {
-                    updatePayload.status = "completed";
-                }
-
-                const { error: maintenanceError } = await supabase
-                    .from("maintenance_schedules")
-                    .update(updatePayload)
-                    .eq("id", execution.schedule_id);
-
-                if (maintenanceError) {
-                    console.error("Error updating maintenance schedule:", maintenanceError);
-                } else {
-                    console.log("Maintenance schedule updated:", isRecurring ? `rescheduled to ${nextDue}` : "completed");
-                }
-
-                // 3. Crea log di manutenzione
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user && schedData) {
-                    const { error: logError } = await supabase
-                        .from("maintenance_logs")
-                        .insert({
-                            equipment_id: schedData.equipment_id,
-                            performed_by: user.id,
-                            title: schedData.title,
-                            description: `Checklist "${checklist?.name}" completata${isRecurring ? `. Prossima: ${new Date(nextDue!).toLocaleDateString("it-IT")}` : ""}`,
-                            status: "completed",
-                            completed_at: new Date().toISOString(),
-                            schedule_id: execution.schedule_id,
-                        });
-
-                    if (logError) {
-                        console.error("Error creating maintenance log:", logError);
-                    }
-
-                    // 4. Riporta lo stato dell'attrezzatura ad "active"
-                    const { error: equipError } = await supabase
-                        .from("equipment")
-                        .update({ status: "active", updated_at: new Date().toISOString() })
-                        .eq("id", schedData.equipment_id);
-
-                    if (equipError) {
-                        console.error("Error updating equipment status:", equipError);
-                    }
-                }
-            } else {
-                console.log("No schedule_id found, skipping maintenance update");
-            }
-
-            // ============================================================
-            // UPDATE LINKED WORK ORDER (if work_order_id is present)
-            // ============================================================
-            if (execution?.work_order_id) {
-                console.log("Updating linked work order:", execution.work_order_id);
-
-                // Count total and completed checklist executions for this WO
-                const { data: allExecs } = await supabase
-                    .from("checklist_executions")
-                    .select("id, status, overall_status")
-                    .eq("work_order_id", execution.work_order_id);
-
-                const totalExecs = allExecs?.length || 0;
-                const completedExecs = allExecs?.filter(
-                    (e: any) => (e.overall_status || e.status) === "completed"
-                ).length || 0;
-
-                console.log(`WO checklist progress: ${completedExecs}/${totalExecs} completed`);
-
-                // Update WO notes with checklist completion info
-                const { error: woUpdateError } = await supabase
-                    .from("work_orders")
-                    .update({
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", execution.work_order_id);
-
-                if (woUpdateError) {
-                    console.error("Error updating work order:", woUpdateError);
-                }
-            }
-
-            toast({
-                title: "Successo",
-                description: "Checklist completata con successo"
-            });
-
-            // Smart redirect: back to WO detail if linked, otherwise /maintenance
-            if (execution?.work_order_id) {
-                router.push(`/maintenance/wo/${execution.work_order_id}`);
-            } else {
-                router.push("/maintenance");
-            }
-        } catch (error: any) {
-            console.error("Error completing checklist:", error);
-            toast({
-                title: "Errore",
-                description: "Impossibile completare la checklist",
-                variant: "destructive"
-            });
-        } finally {
-            setCompleting(false);
-        }
-    };
-
-    if (loading) {
-        return (
-            <MainLayout>
-                <div className="flex items-center justify-center min-h-screen">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            </MainLayout>
-        );
+      if (upErr) throw upErr;
+      uploaded.push(path);
     }
 
-    if (!execution || !checklist) {
-        return (
-            <MainLayout>
-                <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-                    <p className="text-muted-foreground">Esecuzione non trovata</p>
-                    <Button onClick={() => router.push("/dashboard")}>
-                        <ChevronLeft className="h-4 w-4 mr-2" />
-                        Torna alla Dashboard
-                    </Button>
-                </div>
-            </MainLayout>
-        );
+    return uploaded;
+  };
+
+  const validateBeforeComplete = () => {
+    const missing = items.filter(i => i.is_required).filter(i => {
+      if (i.input_type === "boolean") return !i.checked;
+      if (i.input_type === "photo") return !(i.files && i.files.length > 0);
+      return !(i.value && i.value.trim().length > 0);
+    });
+
+    return missing;
+  };
+
+  const completeExecution = async () => {
+    if (!execution) return;
+
+    const missing = validateBeforeComplete();
+    if (missing.length > 0) {
+      toast({
+        title: "Checklist incompleta",
+        description: `Compila i campi obbligatori: ${missing.slice(0, 3).map(m => m.title).join(", ")}${missing.length > 3 ? "…" : ""}`,
+        variant: "destructive",
+      });
+      return;
     }
 
-    const progress = calculateProgress();
-    const startTime = execution.started_at ? new Date(execution.started_at) : new Date();
+    setCompleting(true);
+    try {
+      // Upload photos first
+      const itemsWithUploads: ExecutionItemUI[] = [];
+      for (const it of items) {
+        const uploadedPaths = it.input_type === "photo" ? await uploadPhotosIfAny(execution.id, it) : [];
+        itemsWithUploads.push({ ...it, uploadedPaths });
+      }
 
-    // Colore barra: verde al 100%, primary (arancione) sotto
-    const progressBarColor = progress === 100 ? "bg-green-500" : "bg-primary";
-    const progressBadgeClass = progress === 100
-        ? "bg-green-500/20 text-green-400 border-green-500/30"
-        : "";
+      // Build results JSON (always)
+      const resultsJson = {
+        checklistTitle,
+        completedAt: new Date().toISOString(),
+        technicianName: technicianName || null,
+        items: itemsWithUploads.map(it => ({
+          template_item_id: it.id,
+          title: it.title,
+          input_type: it.input_type,
+          value: it.input_type === "boolean" ? Boolean(it.checked) : (it.value ?? null),
+          notes: it.notes ?? null,
+          photos: it.uploadedPaths ?? [],
+        })),
+      };
 
+      // Try to persist normalized items (new tables). If tables don't exist yet, it will fail and we still keep JSON.
+      try {
+        const rows = itemsWithUploads.map(it => ({
+          execution_id: execution.id,
+          template_item_id: it.id,
+          value: it.input_type === "boolean" ? String(Boolean(it.checked)) : (it.value ?? null),
+          notes: it.notes ?? null,
+        }));
+
+        const { data: inserted, error: insErr } = await supabase
+          .from("checklist_execution_items")
+          .insert(rows as any)
+          .select("id, template_item_id");
+
+        if (insErr) throw insErr;
+
+        // link photos
+        const photoRows: any[] = [];
+        for (const it of itemsWithUploads) {
+          const insertedRow = (inserted ?? []).find((r: any) => r.template_item_id === it.id);
+          if (!insertedRow) continue;
+          for (const p of (it.uploadedPaths ?? [])) {
+            photoRows.push({
+              execution_item_id: insertedRow.id,
+              storage_path: p,
+            });
+          }
+        }
+        if (photoRows.length > 0) {
+          const { error: phErr } = await supabase
+            .from("checklist_execution_photos")
+            .insert(photoRows as any);
+          if (phErr) throw phErr;
+        }
+      } catch (e) {
+        // Non-blocking; keeps JSON results
+        console.warn("Normalized checklist save skipped (tables missing or RLS):", e);
+      }
+
+      // Update execution row
+      const payload: any = {
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        results: resultsJson,
+        notes: null,
+      };
+      if (saveSignature && signatureDataUrl) payload.signature = signatureDataUrl;
+
+      const { error: upErr } = await supabase
+        .from("checklist_executions")
+        .update(payload)
+        .eq("id", execution.id);
+
+      if (upErr) throw upErr;
+
+      toast({ title: "Completata", description: "Checklist completata con successo" });
+      router.push(`/checklist/${execution.id}`);
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "Errore", description: e.message ?? "Errore completamento", variant: "destructive" });
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  // Signature drawing helpers
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    setIsDrawing(true);
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#000";
+    ctx.beginPath();
+    const rect = canvasRef.current.getBoundingClientRect();
+    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!canvasRef.current) return;
+    setIsDrawing(false);
+    const dataUrl = canvasRef.current.toDataURL("image/png");
+    setSignatureDataUrl(dataUrl);
+  };
+
+  const clearSignature = () => {
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    setSignatureDataUrl(null);
+  };
+
+  if (loading) {
     return (
-        <MainLayout>
-            <SEO title={`Esegui Checklist - ${checklist?.name || ""}`} />
-
-            <div className="space-y-6 pb-24">
-                <Card className="bg-gray-800 border-gray-700">
-                    <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                            <div className="space-y-1">
-                                <CardTitle className="text-2xl text-foreground">{checklist.name}</CardTitle>
-                                <p className="text-sm text-gray-400">Esecuzione checklist</p>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-400">
-                                <Clock className="h-4 w-4" />
-                                <span>Inizio: {format(startTime, "dd/MM/yyyy HH:mm")}</span>
-                            </div>
-                        </div>
-                    </CardHeader>
-                </Card>
-
-                <Card className="bg-gray-800 border-gray-700">
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-foreground">Progresso</CardTitle>
-                            <Badge
-                                variant={progress === 100 ? "default" : "secondary"}
-                                className={`text-lg px-3 py-1 ${progressBadgeClass}`}
-                            >
-                                {progress}%
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="w-full bg-gray-700 rounded-full h-3">
-                            <div
-                                className={`${progressBarColor} h-3 rounded-full transition-all duration-300`}
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <div className="space-y-4">
-                    {items.map((item, index) => (
-                        <Card key={item.id} className="bg-gray-800 border-gray-700">
-                            <CardContent className="pt-6">
-                                <div className="space-y-4">
-                                    <div className="flex items-start gap-3">
-                                        <Checkbox
-                                            checked={item.checked}
-                                            onCheckedChange={() => handleItemCheck(index)}
-                                            className="mt-1"
-                                        />
-                                        <div className="flex-1 space-y-2">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <p className={`font-medium ${item.checked ? "text-green-400 line-through" : "text-foreground"}`}>
-                                                    {item.title}
-                                                </p>
-                                                {item.is_required && (
-                                                    <Badge variant="destructive">
-                                                        <Flag className="h-3 w-3 mr-1" />
-                                                        Richiesto
-                                                    </Badge>
-                                                )}
-                                            </div>
-
-                                            {item.description && (
-                                                <p className="text-sm text-gray-400">{item.description}</p>
-                                            )}
-
-                                            {item.images && item.images.length > 0 && (
-                                                <div className="space-y-2 mt-3">
-                                                    <p className="text-xs text-gray-400 font-medium">Immagini di riferimento:</p>
-                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                        {item.images.map((imageUrl, imgIndex) => (
-                                                            <div key={imgIndex} className="relative group cursor-pointer">
-                                                                <img
-                                                                    src={imageUrl}
-                                                                    alt={`Riferimento ${imgIndex + 1}`}
-                                                                    className="w-full h-24 object-cover rounded border border-gray-600 hover:border-primary transition-colors"
-                                                                    onClick={() => window.open(imageUrl, '_blank')}
-                                                                />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="space-y-2">
-                                                <div className="flex items-center gap-2 text-sm text-gray-400">
-                                                    <MessageSquare className="h-4 w-4" />
-                                                    <span>Note</span>
-                                                </div>
-                                                <Textarea
-                                                    value={item.notes || ""}
-                                                    onChange={(e) => handleNoteChange(index, e.target.value)}
-                                                    placeholder="Aggiungi note..."
-                                                    className="bg-gray-900 border-gray-700 text-foreground placeholder:text-gray-500"
-                                                    rows={2}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            </div>
-
-            <div className="fixed bottom-0 left-0 right-0 border-t bg-gray-900 border-gray-800 p-4 safe-area-bottom">
-                <div className="max-w-7xl mx-auto flex gap-3">
-                    <Button
-                        variant="outline"
-                        onClick={() => router.push("/dashboard")}
-                        className="flex-1 bg-gray-800 border-gray-700 text-foreground hover:bg-gray-700"
-                    >
-                        <ChevronLeft className="h-4 w-4 mr-2" />
-                        Annulla
-                    </Button>
-                    <Button
-                        onClick={handleComplete}
-                        disabled={progress < 100 || completing}
-                        className={`flex-1 ${progress === 100 ? "bg-green-600 hover:bg-green-700" : "bg-primary hover:bg-primary/90"}`}
-                    >
-                        {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Completa
-                    </Button>
-                </div>
-            </div>
-
-            <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
-                <DialogContent className="bg-gray-800 border-gray-700 text-foreground">
-                    <DialogHeader>
-                        <DialogTitle className="text-foreground">Conferma il completamento della checklist</DialogTitle>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <p className="text-gray-400">Tecnico</p>
-                                <p className="font-medium text-foreground">{technicianName}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-400">Data e Ora</p>
-                                <p className="font-medium text-foreground">{format(new Date(), "dd/MM/yyyy HH:mm")}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-400">Durata</p>
-                                <p className="font-medium text-foreground">
-                                    {Math.round((new Date().getTime() - startTime.getTime()) / 1000 / 60)} minuti
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-gray-400">Checklist</p>
-                                <p className="font-medium text-foreground">{checklist.name}</p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm text-gray-400">Nome Tecnico</label>
-                            <Input
-                                value={technicianName}
-                                onChange={(e) => setTechnicianName(e.target.value)}
-                                placeholder="Inserisci il tuo nome"
-                                className="bg-gray-900 border-gray-700 text-foreground placeholder:text-gray-500"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm text-gray-400">Firma</label>
-                            <div className="border-2 border-dashed border-gray-600 rounded-lg p-2 bg-gray-900">
-                                <canvas
-                                    ref={canvasRef}
-                                    width={600}
-                                    height={200}
-                                    className="w-full touch-none cursor-crosshair bg-gray-900"
-                                    onMouseDown={startDrawing}
-                                    onMouseMove={draw}
-                                    onMouseUp={stopDrawing}
-                                    onMouseLeave={stopDrawing}
-                                    onTouchStart={startDrawing}
-                                    onTouchMove={draw}
-                                    onTouchEnd={stopDrawing}
-                                />
-                            </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={clearSignature}
-                                className="w-full bg-gray-700 border-gray-600 text-foreground hover:bg-gray-600"
-                            >
-                                Cancella Firma
-                            </Button>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="saveSignature"
-                                checked={saveSignature}
-                                onCheckedChange={(checked) => setSaveSignature(checked as boolean)}
-                            />
-                            <label
-                                htmlFor="saveSignature"
-                                className="text-sm text-gray-300 cursor-pointer"
-                            >
-                                Salva la firma per utilizzi futuri
-                            </label>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowSignatureDialog(false)}
-                            className="bg-gray-700 border-gray-600 text-foreground hover:bg-gray-600"
-                        >
-                            Annulla
-                        </Button>
-                        <Button
-                            type="button"
-                            onClick={confirmComplete}
-                            disabled={completing || !technicianName.trim()}
-                            className="bg-green-600 hover:bg-green-700"
-                        >
-                            {completing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            Conferma e Invia
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </MainLayout>
+      <MainLayout>
+        <div className="flex items-center justify-center h-[70vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </MainLayout>
     );
+  }
+
+  if (!execution) {
+    return (
+      <MainLayout>
+        <div className="max-w-3xl mx-auto p-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Execution non trovata</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" onClick={() => router.push("/checklists")}>Torna alle checklist</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  return (
+    <MainLayout>
+      <SEO title={`Esegui Checklist - ${checklistTitle}`} />
+
+      <div className="max-w-4xl mx-auto p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Indietro
+          </Button>
+          <Badge variant={execution.status === "completed" ? "default" : "secondary"}>
+            {execution.status}
+          </Badge>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between gap-3">
+              <span>{checklistTitle}</span>
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                {execution.started_at ? format(new Date(execution.started_at), "dd/MM/yyyy HH:mm") : "-"}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {checklistDescription && (
+              <p className="text-sm text-muted-foreground mb-3">{checklistDescription}</p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <LabelSmall>Operatore</LabelSmall>
+                <Input value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Nome tecnico" />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button variant="outline" onClick={() => setShowSignatureDialog(true)}>
+                  <Flag className="h-4 w-4 mr-2" />
+                  Firma (opzionale)
+                </Button>
+                {signatureDataUrl && (
+                  <Badge variant="secondary">Firma pronta</Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Elementi
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {items.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nessun elemento nella checklist. Aggiungi items al template.</p>
+            )}
+
+            {items
+              .slice()
+              .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+              .map((item) => (
+                <div key={item.id} className="p-4 rounded-xl border border-border bg-background space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="font-medium text-foreground">
+                        {item.title}{" "}
+                        {item.is_required && <span className="text-red-500">*</span>}
+                      </div>
+                      {item.description && (
+                        <div className="text-sm text-muted-foreground">{item.description}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Input */}
+                  {item.input_type === "boolean" && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={Boolean(item.checked)}
+                        onCheckedChange={(v) =>
+                          setItems(prev => prev.map(i => (i.id === item.id ? { ...i, checked: Boolean(v) } : i)))
+                        }
+                      />
+                      <span className="text-sm">OK / Eseguito</span>
+                    </div>
+                  )}
+
+                  {item.input_type === "number" && (
+                    <div className="space-y-1">
+                      <Input
+                        type="number"
+                        value={item.value ?? ""}
+                        onChange={(e) =>
+                          setItems(prev => prev.map(i => (i.id === item.id ? { ...i, value: e.target.value } : i)))
+                        }
+                        placeholder={item.metadata?.unit ? `Valore (${item.metadata.unit})` : "Valore"}
+                      />
+                      {typeof item.metadata?.min !== "undefined" || typeof item.metadata?.max !== "undefined" ? (
+                        <div className="text-xs text-muted-foreground">
+                          Range: {item.metadata?.min ?? "-"} … {item.metadata?.max ?? "-"}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {item.input_type === "text" && (
+                    <Input
+                      value={item.value ?? ""}
+                      onChange={(e) =>
+                        setItems(prev => prev.map(i => (i.id === item.id ? { ...i, value: e.target.value } : i)))
+                      }
+                      placeholder="Testo"
+                    />
+                  )}
+
+                  {item.input_type === "select" && (
+                    <select
+                      value={item.value ?? ""}
+                      onChange={(e) =>
+                        setItems(prev => prev.map(i => (i.id === item.id ? { ...i, value: e.target.value } : i)))
+                      }
+                      className="w-full border border-border bg-background rounded-md px-3 py-2"
+                    >
+                      <option value="">Seleziona…</option>
+                      {(item.metadata?.options ?? []).map((opt: string) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {item.input_type === "photo" && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Camera className="h-4 w-4" />
+                        Carica una o più foto
+                      </div>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => handleFileChange(item.id, e.target.files)}
+                      />
+                      {item.files && item.files.length > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {item.files.length} file selezionati
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <Textarea
+                    value={item.notes ?? ""}
+                    onChange={(e) =>
+                      setItems(prev => prev.map(i => (i.id === item.id ? { ...i, notes: e.target.value } : i)))
+                    }
+                    placeholder="Note (opzionale)"
+                    rows={2}
+                  />
+                </div>
+              ))}
+
+            <div className="flex justify-end">
+              <Button
+                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                onClick={completeExecution}
+                disabled={completing}
+              >
+                {completing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Salvataggio…
+                  </>
+                ) : (
+                  "Completa"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Signature dialog */}
+        <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Firma</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="border rounded-md overflow-hidden">
+                <canvas
+                  ref={canvasRef}
+                  width={520}
+                  height={180}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  className="w-full bg-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox checked={saveSignature} onCheckedChange={(v) => setSaveSignature(Boolean(v))} />
+                <span className="text-sm">Salva firma nell’esecuzione</span>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={clearSignature}>Pulisci</Button>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowSignatureDialog(false)}>Chiudi</Button>
+              <Button onClick={() => setShowSignatureDialog(false)} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                Usa firma
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </MainLayout>
+  );
 }
+
+function LabelSmall({ children }: { children: React.ReactNode }) {
+  return <div className="text-xs text-muted-foreground mb-1">{children}</div>;
+}
+
