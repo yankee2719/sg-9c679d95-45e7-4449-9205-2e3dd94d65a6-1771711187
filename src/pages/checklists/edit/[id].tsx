@@ -1,267 +1,420 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
+import { SEO } from "@/components/SEO";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Save, Plus, Trash2, Upload, X } from "lucide-react";
-import { checklistService } from "@/services/checklistService";
-import { SEO } from "@/components/SEO";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Trash2, Save, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getUserContext } from "@/lib/supabaseHelpers";
+import { supabase } from "@/integrations/supabase/client";
 
-interface ChecklistItem {
-  id?: string;
-  title: string;
-  description?: string;
-  is_required?: boolean;
-  images?: string[];
+type InputType = "text" | "number" | "boolean" | "select" | "photo";
+
+type Template = {
+    id: string;
+    name: string;
+    description: string | null;
+    target_type: "machine" | "production_line";
+    version: number;
+    is_active: boolean;
+};
+
+type TemplateItem = {
+    id: string;
+    template_id: string;
+    title: string;
+    description: string | null;
+    input_type: InputType;
+    is_required: boolean;
+    order_index: number;
+    metadata: any;
+};
+
+function isEditorRole(role?: string) {
+    return role === "admin" || role === "supervisor";
 }
 
-export default function EditChecklist() {
-  const router = useRouter();
-  const { id } = router.query;
-  const { t } = useLanguage();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [checklist, setChecklist] = useState<any>(null);
-  const [items, setItems] = useState<ChecklistItem[]>([]);
+export default function EditChecklistTemplatePage() {
+    const router = useRouter();
+    const { toast } = useToast();
+    const templateId = router.query.id as string | undefined;
 
-  useEffect(() => {
-    if (id && typeof id === "string") {
-      loadChecklist(id);
-    }
-  }, [id]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
-  const loadChecklist = async (checklistId: string) => {
-    try {
-      const data = await checklistService.getChecklistById(checklistId);
-      setChecklist(data);
-      if (data?.items) {
-        setItems(data.items);
-      }
-    } catch (error) {
-      console.error("Error loading checklist:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const [userRole, setUserRole] = useState < string > ("technician");
+    const canEdit = useMemo(() => isEditorRole(userRole), [userRole]);
 
-  const handleImageUpload = async (index: number, file: File) => {
-    try {
-      const itemId = items[index].id || `temp-${index}`;
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${itemId}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+    const [tpl, setTpl] = useState < Template | null > (null);
+    const [items, setItems] = useState < TemplateItem[] > ([]);
 
-      const { error: uploadError } = await supabase.storage
-        .from('checklist-images')
-        .upload(filePath, file);
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
 
-      if (uploadError) throw uploadError;
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const ctx = await getUserContext();
+                if (!ctx) {
+                    router.push("/login");
+                    return;
+                }
+                setUserRole(ctx.role);
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('checklist-images')
-        .getPublicUrl(filePath);
+                if (!templateId) return;
 
-      const newItems = [...items];
-      newItems[index].images = [...(newItems[index].images || []), publicUrl];
-      setItems(newItems);
+                // Template
+                const { data: tplData, error: tplErr } = await supabase
+                    .from("checklist_templates")
+                    .select("id,name,description,target_type,version,is_active")
+                    .eq("id", templateId)
+                    .single();
 
-      toast({
-        title: t("common.success"),
-        description: "Immagine caricata con successo",
-      });
-    } catch (error: any) {
-      console.error('Error uploading image:', error);
-      toast({
-        title: t("common.error"),
-        description: "Errore durante il caricamento dell'immagine",
-        variant: "destructive",
-      });
-    }
-  };
+                if (tplErr) throw tplErr;
 
-  const removeImage = (itemIndex: number, imageUrl: string) => {
-    const newItems = [...items];
-    newItems[itemIndex].images = newItems[itemIndex].images?.filter(img => img !== imageUrl) || [];
-    setItems(newItems);
-  };
+                // Items
+                const { data: itemData, error: itemErr } = await supabase
+                    .from("checklist_template_items")
+                    .select("id,template_id,title,description,input_type,is_required,order_index,metadata")
+                    .eq("template_id", templateId)
+                    .order("order_index", { ascending: true });
 
-  const handleAddItem = () => {
-    setItems([...items, { title: "", description: "", is_required: false, images: [] }]);
-  };
+                if (itemErr) throw itemErr;
 
-  const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-  };
+                setTpl(tplData as any);
+                setName(tplData?.name ?? "");
+                setDescription(tplData?.description ?? "");
+                setItems((itemData as any) ?? []);
+            } catch (e: any) {
+                console.error(e);
+                toast({ title: "Errore", description: e.message ?? "Errore caricamento template", variant: "destructive" });
+                router.push("/checklists");
+            } finally {
+                setLoading(false);
+            }
+        };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
-  };
+        load();
+    }, [templateId, router]);
 
-  const handleSave = async () => {
-    if (!checklist) return;
+    const addItem = () => {
+        if (!tpl) return;
+        const nextIndex = items.length;
 
-    try {
-      setSaving(true);
-      await checklistService.updateChecklist(checklist.id, {
-        name: checklist.name,
-        description: checklist.description,
-        is_active: checklist.is_active
-      });
-      router.push("/checklists");
-    } catch (error) {
-      console.error("Error updating checklist:", error);
-      alert(t("common.error"));
-    } finally {
-      setSaving(false);
-    }
-  };
+        setItems(prev => [
+            ...prev,
+            {
+                id: `tmp_${crypto.randomUUID()}`,
+                template_id: tpl.id,
+                title: "",
+                description: null,
+                input_type: "boolean",
+                is_required: true,
+                order_index: nextIndex,
+                metadata: { requiresPhoto: false },
+            },
+        ]);
+    };
 
-  if (loading) return <MainLayout><div className="text-white">{t("common.loading")}</div></MainLayout>;
-  if (!checklist) return <MainLayout><div className="text-white">{t("checklists.notFound")}</div></MainLayout>;
+    const removeItem = (id: string) => {
+        setItems(prev => prev.filter(i => i.id !== id).map((i, idx) => ({ ...i, order_index: idx })));
+    };
 
-  return (
-    <MainLayout>
-      <SEO title={`${t("common.edit")} ${checklist.name}`} />
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-white hover:bg-slate-700">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold text-white">{t("common.edit")}: {checklist.name}</h1>
-        </div>
+    const updateItem = <K extends keyof TemplateItem>(id: string, field: K, value: TemplateItem[K]) => {
+        setItems(prev => prev.map(i => (i.id === id ? { ...i, [field]: value } : i)));
+    };
 
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-white">{t("checklists.details")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name" className="text-white">{t("common.name")}</Label>
-              <Input 
-                id="name"
-                value={checklist.name || ""}
-                onChange={(e) => setChecklist({...checklist, name: e.target.value})}
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-              />
-            </div>
+    const toggleRequiresPhoto = (id: string, v: boolean) => {
+        setItems(prev =>
+            prev.map(i => {
+                if (i.id !== id) return i;
+                return { ...i, metadata: { ...(i.metadata ?? {}), requiresPhoto: v } };
+            })
+        );
+    };
 
-            <div className="grid gap-2">
-              <Label htmlFor="description" className="text-white">{t("common.description")}</Label>
-              <Textarea 
-                id="description"
-                value={checklist.description || ""}
-                onChange={(e) => setChecklist({...checklist, description: e.target.value})}
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-              />
-            </div>
-          </CardContent>
-        </Card>
+    const handleSave = async () => {
+        if (!tpl) return;
+        if (!canEdit) {
+            toast({ title: "Permesso negato", description: "Solo Admin/Supervisor possono modificare.", variant: "destructive" });
+            return;
+        }
+        if (!name.trim()) {
+            toast({ title: "Errore", description: "Il nome template è obbligatorio.", variant: "destructive" });
+            return;
+        }
 
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-white">{t("checklists.items")}</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={handleAddItem} className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 bg-transparent">
-              <Plus className="h-4 w-4 mr-2" />
-              {t("checklists.addItem")}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {items.map((item, index) => (
-              <div key={index} className="flex gap-4 items-start p-4 border border-slate-600 rounded-lg bg-slate-700/50">
-                <div className="flex-1 space-y-4">
-                  <Input 
-                    placeholder={t("checklists.itemTitle")}
-                    value={item.title || ""}
-                    onChange={(e) => handleItemChange(index, "title", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                  />
-                  <Input 
-                    placeholder={t("checklists.itemDescription")}
-                    value={item.description || ""}
-                    onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-                  />
-                  <div>
-                    <Label className="text-xs text-slate-400 mb-2 block">Immagini di riferimento</Label>
-                    <div className="space-y-2">
-                      {item.images && item.images.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2">
-                          {item.images.map((imageUrl, imgIndex) => (
-                            <div key={imgIndex} className="relative group">
-                              <img 
-                                src={imageUrl} 
-                                alt={`Riferimento ${imgIndex + 1}`}
-                                className="w-full h-20 object-cover rounded border border-slate-600"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeImage(index, imageUrl)}
-                                className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Input
-                          id={`image-${index}`}
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              handleImageUpload(index, file);
-                              e.target.value = '';
-                            }
-                          }}
-                          className="hidden"
-                        />
-                        <Label
-                          htmlFor={`image-${index}`}
-                          className="cursor-pointer flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded text-sm text-slate-300 transition-colors"
-                        >
-                          <Upload className="h-4 w-4" />
-                          Carica immagine
-                        </Label>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      checked={item.is_required || false}
-                      onCheckedChange={(checked) => handleItemChange(index, "is_required", checked)}
-                    />
-                    <Label className="text-slate-300">{t("checklists.required")}</Label>
-                  </div>
-                </div>
-                <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                  <Trash2 className="h-4 w-4" />
+        setSaving(true);
+        try {
+            // 1) Update template base
+            const { error: upErr } = await supabase
+                .from("checklist_templates")
+                .update({ name: name.trim(), description: description.trim() || null })
+                .eq("id", tpl.id);
+
+            if (upErr) throw upErr;
+
+            // 2) Split: existing (uuid) vs new (tmp_)
+            const existing = items.filter(i => !i.id.startsWith("tmp_"));
+            const created = items.filter(i => i.id.startsWith("tmp_"));
+
+            // Normalize order_index
+            const normalizedExisting = existing.map((i, idx) => ({ ...i, order_index: idx }));
+            const normalizedCreated = created.map((i, idx) => ({ ...i, order_index: normalizedExisting.length + idx }));
+
+            // 3) Update existing items (upsert)
+            if (normalizedExisting.length > 0) {
+                const { error: exErr } = await supabase
+                    .from("checklist_template_items")
+                    .upsert(
+                        normalizedExisting.map(i => ({
+                            id: i.id,
+                            template_id: tpl.id,
+                            title: i.title,
+                            description: i.description,
+                            input_type: i.input_type,
+                            is_required: i.is_required,
+                            order_index: i.order_index,
+                            metadata: i.metadata ?? {},
+                        })),
+                        { onConflict: "id" }
+                    );
+
+                if (exErr) throw exErr;
+            }
+
+            // 4) Insert new items
+            if (normalizedCreated.length > 0) {
+                // need org id from template row in DB (safer)
+                const { data: tplOrg, error: orgErr } = await supabase
+                    .from("checklist_templates")
+                    .select("organization_id")
+                    .eq("id", tpl.id)
+                    .single();
+                if (orgErr) throw orgErr;
+
+                const { error: crErr } = await supabase
+                    .from("checklist_template_items")
+                    .insert(
+                        normalizedCreated.map(i => ({
+                            template_id: tpl.id,
+                            organization_id: (tplOrg as any).organization_id,
+                            title: i.title,
+                            description: i.description,
+                            input_type: i.input_type,
+                            is_required: i.is_required,
+                            order_index: i.order_index,
+                            metadata: i.metadata ?? {},
+                        }))
+                    );
+
+                if (crErr) throw crErr;
+            }
+
+            // 5) Delete removed items? (optional)
+            // Per farlo bene serve tenere snapshot iniziale; per ora non elimino dal DB automaticamente.
+            // Se vuoi, aggiungo "soft-delete" o delete reale con conferma.
+
+            toast({ title: "Salvato", description: "Template aggiornato." });
+
+            // Reload fresh from DB
+            const { data: itemData, error: itemErr } = await supabase
+                .from("checklist_template_items")
+                .select("id,template_id,title,description,input_type,is_required,order_index,metadata")
+                .eq("template_id", tpl.id)
+                .order("order_index", { ascending: true });
+            if (itemErr) throw itemErr;
+
+            setItems((itemData as any) ?? []);
+            setTpl(prev => (prev ? { ...prev, name: name.trim(), description: description.trim() || null } : prev));
+        } catch (e: any) {
+            console.error(e);
+            toast({ title: "Errore", description: e.message ?? "Errore salvataggio", variant: "destructive" });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const statusBadge = (active: boolean) => (
+        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${active
+                ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
+                : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
+            }`}>
+            {active ? "ATTIVA" : "DISATTIVA"}
+        </Badge>
+    );
+
+    if (loading) return null;
+    if (!tpl) return null;
+
+    return (
+        <MainLayout userRole={userRole as any}>
+            <SEO title={`Modifica Template - MACHINA`} />
+
+            <div className="container mx-auto py-8 px-4 max-w-5xl space-y-6">
+                <Button variant="ghost" onClick={() => router.push("/checklists")}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Indietro
                 </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
 
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()} className="bg-transparent border-slate-600 text-white hover:bg-slate-700 hover:text-white">{t("common.cancel")}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-            <Save className="mr-2 h-4 w-4" />
-            {saving ? t("common.saving") : t("common.save")}
-          </Button>
-        </div>
-      </div>
-    </MainLayout>
-  );
+                {!canEdit && (
+                    <Card className="rounded-2xl border border-orange-500/30 bg-orange-500/10">
+                        <CardContent className="p-4 text-orange-200">
+                            Solo <b>Admin</b> e <b>Supervisor</b> possono modificare i template. Sei in sola lettura.
+                        </CardContent>
+                    </Card>
+                )}
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <CardTitle className="text-foreground">Template</CardTitle>
+                                <CardDescription className="text-muted-foreground">
+                                    Versione: {tpl.version} — {statusBadge(tpl.is_active)}
+                                </CardDescription>
+                            </div>
+
+                            {canEdit && (
+                                <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                                    <Save className="w-4 h-4 mr-2" />
+                                    {saving ? "Salvataggio..." : "Salva"}
+                                </Button>
+                            )}
+                        </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-5">
+                        <div className="space-y-2">
+                            <Label>Nome *</Label>
+                            <Input
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                disabled={!canEdit}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Descrizione</Label>
+                            <Textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                rows={3}
+                                disabled={!canEdit}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-foreground">Elementi</CardTitle>
+                                <CardDescription className="text-muted-foreground">
+                                    Gestisci i campi della checklist
+                                </CardDescription>
+                            </div>
+
+                            {canEdit && (
+                                <Button variant="outline" onClick={addItem}>
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Aggiungi
+                                </Button>
+                            )}
+                        </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                        {items.map((it) => (
+                            <div key={it.id} className="p-4 rounded-xl border border-border bg-background space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Titolo *</Label>
+                                            <Input
+                                                value={it.title}
+                                                onChange={(e) => updateItem(it.id, "title", e.target.value)}
+                                                disabled={!canEdit}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label className="text-xs text-muted-foreground">Tipo input</Label>
+                                            <select
+                                                value={it.input_type}
+                                                onChange={(e) => updateItem(it.id, "input_type", e.target.value as any)}
+                                                disabled={!canEdit}
+                                                className="w-full border border-border bg-background rounded-md px-3 py-2"
+                                            >
+                                                <option value="boolean">Boolean (OK/KO)</option>
+                                                <option value="number">Numero</option>
+                                                <option value="text">Testo</option>
+                                                <option value="select">Selezione</option>
+                                                <option value="photo">Foto</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-1 md:col-span-2">
+                                            <Label className="text-xs text-muted-foreground">Descrizione</Label>
+                                            <Input
+                                                value={it.description ?? ""}
+                                                onChange={(e) => updateItem(it.id, "description", e.target.value as any)}
+                                                disabled={!canEdit}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                checked={it.is_required}
+                                                onCheckedChange={(v) => updateItem(it.id, "is_required", Boolean(v) as any)}
+                                                disabled={!canEdit}
+                                            />
+                                            <Label>Obbligatorio</Label>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                checked={Boolean(it.metadata?.requiresPhoto)}
+                                                onCheckedChange={(v) => toggleRequiresPhoto(it.id, Boolean(v))}
+                                                disabled={!canEdit}
+                                            />
+                                            <Label>Richiede foto</Label>
+                                        </div>
+                                    </div>
+
+                                    {canEdit && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                                            onClick={() => removeItem(it.id)}
+                                            title="Rimuovi (solo UI finché non salvi)"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+
+                {canEdit && (
+                    <div className="flex justify-end">
+                        <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                            <Save className="w-4 h-4 mr-2" />
+                            {saving ? "Salvataggio..." : "Salva tutto"}
+                        </Button>
+                    </div>
+                )}
+            </div>
+        </MainLayout>
+    );
 }
