@@ -69,7 +69,6 @@ export default function EditChecklistTemplatePage() {
 
                 if (!templateId) return;
 
-                // Template
                 const { data: tplData, error: tplErr } = await supabase
                     .from("checklist_templates")
                     .select("id,name,description,target_type,version,is_active")
@@ -78,7 +77,6 @@ export default function EditChecklistTemplatePage() {
 
                 if (tplErr) throw tplErr;
 
-                // Items
                 const { data: itemData, error: itemErr } = await supabase
                     .from("checklist_template_items")
                     .select("id,template_id,title,description,input_type,is_required,order_index,metadata")
@@ -93,7 +91,11 @@ export default function EditChecklistTemplatePage() {
                 setItems((itemData as any) ?? []);
             } catch (e: any) {
                 console.error(e);
-                toast({ title: "Errore", description: e.message ?? "Errore caricamento template", variant: "destructive" });
+                toast({
+                    title: "Errore",
+                    description: e.message ?? "Errore caricamento template",
+                    variant: "destructive",
+                });
                 router.push("/checklists");
             } finally {
                 setLoading(false);
@@ -106,8 +108,7 @@ export default function EditChecklistTemplatePage() {
     const addItem = () => {
         if (!tpl) return;
         const nextIndex = items.length;
-
-        setItems(prev => [
+        setItems((prev) => [
             ...prev,
             {
                 id: `tmp_${crypto.randomUUID()}`,
@@ -123,16 +124,20 @@ export default function EditChecklistTemplatePage() {
     };
 
     const removeItem = (id: string) => {
-        setItems(prev => prev.filter(i => i.id !== id).map((i, idx) => ({ ...i, order_index: idx })));
+        setItems((prev) =>
+            prev
+                .filter((i) => i.id !== id)
+                .map((i, idx) => ({ ...i, order_index: idx }))
+        );
     };
 
     const updateItem = <K extends keyof TemplateItem>(id: string, field: K, value: TemplateItem[K]) => {
-        setItems(prev => prev.map(i => (i.id === id ? { ...i, [field]: value } : i)));
+        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
     };
 
     const toggleRequiresPhoto = (id: string, v: boolean) => {
-        setItems(prev =>
-            prev.map(i => {
+        setItems((prev) =>
+            prev.map((i) => {
                 if (i.id !== id) return i;
                 return { ...i, metadata: { ...(i.metadata ?? {}), requiresPhoto: v } };
             })
@@ -142,7 +147,11 @@ export default function EditChecklistTemplatePage() {
     const handleSave = async () => {
         if (!tpl) return;
         if (!canEdit) {
-            toast({ title: "Permesso negato", description: "Solo Admin/Supervisor possono modificare.", variant: "destructive" });
+            toast({
+                title: "Permesso negato",
+                description: "Solo Admin/Supervisor possono modificare.",
+                variant: "destructive",
+            });
             return;
         }
         if (!name.trim()) {
@@ -152,28 +161,26 @@ export default function EditChecklistTemplatePage() {
 
         setSaving(true);
         try {
-            // 1) Update template base
             const { error: upErr } = await supabase
                 .from("checklist_templates")
                 .update({ name: name.trim(), description: description.trim() || null })
                 .eq("id", tpl.id);
-
             if (upErr) throw upErr;
 
-            // 2) Split: existing (uuid) vs new (tmp_)
-            const existing = items.filter(i => !i.id.startsWith("tmp_"));
-            const created = items.filter(i => i.id.startsWith("tmp_"));
+            const existing = items.filter((i) => !i.id.startsWith("tmp_"));
+            const created = items.filter((i) => i.id.startsWith("tmp_"));
 
-            // Normalize order_index
             const normalizedExisting = existing.map((i, idx) => ({ ...i, order_index: idx }));
-            const normalizedCreated = created.map((i, idx) => ({ ...i, order_index: normalizedExisting.length + idx }));
+            const normalizedCreated = created.map((i, idx) => ({
+                ...i,
+                order_index: normalizedExisting.length + idx,
+            }));
 
-            // 3) Update existing items (upsert)
             if (normalizedExisting.length > 0) {
                 const { error: exErr } = await supabase
                     .from("checklist_template_items")
                     .upsert(
-                        normalizedExisting.map(i => ({
+                        normalizedExisting.map((i) => ({
                             id: i.id,
                             template_id: tpl.id,
                             title: i.title,
@@ -185,13 +192,10 @@ export default function EditChecklistTemplatePage() {
                         })),
                         { onConflict: "id" }
                     );
-
                 if (exErr) throw exErr;
             }
 
-            // 4) Insert new items
             if (normalizedCreated.length > 0) {
-                // need org id from template row in DB (safer)
                 const { data: tplOrg, error: orgErr } = await supabase
                     .from("checklist_templates")
                     .select("organization_id")
@@ -199,40 +203,31 @@ export default function EditChecklistTemplatePage() {
                     .single();
                 if (orgErr) throw orgErr;
 
-                const { error: crErr } = await supabase
-                    .from("checklist_template_items")
-                    .insert(
-                        normalizedCreated.map(i => ({
-                            template_id: tpl.id,
-                            organization_id: (tplOrg as any).organization_id,
-                            title: i.title,
-                            description: i.description,
-                            input_type: i.input_type,
-                            is_required: i.is_required,
-                            order_index: i.order_index,
-                            metadata: i.metadata ?? {},
-                        }))
-                    );
-
+                const { error: crErr } = await supabase.from("checklist_template_items").insert(
+                    normalizedCreated.map((i) => ({
+                        template_id: tpl.id,
+                        organization_id: (tplOrg as any).organization_id,
+                        title: i.title,
+                        description: i.description,
+                        input_type: i.input_type,
+                        is_required: i.is_required,
+                        order_index: i.order_index,
+                        metadata: i.metadata ?? {},
+                    }))
+                );
                 if (crErr) throw crErr;
             }
 
-            // 5) Delete removed items? (optional)
-            // Per farlo bene serve tenere snapshot iniziale; per ora non elimino dal DB automaticamente.
-            // Se vuoi, aggiungo "soft-delete" o delete reale con conferma.
-
             toast({ title: "Salvato", description: "Template aggiornato." });
 
-            // Reload fresh from DB
             const { data: itemData, error: itemErr } = await supabase
                 .from("checklist_template_items")
                 .select("id,template_id,title,description,input_type,is_required,order_index,metadata")
                 .eq("template_id", tpl.id)
                 .order("order_index", { ascending: true });
             if (itemErr) throw itemErr;
-
             setItems((itemData as any) ?? []);
-            setTpl(prev => (prev ? { ...prev, name: name.trim(), description: description.trim() || null } : prev));
+            setTpl((prev) => (prev ? { ...prev, name: name.trim(), description: description.trim() || null } : prev));
         } catch (e: any) {
             console.error(e);
             toast({ title: "Errore", description: e.message ?? "Errore salvataggio", variant: "destructive" });
@@ -242,10 +237,12 @@ export default function EditChecklistTemplatePage() {
     };
 
     const statusBadge = (active: boolean) => (
-        <Badge className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${active
-                ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
-                : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
-            }`}>
+        <Badge
+            className={`rounded-md px-2 py-0.5 text-xs font-semibold border ${active
+                    ? "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30"
+                    : "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30"
+                }`}
+        >
             {active ? "ATTIVA" : "DISATTIVA"}
         </Badge>
     );
@@ -293,21 +290,12 @@ export default function EditChecklistTemplatePage() {
                     <CardContent className="space-y-5">
                         <div className="space-y-2">
                             <Label>Nome *</Label>
-                            <Input
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                disabled={!canEdit}
-                            />
+                            <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
                         </div>
 
                         <div className="space-y-2">
                             <Label>Descrizione</Label>
-                            <Textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                rows={3}
-                                disabled={!canEdit}
-                            />
+                            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} disabled={!canEdit} />
                         </div>
                     </CardContent>
                 </Card>
@@ -317,9 +305,7 @@ export default function EditChecklistTemplatePage() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-foreground">Elementi</CardTitle>
-                                <CardDescription className="text-muted-foreground">
-                                    Gestisci i campi della checklist
-                                </CardDescription>
+                                <CardDescription className="text-muted-foreground">Gestisci i campi della checklist</CardDescription>
                             </div>
 
                             {canEdit && (
@@ -338,11 +324,7 @@ export default function EditChecklistTemplatePage() {
                                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <Label className="text-xs text-muted-foreground">Titolo *</Label>
-                                            <Input
-                                                value={it.title}
-                                                onChange={(e) => updateItem(it.id, "title", e.target.value)}
-                                                disabled={!canEdit}
-                                            />
+                                            <Input value={it.title} onChange={(e) => updateItem(it.id, "title", e.target.value)} disabled={!canEdit} />
                                         </div>
 
                                         <div className="space-y-1">
@@ -395,7 +377,7 @@ export default function EditChecklistTemplatePage() {
                                             size="icon"
                                             className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                                             onClick={() => removeItem(it.id)}
-                                            title="Rimuovi (solo UI finché non salvi)"
+                                            title="Rimuovi"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </Button>
@@ -418,3 +400,4 @@ export default function EditChecklistTemplatePage() {
         </MainLayout>
     );
 }
+
