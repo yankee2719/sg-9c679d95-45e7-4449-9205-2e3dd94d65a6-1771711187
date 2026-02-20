@@ -9,10 +9,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, Link2, Play, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { supabase } from "@/integrations/supabase/client";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 type InputType = "text" | "number" | "boolean" | "select" | "photo";
 
@@ -36,6 +45,20 @@ type TemplateItem = {
     metadata: any;
 };
 
+type MachineRow = {
+    id: string;
+    name: string | null;
+    internal_code: string | null;
+};
+
+type ChecklistAssignmentRow = {
+    id: string;
+    machine_id: string;
+    is_active: boolean;
+    created_at: string;
+    machines?: { name: string | null; internal_code: string | null } | null;
+};
+
 function isEditorRole(role?: string) {
     return role === "admin" || role === "supervisor";
 }
@@ -57,6 +80,14 @@ export default function EditChecklistTemplatePage() {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
 
+    const [orgId, setOrgId] = useState < string | null > (null);
+    const [assignments, setAssignments] = useState < ChecklistAssignmentRow[] > ([]);
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
+    const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+    const [machineQuery, setMachineQuery] = useState("");
+    const [selectedMachineId, setSelectedMachineId] = useState < string | null > (null);
+    const [assigning, setAssigning] = useState(false);
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -66,6 +97,7 @@ export default function EditChecklistTemplatePage() {
                     return;
                 }
                 setUserRole(ctx.role);
+                setOrgId(ctx.orgId);
 
                 if (!templateId) return;
 
@@ -84,6 +116,28 @@ export default function EditChecklistTemplatePage() {
                     .order("order_index", { ascending: true });
 
                 if (itemErr) throw itemErr;
+
+                // Load current assignments for this template
+                const { data: asgData, error: asgErr } = await supabase
+                    .from("checklist_assignments")
+                    .select("id, machine_id, is_active, created_at, machines(name, internal_code)")
+                    .eq("template_id", templateId)
+                    .eq("is_active", true)
+                    .order("created_at", { ascending: false });
+                if (asgErr) throw asgErr;
+                setAssignments((asgData as any) ?? []);
+
+                // Preload machines for assignment picker (only if we have orgId)
+                if (ctx.orgId) {
+                    const { data: mData, error: mErr } = await supabase
+                        .from("machines")
+                        .select("id,name,internal_code")
+                        .eq("organization_id", ctx.orgId)
+                        .eq("is_archived", false)
+                        .order("name", { ascending: true });
+                    if (mErr) throw mErr;
+                    setMachines((mData as any) ?? []);
+                }
 
                 setTpl(tplData as any);
                 setName(tplData?.name ?? "");
@@ -104,6 +158,88 @@ export default function EditChecklistTemplatePage() {
 
         load();
     }, [templateId, router]);
+
+    const filteredMachines = useMemo(() => {
+        const q = machineQuery.trim().toLowerCase();
+        const assignedSet = new Set(assignments.map((a) => a.machine_id));
+        const base = machines.filter((m) => !assignedSet.has(m.id));
+        if (!q) return base;
+        return base.filter((m) =>
+            (m.name ?? "").toLowerCase().includes(q) ||
+            (m.internal_code ?? "").toLowerCase().includes(q)
+        );
+    }, [machineQuery, machines, assignments]);
+
+    const handleCreateAssignment = async () => {
+        if (!tpl) return;
+        if (!canEdit) {
+            toast({
+                title: "Permesso negato",
+                description: "Solo Admin/Supervisor possono assegnare template.",
+                variant: "destructive",
+            });
+            return;
+        }
+        if (!orgId) {
+            toast({ title: "Errore", description: "Organizzazione non trovata.", variant: "destructive" });
+            return;
+        }
+        if (!selectedMachineId) {
+            toast({ title: "Errore", description: "Seleziona una macchina.", variant: "destructive" });
+            return;
+        }
+
+        setAssigning(true);
+        try {
+            const { data, error } = await supabase
+                .from("checklist_assignments")
+                .insert({
+                    organization_id: orgId,
+                    template_id: tpl.id,
+                    machine_id: selectedMachineId,
+                    is_active: true,
+                })
+                .select("id, machine_id, is_active, created_at, machines(name, internal_code)")
+                .single();
+
+            if (error) {
+                // handle unique conflict gracefully
+                if ((error as any).code === "23505") {
+                    toast({ title: "Già assegnata", description: "Questo template è già assegnato alla macchina." });
+                } else {
+                    throw error;
+                }
+            } else {
+                setAssignments((prev) => [data as any, ...prev]);
+                toast({ title: "Assegnata", description: "Template assegnato alla macchina." });
+            }
+
+            setAssignDialogOpen(false);
+            setMachineQuery("");
+            setSelectedMachineId(null);
+        } catch (e: any) {
+            console.error(e);
+            toast({ title: "Errore", description: e.message ?? "Errore assegnazione", variant: "destructive" });
+        } finally {
+            setAssigning(false);
+        }
+    };
+
+    const handleDeactivateAssignment = async (assignmentId: string) => {
+        if (!canEdit) return;
+        if (!confirm("Rimuovere questa assegnazione?")) return;
+        try {
+            const { error } = await supabase
+                .from("checklist_assignments")
+                .update({ is_active: false })
+                .eq("id", assignmentId);
+            if (error) throw error;
+            setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+            toast({ title: "Assegnazione rimossa" });
+        } catch (e: any) {
+            toast({ title: "Errore", description: e.message ?? "Errore rimozione", variant: "destructive" });
+        }
+    };
 
     const addItem = () => {
         if (!tpl) return;
@@ -279,10 +415,92 @@ export default function EditChecklistTemplatePage() {
                             </div>
 
                             {canEdit && (
-                                <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-                                    <Save className="w-4 h-4 mr-2" />
-                                    {saving ? "Salvataggio..." : "Salva"}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="outline">
+                                                <Link2 className="w-4 h-4 mr-2" />
+                                                Assegna a macchina
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-[560px]">
+                                            <DialogHeader>
+                                                <DialogTitle>Assegna template a macchina</DialogTitle>
+                                                <DialogDescription>
+                                                    Seleziona una macchina della tua organizzazione. Le macchine già assegnate non sono mostrate.
+                                                </DialogDescription>
+                                            </DialogHeader>
+
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        placeholder="Cerca macchina (nome o codice interno)..."
+                                                        value={machineQuery}
+                                                        onChange={(e) => setMachineQuery(e.target.value)}
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => {
+                                                            setMachineQuery("");
+                                                            setSelectedMachineId(null);
+                                                        }}
+                                                        title="Reset"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+
+                                                <div className="max-h-[320px] overflow-auto border border-border rounded-xl">
+                                                    {filteredMachines.length === 0 ? (
+                                                        <div className="p-4 text-sm text-muted-foreground">Nessuna macchina disponibile.</div>
+                                                    ) : (
+                                                        <div className="divide-y divide-border">
+                                                            {filteredMachines.map((m) => (
+                                                                <button
+                                                                    key={m.id}
+                                                                    type="button"
+                                                                    onClick={() => setSelectedMachineId(m.id)}
+                                                                    className={`w-full text-left p-3 hover:bg-muted/30 transition-colors flex items-center justify-between gap-3 ${selectedMachineId === m.id ? "bg-muted/40" : ""
+                                                                        }`}
+                                                                >
+                                                                    <div className="min-w-0">
+                                                                        <div className="font-medium text-foreground truncate">{m.name ?? "—"}</div>
+                                                                        <div className="text-xs text-muted-foreground truncate">{m.internal_code ?? "—"}</div>
+                                                                    </div>
+                                                                    {selectedMachineId === m.id && (
+                                                                        <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/30">
+                                                                            Selezionata
+                                                                        </Badge>
+                                                                    )}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <DialogFooter>
+                                                <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+                                                    Annulla
+                                                </Button>
+                                                <Button
+                                                    className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                                    onClick={handleCreateAssignment}
+                                                    disabled={assigning || !selectedMachineId}
+                                                >
+                                                    {assigning ? "Assegnazione..." : "Assegna"}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+
+                                    <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {saving ? "Salvataggio..." : "Salva"}
+                                    </Button>
+                                </div>
                             )}
                         </div>
                     </CardHeader>
@@ -297,6 +515,62 @@ export default function EditChecklistTemplatePage() {
                             <Label>Descrizione</Label>
                             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} disabled={!canEdit} />
                         </div>
+                    </CardContent>
+                </Card>
+
+                {/* Assignments list */}
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-foreground">Assegnazioni</CardTitle>
+                                <CardDescription className="text-muted-foreground">
+                                    Template assegnato a macchine (serve per eseguire la checklist)
+                                </CardDescription>
+                            </div>
+                            <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/30">
+                                {assignments.length}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {assignments.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">Nessuna macchina assegnata. Usa “Assegna a macchina”.</div>
+                        ) : (
+                            assignments.map((a) => (
+                                <div
+                                    key={a.id}
+                                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/20"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-foreground truncate">{a.machines?.name ?? "—"}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{a.machines?.internal_code ?? a.machine_id}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => router.push(`/checklist/execute?assignmentId=${a.id}`)}
+                                            title="Esegui checklist"
+                                        >
+                                            <Play className="w-4 h-4 mr-2" />
+                                            Esegui
+                                        </Button>
+                                        {canEdit && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                                onClick={() => handleDeactivateAssignment(a.id)}
+                                                title="Rimuovi assegnazione"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </CardContent>
                 </Card>
 
