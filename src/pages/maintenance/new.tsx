@@ -20,10 +20,15 @@ export default function NewMaintenancePage() {
     const router = useRouter();
     const { toast } = useToast();
     const { t } = useLanguage();
+
     const [loading, setLoading] = useState(false);
     const [machines, setMachines] = useState < any[] > ([]);
-    const [checklists, setChecklists] = useState < any[] > ([]);
+    const [templates, setTemplates] = useState < any[] > ([]);
     const [technicians, setTechnicians] = useState < any[] > ([]);
+
+    const [templateSearch, setTemplateSearch] = useState("");
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState < string[] > ([]);
+
     const [formData, setFormData] = useState({
         machine_id: "",
         title: "",
@@ -46,13 +51,20 @@ export default function NewMaintenancePage() {
 
             // Load machines
             const { data: machineData } = await supabase
-                .from("machines").select("id, name, internal_code").order("name");
+                .from("machines")
+                .select("id, name, internal_code")
+                .order("name");
             if (machineData) setMachines(machineData);
 
-            // Load checklists
-            const { data: checklistData } = await supabase
-                .from("checklists").select("id, title").eq("is_active", true).order("title");
-            if (checklistData) setChecklists(checklistData);
+            // Load checklist templates (new model)
+            const { data: templateData } = await supabase
+                .from("checklist_templates")
+                .select("id, name, description, target_type, version")
+                .eq("is_active", true)
+                .order("name");
+            if (templateData) {
+                setTemplates(templateData.filter((x: any) => (x.target_type ?? "machine") === "machine"));
+            }
 
             // Load technicians from organization_memberships + profiles
             if (ctx.orgId) {
@@ -63,17 +75,22 @@ export default function NewMaintenancePage() {
                     .eq("is_active", true);
 
                 if (members) {
-                    const userIds = members.map(m => m.user_id);
+                    const userIds = members.map((m) => m.user_id);
                     const { data: profiles } = await supabase
                         .from("profiles")
                         .select("id, display_name, first_name, last_name, email")
                         .in("id", userIds);
 
                     if (profiles) {
-                        setTechnicians(profiles.map(p => ({
-                            id: p.id,
-                            name: p.display_name || `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.email,
-                        })));
+                        setTechnicians(
+                            profiles.map((p) => ({
+                                id: p.id,
+                                name:
+                                    p.display_name ||
+                                    `${p.first_name || ""} ${p.last_name || ""}`.trim() ||
+                                    p.email,
+                            }))
+                        );
                     }
                 }
             }
@@ -90,35 +107,77 @@ export default function NewMaintenancePage() {
             const ctx = await getUserContext();
             if (!ctx) throw new Error("Not authenticated");
 
-            const { error } = await supabase.from("maintenance_plans").insert({
-                title: formData.title.trim(),
-                description: formData.description.trim() || null,
-                instructions: formData.instructions.trim() || null,
-                machine_id: formData.machine_id || null,
-                frequency_type: formData.frequency_type,
-                frequency_value: 1,
-                next_due_date: formData.next_due_date || null,
-                default_assignee_id: formData.default_assignee_id || null,
-                priority: formData.priority,
-                organization_id: ctx.orgId,
-                created_by: ctx.userId,
-                is_active: true,
-            });
+            const { data: plan, error } = await supabase
+                .from("maintenance_plans")
+                .insert({
+                    title: formData.title.trim(),
+                    description: formData.description.trim() || null,
+                    instructions: formData.instructions.trim() || null,
+                    machine_id: formData.machine_id || null,
+                    frequency_type: formData.frequency_type,
+                    frequency_value: 1,
+                    next_due_date: formData.next_due_date || null,
+                    default_assignee_id: formData.default_assignee_id || null,
+                    priority: formData.priority,
+                    organization_id: ctx.orgId,
+                    created_by: ctx.userId,
+                    is_active: true,
+                })
+                .select("id")
+                .single();
 
             if (error) throw error;
+
+            // Link selected checklist templates to the plan (optional)
+            if (plan?.id && selectedTemplateIds.length > 0) {
+                const rows = selectedTemplateIds.map((templateId, idx) => ({
+                    plan_id: plan.id,
+                    template_id: templateId,
+                    is_required: true,
+                    execution_order: idx + 1,
+                }));
+
+                const { error: linkErr } = await supabase
+                    .from("maintenance_plan_checklists")
+                    .insert(rows);
+
+                // If the table doesn't exist yet, don't block plan creation.
+                if (linkErr && linkErr.code !== "42P01") {
+                    throw linkErr;
+                }
+            }
 
             toast({ title: t("common.success"), description: t("maintenance.createSuccess") });
             router.push("/maintenance");
         } catch (error: any) {
             console.error("Error creating maintenance:", error);
-            toast({ variant: "destructive", title: t("common.error"), description: error?.message || t("maintenance.createError") });
+            toast({
+                variant: "destructive",
+                title: t("common.error"),
+                description: error?.message || t("maintenance.createError"),
+            });
         } finally {
             setLoading(false);
         }
     };
 
     const handleChange = (field: string, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        setFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const filteredTemplates = templates.filter((tpl: any) => {
+        if (!templateSearch.trim()) return true;
+        const q = templateSearch.toLowerCase();
+        return (
+            (tpl.name ?? "").toLowerCase().includes(q) ||
+            (tpl.description ?? "").toLowerCase().includes(q)
+        );
+    });
+
+    const toggleTemplate = (id: string) => {
+        setSelectedTemplateIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+        );
     };
 
     return (
@@ -143,13 +202,19 @@ export default function NewMaintenancePage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <Label className="text-foreground">{t("equipment.title")} *</Label>
-                                    <Select value={formData.machine_id} onValueChange={(v) => handleChange("machine_id", v)} required>
+                                    <Select
+                                        value={formData.machine_id}
+                                        onValueChange={(v) => handleChange("machine_id", v)}
+                                        required
+                                    >
                                         <SelectTrigger className="bg-muted border-border text-foreground">
                                             <SelectValue placeholder={t("maintenance.selectEquipment")} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {machines.map((m) => (
-                                                <SelectItem key={m.id} value={m.id}>{m.name} ({m.internal_code})</SelectItem>
+                                                <SelectItem key={m.id} value={m.id}>
+                                                    {m.name} ({m.internal_code})
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -157,8 +222,14 @@ export default function NewMaintenancePage() {
 
                                 <div className="space-y-2">
                                     <Label className="text-foreground">{t("maintenance.frequency")} *</Label>
-                                    <Select value={formData.frequency_type} onValueChange={(v) => handleChange("frequency_type", v)} required>
-                                        <SelectTrigger className="bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
+                                    <Select
+                                        value={formData.frequency_type}
+                                        onValueChange={(v) => handleChange("frequency_type", v)}
+                                        required
+                                    >
+                                        <SelectTrigger className="bg-muted border-border text-foreground">
+                                            <SelectValue />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="daily">{t("maintenance.daily")}</SelectItem>
                                             <SelectItem value="weekly">{t("maintenance.weekly")}</SelectItem>
@@ -171,21 +242,32 @@ export default function NewMaintenancePage() {
 
                                 <div className="space-y-2 md:col-span-2">
                                     <Label className="text-foreground">{t("maintenance.titleLabel")} *</Label>
-                                    <Input value={formData.title} onChange={(e) => handleChange("title", e.target.value)}
-                                        placeholder={t("maintenance.titlePlaceholder")} required
-                                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
+                                    <Input
+                                        value={formData.title}
+                                        onChange={(e) => handleChange("title", e.target.value)}
+                                        placeholder={t("maintenance.titlePlaceholder")}
+                                        required
+                                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                                    />
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label className="text-foreground">{t("maintenance.nextDue")} *</Label>
-                                    <Input type="date" value={formData.next_due_date} onChange={(e) => handleChange("next_due_date", e.target.value)}
-                                        required className="bg-muted border-border text-foreground" />
+                                    <Input
+                                        type="date"
+                                        value={formData.next_due_date}
+                                        onChange={(e) => handleChange("next_due_date", e.target.value)}
+                                        required
+                                        className="bg-muted border-border text-foreground"
+                                    />
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label className="text-foreground">{t("common.priority")}</Label>
                                     <Select value={formData.priority} onValueChange={(v) => handleChange("priority", v)}>
-                                        <SelectTrigger className="bg-muted border-border text-foreground"><SelectValue /></SelectTrigger>
+                                        <SelectTrigger className="bg-muted border-border text-foreground">
+                                            <SelectValue />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="high">{t("common.high")}</SelectItem>
                                             <SelectItem value="medium">{t("common.medium")}</SelectItem>
@@ -196,13 +278,18 @@ export default function NewMaintenancePage() {
 
                                 <div className="space-y-2">
                                     <Label className="text-foreground">{t("maintenance.assignTo")}</Label>
-                                    <Select value={formData.default_assignee_id} onValueChange={(v) => handleChange("default_assignee_id", v)}>
+                                    <Select
+                                        value={formData.default_assignee_id}
+                                        onValueChange={(v) => handleChange("default_assignee_id", v)}
+                                    >
                                         <SelectTrigger className="bg-muted border-border text-foreground">
                                             <SelectValue placeholder={t("maintenance.selectTechnician")} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {technicians.map((tech) => (
-                                                <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                                                <SelectItem key={tech.id} value={tech.id}>
+                                                    {tech.name}
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -211,27 +298,84 @@ export default function NewMaintenancePage() {
 
                             <div className="space-y-2">
                                 <Label className="text-foreground">{t("common.description")}</Label>
-                                <Textarea value={formData.description} onChange={(e) => handleChange("description", e.target.value)}
-                                    rows={3} placeholder={t("maintenance.descriptionPlaceholder")}
-                                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
+                                <Textarea
+                                    value={formData.description}
+                                    onChange={(e) => handleChange("description", e.target.value)}
+                                    rows={3}
+                                    placeholder={t("maintenance.descriptionPlaceholder")}
+                                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                                />
                             </div>
 
                             <div className="space-y-2">
                                 <Label className="text-foreground">Istruzioni</Label>
-                                <Textarea value={formData.instructions} onChange={(e) => handleChange("instructions", e.target.value)}
-                                    rows={3} placeholder="Istruzioni dettagliate per l'esecuzione..."
-                                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground" />
+                                <Textarea
+                                    value={formData.instructions}
+                                    onChange={(e) => handleChange("instructions", e.target.value)}
+                                    rows={3}
+                                    placeholder="Istruzioni dettagliate per l'esecuzione..."
+                                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-foreground">Checklist (opzionale)</Label>
+                                <div className="bg-muted border border-border rounded-md p-3 space-y-3">
+                                    <Input
+                                        value={templateSearch}
+                                        onChange={(e) => setTemplateSearch(e.target.value)}
+                                        placeholder="Cerca template checklist..."
+                                        className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+                                    />
+
+                                    <div className="max-h-56 overflow-auto space-y-2">
+                                        {filteredTemplates.length === 0 && (
+                                            <div className="text-sm text-muted-foreground">Nessun template trovato</div>
+                                        )}
+                                        {filteredTemplates.map((tpl: any) => (
+                                            <label
+                                                key={tpl.id}
+                                                className="flex items-start gap-2 text-sm text-foreground cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTemplateIds.includes(tpl.id)}
+                                                    onChange={() => toggleTemplate(tpl.id)}
+                                                    className="mt-1"
+                                                />
+                                                <span>
+                                                    <span className="font-medium">{tpl.name}</span>
+                                                    {tpl.description ? (
+                                                        <span className="block text-xs text-muted-foreground">{tpl.description}</span>
+                                                    ) : null}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+
+                                    <div className="text-xs text-muted-foreground">
+                                        I template selezionati verranno collegati al piano (ordine 1..n). L'esecuzione avverrà tramite Work Order.
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex justify-end gap-3 pt-4">
                                 <Button type="button" variant="outline" onClick={() => router.back()}>
                                     {t("common.cancel")}
                                 </Button>
-                                <Button type="submit" className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" disabled={loading}>
+                                <Button
+                                    type="submit"
+                                    className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                    disabled={loading}
+                                >
                                     {loading ? (
-                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvataggio...</>
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvataggio...
+                                        </>
                                     ) : (
-                                        <><Save className="mr-2 h-4 w-4" /> {t("common.create")}</>
+                                        <>
+                                            <Save className="mr-2 h-4 w-4" /> {t("common.create")}
+                                        </>
                                     )}
                                 </Button>
                             </div>
@@ -242,3 +386,4 @@ export default function NewMaintenancePage() {
         </MainLayout>
     );
 }
+
