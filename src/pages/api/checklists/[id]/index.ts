@@ -24,20 +24,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return sendError(res, ApiError.badRequest(uuidError.message));
     }
 
-    // GET - Get single checklist with items
+    // GET - Get single checklist template with items
     if (req.method === "GET") {
         try {
             let query = supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .select(`
           *,
-          items:checklist_items(id, title, description, input_type, is_required, order_index, images, created_at),
-          created_by_profile:profiles!checklists_created_by_fkey(id, full_name, email)
+          items:checklist_template_items(id, title, description, input_type, is_required, order_index, metadata, created_at)
         `)
                 .eq("id", id);
 
-            if (user.tenant_id) {
-                query = query.eq("tenant_id", user.tenant_id);
+            if (user.organization_id) {
+                query = query.eq("organization_id", user.organization_id);
             }
 
             const { data, error } = await query.single();
@@ -63,7 +62,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
     }
 
-    // PUT/PATCH - Update checklist (admin/supervisor only)
+    // PUT/PATCH - Update checklist template (admin/supervisor only)
     if (req.method === "PUT" || req.method === "PATCH") {
         if (user.role === "technician") {
             return sendError(res, ApiError.forbidden("Only admins and supervisors can update checklists"));
@@ -72,12 +71,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         try {
             // Check if checklist exists
             let checkQuery = supabase
-                .from("checklists")
-                .select("id, tenant_id")
+                .from("checklist_templates")
+                .select("id, organization_id")
                 .eq("id", id);
 
-            if (user.tenant_id) {
-                checkQuery = checkQuery.eq("tenant_id", user.tenant_id);
+            if (user.organization_id) {
+                checkQuery = checkQuery.eq("organization_id", user.organization_id);
             }
 
             const { data: existing, error: checkError } = await checkQuery.single();
@@ -95,7 +94,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const {
                 name,
                 description,
-                category,
+                target_type,
                 is_active,
                 items // Optional: update items
             } = req.body;
@@ -107,11 +106,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             if (name !== undefined) updateData.name = name;
             if (description !== undefined) updateData.description = description;
-            if (category !== undefined) updateData.category = category;
+            if (target_type !== undefined) updateData.target_type = target_type;
             if (is_active !== undefined) updateData.is_active = is_active;
 
             const { error: updateError } = await supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .update(updateData)
                 .eq("id", id);
 
@@ -123,9 +122,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             if (items && Array.isArray(items)) {
                 // Get existing items
                 const { data: existingItems } = await supabase
-                    .from("checklist_items")
+                    .from("checklist_template_items")
                     .select("id")
-                    .eq("checklist_id", id);
+                    .eq("template_id", id);
 
                 const existingIds = new Set((existingItems || []).map(i => i.id));
                 const newItemIds = new Set(items.filter(i => i.id).map(i => i.id));
@@ -134,7 +133,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 const toDelete = [...existingIds].filter(eid => !newItemIds.has(eid));
                 if (toDelete.length > 0) {
                     await supabase
-                        .from("checklist_items")
+                        .from("checklist_template_items")
                         .delete()
                         .in("id", toDelete);
                 }
@@ -142,25 +141,26 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 // Update or insert items
                 for (const [index, item] of items.entries()) {
                     const itemData = {
-                        checklist_id: id,
+                        template_id: id,
+                        organization_id: user.organization_id,
                         title: item.title,
                         description: item.description,
-                        input_type: item.input_type || "checkbox",
+                        input_type: item.input_type || "boolean",
                         is_required: item.is_required ?? true,
                         order_index: item.order_index ?? index,
-                        images: item.images
+                        metadata: item.metadata ?? {}
                     };
 
                     if (item.id && existingIds.has(item.id)) {
                         // Update existing
                         await supabase
-                            .from("checklist_items")
+                            .from("checklist_template_items")
                             .update(itemData)
                             .eq("id", item.id);
                     } else {
                         // Insert new
                         await supabase
-                            .from("checklist_items")
+                            .from("checklist_template_items")
                             .insert({ ...itemData, created_at: new Date().toISOString() });
                     }
                 }
@@ -168,8 +168,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             // Return updated checklist with items
             const { data: fullChecklist, error: fetchError } = await supabase
-                .from("checklists")
-                .select("*, items:checklist_items(*)")
+                .from("checklist_templates")
+                .select("*, items:checklist_template_items(*)")
                 .eq("id", id)
                 .single();
 
@@ -191,7 +191,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
     }
 
-    // DELETE - Delete checklist (admin/supervisor only)
+    // DELETE - Delete checklist template (admin/supervisor only)
     if (req.method === "DELETE") {
         if (user.role === "technician") {
             return sendError(res, ApiError.forbidden("Only admins and supervisors can delete checklists"));
@@ -200,12 +200,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         try {
             // Check if checklist exists
             let checkQuery = supabase
-                .from("checklists")
-                .select("id, tenant_id")
+                .from("checklist_templates")
+                .select("id, organization_id")
                 .eq("id", id);
 
-            if (user.tenant_id) {
-                checkQuery = checkQuery.eq("tenant_id", user.tenant_id);
+            if (user.organization_id) {
+                checkQuery = checkQuery.eq("organization_id", user.organization_id);
             }
 
             const { data: existing, error: checkError } = await checkQuery.single();
@@ -216,13 +216,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             // Delete items first (cascade may not be set)
             await supabase
-                .from("checklist_items")
+                .from("checklist_template_items")
                 .delete()
-                .eq("checklist_id", id);
+                .eq("template_id", id);
 
             // Delete checklist
             const { error } = await supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .delete()
                 .eq("id", id);
 
@@ -241,3 +241,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(handler);
+
