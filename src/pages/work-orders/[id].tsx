@@ -9,8 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import {
     ArrowLeft, Wrench, Calendar, Clock, User, Play, Pause, CheckCircle2,
     XCircle, FileText, ClipboardList, AlertCircle, ChevronRight, Loader2
@@ -41,6 +39,7 @@ interface WorkOrder {
     machine_id: string | null;
     plant_id: string | null;
     maintenance_plan_id: string | null;
+    organization_id: string | null;
     assigned_to: string | null;
     created_by: string | null;
     work_performed: string | null;
@@ -51,20 +50,23 @@ interface WorkOrder {
 
 interface ChecklistExecution {
     id: string;
-    checklist_id: string;
     checklist_name: string;
     status: string;
     executed_by: string | null;
     executor_name: string | null;
     started_at: string | null;
     completed_at: string | null;
+    assignment_id?: string | null;
+    checklist_id?: string | null;
 }
 
-interface AvailableChecklist {
-    id: string;
+interface PlanChecklistTemplate {
+    template_id: string;
+    execution_order: number;
+    is_required: boolean;
     name: string;
     description: string | null;
-    item_count: number;
+    version: number;
 }
 
 // =============================================================================
@@ -128,10 +130,9 @@ export default function WorkOrderDetailPage() {
 
     // Checklist state
     const [executions, setExecutions] = useState < ChecklistExecution[] > ([]);
-    const [availableChecklists, setAvailableChecklists] = useState < AvailableChecklist[] > ([]);
     const [loadingChecklists, setLoadingChecklists] = useState(false);
-    const [selectedChecklistId, setSelectedChecklistId] = useState < string > ("");
-    const [startingChecklist, setStartingChecklist] = useState(false);
+    const [planTemplates, setPlanTemplates] = useState < PlanChecklistTemplate[] > ([]);
+    const [generatingFromPlan, setGeneratingFromPlan] = useState(false);
 
     const perms = getPermissions({ role: userRole, orgType: null });
     const isAdmin = perms.isAdminOrSupervisor;
@@ -187,8 +188,8 @@ export default function WorkOrderDetailPage() {
             // Load checklist executions linked to this WO
             await loadExecutions(woId);
 
-            // Load available checklists for this machine
-            await loadAvailableChecklists(woData.machine_id, woData.organization_id);
+            // Load checklist templates linked to the maintenance plan (new model)
+            await loadPlanTemplates(woData.maintenance_plan_id);
         } catch (err) {
             console.error("Error:", err);
         } finally {
@@ -197,48 +198,168 @@ export default function WorkOrderDetailPage() {
     };
 
     const loadExecutions = async (woId: string) => {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from("checklist_executions")
-            .select("id, checklist_id, status, overall_status, executed_by, started_at, completed_at, checklists(name), profiles:executed_by(display_name, first_name, last_name)")
+            .select("id, checklist_id, assignment_id, status, overall_status, executed_by, started_at, executed_at, completed_at, profiles:executed_by(display_name, first_name, last_name)")
             .eq("work_order_id", woId)
             .order("started_at", { ascending: false });
 
-        if (data) {
-            setExecutions(data.map((e: any) => ({
-                id: e.id,
-                checklist_id: e.checklist_id,
-                checklist_name: e.checklists?.name || "Checklist",
-                status: e.overall_status || e.status || "unknown",
-                executed_by: e.executed_by,
-                executor_name: e.profiles?.display_name || [e.profiles?.first_name, e.profiles?.last_name].filter(Boolean).join(" ") || null,
-                started_at: e.started_at || e.executed_at,
-                completed_at: e.completed_at,
-            })));
+        if (error) {
+            console.error("Error loading executions:", error);
+            return;
+        }
+        if (!data) return;
+
+        const assignmentIds = Array.from(new Set(data.map((r: any) => r.assignment_id).filter(Boolean)));
+        const checklistIds = Array.from(new Set(data.map((r: any) => r.checklist_id).filter(Boolean)));
+
+        const assignmentNameMap = new Map < string, string> ();
+        if (assignmentIds.length) {
+            const { data: asg } = await supabase
+                .from("checklist_assignments")
+                .select("id, template_id, checklist_templates:template_id(name)")
+                .in("id", assignmentIds as any);
+            (asg || []).forEach((a: any) => assignmentNameMap.set(a.id, a.checklist_templates?.name || "Checklist"));
+        }
+
+        const legacyNameMap = new Map < string, string> ();
+        if (checklistIds.length) {
+            const { data: ch } = await supabase
+                .from("checklists")
+                .select("id, title")
+                .in("id", checklistIds as any);
+            (ch || []).forEach((c: any) => legacyNameMap.set(c.id, c.title || "Checklist"));
+        }
+
+        setExecutions(
+            data.map((e: any) => {
+                const nameFromAssignment = e.assignment_id ? assignmentNameMap.get(e.assignment_id) : undefined;
+                const nameFromLegacy = e.checklist_id ? legacyNameMap.get(e.checklist_id) : undefined;
+                return {
+                    id: e.id,
+                    assignment_id: e.assignment_id,
+                    checklist_id: e.checklist_id,
+                    checklist_name: nameFromAssignment || nameFromLegacy || "Checklist",
+                    status: e.overall_status || e.status || "unknown",
+                    executed_by: e.executed_by,
+                    executor_name:
+                        e.profiles?.display_name ||
+                        [e.profiles?.first_name, e.profiles?.last_name].filter(Boolean).join(" ") ||
+                        null,
+                    started_at: e.started_at || e.executed_at,
+                    completed_at: e.completed_at,
+                };
+            })
+        );
+    };
+
+    const loadPlanTemplates = async (planId: string | null) => {
+        setLoadingChecklists(true);
+        try {
+            if (!planId) {
+                setPlanTemplates([]);
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from("maintenance_plan_checklists")
+                .select("template_id, execution_order, is_required, checklist_templates:template_id(id, name, description, version)")
+                .eq("plan_id", planId)
+                .order("execution_order", { ascending: true });
+
+            if (error) throw error;
+
+            setPlanTemplates(
+                (data || []).map((r: any) => ({
+                    template_id: r.template_id,
+                    execution_order: r.execution_order,
+                    is_required: r.is_required,
+                    name: r.checklist_templates?.name || "Checklist",
+                    description: r.checklist_templates?.description || null,
+                    version: r.checklist_templates?.version ?? 1,
+                }))
+            );
+        } catch (err) {
+            console.error("Error loading plan templates:", err);
+            setPlanTemplates([]);
+        } finally {
+            setLoadingChecklists(false);
         }
     };
 
-    const loadAvailableChecklists = async (machineId: string | null, orgId: string | null) => {
-        setLoadingChecklists(true);
+    const ensureExecutionsFromPlan = async (woRow: WorkOrder) => {
+        if (!woRow.maintenance_plan_id || !woRow.machine_id || !woRow.organization_id) return;
+
+        setGeneratingFromPlan(true);
         try {
-            let query = supabase.from("checklists").select("id, name, description, checklist_items(count)").eq("is_active", true);
-            if (machineId) {
-                // Get checklists for this machine OR generic (no machine)
-                query = query.or(`machine_id.eq.${machineId},machine_id.is.null`);
+            const { data: planRows, error: planErr } = await supabase
+                .from("maintenance_plan_checklists")
+                .select("template_id, execution_order")
+                .eq("plan_id", woRow.maintenance_plan_id)
+                .order("execution_order", { ascending: true });
+            if (planErr) throw planErr;
+            if (!planRows || planRows.length === 0) return;
+
+            for (const pr of planRows as any[]) {
+                // Ensure assignment exists
+                let assignmentId: string | null = null;
+                const { data: existingAsg } = await supabase
+                    .from("checklist_assignments")
+                    .select("id")
+                    .eq("template_id", pr.template_id)
+                    .eq("machine_id", woRow.machine_id)
+                    .eq("is_active", true)
+                    .maybeSingle();
+
+                if (existingAsg?.id) {
+                    assignmentId = existingAsg.id;
+                } else {
+                    const { data: createdAsg, error: asgErr } = await supabase
+                        .from("checklist_assignments")
+                        .insert({
+                            organization_id: woRow.organization_id,
+                            template_id: pr.template_id,
+                            machine_id: woRow.machine_id,
+                            is_active: true,
+                        } as any)
+                        .select("id")
+                        .single();
+                    if (asgErr) throw asgErr;
+                    assignmentId = createdAsg.id;
+                }
+
+                if (!assignmentId) continue;
+
+                // Avoid duplicates
+                const { data: exExisting } = await supabase
+                    .from("checklist_executions")
+                    .select("id")
+                    .eq("work_order_id", woRow.id)
+                    .eq("assignment_id", assignmentId)
+                    .maybeSingle();
+                if (exExisting?.id) continue;
+
+                const { error: exErr } = await supabase
+                    .from("checklist_executions")
+                    .insert({
+                        work_order_id: woRow.id,
+                        machine_id: woRow.machine_id,
+                        organization_id: woRow.organization_id,
+                        assignment_id: assignmentId,
+                        template_version: 1,
+                        status: woRow.status === "in_progress" ? "in_progress" : "scheduled",
+                        started_at: woRow.status === "in_progress" ? new Date().toISOString() : null,
+                        results: {},
+                    } as any);
+                if (exErr) throw exErr;
             }
-            const { data } = await query.order("name");
-            if (data) {
-                setAvailableChecklists(data.map((c: any) => ({
-                    id: c.id,
-                    name: c.name,
-                    description: c.description,
-                    item_count: c.checklist_items?.[0]?.count || 0,
-                })));
-                if (data.length > 0) setSelectedChecklistId(data[0].id);
-            }
-        } catch (err) {
-            console.error("Error loading checklists:", err);
+
+            await loadExecutions(woRow.id);
+        } catch (err: any) {
+            console.error("Error generating executions from plan:", err);
+            toast({ title: "Errore", description: err?.message || "Errore generazione checklist", variant: "destructive" });
         } finally {
-            setLoadingChecklists(false);
+            setGeneratingFromPlan(false);
         }
     };
 
@@ -263,6 +384,11 @@ export default function WorkOrderDetailPage() {
 
             setWo(prev => prev ? { ...prev, ...updates } : null);
             toast({ title: `Stato aggiornato: ${statusConfig[newStatus]?.label || newStatus}` });
+
+            // NEW: when WO starts, generate checklist executions from the maintenance plan
+            if (newStatus === "in_progress") {
+                await ensureExecutionsFromPlan({ ...wo, ...updates } as any);
+            }
 
             // Notify on completion → send to supervisors for approval
             if (newStatus === "completed" && wo) {
@@ -295,52 +421,8 @@ export default function WorkOrderDetailPage() {
         await handleTransition("cancelled");
     };
 
-    // =========================================================================
-    // START CHECKLIST EXECUTION
-    // =========================================================================
-
-    const handleStartChecklist = async () => {
-        if (!wo || !selectedChecklistId) return;
-        setStartingChecklist(true);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Non autenticato");
-
-            // Create execution linked to this work order
-            const { data: execution, error } = await supabase
-                .from("checklist_executions")
-                .insert({
-                    checklist_id: selectedChecklistId,
-                    machine_id: wo.machine_id,
-                    work_order_id: wo.id,
-                    executed_by: user.id,
-                    status: "in_progress",
-                    overall_status: "in_progress",
-                    started_at: new Date().toISOString(),
-                    results: {},
-                })
-                .select("id")
-                .single();
-
-            if (error) throw error;
-
-            // If WO is still scheduled/assigned, auto-transition to in_progress
-            if (["draft", "scheduled", "assigned"].includes(wo.status)) {
-                await supabase.from("work_orders").update({
-                    status: "in_progress",
-                    started_at: wo.started_at || new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                }).eq("id", wo.id);
-                setWo(prev => prev ? { ...prev, status: "in_progress", started_at: prev.started_at || new Date().toISOString() } : null);
-            }
-
-            // Navigate to checklist execution
-            router.push(`/checklist/${execution.id}`);
-        } catch (err: any) {
-            toast({ title: "Errore", description: err?.message, variant: "destructive" });
-        } finally {
-            setStartingChecklist(false);
-        }
+    const openExecution = (executionId: string) => {
+        router.push(`/checklist/execute?id=${executionId}`);
     };
 
     // =========================================================================
@@ -476,44 +558,55 @@ export default function WorkOrderDetailPage() {
                     {/* TAB: CHECKLIST                                          */}
                     {/* ====================================================== */}
                     <TabsContent value="checklist" className="space-y-4 mt-4">
-                        {/* Start new checklist */}
-                        {!isClosed && availableChecklists.length > 0 && (
-                            <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                                <CardHeader><CardTitle className="text-base">Avvia Checklist</CardTitle></CardHeader>
-                                <CardContent>
-                                    <div className="flex flex-col sm:flex-row gap-3">
-                                        <Select value={selectedChecklistId} onValueChange={setSelectedChecklistId}>
-                                            <SelectTrigger className="flex-1 bg-background border-border rounded-xl">
-                                                <SelectValue placeholder="Seleziona checklist..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {availableChecklists.map(cl => (
-                                                    <SelectItem key={cl.id} value={cl.id}>
-                                                        {cl.name} ({cl.item_count} items)
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button onClick={handleStartChecklist} disabled={!selectedChecklistId || startingChecklist}
-                                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-                                            {startingChecklist ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-                                            Esegui
-                                        </Button>
-                                    </div>
-                                    {availableChecklists.find(c => c.id === selectedChecklistId)?.description && (
-                                        <p className="text-sm text-muted-foreground mt-2">
-                                            {availableChecklists.find(c => c.id === selectedChecklistId)?.description}
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
+                        {/* Plan-linked checklists (new model) */}
+                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-base">Checklist del piano</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {!wo.maintenance_plan_id && (
+                                    <p className="text-sm text-muted-foreground">Questo ordine di lavoro non è collegato a un piano manutenzione.</p>
+                                )}
 
-                        {isClosed && availableChecklists.length > 0 && executions.length === 0 && (
-                            <Card className="rounded-2xl border-0 bg-muted/50 shadow-sm p-6 text-center">
-                                <p className="text-muted-foreground">Nessuna checklist eseguita per questo ordine di lavoro.</p>
-                            </Card>
-                        )}
+                                {wo.maintenance_plan_id && loadingChecklists && (
+                                    <p className="text-sm text-muted-foreground">Caricamento checklist...</p>
+                                )}
+
+                                {wo.maintenance_plan_id && !loadingChecklists && planTemplates.length === 0 && (
+                                    <p className="text-sm text-muted-foreground">Nessuna checklist collegata a questo piano.</p>
+                                )}
+
+                                {planTemplates.length > 0 && (
+                                    <div className="space-y-2">
+                                        {planTemplates.map((tpl) => (
+                                            <div key={tpl.template_id} className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border bg-background">
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-foreground truncate">{tpl.name}</p>
+                                                    {tpl.description && <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{tpl.description}</p>}
+                                                </div>
+                                                <Badge variant="outline" className="rounded-full text-xs whitespace-nowrap">
+                                                    {tpl.is_required ? "Obbligatoria" : "Opzionale"}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {wo.maintenance_plan_id && planTemplates.length > 0 && executions.length === 0 && !isClosed && (
+                                    <div className="pt-1">
+                                        <Button
+                                            onClick={() => ensureExecutionsFromPlan(wo)}
+                                            disabled={generatingFromPlan}
+                                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                        >
+                                            {generatingFromPlan ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ClipboardList className="w-4 h-4 mr-2" />}
+                                            Genera checklist per questo WO
+                                        </Button>
+                                        <p className="text-xs text-muted-foreground mt-2">Consiglio: le checklist vengono generate automaticamente quando metti il WO in “In Corso”.</p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
 
                         {/* Execution History */}
                         {executions.length > 0 && (
@@ -524,7 +617,7 @@ export default function WorkOrderDetailPage() {
                                     return (
                                         <Card key={exec.id}
                                             className="rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group"
-                                            onClick={() => router.push(`/checklist/${exec.id}`)}>
+                                            onClick={() => openExecution(exec.id)}>
                                             <CardContent className="p-4 flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isComplete ? "bg-green-50 dark:bg-green-500/10" : "bg-yellow-50 dark:bg-yellow-500/10"}`}>
@@ -557,11 +650,11 @@ export default function WorkOrderDetailPage() {
                             </div>
                         )}
 
-                        {executions.length === 0 && !isClosed && availableChecklists.length === 0 && (
+                        {executions.length === 0 && !isClosed && (!wo.maintenance_plan_id || planTemplates.length === 0) && (
                             <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
                                 <ClipboardList className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
                                 <h3 className="text-xl font-bold text-foreground mb-2">Nessuna checklist disponibile</h3>
-                                <p className="text-muted-foreground">Crea una checklist per questa macchina dalla sezione Checklist</p>
+                                <p className="text-muted-foreground">Collega una checklist al piano manutenzione oppure crea un template dalla sezione Checklist.</p>
                             </Card>
                         )}
                     </TabsContent>
@@ -583,4 +676,5 @@ function InfoRow({ label, value, icon }: { label: string; value: string | null; 
         </div>
     );
 }
+
 
