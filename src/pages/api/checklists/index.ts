@@ -14,14 +14,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const supabase = getSupabaseAdmin();
     const { user } = req;
 
-    // GET - List checklists with pagination and filters
+    // GET - List checklist templates with pagination and filters
     if (req.method === "GET") {
         try {
             const {
                 page = "1",
                 limit = "20",
                 search,
-                category,
                 is_active,
                 include_items = "true",
                 sort = "created_at",
@@ -34,26 +33,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             // Build query - optionally include items
             const selectClause = include_items === "true"
-                ? "*, items:checklist_items(id, title, description, input_type, is_required, order_index, images)"
+                ? "*, items:checklist_template_items(id, title, description, input_type, is_required, order_index, metadata, created_at)"
                 : "*";
 
             let query = supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .select(selectClause, { count: "exact" });
 
-            // Apply tenant filter
-            if (user.tenant_id) {
-                query = query.eq("tenant_id", user.tenant_id);
+            // Apply org filter (multi-tenant)
+            if (user.organization_id) {
+                query = query.eq("organization_id", user.organization_id);
             }
 
             // Apply search filter
             if (search) {
                 query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
-            }
-
-            // Apply category filter
-            if (category) {
-                query = query.eq("category", category);
             }
 
             // Apply active filter
@@ -62,8 +56,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
 
             // Apply sorting
-            const validSortFields = ["created_at", "updated_at", "name", "category"];
-            const sortField = validSortFields.includes(sort as string) ? sort as string : "created_at";
+            const validSortFields = ["created_at", "name"];
+            const sortField = validSortFields.includes(sort as string) ? (sort as string) : "created_at";
             const sortOrder = order === "asc" ? true : false;
 
             query = query.order(sortField, { ascending: sortOrder });
@@ -78,13 +72,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
 
             // Sort items by order_index if included
-            const processedData = data?.map(checklist => {
-                if (checklist.items && Array.isArray(checklist.items)) {
-                    checklist.items.sort((a: { order_index: number }, b: { order_index: number }) =>
+            const processedData = data?.map((tpl: any) => {
+                if (tpl.items && Array.isArray(tpl.items)) {
+                    tpl.items.sort((a: { order_index: number }, b: { order_index: number }) =>
                         (a.order_index || 0) - (b.order_index || 0)
                     );
                 }
-                return checklist;
+                return tpl;
             });
 
             return sendPaginated(res, processedData || [], count || 0, pageNum, limitNum);
@@ -94,7 +88,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
     }
 
-    // POST - Create new checklist (admin/supervisor only)
+    // POST - Create new checklist template (admin/supervisor only)
     if (req.method === "POST") {
         // Check permissions
         if (user.role === "technician") {
@@ -111,26 +105,24 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const {
                 name,
                 description,
-                category,
+                target_type = "machine",
                 is_active = true,
-                items // Optional: create checklist with items
+                items // Optional: create template with items
             } = req.body;
 
-            // Create checklist
-            const checklistData = {
+            const templateData = {
                 name,
                 description,
-                category,
+                target_type,
+                version: 1,
                 is_active,
-                tenant_id: user.tenant_id,
-                created_by: user.id,
+                organization_id: user.organization_id,
                 created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
             };
 
-            const { data: checklist, error: createError } = await supabase
-                .from("checklists")
-                .insert(checklistData)
+            const { data: template, error: createError } = await supabase
+                .from("checklist_templates")
+                .insert(templateData)
                 .select()
                 .single();
 
@@ -141,39 +133,40 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             // Create items if provided
             if (items && Array.isArray(items) && items.length > 0) {
                 const itemsToInsert = items.map((item, index) => ({
-                    checklist_id: checklist.id,
+                    template_id: template.id,
+                    organization_id: user.organization_id,
                     title: item.title,
                     description: item.description,
-                    input_type: item.input_type || "checkbox",
+                    input_type: item.input_type || "boolean",
                     is_required: item.is_required ?? true,
                     order_index: item.order_index ?? index,
-                    images: item.images,
-                    created_at: new Date().toISOString()
+                    metadata: item.metadata ?? {},
+                    created_at: new Date().toISOString(),
                 }));
 
                 const { error: itemsError } = await supabase
-                    .from("checklist_items")
+                    .from("checklist_template_items")
                     .insert(itemsToInsert);
 
                 if (itemsError) {
-                    // Rollback: delete the checklist
-                    await supabase.from("checklists").delete().eq("id", checklist.id);
+                    // Rollback: delete template
+                    await supabase.from("checklist_templates").delete().eq("id", template.id);
                     throw handleSupabaseError(itemsError);
                 }
             }
 
-            // Return checklist with items
-            const { data: fullChecklist, error: fetchError } = await supabase
-                .from("checklists")
-                .select("*, items:checklist_items(*)")
-                .eq("id", checklist.id)
+            // Return template with items
+            const { data: fullTemplate, error: fetchError } = await supabase
+                .from("checklist_templates")
+                .select("*, items:checklist_template_items(*)")
+                .eq("id", template.id)
                 .single();
 
             if (fetchError) {
                 throw handleSupabaseError(fetchError);
             }
 
-            return sendSuccess(res, fullChecklist, 201);
+            return sendSuccess(res, fullTemplate, 201);
 
         } catch (error) {
             return sendError(res, error as Error);
@@ -185,3 +178,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(handler);
+
