@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { createTemplate, addTemplateItems, ChecklistInputType } from "@/services/checklistService";
+import { addTemplateItems, ChecklistInputType, createTemplate } from "@/services/checklistService";
 
 interface TemplateItemDraft {
     id: string;
@@ -18,7 +18,7 @@ interface TemplateItemDraft {
     is_required: boolean;
     order_index: number;
     input_type: ChecklistInputType;
-    requires_photo: boolean; // finisce in metadata
+    requires_photo: boolean; // stored in metadata
 }
 
 export default function NewChecklistTemplate() {
@@ -40,7 +40,7 @@ export default function NewChecklistTemplate() {
     ]);
 
     const addItem = () => {
-        setItems(prev => [
+        setItems((prev) => [
             ...prev,
             {
                 id: crypto.randomUUID(),
@@ -54,10 +54,14 @@ export default function NewChecklistTemplate() {
         ]);
     };
 
-    const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
+    const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
-    const updateItem = <K extends keyof TemplateItemDraft>(id: string, field: K, value: TemplateItemDraft[K]) => {
-        setItems(prev => prev.map(i => (i.id === id ? { ...i, [field]: value } : i)));
+    const updateItem = <K extends keyof TemplateItemDraft>(
+        id: string,
+        field: K,
+        value: TemplateItemDraft[K]
+    ) => {
+        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -72,23 +76,23 @@ export default function NewChecklistTemplate() {
 
             const validItems = items
                 .map((it, idx) => ({ ...it, order_index: idx }))
-                .filter(it => it.title.trim().length > 0);
+                .filter((it) => it.title.trim().length > 0);
 
             if (validItems.length === 0) {
                 toast({ title: "Errore", description: "Aggiungi almeno un elemento", variant: "destructive" });
                 return;
             }
 
-            // 1) crea template
+            // 1) create template
             const tpl = await createTemplate({
                 name: formData.title.trim(),
                 description: formData.description.trim() || null,
                 target_type: "machine",
             });
 
-            // 2) crea items
+            // 2) create items
             await addTemplateItems(
-                validItems.map(it => ({
+                validItems.map((it) => ({
                     template_id: tpl.id,
                     title: it.title.trim(),
                     description: it.description.trim() || null,
@@ -102,8 +106,12 @@ export default function NewChecklistTemplate() {
             toast({ title: "Successo", description: "Template creato con successo" });
             router.push("/checklists");
         } catch (error: any) {
-            console.error(error);
-            toast({ title: "Errore", description: error.message || "Errore creazione template", variant: "destructive" });
+            console.error("Error creating checklist template:", error);
+            toast({
+                title: "Errore",
+                description: error.message || "Errore durante la creazione del template",
+                variant: "destructive",
+            });
         } finally {
             setLoading(false);
         }
@@ -128,7 +136,9 @@ export default function NewChecklistTemplate() {
                     <CardContent className="space-y-6">
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-2">
-                                <Label htmlFor="title" className="text-slate-200">Titolo *</Label>
+                                <Label htmlFor="title" className="text-slate-200">
+                                    Titolo *
+                                </Label>
                                 <Input
                                     id="title"
                                     value={formData.title}
@@ -140,7 +150,9 @@ export default function NewChecklistTemplate() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="description" className="text-slate-200">Descrizione</Label>
+                                <Label htmlFor="description" className="text-slate-200">
+                                    Descrizione
+                                </Label>
                                 <Textarea
                                     id="description"
                                     value={formData.description}
@@ -168,7 +180,10 @@ export default function NewChecklistTemplate() {
 
                                 <div className="space-y-3">
                                     {items.map((item) => (
-                                        <div key={item.id} className="p-4 border border-slate-700 rounded-lg bg-slate-900/50 space-y-3">
+                                        <div
+                                            key={item.id}
+                                            className="p-4 border border-slate-700 rounded-lg bg-slate-900/50 space-y-3"
+                                        >
                                             <div className="flex justify-between items-start gap-3">
                                                 <div className="flex-1 space-y-3">
                                                     <div>
@@ -231,6 +246,7 @@ export default function NewChecklistTemplate() {
                                                     size="icon"
                                                     onClick={() => removeItem(item.id)}
                                                     className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                                                    title="Rimuovi"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
@@ -255,3 +271,4 @@ export default function NewChecklistTemplate() {
         </MainLayout>
     );
 }
+
