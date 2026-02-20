@@ -12,7 +12,7 @@ import { validateChecklistItem, validators } from "@/lib/validators";
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const supabase = getSupabaseAdmin();
     const { user } = req;
-    const { id } = req.query; // checklist ID
+    const { id } = req.query; // template ID
 
     // Validate checklist ID
     if (!id || typeof id !== "string") {
@@ -24,22 +24,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return sendError(res, ApiError.badRequest(uuidError.message));
     }
 
-    // Verify checklist exists and user has access
+    // Verify template exists and user has access
     async function verifyChecklistAccess(): Promise<boolean> {
         let query = supabase
-            .from("checklists")
-            .select("id, tenant_id")
+            .from("checklist_templates")
+            .select("id, organization_id")
             .eq("id", id);
 
-        if (user.tenant_id) {
-            query = query.eq("tenant_id", user.tenant_id);
+        if (user.organization_id) {
+            query = query.eq("organization_id", user.organization_id);
         }
 
         const { data, error } = await query.single();
         return !error && !!data;
     }
 
-    // GET - List items for a checklist
+    // GET - List items for a template
     if (req.method === "GET") {
         try {
             if (!(await verifyChecklistAccess())) {
@@ -47,9 +47,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
 
             const { data, error } = await supabase
-                .from("checklist_items")
+                .from("checklist_template_items")
                 .select("*")
-                .eq("checklist_id", id)
+                .eq("template_id", id)
                 .order("order_index", { ascending: true });
 
             if (error) {
@@ -63,7 +63,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
     }
 
-    // POST - Add item to checklist (admin/supervisor only)
+    // POST - Add item to template (admin/supervisor only)
     if (req.method === "POST") {
         if (user.role === "technician") {
             return sendError(res, ApiError.forbidden("Only admins and supervisors can add checklist items"));
@@ -74,8 +74,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 throw ApiError.notFound("Checklist not found");
             }
 
-            // Validate input
-            const itemData = { ...req.body, checklist_id: id };
+            // Validate input (validator may still be legacy; we keep shape minimal)
+            const itemData = { ...req.body, template_id: id };
             const validation = validateChecklistItem(itemData);
             if (!validation.valid) {
                 return sendValidationError(res, validation);
@@ -84,19 +84,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const {
                 title,
                 description,
-                input_type = "checkbox",
+                input_type = "boolean",
                 is_required = true,
                 order_index,
-                images
+                metadata
             } = req.body;
 
             // Get max order_index if not provided
             let finalOrderIndex = order_index;
             if (finalOrderIndex === undefined) {
                 const { data: maxItem } = await supabase
-                    .from("checklist_items")
+                    .from("checklist_template_items")
                     .select("order_index")
-                    .eq("checklist_id", id)
+                    .eq("template_id", id)
                     .order("order_index", { ascending: false })
                     .limit(1)
                     .single();
@@ -105,18 +105,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
 
             const insertData = {
-                checklist_id: id,
+                template_id: id,
+                organization_id: user.organization_id,
                 title,
                 description,
                 input_type,
                 is_required,
                 order_index: finalOrderIndex,
-                images,
+                metadata: metadata ?? {},
                 created_at: new Date().toISOString()
             };
 
             const { data, error } = await supabase
-                .from("checklist_items")
+                .from("checklist_template_items")
                 .insert(insertData)
                 .select()
                 .single();
@@ -125,9 +126,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 throw handleSupabaseError(error);
             }
 
-            // Update checklist updated_at
+            // Update template updated_at (if column exists)
             await supabase
-                .from("checklists")
+                .from("checklist_templates")
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", id);
 
@@ -162,17 +163,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 }
 
                 await supabase
-                    .from("checklist_items")
+                    .from("checklist_template_items")
                     .update({ order_index: item.order_index })
                     .eq("id", item.id)
-                    .eq("checklist_id", id);
+                    .eq("template_id", id);
             }
 
             // Get updated items
             const { data, error } = await supabase
-                .from("checklist_items")
+                .from("checklist_template_items")
                 .select("*")
-                .eq("checklist_id", id)
+                .eq("template_id", id)
                 .order("order_index", { ascending: true });
 
             if (error) {
@@ -190,3 +191,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(handler);
+
