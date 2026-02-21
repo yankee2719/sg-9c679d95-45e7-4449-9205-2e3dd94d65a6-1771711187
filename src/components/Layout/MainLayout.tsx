@@ -118,12 +118,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
     };
 
-    // Translation helper: if the translation is missing, some i18n implementations
-    // return the key itself (e.g. "nav.workOrders"). In that case we want a human
-    // fallback label instead of showing the raw key.
+    // Translation helper: if a key is missing, some i18n setups return the key itself (e.g. "nav.workOrders").
+    // This ensures we always show a human fallback.
     const tr = (key: string, fallback: string) => {
         const value = t(key);
-        return !value || value === key ? fallback : value;
+        if (!value || value === key || value.startsWith("nav.")) return fallback;
+        return value;
     };
 
     // Navigation items based on role
