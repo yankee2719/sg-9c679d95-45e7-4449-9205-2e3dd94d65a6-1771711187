@@ -7,7 +7,7 @@ export default function Document() {
       <Head>
         <SEOElements />
       </Head>
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning>
         <script
           dangerouslySetInnerHTML={{
             __html: `
