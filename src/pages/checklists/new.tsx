@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,14 @@ interface TemplateItemDraft {
 export default function NewChecklistTemplate() {
     const router = useRouter();
     const { toast } = useToast();
+    const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({ title: "", description: "" });
+    const [itemCounter, setItemCounter] = useState(1);
 
     const [items, setItems] = useState < TemplateItemDraft[] > ([
         {
-            id: crypto.randomUUID(),
+            id: "item-0",
             title: "",
             description: "",
             is_required: true,
@@ -39,19 +41,25 @@ export default function NewChecklistTemplate() {
         },
     ]);
 
+    useEffect(() => { setMounted(true); }, []);
+
     const addItem = () => {
-        setItems((prev) => [
-            ...prev,
-            {
-                id: crypto.randomUUID(),
-                title: "",
-                description: "",
-                is_required: true,
-                order_index: prev.length,
-                input_type: "boolean",
-                requires_photo: false,
-            },
-        ]);
+        setItemCounter((c) => {
+            const newId = `item-${c}`;
+            setItems((prev) => [
+                ...prev,
+                {
+                    id: newId,
+                    title: "",
+                    description: "",
+                    is_required: true,
+                    order_index: prev.length,
+                    input_type: "boolean",
+                    requires_photo: false,
+                },
+            ]);
+            return c + 1;
+        });
     };
 
     const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
@@ -116,6 +124,8 @@ export default function NewChecklistTemplate() {
             setLoading(false);
         }
     };
+
+    if (!mounted) return null;
 
     return (
         <MainLayout>
