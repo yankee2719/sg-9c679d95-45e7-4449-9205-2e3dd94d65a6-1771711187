@@ -38,7 +38,7 @@ export async function getUserContext(): Promise<UserContext | null> {
             .from("organizations")
             .select("type")
             .eq("id", orgId)
-            .single();
+            .maybeSingle();
 
         if (org?.type) orgType = org.type;
     }
