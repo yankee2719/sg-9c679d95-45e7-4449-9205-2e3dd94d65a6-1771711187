@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, ArrowLeft, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { addTemplateItems, ChecklistInputType, createTemplate } from "@/services/checklistService";
+import { ChecklistInputType } from "@/services/checklistService";
 
 interface TemplateItemDraft {
     id: string;
@@ -36,7 +36,7 @@ export default function NewChecklistTemplate() {
         equipmentType: "",
         description: "",
     });
-    const [items, setItems] = useState<TemplateItemDraft[]>([
+    const [items, setItems] = useState < TemplateItemDraft[] > ([
         { id: "item-0", title: "", description: "", is_required: true, order_index: 0, input_type: "boolean", requires_photo: false },
     ]);
 
@@ -73,31 +73,34 @@ export default function NewChecklistTemplate() {
                 return;
             }
 
-            const tpl = await createTemplate({
-                name: formData.title.trim(),
-                description: formData.description.trim() || null,
-                target_type: "machine",
-            });
+            // Get auth token for API call
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error("Sessione non trovata. Effettua il login.");
 
-            // Update with extra fields
-            if (formData.category || formData.equipmentType) {
-                await supabase.from("checklist_templates").update({
+            const response = await fetch("/api/checklists/templates/create", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    name: formData.title.trim(),
+                    description: formData.description.trim() || null,
+                    target_type: "machine",
                     category: formData.category.trim() || null,
                     equipment_type: formData.equipmentType.trim() || null,
-                }).eq("id", tpl.id);
-            }
+                    items: validItems.map((it) => ({
+                        title: it.title.trim(),
+                        description: it.description.trim() || null,
+                        input_type: it.input_type,
+                        is_required: it.is_required,
+                        requires_photo: it.requires_photo,
+                    })),
+                }),
+            });
 
-            await addTemplateItems(
-                validItems.map((it) => ({
-                    template_id: tpl.id,
-                    title: it.title.trim(),
-                    description: it.description.trim() || null,
-                    input_type: it.input_type,
-                    is_required: it.is_required,
-                    order_index: it.order_index,
-                    metadata: { requiresPhoto: it.requires_photo },
-                }))
-            );
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Errore durante la creazione");
 
             toast({ title: "Successo", description: "Checklist creata con successo" });
             router.push("/checklists");
