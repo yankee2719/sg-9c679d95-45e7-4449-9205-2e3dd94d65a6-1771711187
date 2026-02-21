@@ -1,4 +1,4 @@
-/// src/pages/equipment/new.tsx
+// src/pages/equipment/new.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
