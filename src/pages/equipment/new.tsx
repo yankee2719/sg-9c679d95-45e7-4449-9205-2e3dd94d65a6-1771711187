@@ -1,4 +1,4 @@
-// src/pages/equipment/new.tsx
+/// src/pages/equipment/new.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,6 +54,7 @@ export default function NewEquipmentPage() {
     const router = useRouter();
     const { toast } = useToast();
 
+    const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [userRole, setUserRole] = useState < string > ("technician");
@@ -79,6 +80,7 @@ export default function NewEquipmentPage() {
 
     useEffect(() => {
         const init = async () => {
+            setMounted(true);
             try {
                 const ctx: any = await getUserContext();
                 if (!ctx) { router.push("/login"); return; }
@@ -196,7 +198,7 @@ export default function NewEquipmentPage() {
         }
     };
 
-    if (loading) return null;
+    if (!mounted || loading) return null;
 
     return (
         <MainLayout userRole={userRole as any}>
