@@ -1,30 +1,36 @@
-throwOnHydrationMismatch
-node_modules / react - dom / cjs / react - dom.development.js(12507: 9)
-tryToClaimNextHydratableInstance
-node_modules / react - dom / cjs / react - dom.development.js(12535: 7)
-updateHostComponent
-node_modules / react - dom / cjs / react - dom.development.js(19931: 5)
-beginWork
-node_modules / react - dom / cjs / react - dom.development.js(21657: 14)
-HTMLUnknownElement.callCallback
-node_modules / react - dom / cjs / react - dom.development.js(4164: 14)
-Object.invokeGuardedCallbackDev
-node_modules / react - dom / cjs / react - dom.development.js(4213: 16)
-invokeGuardedCallback
-node_modules / react - dom / cjs / react - dom.development.js(4277: 31)
-beginWork$1
-node_modules / react - dom / cjs / react - dom.development.js(27490: 7)
-performUnitOfWork
-node_modules / react - dom / cjs / react - dom.development.js(26596: 12)
-workLoopSync
-node_modules / react - dom / cjs / react - dom.development.js(26505: 5)
-renderRootSync
-node_modules / react - dom / cjs / react - dom.development.js(26473: 7)
-performConcurrentWorkOnRoot
-node_modules / react - dom / cjs / react - dom.development.js(25777: 74)
-workLoop
-node_modules / scheduler / cjs / scheduler.development.js(266: 34)
-flushWork
-node_modules / scheduler / cjs / scheduler.development.js(239: 14)
-MessagePort.performWorkUntilDeadline
-node_modules / scheduler / cjs / scheduler.development.js(533: 21)
+import { Toaster } from "@/components/ui/toaster";
+import "@/styles/globals.css";
+import type { AppProps } from "next/app";
+import Head from "next/head";
+import { ThemeProvider } from "@/contexts/ThemeProvider";
+import { LanguageProvider } from "@/contexts/LanguageContext";
+import { PWAProvider } from "@/contexts/PWAProvider";
+import dynamic from "next/dynamic";
+
+// Disable SSR for the entire app — all pages require auth and use
+// browser APIs (localStorage, supabase, etc.) that cause hydration mismatches.
+function App({ Component, pageProps }: AppProps) {
+  return (
+    <>
+      <Head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#FF6B35" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="MACHINA" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+      </Head>
+      <ThemeProvider>
+        <LanguageProvider>
+          <PWAProvider>
+            <Component {...pageProps} />
+            <Toaster />
+          </PWAProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </>
+  );
+}
+
+// Export with SSR disabled — eliminates all hydration mismatch errors
+export default dynamic(() => Promise.resolve(App), { ssr: false });
