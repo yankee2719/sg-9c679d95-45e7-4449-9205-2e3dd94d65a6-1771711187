@@ -86,7 +86,18 @@ export default function NewEquipmentPage() {
                 if (!ctx) { router.push("/login"); return; }
                 setUserRole(ctx.role ?? "technician");
 
-                if (ctx.orgType === "manufacturer") {
+                // orgType may be null if RLS blocks — do a direct fallback query
+                let orgType = ctx.orgType;
+                if (!orgType && ctx.orgId) {
+                    const { data: orgRow } = await supabase
+                        .from("organizations")
+                        .select("type")
+                        .eq("id", ctx.orgId)
+                        .maybeSingle();
+                    orgType = orgRow?.type ?? null;
+                }
+
+                if (orgType === "manufacturer") {
                     setIsManufacturer(true);
                     const { data, error } = await supabase
                         .from("organizations")
@@ -94,7 +105,7 @@ export default function NewEquipmentPage() {
                         .eq("manufacturer_org_id", ctx.orgId)
                         .eq("type", "customer")
                         .order("name", { ascending: true });
-                    if (error) throw error;
+                    if (error) console.error("customers load:", error);
                     setCustomers((data ?? []) as CustomerOrg[]);
                 } else {
                     const { data, error } = await supabase
