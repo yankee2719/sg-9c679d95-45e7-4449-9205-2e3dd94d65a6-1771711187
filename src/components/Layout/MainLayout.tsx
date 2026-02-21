@@ -31,7 +31,6 @@ import {
     ShieldCheck,
     CalendarClock,
     Building2,
-    Factory,
     Package,
     ClipboardCheck,
 } from "lucide-react";
@@ -47,6 +46,11 @@ interface MainLayoutProps {
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
     const router = useRouter();
     const { t } = useLanguage();
+    // Translation helper: if i18n key is missing, return the provided fallback
+    const tr = (key: string, fallback: string) => {
+        const value = t(key);
+        return !value || value === key ? fallback : value;
+    };
     const [user, setUser] = useState < { id: string; email?: string } | null > (null);
     const [profile, setProfile] = useState < { full_name?: string; role?: string } | null > (null);
     const [orgType, setOrgType] = useState < string | null > (null);
@@ -119,50 +123,66 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     };
 
     // Navigation items based on role
-    const getNavigationItems = () => {
-        const currentRole = profile?.role || userRole;
-
-        const baseNav = [
-            { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.equipment"), href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.workOrders") || "Ordini di Lavoro", href: "/work-orders", icon: ClipboardCheck, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
-            { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
-            { name: "Compliance", href: "/compliance", icon: ShieldCheck, roles: ["admin", "supervisor"] },
-        ];
-
-        return baseNav.filter(item => item.roles.includes(currentRole));
+    const resolveRole = (): UserRole => {
+        const raw = (profile?.role as UserRole) || userRole;
+        return raw === "admin" || raw === "supervisor" || raw === "technician" ? raw : "technician";
     };
 
-    const navigation = getNavigationItems();
+    type NavItemConfig = {
+        labelKey?: string;
+        fallback: string;
+        href: string;
+        icon: any;
+        roles: UserRole[];
+        orgTypes?: Array<"manufacturer" | "customer">;
+    };
 
-    // Manufacturer-specific nav
-    const manufacturerNavigation = [
-        { name: "Clienti", href: "/customers", icon: Building2 },
-        { name: "Assegnazioni", href: "/assignments", icon: Package },
-        { name: t("nav.users"), href: "/admin/users", icon: Users },
+    const buildNav = (items: NavItemConfig[], role: UserRole, type: string | null) => {
+        const org = (type === "manufacturer" || type === "customer") ? type : null;
+        return items
+            .filter((item) => item.roles.includes(role))
+            .filter((item) => !item.orgTypes || (org ? item.orgTypes.includes(org) : false))
+            .map((item) => ({
+                name: item.labelKey ? tr(item.labelKey, item.fallback) : item.fallback,
+                href: item.href,
+                icon: item.icon,
+            }));
+    };
+
+    const currentRole = resolveRole();
+
+    const baseNavConfig: NavItemConfig[] = [
+        { labelKey: "nav.dashboard", fallback: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
+        { labelKey: "nav.equipment", fallback: "Macchine", href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
+        { labelKey: "nav.maintenance", fallback: "Manutenzione", href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
+        { labelKey: "nav.workOrders", fallback: "Ordini di lavoro", href: "/work-orders", icon: ClipboardCheck, roles: ["admin", "supervisor", "technician"] },
+        { labelKey: "nav.checklists", fallback: "Checklist", href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
+        { labelKey: "nav.scanner", fallback: "Scanner", href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
+        { labelKey: "nav.analytics", fallback: "Analytics", href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
+        { fallback: "Compliance", href: "/compliance", icon: ShieldCheck, roles: ["admin", "supervisor"] },
     ];
 
-    // Customer-specific admin nav
-    const customerAdminNavigation = [
-        { name: "Stabilimenti", href: "/plants", icon: Building2 },
-        { name: "Costruttori", href: "/manufacturers", icon: Factory },
-        { name: t("nav.users"), href: "/admin/users", icon: Users },
+    const adminNavConfig: NavItemConfig[] = [
+        // Manufacturer org
+        { fallback: "Clienti", href: "/customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { fallback: "Assegnazioni", href: "/assignments", icon: Package, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+
+        // Customer org
+        { fallback: "Stabilimenti", href: "/plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
+
+        // Shared
+        { labelKey: "nav.users", fallback: "Utenti", href: "/admin/users", icon: Users, roles: ["admin", "supervisor"], orgTypes: ["manufacturer", "customer"] },
     ];
 
-    const adminNavigation = orgType === "manufacturer" ? manufacturerNavigation : customerAdminNavigation;
+    const navigation = buildNav(baseNavConfig, currentRole, orgType);
 
-    const isActive = (href: string) => {
+    const adminNavigation = buildNav(adminNavConfig, currentRole, orgType);
+const isActive = (href: string) => {
         if (href === "/dashboard") return router.pathname === "/dashboard";
         return router.pathname.startsWith(href);
     };
 
-    const canAccessAdmin = () => {
-        const currentRole = profile?.role || userRole;
-        return currentRole === "admin" || currentRole === "supervisor";
-    };
+    const canAccessAdmin = () => currentRole === "admin" || currentRole === "supervisor";
 
     const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
         <nav className={`flex ${mobile ? "flex-col" : "flex-col"} gap-1`}>
