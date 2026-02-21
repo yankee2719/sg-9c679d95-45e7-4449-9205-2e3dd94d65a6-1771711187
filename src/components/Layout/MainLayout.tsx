@@ -413,4 +413,3 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         </div>
     );
 }
-
