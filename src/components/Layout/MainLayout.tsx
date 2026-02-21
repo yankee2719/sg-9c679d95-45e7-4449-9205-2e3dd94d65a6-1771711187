@@ -409,4 +409,5 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </main>
         </div>
     );
+    
 }
