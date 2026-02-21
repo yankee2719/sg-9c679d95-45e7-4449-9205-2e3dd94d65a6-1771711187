@@ -47,6 +47,13 @@ interface MainLayoutProps {
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
     const router = useRouter();
     const { t } = useLanguage();
+
+    const tr = (key: string, fallback: string) => {
+        const value = t(key);
+        // If translation is missing, many i18n setups return the key itself
+        if (!value || value === key || value.startsWith("nav.")) return fallback;
+        return value;
+    };
     const [user, setUser] = useState < { id: string; email?: string } | null > (null);
     const [profile, setProfile] = useState < { full_name?: string; role?: string } | null > (null);
     const [orgType, setOrgType] = useState < string | null > (null);
@@ -118,14 +125,6 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
     };
 
-    // Translation helper: if a key is missing, some i18n setups return the key itself (e.g. "nav.workOrders").
-    // This ensures we always show a human fallback.
-    const tr = (key: string, fallback: string) => {
-        const value = t(key);
-        if (!value || value === key || value.startsWith("nav.")) return fallback;
-        return value;
-    };
-
     // Navigation items based on role
     const getNavigationItems = () => {
         const currentRole = profile?.role || userRole;
@@ -156,12 +155,16 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     // Customer-specific admin nav
     const customerAdminNavigation = [
         { name: "Stabilimenti", href: "/plants", icon: Building2 },
-        // IMPORTANT: "Costruttori" must NOT be visible for customer orgs.
-        // That section is only relevant for manufacturer orgs.
+
         { name: tr("nav.users", "Utenti"), href: "/admin/users", icon: Users },
     ];
 
-    const adminNavigation = orgType === "manufacturer" ? manufacturerNavigation : customerAdminNavigation;
+    const adminNavigation =
+        orgType === "manufacturer"
+            ? manufacturerNavigation
+            : orgType === "customer"
+                ? customerAdminNavigation
+                : [];
 
     const isActive = (href: string) => {
         if (href === "/dashboard") return router.pathname === "/dashboard";
@@ -193,7 +196,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 );
             })}
 
-            {canAccessAdmin() && (
+            {canAccessAdmin() && adminNavigation.length > 0 && (
                 <>
                     <div className="my-3 px-4">
                         <div className="h-px bg-border" />
@@ -235,7 +238,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         </div>
                         <div>
                             <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                            <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
+                            <p className="text-xs text-muted-foreground">{tr("nav.maintenance", "Manutenzione")}</p>
                         </div>
                     </Link>
                 </div>
@@ -301,7 +304,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 </div>
                                 <div>
                                     <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                                    <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
+                                    <p className="text-xs text-muted-foreground">{tr("nav.maintenance", "Manutenzione")}</p>
                                 </div>
                             </Link>
                         </div>
@@ -409,5 +412,5 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </main>
         </div>
     );
-    
 }
+
