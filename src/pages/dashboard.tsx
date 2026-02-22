@@ -39,12 +39,9 @@ import {
     languageNames,
 } from "@/contexts/LanguageContext";
 
-function DashboardPage() {
+function DashboardInner() {
     const router = useRouter();
     const { t, language, setLanguage } = useLanguage();
-
-    // IMPORTANT: avoid SSR hydration by waiting for client mount
-    const [mounted, setMounted] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [userRole, setUserRole] = useState("technician");
@@ -77,12 +74,6 @@ function DashboardPage() {
     const [recentMachines, setRecentMachines] = useState < any[] > ([]);
 
     useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    useEffect(() => {
-        if (!mounted) return;
-
         const loadData = async () => {
             try {
                 const ctx = await getUserContext();
@@ -99,10 +90,7 @@ function DashboardPage() {
                     await loadManufacturerDashboard(ctx.orgId!);
                 } else {
                     await loadCustomerDashboard();
-
-                    if (ctx.role === "admin") {
-                        await loadUserStats(ctx.orgId!);
-                    }
+                    if (ctx.role === "admin") await loadUserStats(ctx.orgId!);
                 }
             } catch (error) {
                 console.error(error);
@@ -112,7 +100,7 @@ function DashboardPage() {
         };
 
         loadData();
-    }, [mounted, router]);
+    }, [router]);
 
     const loadCustomerDashboard = async () => {
         try {
@@ -254,30 +242,24 @@ function DashboardPage() {
         return c[state] || c.active;
     };
 
-    // IMPORTANT: server renders nothing; client first render also nothing -> no hydration mismatch
-    if (!mounted) return null;
     if (loading) return null;
 
     return (
         <MainLayout userRole={userRole}>
             <SEO title="Dashboard - MACHINA" />
+
             <div className="space-y-8 max-w-7xl mx-auto">
                 {/* Welcome */}
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
-                        <p className="text-muted-foreground text-sm mb-1">
-                            {t("dashboard.welcome")},
-                        </p>
+                        <p className="text-muted-foreground text-sm mb-1">{t("dashboard.welcome")},</p>
                         <h1 className="text-3xl font-bold text-foreground">{userName}</h1>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                             <Globe className="w-5 h-5 text-muted-foreground" />
-                            <Select
-                                value={language}
-                                onValueChange={(val) => setLanguage(val as Language)}
-                            >
+                            <Select value={language} onValueChange={(val) => setLanguage(val as Language)}>
                                 <SelectTrigger className="w-[160px]">
                                     <SelectValue>
                                         <span className="flex items-center gap-2">
@@ -308,9 +290,7 @@ function DashboardPage() {
                                     : "border-[#FF6B35] text-[#FF6B35]"
                             }
                         >
-                            {orgType === "manufacturer"
-                                ? "🏭 Costruttore"
-                                : `👤 ${getRoleLabel(userRole)}`}
+                            {orgType === "manufacturer" ? "🏭 Costruttore" : `👤 ${getRoleLabel(userRole)}`}
                         </Badge>
                     </div>
                 </div>
@@ -353,7 +333,6 @@ function DashboardPage() {
                             />
                         </div>
 
-                        {/* Quick Actions */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <ActionCard
                                 gradient="from-purple-600 to-purple-700"
@@ -379,11 +358,7 @@ function DashboardPage() {
                         </div>
 
                         {customerList.length > 0 && (
-                            <ListSection
-                                title="Clienti Recenti"
-                                linkHref="/customers"
-                                linkText="Vedi tutti"
-                            >
+                            <ListSection title="Clienti Recenti" linkHref="/customers" linkText="Vedi tutti">
                                 {customerList.slice(0, 6).map((c) => (
                                     <Card
                                         key={c.id}
@@ -395,12 +370,8 @@ function DashboardPage() {
                                                 <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-foreground truncate">
-                                                    {c.name}
-                                                </h4>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {c.city || c.slug}
-                                                </p>
+                                                <h4 className="font-bold text-foreground truncate">{c.name}</h4>
+                                                <p className="text-sm text-muted-foreground">{c.city || c.slug}</p>
                                             </div>
                                             <ChevronRight className="w-5 h-5 text-muted-foreground" />
                                         </CardContent>
@@ -422,11 +393,7 @@ function DashboardPage() {
                                             <CardContent className="p-4 flex items-center gap-4">
                                                 <div className="w-12 h-12 bg-purple-100 dark:bg-purple-500/10 rounded-xl flex items-center justify-center overflow-hidden">
                                                     {m.photo_url ? (
-                                                        <img
-                                                            src={m.photo_url}
-                                                            alt={m.name}
-                                                            className="w-full h-full object-cover"
-                                                        />
+                                                        <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover" />
                                                     ) : (
                                                         <Wrench className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                                                     )}
@@ -446,18 +413,12 @@ function DashboardPage() {
                         {mfrStats.totalMachines === 0 && mfrStats.totalCustomers === 0 && (
                             <Card className="p-12 text-center">
                                 <Factory className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-foreground mb-2">
-                                    Benvenuto in MACHINA!
-                                </h3>
+                                <h3 className="text-xl font-bold text-foreground mb-2">Benvenuto in MACHINA!</h3>
                                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                                    Come costruttore, inizia aggiungendo le tue macchine al catalogo,
-                                    poi crea le organizzazioni dei tuoi clienti e assegna le macchine.
+                                    Come costruttore, inizia aggiungendo le tue macchine al catalogo, poi crea le organizzazioni dei tuoi clienti e assegna le macchine.
                                 </p>
                                 <div className="flex justify-center gap-4">
-                                    <Button
-                                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                                        onClick={() => router.push("/equipment/new")}
-                                    >
+                                    <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => router.push("/equipment/new")}>
                                         <Wrench className="w-4 h-4 mr-2" /> Aggiungi Macchina
                                     </Button>
                                     <Button variant="outline" onClick={() => router.push("/customers/new")}>
@@ -469,7 +430,6 @@ function DashboardPage() {
                     </>
                 ) : (
                     <>
-                        {/* ═══ CUSTOMER ═══ */}
                         <div
                             className="rounded-2xl bg-gradient-to-br from-[#FF6B35] via-[#FF7B47] to-[#FF8C61] p-8 text-white shadow-lg relative overflow-hidden cursor-pointer transition-all hover:scale-[1.01] hover:shadow-xl"
                             onClick={() => router.push("/scanner")}
@@ -693,5 +653,5 @@ function ListSection({
     );
 }
 
-// IMPORTANT: disable SSR ONLY for this page to eliminate hydration mismatch
-export default dynamic(() => Promise.resolve(DashboardPage), { ssr: false });
+// Client-only export to avoid hydration mismatch on personalized dashboard
+export default dynamic(() => Promise.resolve(DashboardInner), { ssr: false }); se.resolve(DashboardPage), { ssr: false });
