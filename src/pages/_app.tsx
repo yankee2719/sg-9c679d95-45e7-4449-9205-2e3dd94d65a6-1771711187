@@ -7,8 +7,6 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { PWAProvider } from "@/contexts/PWAProvider";
 import dynamic from "next/dynamic";
 
-// Disable SSR for the entire app — all pages require auth and use
-// browser APIs (localStorage, supabase, etc.) that cause hydration mismatches.
 function App({ Component, pageProps }: AppProps) {
     return (
         <>
@@ -32,6 +30,4 @@ function App({ Component, pageProps }: AppProps) {
     );
 }
 
-// Export with SSR disabled — eliminates all hydration mismatch errors
 export default dynamic(() => Promise.resolve(App), { ssr: false });
-lve(App), { ssr: false });
