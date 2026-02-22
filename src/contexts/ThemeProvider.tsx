@@ -10,27 +10,31 @@ interface ThemeContextType {
 const ThemeContext = createContext < ThemeContextType | undefined > (undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    // Default "light" is fine — the inline script in _document.tsx
-    // has already applied the correct class to <html> before React loads.
-    // So there's no flash and no hydration mismatch.
-    const [theme, setTheme] = useState < Theme > ("light");
+    const [theme, setTheme] = useState < Theme > ("dark");
 
     useEffect(() => {
-        const saved = localStorage.getItem("theme") as Theme | null;
-        const initial: Theme =
-            saved === "dark" || saved === "light"
-                ? saved
-                : window.matchMedia("(prefers-color-scheme: dark)").matches
-                    ? "dark"
-                    : "light";
-        setTheme(initial);
+        const savedTheme = localStorage.getItem("theme") as Theme | null;
+        let initialTheme: Theme;
+        if (savedTheme === "dark" || savedTheme === "light") {
+            initialTheme = savedTheme;
+        } else {
+            const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            initialTheme = prefersDark ? "dark" : "light";
+            localStorage.setItem("theme", initialTheme);
+        }
+        setTheme(initialTheme);
+        if (initialTheme === "dark") {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
     }, []);
 
     const toggleTheme = () => {
-        const next: Theme = theme === "dark" ? "light" : "dark";
-        setTheme(next);
-        localStorage.setItem("theme", next);
-        if (next === "dark") {
+        const newTheme = theme === "dark" ? "light" : "dark";
+        setTheme(newTheme);
+        localStorage.setItem("theme", newTheme);
+        if (newTheme === "dark") {
             document.documentElement.classList.add("dark");
         } else {
             document.documentElement.classList.remove("dark");
