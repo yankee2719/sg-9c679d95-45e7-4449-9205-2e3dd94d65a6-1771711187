@@ -10,43 +10,32 @@ interface ThemeContextType {
 const ThemeContext = createContext < ThemeContextType | undefined > (undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    // Start with null — render nothing until we know the real theme from localStorage
-    const [theme, setTheme] = useState < Theme | null > (null);
+    // Default "light" is fine — the inline script in _document.tsx
+    // has already applied the correct class to <html> before React loads.
+    // So there's no flash and no hydration mismatch.
+    const [theme, setTheme] = useState < Theme > ("light");
 
     useEffect(() => {
-        const savedTheme = localStorage.getItem("theme") as Theme | null;
-        let initialTheme: Theme;
-
-        if (savedTheme === "dark" || savedTheme === "light") {
-            initialTheme = savedTheme;
-        } else {
-            const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-            initialTheme = prefersDark ? "dark" : "light";
-            localStorage.setItem("theme", initialTheme);
-        }
-
-        setTheme(initialTheme);
-
-        if (initialTheme === "dark") {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-        }
+        const saved = localStorage.getItem("theme") as Theme | null;
+        const initial: Theme =
+            saved === "dark" || saved === "light"
+                ? saved
+                : window.matchMedia("(prefers-color-scheme: dark)").matches
+                    ? "dark"
+                    : "light";
+        setTheme(initial);
     }, []);
 
     const toggleTheme = () => {
-        const newTheme = theme === "dark" ? "light" : "dark";
-        setTheme(newTheme);
-        localStorage.setItem("theme", newTheme);
-        if (newTheme === "dark") {
+        const next: Theme = theme === "dark" ? "light" : "dark";
+        setTheme(next);
+        localStorage.setItem("theme", next);
+        if (next === "dark") {
             document.documentElement.classList.add("dark");
         } else {
             document.documentElement.classList.remove("dark");
         }
     };
-
-    // Don't render children until theme is known — avoids flash and hydration mismatch
-    if (theme === null) return null;
 
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme }}>
