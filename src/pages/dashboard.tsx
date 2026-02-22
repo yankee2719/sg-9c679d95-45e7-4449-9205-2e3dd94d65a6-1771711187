@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -307,5 +306,8 @@ function ListSection({ title, linkHref, linkText, children }: { title: string; l
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
         </div>
     );
+}
+export async function getServerSideProps() {
+    return { props: {} };
 }
 
