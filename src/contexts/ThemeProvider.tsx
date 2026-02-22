@@ -10,7 +10,8 @@ interface ThemeContextType {
 const ThemeContext = createContext < ThemeContextType | undefined > (undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setTheme] = useState < Theme > ("dark");
+    // Start with null — render nothing until we know the real theme from localStorage
+    const [theme, setTheme] = useState < Theme | null > (null);
 
     useEffect(() => {
         const savedTheme = localStorage.getItem("theme") as Theme | null;
@@ -37,13 +38,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         const newTheme = theme === "dark" ? "light" : "dark";
         setTheme(newTheme);
         localStorage.setItem("theme", newTheme);
-
         if (newTheme === "dark") {
             document.documentElement.classList.add("dark");
         } else {
             document.documentElement.classList.remove("dark");
         }
     };
+
+    // Don't render children until theme is known — avoids flash and hydration mismatch
+    if (theme === null) return null;
 
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme }}>
@@ -54,8 +57,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme() {
     const context = useContext(ThemeContext);
-    if (!context) {
-        throw new Error("useTheme must be used within ThemeProvider");
-    }
+    if (!context) throw new Error("useTheme must be used within ThemeProvider");
     return context;
 }
