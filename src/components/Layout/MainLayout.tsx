@@ -31,6 +31,7 @@ import {
     ShieldCheck,
     CalendarClock,
     Building2,
+    Factory,
     Package,
     ClipboardCheck,
 } from "lucide-react";
@@ -46,9 +47,6 @@ interface MainLayoutProps {
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
     const router = useRouter();
     const { t } = useLanguage();
-
-    // SSR-safe: always start with false, populate only on client
-    const [mounted, setMounted] = useState(false);
     const [user, setUser] = useState < { id: string; email?: string } | null > (null);
     const [profile, setProfile] = useState < { full_name?: string; role?: string } | null > (null);
     const [orgType, setOrgType] = useState < string | null > (null);
@@ -56,8 +54,6 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const [unreadNotifications, setUnreadNotifications] = useState(0);
 
     useEffect(() => {
-        setMounted(true);
-
         const loadUser = async () => {
             try {
                 const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -69,9 +65,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 if (profileData) {
                     setProfile({
                         full_name: profileData.full_name || undefined,
-                        role: profileData.role || undefined,
+                        role: profileData.role || undefined
                     });
 
+                    // Fetch org type
                     if (profileData.tenant_id) {
                         const { data: org } = await supabase
                             .from("organizations")
@@ -85,6 +82,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 const count = await getNotificationCount(authUser.id);
                 setUnreadNotifications(count);
 
+                // Realtime subscription for new notifications
                 const channel = supabase
                     .channel(`layout-notif-${authUser.id}`)
                     .on(
@@ -95,16 +93,18 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             table: "notifications",
                             filter: `user_id=eq.${authUser.id}`,
                         },
-                        () => { setUnreadNotifications(prev => prev + 1); }
+                        () => {
+                            setUnreadNotifications(prev => prev + 1);
+                        }
                     )
                     .subscribe();
 
+                // Cleanup on unmount
                 return () => { supabase.removeChannel(channel); };
             } catch (error) {
                 console.error("Error loading user:", error);
             }
         };
-
         loadUser();
     }, []);
 
@@ -118,70 +118,64 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
     };
 
-    // IMPORTANT: use userRole prop as stable SSR default.
-    // profile?.role is only available after client fetch — using it directly caused hydration mismatch.
-    const currentRole = profile?.role || userRole;
+    // Navigation items based on role
+    const getNavigationItems = () => {
+        const currentRole = profile?.role || userRole;
 
-    const tr = (key: string, fallback: string) => {
-        const value = t(key);
-        if (!value || value === key || value.startsWith("nav.")) return fallback;
-        return value;
+        const baseNav = [
+            { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.equipment"), href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.workOrders") || "Ordini di Lavoro", href: "/work-orders", icon: ClipboardCheck, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.checklists"), href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
+            { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
+            { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
+            { name: "Compliance", href: "/compliance", icon: ShieldCheck, roles: ["admin", "supervisor"] },
+        ];
+
+        return baseNav.filter(item => item.roles.includes(currentRole));
     };
 
-    const baseNav = [
-        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
-        { name: "Attrezzatura", href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
-        { name: "Manutenzione", href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
-        { name: "Ordini di lavoro", href: "/work-orders", icon: ClipboardCheck, roles: ["admin", "supervisor", "technician"] },
-        { name: "Checklist", href: "/checklists", icon: ClipboardList, roles: ["admin", "supervisor"] },
-        { name: "Scanner QR", href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
-        { name: "Analisi", href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
-        { name: "Compliance", href: "/compliance", icon: ShieldCheck, roles: ["admin", "supervisor"] },
-    ];
+    const navigation = getNavigationItems();
 
-    // Use userRole (stable prop) for SSR, switch to currentRole only after mount
-    const effectiveRole = mounted ? currentRole : userRole;
-    const navigation = baseNav.filter(item => item.roles.includes(effectiveRole));
-
+    // Manufacturer-specific nav
     const manufacturerNavigation = [
         { name: "Clienti", href: "/customers", icon: Building2 },
         { name: "Assegnazioni", href: "/assignments", icon: Package },
-        { name: "Utenti", href: "/admin/users", icon: Users },
+        { name: t("nav.users"), href: "/admin/users", icon: Users },
     ];
 
+    // Customer-specific admin nav
     const customerAdminNavigation = [
         { name: "Stabilimenti", href: "/plants", icon: Building2 },
-        { name: "Utenti", href: "/admin/users", icon: Users },
+        { name: "Costruttori", href: "/manufacturers", icon: Factory },
+        { name: t("nav.users"), href: "/admin/users", icon: Users },
     ];
 
-    // Only show admin nav after mount (depends on orgType from client fetch)
-    const adminNavigation = mounted
-        ? orgType === "manufacturer"
-            ? manufacturerNavigation
-            : orgType === "customer"
-                ? customerAdminNavigation
-                : []
-        : [];
-
-    const canAccessAdmin = effectiveRole === "admin" || effectiveRole === "supervisor";
+    const adminNavigation = orgType === "manufacturer" ? manufacturerNavigation : customerAdminNavigation;
 
     const isActive = (href: string) => {
         if (href === "/dashboard") return router.pathname === "/dashboard";
         return router.pathname.startsWith(href);
     };
 
+    const canAccessAdmin = () => {
+        const currentRole = profile?.role || userRole;
+        return currentRole === "admin" || currentRole === "supervisor";
+    };
+
     const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
-        <nav className="flex flex-col gap-1">
+        <nav className={`flex ${mobile ? "flex-col" : "flex-col"} gap-1`}>
             {navigation.map((item) => {
                 const active = isActive(item.href);
                 return (
                     <Link
-                        key={item.href}
+                        key={item.name}
                         href={item.href}
                         onClick={() => mobile && setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                ? "bg-primary text-primary-foreground shadow-lg"
-                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            ? "bg-primary text-primary-foreground shadow-lg"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                             }`}
                     >
                         <item.icon className="w-5 h-5" />
@@ -190,7 +184,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 );
             })}
 
-            {canAccessAdmin && adminNavigation.length > 0 && (
+            {canAccessAdmin() && (
                 <>
                     <div className="my-3 px-4">
                         <div className="h-px bg-border" />
@@ -202,12 +196,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         const active = isActive(item.href);
                         return (
                             <Link
-                                key={item.href}
+                                key={item.name}
                                 href={item.href}
                                 onClick={() => mobile && setMobileMenuOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                        ? "bg-primary text-primary-foreground shadow-lg"
-                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                    ? "bg-primary text-primary-foreground shadow-lg"
+                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                     }`}
                             >
                                 <item.icon className="w-5 h-5" />
@@ -224,6 +218,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         <div className="min-h-screen bg-background">
             {/* Desktop Sidebar */}
             <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-border/60 bg-card shadow-sm">
+                {/* Logo */}
                 <div className="p-6 border-b border-border">
                     <Link href="/dashboard" className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg">
@@ -231,15 +226,17 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         </div>
                         <div>
                             <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                            <p className="text-xs text-muted-foreground">Manutenzione</p>
+                            <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
                         </div>
                     </Link>
                 </div>
 
+                {/* Navigation */}
                 <div className="flex-1 p-4 overflow-y-auto">
                     <NavLinks />
                 </div>
 
+                {/* User Section */}
                 <div className="p-4 border-t border-border">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -253,7 +250,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     <p className="text-sm font-medium text-foreground truncate">
                                         {profile?.full_name || user?.email?.split("@")[0] || "User"}
                                     </p>
-                                    <p className="text-xs text-muted-foreground capitalize">{effectiveRole}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
                                 </div>
                                 <ChevronDown className="w-4 h-4 text-muted-foreground" />
                             </button>
@@ -262,7 +259,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             <DropdownMenuItem asChild className="cursor-pointer">
                                 <Link href="/settings" className="flex items-center gap-2">
                                     <Settings className="w-4 h-4" />
-                                    {tr("nav.settings", "Impostazioni")}
+                                    {t("nav.settings")}
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -271,7 +268,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 className="text-destructive focus:text-destructive cursor-pointer"
                             >
                                 <LogOut className="w-4 h-4 mr-2" />
-                                {tr("nav.logout", "Esci")}
+                                {t("nav.logout")}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -287,6 +284,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-72 p-0 bg-card border-border">
+                        {/* Mobile Logo */}
                         <div className="p-6 border-b border-border">
                             <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
                                 <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
@@ -294,15 +292,17 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 </div>
                                 <div>
                                     <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                                    <p className="text-xs text-muted-foreground">Manutenzione</p>
+                                    <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
                                 </div>
                             </Link>
                         </div>
 
+                        {/* Mobile Navigation */}
                         <div className="p-4">
                             <NavLinks mobile />
                         </div>
 
+                        {/* Mobile User Section */}
                         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
                             <div className="flex items-center gap-3 mb-4">
                                 <Avatar className="w-10 h-10 bg-primary">
@@ -314,7 +314,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     <p className="text-sm font-medium text-foreground truncate">
                                         {profile?.full_name || user?.email?.split("@")[0] || "User"}
                                     </p>
-                                    <p className="text-xs text-muted-foreground capitalize">{effectiveRole}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
                                 </div>
                             </div>
                             <div className="flex gap-2">
@@ -322,10 +322,13 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     variant="outline"
                                     size="sm"
                                     className="flex-1"
-                                    onClick={() => { setMobileMenuOpen(false); router.push("/settings"); }}
+                                    onClick={() => {
+                                        setMobileMenuOpen(false);
+                                        router.push("/settings");
+                                    }}
                                 >
                                     <Settings className="w-4 h-4 mr-2" />
-                                    {tr("nav.settings", "Impostazioni")}
+                                    {t("nav.settings")}
                                 </Button>
                                 <Button
                                     variant="outline"
@@ -340,6 +343,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     </SheetContent>
                 </Sheet>
 
+                {/* Mobile Logo */}
                 <Link href="/dashboard" className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                         <Wrench className="w-4 h-4 text-primary-foreground" />
@@ -347,6 +351,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     <span className="font-bold text-foreground">MACHINA</span>
                 </Link>
 
+                {/* Mobile Actions */}
                 <div className="flex items-center gap-2">
                     <ThemeSwitch />
                     <Button
@@ -356,7 +361,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         onClick={() => router.push("/notifications")}
                     >
                         <Bell className="w-5 h-5" />
-                        {mounted && unreadNotifications > 0 && (
+                        {unreadNotifications > 0 && (
                             <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
                                 {unreadNotifications > 9 ? "9+" : unreadNotifications}
                             </Badge>
@@ -367,6 +372,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
             {/* Main Content */}
             <main className="lg:ml-64 min-h-screen">
+                {/* Desktop Top Bar */}
                 <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border/60 bg-card/80 backdrop-blur-sm sticky top-0 z-30">
                     <ThemeSwitch />
                     <Button
@@ -376,7 +382,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         onClick={() => router.push("/notifications")}
                     >
                         <Bell className="w-5 h-5" />
-                        {mounted && unreadNotifications > 0 && (
+                        {unreadNotifications > 0 && (
                             <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
                                 {unreadNotifications > 9 ? "9+" : unreadNotifications}
                             </Badge>
@@ -384,8 +390,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     </Button>
                 </header>
 
+                {/* Offline/Sync Status Bar */}
                 <OfflineStatusBar />
 
+                {/* Page Content */}
                 <div className="p-4 lg:p-8 pt-20 lg:pt-8">
                     {children}
                 </div>
