@@ -5,10 +5,8 @@ import Head from "next/head";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { PWAProvider } from "@/contexts/PWAProvider";
-import dynamic from "next/dynamic";
 
-// Disable SSR for the entire app — all pages require auth and use
-// browser APIs (localStorage, supabase, etc.) that cause hydration mismatches.
+// App shell (SSR-safe). If a page/component needs browser-only APIs, access them in useEffect.
 function App({ Component, pageProps }: AppProps) {
   return (
     <>
@@ -16,10 +14,14 @@ function App({ Component, pageProps }: AppProps) {
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#FF6B35" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
+        />
         <meta name="apple-mobile-web-app-title" content="MACHINA" />
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
       </Head>
+
       <ThemeProvider>
         <LanguageProvider>
           <PWAProvider>
@@ -32,5 +34,4 @@ function App({ Component, pageProps }: AppProps) {
   );
 }
 
-// Export with SSR disabled — eliminates all hydration mismatch errors
-export default dynamic(() => Promise.resolve(App), { ssr: false });
+export default App;
