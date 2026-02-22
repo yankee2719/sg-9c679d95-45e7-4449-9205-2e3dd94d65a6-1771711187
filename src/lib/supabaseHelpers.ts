@@ -9,77 +9,158 @@ export interface UserContext {
     email: string;
 }
 
-export async function getUserContext(): Promise<UserContext | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+/**
+ * Ensure a profiles row exists (some projects miss the signup trigger).
+ * Safe with RLS if user can upsert their own profile row.
+ */
+async function ensureProfileRow(userId: string, email: string) {
+    const { data: existing, error: readErr } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
 
-    const { data: profile } = await supabase
+    // If RLS blocks reading, we can't know; just return.
+    if (readErr) return;
+
+    if (!existing) {
+        await supabase.from("profiles").upsert(
+            {
+                id: userId,
+                email,
+                display_name: null,
+                first_name: null,
+                last_name: null,
+                default_organization_id: null,
+            } as any,
+            { onConflict: "id" }
+        );
+    }
+}
+
+async function getOrgType(orgId: string): Promise<string | null> {
+    const { data, error } = await supabase
+        .from("organizations")
+        .select("type")
+        .eq("id", orgId)
+        .maybeSingle();
+
+    if (error) return null;
+    return (data as any)?.type ?? null;
+}
+
+async function getRoleForOrg(userId: string, orgId: string): Promise<string> {
+    const { data, error } = await supabase
+        .from("organization_memberships")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("organization_id", orgId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+    if (error) return "technician";
+    return (data as any)?.role ?? "technician";
+}
+
+/**
+ * If default_organization_id is missing, fallback to any active membership.
+ * Prefer a manufacturer org if the user has one (important for your UX).
+ */
+async function resolveOrgId(userId: string, defaultOrgId: string | null) {
+    if (defaultOrgId) return defaultOrgId;
+
+    const { data: memberships, error } = await supabase
+        .from("organization_memberships")
+        .select("organization_id")
+        .eq("user_id", userId)
+        .eq("is_active", true);
+
+    if (error || !memberships || memberships.length === 0) return null;
+
+    const orgIds = memberships.map((m: any) => m.organization_id).filter(Boolean);
+    if (orgIds.length === 0) return null;
+
+    // Load org types and prefer manufacturer
+    const { data: orgs } = await supabase
+        .from("organizations")
+        .select("id,type")
+        .in("id", orgIds);
+
+    const manufacturer = (orgs ?? []).find((o: any) => o.type === "manufacturer");
+    return (manufacturer?.id ?? orgIds[0]) as string;
+}
+
+export async function getUserContext(): Promise<UserContext | null> {
+    const {
+        data: { user },
+        error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) return null;
+
+    const email = user.email || "";
+
+    // Make sure profile exists (if your DB trigger failed)
+    await ensureProfileRow(user.id, email);
+
+    const { data: profile, error: profileErr } = await supabase
         .from("profiles")
         .select("default_organization_id, display_name, email, first_name, last_name")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-    const orgId = profile?.default_organization_id || null;
-    let role = "technician";
-    let orgType: string | null = null;
+    // If RLS blocks profile read, we still can try memberships fallback
+    const defaultOrgId = (profile as any)?.default_organization_id ?? null;
 
-    if (orgId) {
-        const { data: membership } = await supabase
-            .from("organization_memberships")
-            .select("role")
-            .eq("user_id", user.id)
-            .eq("organization_id", orgId)
-            .eq("is_active", true)
-            .single();
+    const orgId = await resolveOrgId(user.id, defaultOrgId);
+    const role = orgId ? await getRoleForOrg(user.id, orgId) : "technician";
+    const orgType = orgId ? await getOrgType(orgId) : null;
 
-        if (membership?.role) role = membership.role;
-
-        const { data: org } = await supabase
-            .from("organizations")
-            .select("type")
-            .eq("id", orgId)
-            .maybeSingle();
-
-        if (org?.type) orgType = org.type;
-    }
+    const displayName =
+        (profile as any)?.display_name ||
+        (profile as any)?.first_name ||
+        email.split("@")[0] ||
+        "User";
 
     return {
         userId: user.id,
         orgId,
         orgType,
         role,
-        displayName: profile?.display_name || profile?.first_name || user.email?.split("@")[0] || "User",
-        email: profile?.email || user.email || "",
+        displayName,
+        email: (profile as any)?.email || email,
     };
 }
 
 export async function getProfileData(userId: string) {
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from("profiles")
         .select("display_name, first_name, last_name, default_organization_id, email")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
-    if (!data) return null;
+    if (error || !data) return null;
 
-    // Get role from membership
     let role = "technician";
-    if (data.default_organization_id) {
+    if ((data as any).default_organization_id) {
         const { data: membership } = await supabase
             .from("organization_memberships")
             .select("role")
             .eq("user_id", userId)
-            .eq("organization_id", data.default_organization_id)
+            .eq("organization_id", (data as any).default_organization_id)
             .eq("is_active", true)
-            .single();
+            .maybeSingle();
 
-        if (membership?.role) role = membership.role;
+        if ((membership as any)?.role) role = (membership as any).role;
     }
 
     return {
-        full_name: data.display_name || `${data.first_name || ""} ${data.last_name || ""}`.trim() || null,
+        full_name:
+            (data as any).display_name ||
+            `${(data as any).first_name || ""} ${(data as any).last_name || ""}`.trim() ||
+            null,
         role,
-        tenant_id: data.default_organization_id,
+        tenant_id: (data as any).default_organization_id,
     };
 }
 
