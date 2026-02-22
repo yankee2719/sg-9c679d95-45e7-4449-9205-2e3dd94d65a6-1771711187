@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { MainLayout } from "@/components/Layout/MainLayout";
@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import {
     useLanguage,
-    Language,
+    type Language,
     languageFlags,
     languageNames,
 } from "@/contexts/LanguageContext";
@@ -115,7 +115,6 @@ function DashboardInner() {
 
             const futureDate = new Date();
             futureDate.setDate(futureDate.getDate() + 7);
-
             const nowIso = new Date().toISOString();
 
             const { count: upcomingCount } = await supabase
@@ -151,19 +150,23 @@ function DashboardInner() {
     };
 
     const loadUserStats = async (orgId: string) => {
-        const { data: members } = await supabase
-            .from("organization_memberships")
-            .select("role")
-            .eq("organization_id", orgId)
-            .eq("is_active", true);
+        try {
+            const { data: members } = await supabase
+                .from("organization_memberships")
+                .select("role")
+                .eq("organization_id", orgId)
+                .eq("is_active", true);
 
-        if (members) {
-            setUserStats({
-                total: members.length,
-                admins: members.filter((m) => m.role === "admin").length,
-                supervisors: members.filter((m) => m.role === "supervisor").length,
-                technicians: members.filter((m) => m.role === "technician").length,
-            });
+            if (members) {
+                setUserStats({
+                    total: members.length,
+                    admins: members.filter((m) => m.role === "admin").length,
+                    supervisors: members.filter((m) => m.role === "supervisor").length,
+                    technicians: members.filter((m) => m.role === "technician").length,
+                });
+            }
+        } catch (e) {
+            console.error(e);
         }
     };
 
@@ -207,9 +210,11 @@ function DashboardInner() {
     };
 
     const getRoleLabel = (role: string) =>
-    ({ admin: t("users.admin"), supervisor: "Supervisor", technician: t("users.technician") }[
-        role
-    ] || role);
+    ({
+        admin: t("users.admin"),
+        supervisor: "Supervisor",
+        technician: t("users.technician"),
+    }[role] || role);
 
     const getLifecycleConfig = (state: string) => {
         const c: Record<string, { label: string; color: string }> = {
@@ -252,14 +257,19 @@ function DashboardInner() {
                 {/* Welcome */}
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
-                        <p className="text-muted-foreground text-sm mb-1">{t("dashboard.welcome")},</p>
+                        <p className="text-muted-foreground text-sm mb-1">
+                            {t("dashboard.welcome")},
+                        </p>
                         <h1 className="text-3xl font-bold text-foreground">{userName}</h1>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                             <Globe className="w-5 h-5 text-muted-foreground" />
-                            <Select value={language} onValueChange={(val) => setLanguage(val as Language)}>
+                            <Select
+                                value={language}
+                                onValueChange={(val) => setLanguage(val as Language)}
+                            >
                                 <SelectTrigger className="w-[160px]">
                                     <SelectValue>
                                         <span className="flex items-center gap-2">
@@ -290,7 +300,9 @@ function DashboardInner() {
                                     : "border-[#FF6B35] text-[#FF6B35]"
                             }
                         >
-                            {orgType === "manufacturer" ? "🏭 Costruttore" : `👤 ${getRoleLabel(userRole)}`}
+                            {orgType === "manufacturer"
+                                ? "🏭 Costruttore"
+                                : `👤 ${getRoleLabel(userRole)}`}
                         </Badge>
                     </div>
                 </div>
@@ -333,6 +345,7 @@ function DashboardInner() {
                             />
                         </div>
 
+                        {/* Quick Actions */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <ActionCard
                                 gradient="from-purple-600 to-purple-700"
@@ -358,7 +371,11 @@ function DashboardInner() {
                         </div>
 
                         {customerList.length > 0 && (
-                            <ListSection title="Clienti Recenti" linkHref="/customers" linkText="Vedi tutti">
+                            <ListSection
+                                title="Clienti Recenti"
+                                linkHref="/customers"
+                                linkText="Vedi tutti"
+                            >
                                 {customerList.slice(0, 6).map((c) => (
                                     <Card
                                         key={c.id}
@@ -370,8 +387,12 @@ function DashboardInner() {
                                                 <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-foreground truncate">{c.name}</h4>
-                                                <p className="text-sm text-muted-foreground">{c.city || c.slug}</p>
+                                                <h4 className="font-bold text-foreground truncate">
+                                                    {c.name}
+                                                </h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {c.city || c.slug}
+                                                </p>
                                             </div>
                                             <ChevronRight className="w-5 h-5 text-muted-foreground" />
                                         </CardContent>
@@ -381,7 +402,11 @@ function DashboardInner() {
                         )}
 
                         {recentMachines.length > 0 && (
-                            <ListSection title="Ultime Macchine" linkHref="/equipment" linkText="Vedi tutte">
+                            <ListSection
+                                title="Ultime Macchine"
+                                linkHref="/equipment"
+                                linkText="Vedi tutte"
+                            >
                                 {recentMachines.map((m) => {
                                     const lc = getLifecycleConfig(m.lifecycle_state || "active");
                                     return (
@@ -393,16 +418,26 @@ function DashboardInner() {
                                             <CardContent className="p-4 flex items-center gap-4">
                                                 <div className="w-12 h-12 bg-purple-100 dark:bg-purple-500/10 rounded-xl flex items-center justify-center overflow-hidden">
                                                     {m.photo_url ? (
-                                                        <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover" />
+                                                        <img
+                                                            src={m.photo_url}
+                                                            alt={m.name}
+                                                            className="w-full h-full object-cover"
+                                                        />
                                                     ) : (
                                                         <Wrench className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-foreground truncate">{m.name}</h4>
-                                                    <p className="text-xs text-muted-foreground font-mono">{m.internal_code}</p>
+                                                    <h4 className="font-bold text-foreground truncate">
+                                                        {m.name}
+                                                    </h4>
+                                                    <p className="text-xs text-muted-foreground font-mono">
+                                                        {m.internal_code}
+                                                    </p>
                                                 </div>
-                                                <Badge className={`text-xs border ${lc.color}`}>{lc.label}</Badge>
+                                                <Badge className={`text-xs border ${lc.color}`}>
+                                                    {lc.label}
+                                                </Badge>
                                             </CardContent>
                                         </Card>
                                     );
@@ -413,15 +448,24 @@ function DashboardInner() {
                         {mfrStats.totalMachines === 0 && mfrStats.totalCustomers === 0 && (
                             <Card className="p-12 text-center">
                                 <Factory className="w-16 h-16 text-muted-foreground/40 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-foreground mb-2">Benvenuto in MACHINA!</h3>
+                                <h3 className="text-xl font-bold text-foreground mb-2">
+                                    Benvenuto in MACHINA!
+                                </h3>
                                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                                    Come costruttore, inizia aggiungendo le tue macchine al catalogo, poi crea le organizzazioni dei tuoi clienti e assegna le macchine.
+                                    Come costruttore, inizia aggiungendo le tue macchine al catalogo,
+                                    poi crea le organizzazioni dei tuoi clienti e assegna le macchine.
                                 </p>
                                 <div className="flex justify-center gap-4">
-                                    <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => router.push("/equipment/new")}>
+                                    <Button
+                                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                                        onClick={() => router.push("/equipment/new")}
+                                    >
                                         <Wrench className="w-4 h-4 mr-2" /> Aggiungi Macchina
                                     </Button>
-                                    <Button variant="outline" onClick={() => router.push("/customers/new")}>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => router.push("/customers/new")}
+                                    >
                                         <UserPlus className="w-4 h-4 mr-2" /> Crea Cliente
                                     </Button>
                                 </div>
@@ -430,6 +474,9 @@ function DashboardInner() {
                     </>
                 ) : (
                     <>
+                        {/* ═══ CUSTOMER ═══ */}
+
+                        {/* QR Scanner */}
                         <div
                             className="rounded-2xl bg-gradient-to-br from-[#FF6B35] via-[#FF7B47] to-[#FF8C61] p-8 text-white shadow-lg relative overflow-hidden cursor-pointer transition-all hover:scale-[1.01] hover:shadow-xl"
                             onClick={() => router.push("/scanner")}
@@ -440,7 +487,9 @@ function DashboardInner() {
                                         <QrCode className="w-8 h-8" />
                                     </div>
                                     <div>
-                                        <h2 className="text-2xl font-bold mb-1">{t("dashboard.scanQR")}</h2>
+                                        <h2 className="text-2xl font-bold mb-1">
+                                            {t("dashboard.scanQR")}
+                                        </h2>
                                         <p className="text-white/90">{t("nav.scanner")}</p>
                                     </div>
                                 </div>
@@ -451,6 +500,7 @@ function DashboardInner() {
                             <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
                         </div>
 
+                        {/* Admin panel */}
                         {userRole === "admin" && (
                             <div
                                 className="rounded-3xl bg-gradient-to-br from-purple-500 via-purple-600 to-indigo-600 p-8 text-white shadow-lg cursor-pointer transition-all hover:scale-[1.01]"
@@ -462,7 +512,9 @@ function DashboardInner() {
                                             <Shield className="w-8 h-8" />
                                         </div>
                                         <div>
-                                            <h2 className="text-2xl font-bold mb-1">{t("users.title")}</h2>
+                                            <h2 className="text-2xl font-bold mb-1">
+                                                {t("users.title")}
+                                            </h2>
                                             <p className="text-purple-50">{t("nav.users")}</p>
                                         </div>
                                     </div>
@@ -470,14 +522,28 @@ function DashboardInner() {
                                         <ArrowRight className="w-6 h-6" />
                                     </div>
                                 </div>
+
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    <StatBox icon={<Users />} value={userStats.total} label={t("common.all")} />
-                                    <StatBox icon={<Shield />} value={userStats.admins} label={t("users.admin")} />
-                                    <StatBox icon={<Users />} value={userStats.supervisors} label="Supervisor" />
+                                    <StatBox
+                                        icon={<Users />}
+                                        value={userStats.total}
+                                        label={t("common.all")}
+                                    />
+                                    <StatBox
+                                        icon={<Shield />}
+                                        value={userStats.admins}
+                                        label={t("users.admin")}
+                                    />
+                                    <StatBox
+                                        icon={<Users />}
+                                        value={userStats.supervisors}
+                                        label="Supervisor"
+                                    />
                                 </div>
                             </div>
                         )}
 
+                        {/* KPIs */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             <KPICard
                                 icon={<Wrench />}
@@ -513,7 +579,12 @@ function DashboardInner() {
                             />
                         </div>
 
-                        <ListSection title={t("equipment.title")} linkHref="/equipment" linkText={t("dashboard.viewAll")}>
+                        {/* Machine list */}
+                        <ListSection
+                            title={t("equipment.title")}
+                            linkHref="/equipment"
+                            linkText={t("dashboard.viewAll")}
+                        >
                             {machineList.map((item) => {
                                 const lc = getLifecycleConfig(item.lifecycle_state || "active");
                                 return (
@@ -525,15 +596,22 @@ function DashboardInner() {
                                         <div className="p-4 flex items-center gap-4">
                                             <div className="w-16 h-16 bg-muted rounded-xl flex-shrink-0 overflow-hidden">
                                                 {item.photo_url ? (
-                                                    <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
+                                                    <img
+                                                        src={item.photo_url}
+                                                        alt={item.name}
+                                                        className="w-full h-full object-cover"
+                                                    />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
                                                         <Wrench className="w-6 h-6 text-muted-foreground" />
                                                     </div>
                                                 )}
                                             </div>
+
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-foreground truncate">{item.name}</h4>
+                                                <h4 className="font-bold text-foreground truncate">
+                                                    {item.name}
+                                                </h4>
                                                 <p className="text-sm text-muted-foreground truncate">
                                                     {item.position || t("equipment.noLocation")}
                                                 </p>
@@ -541,9 +619,12 @@ function DashboardInner() {
                                                     <span className="text-xs text-muted-foreground">
                                                         {item.category || t("equipment.generic")}
                                                     </span>
-                                                    <Badge className={`text-xs border ${lc.color}`}>{lc.label}</Badge>
+                                                    <Badge className={`text-xs border ${lc.color}`}>
+                                                        {lc.label}
+                                                    </Badge>
                                                 </div>
                                             </div>
+
                                             <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
                                         </div>
                                     </Card>
@@ -553,7 +634,9 @@ function DashboardInner() {
                             {machineList.length === 0 && (
                                 <Card className="p-8 text-center col-span-full">
                                     <Wrench className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                                    <p className="text-muted-foreground">{t("equipment.noEquipment")}</p>
+                                    <p className="text-muted-foreground">
+                                        {t("equipment.noEquipment")}
+                                    </p>
                                 </Card>
                             )}
                         </ListSection>
@@ -572,7 +655,7 @@ function KPICard({
     label,
     onClick,
 }: {
-    icon: React.ReactNode;
+    icon: ReactNode;
     iconColor: string;
     iconBg: string;
     value: number;
@@ -580,9 +663,14 @@ function KPICard({
     onClick: () => void;
 }) {
     return (
-        <Card className="rounded-2xl border-0 shadow-sm hover:shadow-md cursor-pointer transition-all" onClick={onClick}>
+        <Card
+            className="rounded-2xl border-0 shadow-sm hover:shadow-md cursor-pointer transition-all"
+            onClick={onClick}
+        >
             <CardContent className="p-6">
-                <div className={`w-12 h-12 ${iconBg} rounded-xl flex items-center justify-center mb-4`}>
+                <div
+                    className={`w-12 h-12 ${iconBg} rounded-xl flex items-center justify-center mb-4`}
+                >
                     <span className={`w-6 h-6 ${iconColor}`}>{icon}</span>
                 </div>
                 <h3 className="text-4xl font-bold text-foreground">{value}</h3>
@@ -600,15 +688,20 @@ function ActionCard({
     onClick,
 }: {
     gradient: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
     title: string;
     sub: string;
     onClick: () => void;
 }) {
     return (
-        <div className={`rounded-2xl bg-gradient-to-br ${gradient} p-6 text-white cursor-pointer hover:scale-[1.01] transition-all shadow-md`} onClick={onClick}>
+        <div
+            className={`rounded-2xl bg-gradient-to-br ${gradient} p-6 text-white cursor-pointer hover:scale-[1.01] transition-all shadow-md`}
+            onClick={onClick}
+        >
             <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">{icon}</div>
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    {icon}
+                </div>
                 <div>
                     <h3 className="font-bold text-lg">{title}</h3>
                     <p className="text-white/80 text-sm">{sub}</p>
@@ -619,7 +712,15 @@ function ActionCard({
     );
 }
 
-function StatBox({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
+function StatBox({
+    icon,
+    value,
+    label,
+}: {
+    icon: ReactNode;
+    value: number;
+    label: string;
+}) {
     return (
         <div className="bg-white/10 rounded-2xl p-4">
             <span className="w-5 h-5 text-white/80 mb-2 block">{icon}</span>
@@ -638,20 +739,26 @@ function ListSection({
     title: string;
     linkHref: string;
     linkText: string;
-    children: React.ReactNode;
+    children: ReactNode;
 }) {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between px-2">
                 <h3 className="text-lg font-bold text-foreground">{title}</h3>
-                <Button variant="ghost" className="text-primary font-medium p-0 h-auto hover:bg-transparent" asChild>
+                <Button
+                    variant="ghost"
+                    className="text-primary font-medium p-0 h-auto hover:bg-transparent"
+                    asChild
+                >
                     <Link href={linkHref}>{linkText}</Link>
                 </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {children}
+            </div>
         </div>
     );
 }
 
-// Client-only export to avoid hydration mismatch on personalized dashboard
-export default dynamic(() => Promise.resolve(DashboardInner), { ssr: false }); se.resolve(DashboardPage), { ssr: false });
+// IMPORTANT: client-only export (no SSR) to eliminate hydration mismatch
+export default dynamic(() => Promise.resolve(DashboardInner), { ssr: false });
