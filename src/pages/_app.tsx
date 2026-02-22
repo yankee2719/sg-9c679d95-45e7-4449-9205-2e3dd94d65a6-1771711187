@@ -1,21 +1,15 @@
+import { Toaster } from "@/components/ui/toaster";
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import Head from "next/head";
-import { useEffect, useState } from "react";
-
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { PWAProvider } from "@/contexts/PWAProvider";
-import { Toaster } from "@/components/ui/toaster";
+import dynamic from "next/dynamic";
 
-export default function App({ Component, pageProps }: AppProps) {
-    // IMPORTANT: prevent hydration mismatch by rendering the app only on client
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
+// Disable SSR for the entire app — all pages require auth and use
+// browser APIs (localStorage, supabase, etc.) that cause hydration mismatches.
+function App({ Component, pageProps }: AppProps) {
     return (
         <>
             <Head>
@@ -26,18 +20,17 @@ export default function App({ Component, pageProps }: AppProps) {
                 <meta name="apple-mobile-web-app-title" content="MACHINA" />
                 <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
             </Head>
-
-            {/* Server + first client render: identical */}
-            {!mounted ? null : (
-                <ThemeProvider>
-                    <LanguageProvider>
-                        <PWAProvider>
-                            <Component {...pageProps} />
-                            <Toaster />
-                        </PWAProvider>
-                    </LanguageProvider>
-                </ThemeProvider>
-            )}
+            <ThemeProvider>
+                <LanguageProvider>
+                    <PWAProvider>
+                        <Component {...pageProps} />
+                        <Toaster />
+                    </PWAProvider>
+                </LanguageProvider>
+            </ThemeProvider>
         </>
     );
 }
+
+// Export with SSR disabled — eliminates all hydration mismatch errors
+export default dynamic(() => Promise.resolve(App), { ssr: false });
