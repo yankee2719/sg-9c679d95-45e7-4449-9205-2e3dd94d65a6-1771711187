@@ -1,3 +1,4 @@
+// src/pages/equipment/index.tsx
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
@@ -10,11 +11,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import {
-    Plus, Search, Wrench, MapPin, Filter, ChevronRight, ChevronDown,
-    QrCode, Trash2, Building2, LayoutGrid, List, Factory,
+    Plus,
+    Search,
+    Wrench,
+    MapPin,
+    Filter,
+    ChevronRight,
+    ChevronDown,
+    QrCode,
+    Trash2,
+    Building2,
+    LayoutGrid,
+    List,
+    Factory,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -33,19 +49,40 @@ interface Machine {
     plant_id: string | null;
     photo_url: string | null;
     organization_id: string | null;
-    // UI-only flags
-    _isAssigned?: boolean;      // true if this comes from machine_assignments
-    _manufacturerName?: string; // manufacturer org name
+    _isAssigned?: boolean;
+    _manufacturerName?: string | null;
 }
 
-interface Plant { id: string; name: string; }
+interface Plant {
+    id: string;
+    name: string;
+}
+
+async function getOrgTypeById(orgId: string): Promise<"manufacturer" | "customer" | null> {
+    const { data, error } = await supabase
+        .from("organizations")
+        .select("type")
+        .eq("id", orgId)
+        .maybeSingle();
+
+    if (error) throw error;
+    const tRaw = String((data as any)?.type ?? "").toLowerCase();
+    if (tRaw === "manufacturer") return "manufacturer";
+    if (tRaw === "customer") return "customer";
+    return null;
+}
 
 export default function EquipmentPage() {
     const router = useRouter();
     const { t } = useLanguage();
     const { toast } = useToast();
+
     const [loading, setLoading] = useState(true);
     const [ctx, setCtx] = useState < UserContext | null > (null);
+
+    // DB-truth (do not trust ctx.orgType)
+    const [orgType, setOrgType] = useState < "manufacturer" | "customer" | null > (null);
+
     const [machines, setMachines] = useState < Machine[] > ([]);
     const [filteredMachines, setFilteredMachines] = useState < Machine[] > ([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -62,46 +99,77 @@ export default function EquipmentPage() {
         const loadData = async () => {
             try {
                 const userCtx = await getUserContext();
-                if (!userCtx) { router.push("/login"); return; }
+                if (!userCtx) {
+                    router.push("/login");
+                    return;
+                }
                 setCtx(userCtx);
 
-                // 1. Load own machines (RLS handles org filter)
-                const { data: machineData } = await supabase
-                    .from("machines").select("*").order("name");
+                const effectiveOrgId = (userCtx as any)?.orgId || (userCtx as any)?.organizationId || (userCtx as any)?.organization_id;
+                if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
 
-                let allMachines: Machine[] = (machineData || []).map(m => ({
+                const type = await getOrgTypeById(effectiveOrgId);
+                setOrgType(type);
+
+                // 1) Load own machines (RLS handles org filter)
+                const { data: machineData, error: machineErr } = await supabase
+                    .from("machines")
+                    .select("*")
+                    .order("name");
+
+                if (machineErr) throw machineErr;
+
+                let allMachines: Machine[] = (machineData || []).map((m: any) => ({
                     ...m,
-                    _isAssigned: m.organization_id !== userCtx.orgId,
+                    _isAssigned: m.organization_id !== effectiveOrgId,
                 }));
 
-                // 2. For customer orgs: also load assigned machines and tag them
-                if (userCtx.orgType === "customer" && userCtx.orgId) {
-                    const { data: assignments } = await supabase
+                // 2) Customer only: load assignments and tag
+                if (type === "customer" && effectiveOrgId) {
+                    const { data: assignments, error: asgErr } = await supabase
                         .from("machine_assignments")
                         .select("machine_id, machines(organization_id)")
-                        .eq("customer_org_id", userCtx.orgId)
+                        .eq("customer_org_id", effectiveOrgId)
                         .eq("is_active", true);
+
+                    if (asgErr) throw asgErr;
 
                     if (assignments) {
                         const assignedIds = new Set(assignments.map((a: any) => a.machine_id));
-                        allMachines = allMachines.map(m => ({
+                        allMachines = allMachines.map((m) => ({
                             ...m,
-                            _isAssigned: assignedIds.has(m.id) && m.organization_id !== userCtx.orgId,
+                            _isAssigned: assignedIds.has(m.id) && m.organization_id !== effectiveOrgId,
                         }));
                     }
 
-                    // Get manufacturer name for assigned machines
-                    if (allMachines.some(m => m._isAssigned)) {
-                        const mfrOrgIds = [...new Set(allMachines.filter(m => m._isAssigned).map(m => m.organization_id).filter(Boolean))];
+                    // Manufacturer name for assigned
+                    if (allMachines.some((m) => m._isAssigned)) {
+                        const mfrOrgIds = [
+                            ...new Set(
+                                allMachines
+                                    .filter((m) => m._isAssigned)
+                                    .map((m) => m.organization_id)
+                                    .filter(Boolean)
+                            ),
+                        ] as string[];
+
                         if (mfrOrgIds.length > 0) {
-                            const { data: mfrOrgs } = await supabase
-                                .from("organizations").select("id, name").in("id", mfrOrgIds);
+                            const { data: mfrOrgs, error: mfrErr } = await supabase
+                                .from("organizations")
+                                .select("id, name")
+                                .in("id", mfrOrgIds);
+
+                            if (mfrErr) throw mfrErr;
+
                             if (mfrOrgs) {
-                                const mfrMap = new Map(mfrOrgs.map(o => [o.id, o.name]));
-                                allMachines = allMachines.map(m => ({
+                                const mfrMap = new Map(mfrOrgs.map((o: any) => [o.id, o.name]));
+                                allMachines = allMachines.map((m) => ({
                                     ...m,
-                                    _manufacturerName: m._isAssigned && m.organization_id ? mfrMap.get(m.organization_id) || null : null,
-                                })) as Machine[];
+                                    _manufacturerName:
+                                        m._isAssigned && m.organization_id
+                                            ? mfrMap.get(m.organization_id) || null
+                                            : null,
+                                }));
                             }
                         }
                     }
@@ -109,15 +177,22 @@ export default function EquipmentPage() {
 
                 setMachines(allMachines);
                 setFilteredMachines(allMachines);
-                const cats = [...new Set(allMachines.map(m => m.category).filter(Boolean))] as string[];
-                setCategories(cats);
-                if (allMachines.some(m => m.plant_id)) setGroupedView(true);
 
+                const cats = [...new Set(allMachines.map((m) => m.category).filter(Boolean))] as string[];
+                setCategories(cats);
+
+                if (allMachines.some((m) => m.plant_id)) setGroupedView(true);
+
+                // Plants list only meaningful for customer UI grouping, but harmless if empty due to RLS
                 const { data: plantsData } = await supabase
-                    .from("plants").select("id, name").eq("is_archived", false).order("name");
+                    .from("plants")
+                    .select("id, name")
+                    .eq("is_archived", false)
+                    .order("name");
+
                 if (plantsData) {
-                    setPlants(plantsData);
-                    setExpandedPlants(new Set(plantsData.map(p => p.id)));
+                    setPlants(plantsData as any);
+                    setExpandedPlants(new Set(plantsData.map((p: any) => p.id)));
                 }
             } catch (error) {
                 console.error("Error loading:", error);
@@ -125,6 +200,7 @@ export default function EquipmentPage() {
                 setLoading(false);
             }
         };
+
         loadData();
     }, [router]);
 
@@ -132,18 +208,19 @@ export default function EquipmentPage() {
         let filtered = machines;
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(m =>
-                m.name.toLowerCase().includes(q) ||
-                m.internal_code?.toLowerCase().includes(q) ||
-                m.serial_number?.toLowerCase().includes(q) ||
-                m.position?.toLowerCase().includes(q) ||
-                m.brand?.toLowerCase().includes(q)
+            filtered = filtered.filter(
+                (m) =>
+                    m.name.toLowerCase().includes(q) ||
+                    m.internal_code?.toLowerCase().includes(q) ||
+                    m.serial_number?.toLowerCase().includes(q) ||
+                    m.position?.toLowerCase().includes(q) ||
+                    m.brand?.toLowerCase().includes(q)
             );
         }
-        if (statusFilter !== "all") filtered = filtered.filter(m => m.lifecycle_state === statusFilter);
-        if (categoryFilter !== "all") filtered = filtered.filter(m => m.category === categoryFilter);
-        if (sourceFilter === "own") filtered = filtered.filter(m => !m._isAssigned);
-        if (sourceFilter === "assigned") filtered = filtered.filter(m => m._isAssigned);
+        if (statusFilter !== "all") filtered = filtered.filter((m) => m.lifecycle_state === statusFilter);
+        if (categoryFilter !== "all") filtered = filtered.filter((m) => m.category === categoryFilter);
+        if (sourceFilter === "own") filtered = filtered.filter((m) => !m._isAssigned);
+        if (sourceFilter === "assigned") filtered = filtered.filter((m) => m._isAssigned);
         setFilteredMachines(filtered);
     }, [searchQuery, statusFilter, categoryFilter, sourceFilter, machines]);
 
@@ -154,7 +231,7 @@ export default function EquipmentPage() {
         try {
             const { error } = await supabase.from("machines").delete().eq("id", id);
             if (error) throw error;
-            setMachines(prev => prev.filter(m => m.id !== id));
+            setMachines((prev) => prev.filter((m) => m.id !== id));
             toast({ title: "Eliminato", description: `"${name}" eliminato` });
         } catch (error: any) {
             toast({ title: "Errore", description: error?.message || "Errore", variant: "destructive" });
@@ -165,35 +242,70 @@ export default function EquipmentPage() {
 
     const getStatusConfig = (state: string | null) => {
         const configs: Record<string, { label: string; color: string }> = {
-            active: { label: "Attivo", color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30" },
-            commissioned: { label: "Attivo", color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30" },
-            inactive: { label: "Inattivo", color: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30" },
-            under_maintenance: { label: "In Manutenzione", color: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-300 dark:border-amber-500/30" },
-            decommissioned: { label: "Dismesso", color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30" },
+            active: {
+                label: "Attivo",
+                color:
+                    "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30",
+            },
+            commissioned: {
+                label: "Attivo",
+                color:
+                    "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30",
+            },
+            inactive: {
+                label: "Inattivo",
+                color:
+                    "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
+            },
+            under_maintenance: {
+                label: "In Manutenzione",
+                color:
+                    "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-300 dark:border-amber-500/30",
+            },
+            decommissioned: {
+                label: "Dismesso",
+                color:
+                    "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30",
+            },
         };
-        return configs[state || "active"] || { label: state || "—", color: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30" };
+        return (
+            configs[state || "active"] || {
+                label: state || "—",
+                color:
+                    "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
+            }
+        );
     };
 
-    const perms = ctx ? getPermissions({ role: ctx.role, orgType: ctx.orgType as any }) : null;
+    const perms = ctx ? getPermissions({ role: ctx.role, orgType: orgType as any }) : null;
     const isAdmin = perms?.isAdminOrSupervisor ?? false;
-    const isCustomer = ctx?.orgType === "customer";
-    const hasAssigned = machines.some(m => m._isAssigned);
+    const isCustomer = orgType === "customer";
+    const hasAssigned = machines.some((m) => m._isAssigned);
 
     const togglePlant = (id: string) => {
-        setExpandedPlants(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
+        setExpandedPlants((prev) => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id);
+            else n.add(id);
+            return n;
+        });
     };
 
     const MachineCard = ({ item }: { item: Machine }) => {
         const status = getStatusConfig(item.lifecycle_state);
-        const canEdit = !item._isAssigned; // Can't edit manufacturer's machines
+        const canEdit = !item._isAssigned;
         return (
             <Card
-                className={`rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden ${item._isAssigned ? "ring-1 ring-purple-200 dark:ring-purple-500/20" : ""}`}
+                className={`rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden ${item._isAssigned ? "ring-1 ring-purple-200 dark:ring-purple-500/20" : ""
+                    }`}
                 onClick={() => router.push(`/equipment/${item.id}`)}
             >
                 <CardContent className="p-5">
                     <div className="flex items-start gap-4 mb-3">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${item._isAssigned ? "bg-purple-50 dark:bg-purple-500/10" : "bg-blue-50 dark:bg-blue-500/10"}`}>
+                        <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${item._isAssigned ? "bg-purple-50 dark:bg-purple-500/10" : "bg-blue-50 dark:bg-blue-500/10"
+                                }`}
+                        >
                             {item.photo_url ? (
                                 <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
                             ) : (
@@ -228,10 +340,13 @@ export default function EquipmentPage() {
 
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
                         <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${status.color}`}>{status.label}</Badge>
-                        <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-medium text-muted-foreground border-border">{item.category || "Generico"}</Badge>
-                        {item._isAssigned && (
+                        <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-medium text-muted-foreground border-border">
+                            {item.category || "Generico"}
+                        </Badge>
+                        {isCustomer && item._isAssigned && (
                             <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
-                                <Factory className="w-3 h-3 mr-1" />{item._manufacturerName || "Costruttore"}
+                                <Factory className="w-3 h-3 mr-1" />
+                                {item._manufacturerName || "Costruttore"}
                             </Badge>
                         )}
                     </div>
@@ -248,63 +363,80 @@ export default function EquipmentPage() {
     };
 
     const renderGroupedView = () => {
-        const unassigned = filteredMachines.filter(m => !m.plant_id && !m._isAssigned);
-        const assignedMachines = filteredMachines.filter(m => m._isAssigned);
-        const plantMachinesList = filteredMachines.filter(m => m.plant_id && !m._isAssigned);
+        const unassigned = filteredMachines.filter((m) => !m.plant_id && !m._isAssigned);
+        const assignedMachines = filteredMachines.filter((m) => m._isAssigned);
+        const plantMachinesList = filteredMachines.filter((m) => m.plant_id && !m._isAssigned);
 
         return (
             <div className="space-y-4">
-                {/* Assigned from manufacturer */}
-                {assignedMachines.length > 0 && (
+                {isCustomer && assignedMachines.length > 0 && (
                     <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Factory className="w-5 h-5 text-purple-400" />
                             <span className="text-foreground font-bold text-lg">Macchine dal Costruttore</span>
-                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-300 dark:border-purple-500/30 ml-2">{assignedMachines.length}</Badge>
+                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-300 dark:border-purple-500/30 ml-2">
+                                {assignedMachines.length}
+                            </Badge>
                         </div>
                         <div className="px-4 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {assignedMachines.map(m => <MachineCard key={m.id} item={m} />)}
+                                {assignedMachines.map((m) => (
+                                    <MachineCard key={m.id} item={m} />
+                                ))}
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* By plant */}
-                {plants.map(plant => {
-                    const plantMachines = plantMachinesList.filter(m => m.plant_id === plant.id);
-                    const isExpanded = expandedPlants.has(plant.id);
-                    if (plantMachines.length === 0 && searchQuery) return null;
-                    return (
-                        <div key={plant.id} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
-                            <button onClick={() => togglePlant(plant.id)} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors">
-                                {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-400" /> : <ChevronRight className="w-5 h-5 text-blue-400" />}
-                                <Building2 className="w-5 h-5 text-blue-400" />
-                                <span className="text-foreground font-bold text-lg">{plant.name}</span>
-                                <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-300 dark:border-blue-500/30 ml-2">{plantMachines.length}</Badge>
-                            </button>
-                            {isExpanded && plantMachines.length > 0 && (
-                                <div className="px-4 pb-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {plantMachines.map(m => <MachineCard key={m.id} item={m} />)}
+                {isCustomer &&
+                    plants.map((plant) => {
+                        const plantMachines = plantMachinesList.filter((m) => m.plant_id === plant.id);
+                        const isExpanded = expandedPlants.has(plant.id);
+                        if (plantMachines.length === 0 && searchQuery) return null;
+                        return (
+                            <div key={plant.id} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
+                                <button
+                                    onClick={() => togglePlant(plant.id)}
+                                    className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors"
+                                >
+                                    {isExpanded ? (
+                                        <ChevronDown className="w-5 h-5 text-blue-400" />
+                                    ) : (
+                                        <ChevronRight className="w-5 h-5 text-blue-400" />
+                                    )}
+                                    <Building2 className="w-5 h-5 text-blue-400" />
+                                    <span className="text-foreground font-bold text-lg">{plant.name}</span>
+                                    <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-300 dark:border-blue-500/30 ml-2">
+                                        {plantMachines.length}
+                                    </Badge>
+                                </button>
+                                {isExpanded && plantMachines.length > 0 && (
+                                    <div className="px-4 pb-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            {plantMachines.map((m) => (
+                                                <MachineCard key={m.id} item={m} />
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
+                                )}
+                            </div>
+                        );
+                    })}
 
-                {/* Unassigned to plant */}
                 {unassigned.length > 0 && (
                     <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
                             <Wrench className="w-5 h-5 text-muted-foreground" />
                             <span className="text-muted-foreground font-bold text-lg">Non assegnate a stabilimento</span>
-                            <Badge className="bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30 ml-2">{unassigned.length}</Badge>
+                            <Badge className="bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30 ml-2">
+                                {unassigned.length}
+                            </Badge>
                         </div>
                         <div className="px-4 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {unassigned.map(m => <MachineCard key={m.id} item={m} />)}
+                                {unassigned.map((m) => (
+                                    <MachineCard key={m.id} item={m} />
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -325,33 +457,47 @@ export default function EquipmentPage() {
                         <p className="text-muted-foreground mt-1">{t("equipment.subtitle")}</p>
                     </div>
                     <div className="flex gap-2">
-                        {plants.length > 0 && (
-                            <Button variant="outline" size="sm" onClick={() => setGroupedView(!groupedView)} className="border-border">
+                        {orgType === "customer" && plants.length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setGroupedView(!groupedView)}
+                                className="border-border"
+                            >
                                 {groupedView ? <LayoutGrid className="w-4 h-4" /> : <List className="w-4 h-4" />}
                                 <span className="ml-2 hidden sm:inline">{groupedView ? "Griglia" : "Per stabilimento"}</span>
                             </Button>
                         )}
                         {isAdmin && (
-                            <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => router.push("/equipment/new")}>
-                                <Plus className="w-4 h-4 mr-2" />{t("equipment.addEquipment")}
+                            <Button
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                onClick={() => router.push("/equipment/new")}
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                {t("equipment.addEquipment")}
                             </Button>
                         )}
                     </div>
                 </div>
 
-                {/* Filters */}
                 <Card className="rounded-2xl border-0 bg-card shadow-sm">
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="flex-1 relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input placeholder={t("common.search")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl" />
+                                <Input
+                                    placeholder={t("common.search")}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl"
+                                />
                             </div>
+
                             <div className="flex gap-3 flex-wrap">
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                                     <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
-                                        <Filter className="w-4 h-4 mr-2 text-muted-foreground" /><SelectValue placeholder={t("common.status")} />
+                                        <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                                        <SelectValue placeholder={t("common.status")} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">{t("common.all")}</SelectItem>
@@ -361,6 +507,7 @@ export default function EquipmentPage() {
                                         <SelectItem value="decommissioned">Dismesso</SelectItem>
                                     </SelectContent>
                                 </Select>
+
                                 {categories.length > 0 && (
                                     <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                                         <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
@@ -368,11 +515,16 @@ export default function EquipmentPage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t("common.all")}</SelectItem>
-                                            {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                                            {categories.map((cat) => (
+                                                <SelectItem key={cat} value={cat}>
+                                                    {cat}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 )}
-                                {hasAssigned && (
+
+                                {orgType === "customer" && hasAssigned && (
                                     <Select value={sourceFilter} onValueChange={setSourceFilter}>
                                         <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
                                             <SelectValue placeholder="Provenienza" />
@@ -389,10 +541,13 @@ export default function EquipmentPage() {
                     </CardContent>
                 </Card>
 
-                {/* Machine list */}
-                {groupedView ? renderGroupedView() : (
+                {groupedView && orgType === "customer" ? (
+                    renderGroupedView()
+                ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredMachines.map(m => <MachineCard key={m.id} item={m} />)}
+                        {filteredMachines.map((m) => (
+                            <MachineCard key={m.id} item={m} />
+                        ))}
                     </div>
                 )}
 
@@ -403,7 +558,8 @@ export default function EquipmentPage() {
                         <p className="text-muted-foreground mb-6">{t("equipment.noEquipmentDesc")}</p>
                         {isAdmin && (
                             <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => router.push("/equipment/new")}>
-                                <Plus className="w-4 h-4 mr-2" />{t("equipment.addFirst")}
+                                <Plus className="w-4 h-4 mr-2" />
+                                {t("equipment.addFirst")}
                             </Button>
                         )}
                     </Card>
@@ -412,4 +568,3 @@ export default function EquipmentPage() {
         </MainLayout>
     );
 }
-
