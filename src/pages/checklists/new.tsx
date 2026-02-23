@@ -7,10 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, ArrowLeft, Upload } from "lucide-react";
+import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ChecklistInputType } from "@/services/checklistService";
+import { getUserContext } from "@/lib/supabaseHelpers";
+
+// Se nel tuo progetto esiste già questo tipo, puoi reimportarlo come prima.
+// Qui lo rendo "safe" e compatibile con l'editor che hai incollato.
+type ChecklistInputType = "text" | "number" | "boolean" | "select" | "photo";
 
 interface TemplateItemDraft {
     id: string;
@@ -23,29 +27,80 @@ interface TemplateItemDraft {
 }
 
 let itemIdCounter = 0;
-function newItemId() { return `item-${++itemIdCounter}`; }
+function newItemId() {
+    return `item-${++itemIdCounter}`;
+}
 
 export default function NewChecklistTemplate() {
     const router = useRouter();
     const { toast } = useToast();
+
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    const [userRole, setUserRole] = useState < string > ("technician");
+    const [orgId, setOrgId] = useState < string | null > (null);
+
     const [formData, setFormData] = useState({
         title: "",
         category: "",
         equipmentType: "",
         description: "",
     });
+
     const [items, setItems] = useState < TemplateItemDraft[] > ([
-        { id: "item-0", title: "", description: "", is_required: true, order_index: 0, input_type: "boolean", requires_photo: false },
+        {
+            id: "item-0",
+            title: "",
+            description: "",
+            is_required: true,
+            order_index: 0,
+            input_type: "boolean",
+            requires_photo: false,
+        },
     ]);
 
-    useEffect(() => { setMounted(true); }, []);
+    useEffect(() => {
+        setMounted(true);
+
+        const init = async () => {
+            try {
+                const ctx = await getUserContext();
+                if (!ctx) {
+                    router.push("/login");
+                    return;
+                }
+                setUserRole(ctx.role ?? "technician");
+                setOrgId(ctx.orgId ?? null);
+
+                if (!ctx.orgId) {
+                    toast({
+                        title: "Errore",
+                        description: "Organizzazione non trovata. Verifica default_organization_id / membership.",
+                        variant: "destructive",
+                    });
+                }
+            } catch (e: any) {
+                console.error(e);
+                toast({ title: "Errore", description: e?.message ?? "Errore inizializzazione", variant: "destructive" });
+            }
+        };
+
+        init();
+    }, [router]);
 
     const addItem = () => {
         setItems((prev) => [
             ...prev,
-            { id: newItemId(), title: "", description: "", is_required: true, order_index: prev.length, input_type: "boolean", requires_photo: false },
+            {
+                id: newItemId(),
+                title: "",
+                description: "",
+                is_required: true,
+                order_index: prev.length,
+                input_type: "boolean",
+                requires_photo: false,
+            },
         ]);
     };
 
@@ -55,10 +110,45 @@ export default function NewChecklistTemplate() {
         setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
     };
 
+    // Insert con fallback: se alcune colonne non esistono (category/equipment_type),
+    // ritenta con payload minimo (così non si blocca la creazione).
+    const insertTemplateWithFallback = async (payload: any) => {
+        let { data, error } = await supabase
+            .from("checklist_templates")
+            .insert(payload)
+            .select("id")
+            .single();
+
+        if (!error) return data;
+
+        const msg = String((error as any)?.message ?? "");
+        const looksLikeMissingColumn =
+            msg.toLowerCase().includes("column") && msg.toLowerCase().includes("does not exist");
+
+        if (!looksLikeMissingColumn) throw error;
+
+        // fallback: togli campi "optional" che potrebbero non esistere
+        const minimal = {
+            organization_id: payload.organization_id,
+            name: payload.name,
+            description: payload.description ?? null,
+            target_type: payload.target_type ?? "machine",
+            is_active: payload.is_active ?? true,
+        };
+
+        const retry = await supabase.from("checklist_templates").insert(minimal).select("id").single();
+        if (retry.error) throw retry.error;
+        return retry.data;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (loading) return;
+
         setLoading(true);
         try {
+            if (!orgId) throw new Error("Organizzazione non trovata. Effettua logout/login o imposta default_organization_id.");
+
             if (!formData.title.trim()) {
                 toast({ title: "Errore", description: "Il titolo è obbligatorio", variant: "destructive" });
                 return;
@@ -67,46 +157,56 @@ export default function NewChecklistTemplate() {
                 toast({ title: "Errore", description: "La categoria è obbligatoria", variant: "destructive" });
                 return;
             }
-            const validItems = items.map((it, idx) => ({ ...it, order_index: idx })).filter((it) => it.title.trim().length > 0);
+
+            const validItems = items
+                .map((it, idx) => ({ ...it, order_index: idx }))
+                .filter((it) => it.title.trim().length > 0);
+
             if (validItems.length === 0) {
                 toast({ title: "Errore", description: "Aggiungi almeno un elemento", variant: "destructive" });
                 return;
             }
 
-            // Get auth token for API call
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error("Sessione non trovata. Effettua il login.");
+            // 1) create template (schema nuovo)
+            const templatePayload: any = {
+                organization_id: orgId,
+                name: formData.title.trim(),
+                description: formData.description.trim() || null,
+                target_type: "machine",
+                is_active: true,
+                // questi due campi potrebbero non esistere nella tua tabella -> fallback automatico
+                category: formData.category.trim() || null,
+                equipment_type: formData.equipmentType.trim() || null,
+            };
 
-            const response = await fetch("/api/checklists/templates/create", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({
-                    name: formData.title.trim(),
-                    description: formData.description.trim() || null,
-                    target_type: "machine",
-                    category: formData.category.trim() || null,
-                    equipment_type: formData.equipmentType.trim() || null,
-                    items: validItems.map((it) => ({
-                        title: it.title.trim(),
-                        description: it.description.trim() || null,
-                        input_type: it.input_type,
-                        is_required: it.is_required,
-                        requires_photo: it.requires_photo,
-                    })),
-                }),
-            });
+            const tpl = await insertTemplateWithFallback(templatePayload);
+            const templateId = (tpl as any)?.id;
+            if (!templateId) throw new Error("Creazione template fallita (id mancante).");
 
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Errore durante la creazione");
+            // 2) create items
+            const itemsPayload = validItems.map((it) => ({
+                organization_id: orgId,
+                template_id: templateId,
+                title: it.title.trim(),
+                description: it.description.trim() || null,
+                input_type: it.input_type,
+                is_required: it.is_required,
+                order_index: it.order_index,
+                metadata: { requiresPhoto: it.requires_photo },
+            }));
+
+            const { error: itemsErr } = await supabase.from("checklist_template_items").insert(itemsPayload);
+            if (itemsErr) throw itemsErr;
 
             toast({ title: "Successo", description: "Checklist creata con successo" });
             router.push("/checklists");
         } catch (error: any) {
             console.error("Error creating checklist:", error);
-            toast({ title: "Errore", description: error.message || "Errore durante la creazione", variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: error?.message || "Errore durante la creazione",
+                variant: "destructive",
+            });
         } finally {
             setLoading(false);
         }
@@ -115,7 +215,7 @@ export default function NewChecklistTemplate() {
     if (!mounted) return null;
 
     return (
-        <MainLayout>
+        <MainLayout userRole={userRole as any}>
             <div className="container mx-auto py-8 px-4 max-w-3xl">
                 <Button variant="ghost" className="mb-6" onClick={() => router.push("/checklists")}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> Indietro
@@ -182,14 +282,19 @@ export default function NewChecklistTemplate() {
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <Label className="text-foreground">Elementi Checklist *</Label>
-                                    <Button type="button" variant="outline" size="sm" onClick={addItem}
-                                        className="border-[#FF6B35]/50 text-[#FF6B35] hover:bg-[#FF6B35]/10 bg-transparent">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={addItem}
+                                        className="border-[#FF6B35]/50 text-[#FF6B35] hover:bg-[#FF6B35]/10 bg-transparent"
+                                    >
                                         <Plus className="mr-2 h-4 w-4" /> Aggiungi Elemento
                                     </Button>
                                 </div>
 
                                 <div className="space-y-3">
-                                    {items.map((item, idx) => (
+                                    {items.map((item) => (
                                         <div key={item.id} className="p-4 border border-border rounded-lg bg-muted/30 space-y-3">
                                             <div className="flex justify-between items-start gap-3">
                                                 <div className="flex-1 space-y-3">
@@ -202,6 +307,7 @@ export default function NewChecklistTemplate() {
                                                             className="bg-muted border-border text-foreground"
                                                         />
                                                     </div>
+
                                                     <div>
                                                         <Label className="text-xs text-muted-foreground mb-1 block">Descrizione elemento</Label>
                                                         <Input
@@ -211,6 +317,7 @@ export default function NewChecklistTemplate() {
                                                             className="bg-muted border-border text-foreground"
                                                         />
                                                     </div>
+
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
                                                         <div className="space-y-1">
                                                             <Label className="text-xs text-muted-foreground">Tipo input</Label>
@@ -226,6 +333,7 @@ export default function NewChecklistTemplate() {
                                                                 <option value="photo">Foto</option>
                                                             </select>
                                                         </div>
+
                                                         <div className="flex items-center gap-2 pt-4">
                                                             <Switch
                                                                 checked={item.is_required}
@@ -233,6 +341,7 @@ export default function NewChecklistTemplate() {
                                                             />
                                                             <Label className="text-foreground text-sm">Campo obbligatorio</Label>
                                                         </div>
+
                                                         <div className="flex items-center gap-2 pt-4">
                                                             <Switch
                                                                 checked={item.requires_photo}
@@ -242,10 +351,15 @@ export default function NewChecklistTemplate() {
                                                         </div>
                                                     </div>
                                                 </div>
+
                                                 {items.length > 1 && (
-                                                    <Button type="button" variant="ghost" size="icon"
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
                                                         onClick={() => removeItem(item.id)}
-                                                        className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10">
+                                                        className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                                                    >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 )}
