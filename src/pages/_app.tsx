@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
@@ -5,9 +6,14 @@ import Head from "next/head";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { PWAProvider } from "@/contexts/PWAProvider";
-import dynamic from "next/dynamic";
 
-function App({ Component, pageProps }: AppProps) {
+export default function App({ Component, pageProps }: AppProps) {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     return (
         <>
             <Head>
@@ -18,16 +24,16 @@ function App({ Component, pageProps }: AppProps) {
                 <meta name="apple-mobile-web-app-title" content="MACHINA" />
                 <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
             </Head>
-            <ThemeProvider>
-                <LanguageProvider>
-                    <PWAProvider>
-                        <Component {...pageProps} />
-                        <Toaster />
-                    </PWAProvider>
-                </LanguageProvider>
-            </ThemeProvider>
+            {!mounted ? null : (
+                <ThemeProvider>
+                    <LanguageProvider>
+                        <PWAProvider>
+                            <Component {...pageProps} />
+                            <Toaster />
+                        </PWAProvider>
+                    </LanguageProvider>
+                </ThemeProvider>
+            )}
         </>
     );
-}
-
-export default dynamic(() => Promise.resolve(App), { ssr: false });
+} { ssr: false });
