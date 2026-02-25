@@ -1,5 +1,4 @@
 // src/pages/equipment/new.tsx
-<div className="text-xs opacity-50">PAGE: equipment/new.tsx</div>
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
