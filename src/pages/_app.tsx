@@ -1,3 +1,9 @@
+import { useEffect } from "react";
+import { initAuthContextCacheListener } from "@/lib/supabaseHelpers";
+
+useEffect(() => {
+    initAuthContextCacheListener();
+}, []);
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import Head from "next/head";
