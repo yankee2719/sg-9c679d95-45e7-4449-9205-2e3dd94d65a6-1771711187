@@ -1,176 +1,209 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface UserContext {
-    userId: string;
-    orgId: string | null;
-    orgType: string | null;
-    role: string;
-    displayName: string;
-    email: string;
+  userId: string;
+  orgId: string | null;
+  orgType: string | null;
+  role: string;
+  displayName: string;
+  email: string;
 }
 
 /**
- * Ensure a profiles row exists (some projects miss the signup trigger).
- * Safe with RLS if user can upsert their own profile row.
+ * Small in-memory cache to avoid UI flicker + repeated calls.
+ * Cleared on auth state changes.
  */
-async function ensureProfileRow(userId: string, email: string) {
-    const { data: existing, error: readErr } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", userId)
-        .maybeSingle();
+let ctxCache: { value: UserContext | null; ts: number } = { value: null, ts: 0 };
+const CACHE_TTL_MS = 30_000;
 
-    // If RLS blocks reading, we can't know; just return.
-    if (readErr) return;
+function now() {
+  return Date.now();
+}
 
-    if (!existing) {
-        await supabase.from("profiles").upsert(
-            {
-                id: userId,
-                email,
-                display_name: null,
-                first_name: null,
-                last_name: null,
-                default_organization_id: null,
-            } as any,
-            { onConflict: "id" }
-        );
+export function clearUserContextCache() {
+  ctxCache = { value: null, ts: 0 };
+}
+
+/**
+ * HARDENED: single source of truth via RPC (Security Definer).
+ * Fallback (legacy) is kept only as a safety net.
+ */
+export async function getUserContext(force = false): Promise<UserContext | null> {
+  if (!force && ctxCache.value && now() - ctxCache.ts < CACHE_TTL_MS) {
+    return ctxCache.value;
+  }
+
+  // 1) Must have auth user
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+
+  if (userErr) {
+    console.error("getUserContext auth.getUser error:", userErr);
+  }
+  if (!user) {
+    clearUserContextCache();
+    return null;
+  }
+
+  // 2) Preferred: RPC (atomic + consistent)
+  try {
+    const { data, error } = await supabase.rpc("get_user_context");
+
+    if (error) throw error;
+
+    // Supabase rpc returns array-like for set-returning functions (usually 0 or 1 row)
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+      // If profiles row missing, treat as not ready
+      throw new Error("get_user_context returned no row (profile missing?)");
     }
-}
 
-async function getOrgType(orgId: string): Promise<string | null> {
-    const { data, error } = await supabase
-        .from("organizations")
-        .select("type")
-        .eq("id", orgId)
-        .maybeSingle();
-
-    if (error) return null;
-    return (data as any)?.type ?? null;
-}
-
-async function getRoleForOrg(userId: string, orgId: string): Promise<string> {
-    const { data, error } = await supabase
-        .from("organization_memberships")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("organization_id", orgId)
-        .eq("is_active", true)
-        .maybeSingle();
-
-    if (error) return "technician";
-    return (data as any)?.role ?? "technician";
-}
-
-/**
- * If default_organization_id is missing, fallback to any active membership.
- * Prefer a manufacturer org if the user has one (important for your UX).
- */
-async function resolveOrgId(userId: string, defaultOrgId: string | null) {
-    if (defaultOrgId) return defaultOrgId;
-
-    const { data: memberships, error } = await supabase
-        .from("organization_memberships")
-        .select("organization_id")
-        .eq("user_id", userId)
-        .eq("is_active", true);
-
-    if (error || !memberships || memberships.length === 0) return null;
-
-    const orgIds = memberships.map((m: any) => m.organization_id).filter(Boolean);
-    if (orgIds.length === 0) return null;
-
-    // Load org types and prefer manufacturer
-    const { data: orgs } = await supabase
-        .from("organizations")
-        .select("id,type")
-        .in("id", orgIds);
-
-    const manufacturer = (orgs ?? []).find((o: any) => o.type === "manufacturer");
-    return (manufacturer?.id ?? orgIds[0]) as string;
-}
-
-export async function getUserContext(): Promise<UserContext | null> {
-    const {
-        data: { user },
-        error: userErr,
-    } = await supabase.auth.getUser();
-
-    if (userErr || !user) return null;
-
-    const email = user.email || "";
-
-    // Make sure profile exists (if your DB trigger failed)
-    await ensureProfileRow(user.id, email);
-
-    const { data: profile, error: profileErr } = await supabase
-        .from("profiles")
-        .select("default_organization_id, display_name, email, first_name, last_name")
-        .eq("id", user.id)
-        .maybeSingle();
-
-    // If RLS blocks profile read, we still can try memberships fallback
-    const defaultOrgId = (profile as any)?.default_organization_id ?? null;
-
-    const orgId = await resolveOrgId(user.id, defaultOrgId);
-    const role = orgId ? await getRoleForOrg(user.id, orgId) : "technician";
-    const orgType = orgId ? await getOrgType(orgId) : null;
-
-    const displayName =
-        (profile as any)?.display_name ||
-        (profile as any)?.first_name ||
-        email.split("@")[0] ||
-        "User";
-
-    return {
-        userId: user.id,
-        orgId,
-        orgType,
-        role,
-        displayName,
-        email: (profile as any)?.email || email,
+    const ctx: UserContext = {
+      userId: row.user_id ?? user.id,
+      orgId: row.org_id ?? null,
+      orgType: row.org_type ?? null,
+      role: row.role ?? "technician",
+      displayName:
+        row.display_name ??
+        user.email?.split("@")[0] ??
+        "User",
+      email: row.email ?? user.email ?? "",
     };
+
+    // HARD FAIL: if you’re logged-in, org should usually exist in this app
+    // (If you want to allow “no org yet”, change this behavior.)
+    if (!ctx.orgId || !ctx.orgType) {
+      throw new Error("Context incompleto: orgId/orgType null (profile default_organization_id o RLS/seed errati)");
+    }
+
+    ctxCache = { value: ctx, ts: now() };
+    return ctx;
+  } catch (e) {
+    console.warn("getUserContext RPC failed, falling back:", e);
+  }
+
+  // 3) Fallback legacy (keep it strict + non-silent)
+  const { data: profile, error: pErr } = await supabase
+    .from("profiles")
+    .select("default_organization_id, display_name, email, first_name, last_name")
+    .eq("id", user.id)
+    .single();
+
+  if (pErr) {
+    console.error("getUserContext fallback profile error:", pErr);
+    clearUserContextCache();
+    return null;
+  }
+
+  const orgId: string | null = (profile as any)?.default_organization_id ?? null;
+
+  if (!orgId) {
+    // same hard-fail semantics
+    throw new Error("default_organization_id mancante in profiles: impossibile determinare organizzazione.");
+  }
+
+  const { data: membership, error: mErr } = await supabase
+    .from("organization_memberships")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("organization_id", orgId)
+    .eq("is_active", true)
+    .single();
+
+  if (mErr) {
+    console.error("getUserContext fallback membership error:", mErr);
+    throw new Error("Impossibile leggere organization_memberships per determinare role.");
+  }
+
+  const { data: org, error: oErr } = await supabase
+    .from("organizations")
+    .select("type")
+    .eq("id", orgId)
+    .single();
+
+  if (oErr) {
+    console.error("getUserContext fallback organizations error:", oErr);
+    throw new Error("Impossibile leggere organizations.type per determinare orgType.");
+  }
+
+  const displayName =
+    (profile as any)?.display_name ||
+    (profile as any)?.first_name ||
+    user.email?.split("@")[0] ||
+    "User";
+
+  const ctx: UserContext = {
+    userId: user.id,
+    orgId,
+    orgType: (org as any)?.type ?? null,
+    role: (membership as any)?.role ?? "technician",
+    displayName,
+    email: (profile as any)?.email || user.email || "",
+  };
+
+  if (!ctx.orgType) {
+    throw new Error("orgType non risolto - RLS o dati organizations incompleti.");
+  }
+
+  ctxCache = { value: ctx, ts: now() };
+  return ctx;
 }
 
 export async function getProfileData(userId: string) {
-    const { data, error } = await supabase
-        .from("profiles")
-        .select("display_name, first_name, last_name, default_organization_id, email")
-        .eq("id", userId)
-        .maybeSingle();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("display_name, first_name, last_name, default_organization_id, email")
+    .eq("id", userId)
+    .single();
 
-    if (error || !data) return null;
+  if (error) {
+    console.error("getProfileData error:", error);
+    return null;
+  }
+  if (!data) return null;
 
-    let role = "technician";
-    if ((data as any).default_organization_id) {
-        const { data: membership } = await supabase
-            .from("organization_memberships")
-            .select("role")
-            .eq("user_id", userId)
-            .eq("organization_id", (data as any).default_organization_id)
-            .eq("is_active", true)
-            .maybeSingle();
+  // Get role from membership
+  let role = "technician";
+  if ((data as any).default_organization_id) {
+    const { data: membership } = await supabase
+      .from("organization_memberships")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("organization_id", (data as any).default_organization_id)
+      .eq("is_active", true)
+      .single();
 
-        if ((membership as any)?.role) role = (membership as any).role;
-    }
+    if ((membership as any)?.role) role = (membership as any).role;
+  }
 
-    return {
-        full_name:
-            (data as any).display_name ||
-            `${(data as any).first_name || ""} ${(data as any).last_name || ""}`.trim() ||
-            null,
-        role,
-        tenant_id: (data as any).default_organization_id,
-    };
+  return {
+    full_name:
+      (data as any).display_name ||
+      `${(data as any).first_name || ""} ${(data as any).last_name || ""}`.trim() ||
+      null,
+    role,
+    tenant_id: (data as any).default_organization_id,
+  };
 }
 
 export async function getNotificationCount(userId: string): Promise<number> {
-    const { count, error } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("is_read", false);
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
 
-    if (error) return 0;
-    return count || 0;
+  if (error) return 0;
+  return count || 0;
+}
+
+/**
+ * Recommended: clear cache when auth changes (call once in _app.tsx)
+ */
+export function initAuthContextCacheListener() {
+  supabase.auth.onAuthStateChange(() => {
+    clearUserContextCache();
+  });
 }
