@@ -1,3 +1,4 @@
+<div className="text-xs opacity-50">PAGE: equipment/edit/new.tsx</div>
 import type { NextApiResponse } from "next";
 import { withAuth, AuthenticatedRequest, getSupabaseAdmin } from "@/lib/middleware/auth";
 import { sendSuccess, sendError, ApiError, handleSupabaseError } from "@/lib/middleware/errorHandler";
