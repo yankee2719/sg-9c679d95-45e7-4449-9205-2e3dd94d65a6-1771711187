@@ -1,6 +1,7 @@
 // src/pages/equipment/new.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
@@ -19,17 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { ArrowLeft, Save } from "lucide-react";
 
-type CustomerOrg = {
-  id: string;
-  name: string;
-};
-
-type Plant = {
-  id: string;
-  name?: string | null;
-  code?: string | null;
-};
-
+type CustomerOrg = { id: string; name: string };
+type Plant = { id: string; name?: string | null; code?: string | null };
 type ProductionLine = {
   id: string;
   name?: string | null;
@@ -48,8 +40,9 @@ export default function NewEquipmentPage() {
   const [userRole, setUserRole] = useState<string>("technician");
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgType, setOrgType] = useState<string | null>(null);
-  const [isManufacturer, setIsManufacturer] = useState(false);
+  const isManufacturer = orgType === "manufacturer";
 
+  // form fields
   const [name, setName] = useState("");
   const [internalCode, setInternalCode] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
@@ -59,7 +52,7 @@ export default function NewEquipmentPage() {
   const [customers, setCustomers] = useState<CustomerOrg[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
 
-  // Customer: select plant + optional line
+  // Customer: select plant + line
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState<string>("");
   const [lines, setLines] = useState<ProductionLine[]>([]);
@@ -68,13 +61,12 @@ export default function NewEquipmentPage() {
 
   const canCreate = useMemo(() => true, []);
 
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     const init = async () => {
-      setMounted(true);
-      setLoading(true);
-
       try {
-        const ctx = await getUserContext(); // hardened: should not return orgType null in normal flow
+        const ctx: any = await getUserContext();
         if (!ctx) {
           router.push("/login");
           return;
@@ -82,19 +74,33 @@ export default function NewEquipmentPage() {
 
         setUserRole(ctx.role ?? "technician");
         setOrgId(ctx.orgId ?? null);
-        setOrgType(ctx.orgType ?? null);
 
-        // HARD FAIL (fondamentale) - evita UI random
-        if (!ctx.orgType) {
+        // --------- HARDEN orgType (NO BUG RANDOM) ----------
+        let resolvedOrgType = ctx.orgType as string | null;
+
+        if (!resolvedOrgType && ctx.orgId) {
+          const { data: orgRow, error: orgErr } = await supabase
+            .from("organizations")
+            .select("type")
+            .eq("id", ctx.orgId)
+            .single();
+
+          if (orgErr) throw orgErr;
+          resolvedOrgType = (orgRow as any)?.type ?? null;
+        }
+
+        // HARD FAIL (fondamentale)
+        if (!resolvedOrgType) {
           throw new Error("orgType non risolto - RLS o context errato");
         }
 
-        const mfr = ctx.orgType === "manufacturer";
-        setIsManufacturer(mfr);
+        setOrgType(resolvedOrgType);
 
-        if (mfr) {
-          // Load customers that belong to this manufacturer
-          if (!ctx.orgId) throw new Error("Organization non trovata.");
+        // --------- LOAD DATA by orgType ----------
+        if (resolvedOrgType === "manufacturer") {
+          if (!ctx.orgId) throw new Error("Organization ID mancante.");
+
+          // Manufacturer selects customers (organizations where manufacturer_org_id = my org)
           const { data, error } = await supabase
             .from("organizations")
             .select("id,name")
@@ -106,12 +112,10 @@ export default function NewEquipmentPage() {
           if (error) throw error;
           setCustomers((data ?? []) as CustomerOrg[]);
         } else {
-          // Load plants for current org (customer)
-          if (!ctx.orgId) throw new Error("Organization non trovata.");
+          // Customer selects plant (+ optional line)
           const { data, error } = await supabase
             .from("plants")
             .select("id,name,code")
-            .eq("organization_id", ctx.orgId)
             .eq("is_archived", false)
             .order("name", { ascending: true });
 
@@ -131,10 +135,10 @@ export default function NewEquipmentPage() {
     };
 
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, [router, toast]);
 
   useEffect(() => {
+    if (!mounted) return;
     if (isManufacturer) return;
 
     const loadLines = async () => {
@@ -150,7 +154,6 @@ export default function NewEquipmentPage() {
           .from("production_lines")
           .select("id,name,code,plant_id")
           .eq("plant_id", selectedPlantId)
-          .eq("is_archived", false)
           .order("name", { ascending: true });
 
         if (error) throw error;
@@ -171,20 +174,10 @@ export default function NewEquipmentPage() {
     };
 
     loadLines();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlantId, isManufacturer]);
+  }, [selectedPlantId, isManufacturer, mounted, toast]);
 
   const handleSave = async () => {
     if (!canCreate) return;
-
-    if (!name.trim()) {
-      toast({
-        title: "Errore",
-        description: "Inserisci un nome per la macchina/attrezzatura",
-        variant: "destructive",
-      });
-      return;
-    }
 
     if (!orgId) {
       toast({
@@ -195,31 +188,36 @@ export default function NewEquipmentPage() {
       return;
     }
 
-    if (isManufacturer) {
-      if (!selectedCustomerId) {
-        toast({
-          title: "Errore",
-          description: "Seleziona un cliente",
-          variant: "destructive",
-        });
-        return;
-      }
-    } else {
-      if (!selectedPlantId) {
-        toast({
-          title: "Errore",
-          description: "Seleziona uno stabilimento",
-          variant: "destructive",
-        });
-        return;
-      }
+    if (!name.trim()) {
+      toast({
+        title: "Errore",
+        description: "Inserisci un nome per la macchina/attrezzatura",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isManufacturer && !selectedCustomerId) {
+      toast({
+        title: "Errore",
+        description: "Seleziona un cliente",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isManufacturer && !selectedPlantId) {
+      toast({
+        title: "Errore",
+        description: "Seleziona uno stabilimento",
+        variant: "destructive",
+      });
+      return;
     }
 
     setSaving(true);
     try {
-      // Create machine in machines
-      // Manufacturer creates machine under manufacturer org; then assigns to customer via machine_assignments
-      // Customer creates machine under their org and directly sets plant/line
+      // machines belong to CURRENT org (manufacturer org OR customer org)
       const payload: any = {
         organization_id: orgId,
         name: name.trim(),
@@ -232,10 +230,6 @@ export default function NewEquipmentPage() {
       if (!isManufacturer) {
         payload.plant_id = selectedPlantId;
         payload.production_line_id = selectedLineId || null;
-      } else {
-        // ensure we don't accidentally send plant/line
-        payload.plant_id = null;
-        payload.production_line_id = null;
       }
 
       const { data: machine, error } = await supabase
@@ -246,7 +240,7 @@ export default function NewEquipmentPage() {
 
       if (error) throw error;
 
-      // Link machine to customer via machine_assignments
+      // Manufacturer: link machine to customer via machine_assignments
       if (isManufacturer && selectedCustomerId && machine?.id) {
         const { error: assignError } = await supabase
           .from("machine_assignments")
@@ -259,8 +253,14 @@ export default function NewEquipmentPage() {
           });
 
         if (assignError) {
-          // assignment is important; fail loudly (better than “ghost machines”)
-          throw assignError;
+          // non-fatal, ma lo segnalo
+          console.error("Assignment error:", assignError);
+          toast({
+            title: "Creato ma non assegnato",
+            description:
+              "La macchina è stata creata, ma l’assegnazione al cliente è fallita.",
+            variant: "destructive",
+          });
         }
       }
 
@@ -300,7 +300,6 @@ export default function NewEquipmentPage() {
           </CardHeader>
 
           <CardContent className="space-y-5">
-            {/* Manufacturer: CUSTOMER select */}
             {isManufacturer ? (
               <div className="space-y-2">
                 <Label>Cliente *</Label>
@@ -319,13 +318,16 @@ export default function NewEquipmentPage() {
 
                 {customers.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    Nessun cliente trovato. Crea prima un cliente collegato a questo costruttore.
+                    Nessun cliente trovato.{" "}
+                    <Link href="/customers/new" className="text-[#FF6B35] underline">
+                      Crea un cliente
+                    </Link>{" "}
+                    prima di aggiungere attrezzature.
                   </p>
                 )}
               </div>
             ) : (
               <>
-                {/* Customer: PLANT select */}
                 <div className="space-y-2">
                   <Label>Stabilimento *</Label>
                   <select
@@ -342,7 +344,6 @@ export default function NewEquipmentPage() {
                   </select>
                 </div>
 
-                {/* Customer: LINE select */}
                 <div className="space-y-2">
                   <Label>Linea (opzionale)</Label>
                   <select
@@ -358,7 +359,6 @@ export default function NewEquipmentPage() {
                       </option>
                     ))}
                   </select>
-
                   {!selectedPlantId && (
                     <p className="text-xs text-muted-foreground">
                       Seleziona prima lo stabilimento per vedere le linee.
@@ -368,7 +368,6 @@ export default function NewEquipmentPage() {
               </>
             )}
 
-            {/* Machine fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Nome *</Label>
@@ -420,9 +419,6 @@ export default function NewEquipmentPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Debug guard (optional): show current context to verify no random flips) */}
-        {/* <pre className="text-xs text-muted-foreground">{JSON.stringify({ orgType, orgId }, null, 2)}</pre> */}
       </div>
     </MainLayout>
   );
