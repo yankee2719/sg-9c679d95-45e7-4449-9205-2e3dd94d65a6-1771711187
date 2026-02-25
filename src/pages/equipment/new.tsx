@@ -1,33 +1,37 @@
 // src/pages/equipment/new.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
-import { ArrowLeft, Save, RefreshCw } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
+
+type OrgType = "manufacturer" | "customer";
 
 type CustomerOrg = { id: string; name: string };
 type Plant = { id: string; name?: string | null; code?: string | null };
-type ProductionLine = {
-    id: string;
-    name?: string | null;
-    code?: string | null;
-    plant_id: string;
-};
+type ProductionLine = { id: string; name?: string | null; code?: string | null; plant_id: string };
+
+async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
+    const { data, error } = await supabase
+        .from("organizations")
+        .select("type")
+        .eq("id", orgId)
+        .single();
+
+    if (error) throw error;
+    const t = String((data as any)?.type ?? "").toLowerCase();
+    if (t === "manufacturer") return "manufacturer";
+    if (t === "customer") return "customer";
+    return null;
+}
 
 export default function NewEquipmentPage() {
     const router = useRouter();
@@ -39,12 +43,10 @@ export default function NewEquipmentPage() {
 
     const [userRole, setUserRole] = useState < string > ("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
-    const [orgType, setOrgType] = useState < string | null > (null);
-    const [ctxError, setCtxError] = useState < string | null > (null);
+    const [orgType, setOrgType] = useState < OrgType | null > (null);
 
     const isManufacturer = orgType === "manufacturer";
 
-    // form fields
     const [name, setName] = useState("");
     const [internalCode, setInternalCode] = useState("");
     const [serialNumber, setSerialNumber] = useState("");
@@ -61,91 +63,82 @@ export default function NewEquipmentPage() {
     const [selectedLineId, setSelectedLineId] = useState < string > ("");
     const [loadingLines, setLoadingLines] = useState(false);
 
-    const canCreate = useMemo(() => true, []);
-
-    useEffect(() => setMounted(true), []);
-
-    const bootstrap = async () => {
-        setLoading(true);
-        setCtxError(null);
-
-        try {
-            const ctx: any = await getUserContext();
-            if (!ctx) {
-                router.push("/login");
-                return;
-            }
-
-            setUserRole(ctx.role ?? "technician");
-            setOrgId(ctx.orgId ?? null);
-
-            // MUST have orgType
-            let resolvedOrgType = ctx.orgType as string | null;
-
-            // fallback query (hard)
-            if (!resolvedOrgType && ctx.orgId) {
-                const { data: orgRow, error: orgErr } = await supabase
-                    .from("organizations")
-                    .select("type")
-                    .eq("id", ctx.orgId)
-                    .single();
-                if (orgErr) throw orgErr;
-                resolvedOrgType = (orgRow as any)?.type ?? null;
-            }
-
-            if (!resolvedOrgType) {
-                // IMPORTANT: do NOT render wrong branch
-                throw new Error("orgType non risolto (session/profile/RLS). Riprova tra 1 secondo.");
-            }
-
-            setOrgType(resolvedOrgType);
-
-            // load per type
-            if (resolvedOrgType === "manufacturer") {
-                if (!ctx.orgId) throw new Error("Organization ID mancante.");
-
-                const { data, error } = await supabase
-                    .from("organizations")
-                    .select("id,name")
-                    .eq("manufacturer_org_id", ctx.orgId)
-                    .eq("type", "customer")
-                    .eq("is_archived", false)
-                    .order("name", { ascending: true });
-
-                if (error) throw error;
-                setCustomers((data ?? []) as CustomerOrg[]);
-            } else {
-                const { data, error } = await supabase
-                    .from("plants")
-                    .select("id,name,code")
-                    .eq("is_archived", false)
-                    .order("name", { ascending: true });
-
-                if (error) throw error;
-                setPlants((data ?? []) as Plant[]);
-            }
-        } catch (e: any) {
-            console.error(e);
-            setCtxError(e?.message ?? "Errore context");
-            toast({
-                title: "Errore",
-                description: e?.message ?? "Errore caricamento dati",
-                variant: "destructive",
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
+    const canCreate = useMemo(() => userRole === "admin" || userRole === "supervisor", [userRole]);
 
     useEffect(() => {
-        bootstrap();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router]);
+        setMounted(true);
+
+        const init = async () => {
+            try {
+                const ctx: any = await getUserContext();
+                if (!ctx) {
+                    router.push("/login");
+                    return;
+                }
+
+                setUserRole(ctx.role ?? "technician");
+
+                const effectiveOrgId =
+                    ctx.orgId || ctx.organizationId || ctx.organization_id || ctx.tenant_id || null;
+
+                if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
+                setOrgId(effectiveOrgId);
+
+                // === HARDENING orgType (DB truth, no random ctx) ===
+                let resolvedType = ctx.orgType as OrgType | null;
+
+                if (!resolvedType && effectiveOrgId) {
+                    resolvedType = await getOrgTypeById(effectiveOrgId);
+                }
+
+                // HARD FAIL (fondamentale)
+                if (!resolvedType) {
+                    throw new Error("orgType non risolto - RLS o context errato");
+                }
+
+                setOrgType(resolvedType);
+
+                if (resolvedType === "manufacturer") {
+                    // load customers of this manufacturer
+                    const { data, error } = await supabase
+                        .from("organizations")
+                        .select("id,name")
+                        .eq("manufacturer_org_id", effectiveOrgId)
+                        .eq("type", "customer")
+                        .order("name", { ascending: true });
+
+                    if (error) throw error;
+                    setCustomers((data ?? []) as any);
+                } else {
+                    // load plants (RLS will filter)
+                    const { data, error } = await supabase
+                        .from("plants")
+                        .select("id,name,code")
+                        .eq("is_archived", false)
+                        .order("name", { ascending: true });
+
+                    if (error) throw error;
+                    setPlants((data ?? []) as any);
+                }
+            } catch (e: any) {
+                console.error(e);
+                toast({
+                    title: "Errore",
+                    description: e.message ?? "Errore caricamento",
+                    variant: "destructive",
+                });
+                router.push("/equipment");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        init();
+    }, [router, toast]);
 
     useEffect(() => {
         if (!mounted) return;
         if (isManufacturer) return;
-        if (!orgType) return; // <- IMPORTANT: don't load lines if orgType unknown
 
         const loadLines = async () => {
             if (!selectedPlantId) {
@@ -153,23 +146,22 @@ export default function NewEquipmentPage() {
                 setSelectedLineId("");
                 return;
             }
-
             setLoadingLines(true);
             try {
                 const { data, error } = await supabase
                     .from("production_lines")
                     .select("id,name,code,plant_id")
                     .eq("plant_id", selectedPlantId)
+                    .eq("is_archived", false)
                     .order("name", { ascending: true });
 
                 if (error) throw error;
-                setLines((data ?? []) as ProductionLine[]);
+                setLines((data ?? []) as any);
                 setSelectedLineId("");
             } catch (e: any) {
-                console.error(e);
                 toast({
                     title: "Errore",
-                    description: e?.message ?? "Errore caricamento linee",
+                    description: e.message ?? "Errore caricamento linee",
                     variant: "destructive",
                 });
                 setLines([]);
@@ -180,15 +172,13 @@ export default function NewEquipmentPage() {
         };
 
         loadLines();
-    }, [selectedPlantId, isManufacturer, mounted, orgType, toast]);
+    }, [selectedPlantId, isManufacturer, mounted, toast]);
 
     const handleSave = async () => {
-        if (!canCreate) return;
-
-        if (!orgId) {
+        if (!canCreate) {
             toast({
-                title: "Errore",
-                description: "Organizzazione non trovata.",
+                title: "Permesso negato",
+                description: "Solo Admin/Supervisor possono creare attrezzature.",
                 variant: "destructive",
             });
             return;
@@ -203,21 +193,18 @@ export default function NewEquipmentPage() {
             return;
         }
 
+        if (!orgId) {
+            toast({ title: "Errore", description: "Organization non trovata.", variant: "destructive" });
+            return;
+        }
+
         if (isManufacturer && !selectedCustomerId) {
-            toast({
-                title: "Errore",
-                description: "Seleziona un cliente",
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: "Seleziona un cliente", variant: "destructive" });
             return;
         }
 
         if (!isManufacturer && !selectedPlantId) {
-            toast({
-                title: "Errore",
-                description: "Seleziona uno stabilimento",
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: "Seleziona uno stabilimento", variant: "destructive" });
             return;
         }
 
@@ -230,12 +217,9 @@ export default function NewEquipmentPage() {
                 serial_number: serialNumber.trim() || null,
                 notes: notes.trim() || null,
                 is_archived: false,
+                plant_id: isManufacturer ? null : selectedPlantId,
+                production_line_id: isManufacturer ? null : selectedLineId || null,
             };
-
-            if (!isManufacturer) {
-                payload.plant_id = selectedPlantId;
-                payload.production_line_id = selectedLineId || null;
-            }
 
             const { data: machine, error } = await supabase
                 .from("machines")
@@ -245,25 +229,26 @@ export default function NewEquipmentPage() {
 
             if (error) throw error;
 
-            if (isManufacturer && selectedCustomerId && machine?.id) {
-                const { error: assignError } = await supabase
-                    .from("machine_assignments")
-                    .insert({
-                        machine_id: machine.id,
-                        customer_org_id: selectedCustomerId,
-                        manufacturer_org_id: orgId,
-                        assigned_at: new Date().toISOString(),
-                        is_active: true,
-                    });
+            // Manufacturer: link machine to customer
+            if (isManufacturer && machine?.id) {
+                const { error: assignError } = await supabase.from("machine_assignments").insert({
+                    machine_id: machine.id,
+                    customer_org_id: selectedCustomerId,
+                    manufacturer_org_id: orgId,
+                    assigned_at: new Date().toISOString(),
+                    is_active: true,
+                });
 
                 if (assignError) {
+                    // non-fatal, ma te lo mostro
                     console.error("Assignment error:", assignError);
                     toast({
-                        title: "Creato ma non assegnato",
-                        description:
-                            "La macchina è stata creata, ma l’assegnazione al cliente è fallita.",
+                        title: "Creato (ma non assegnato)",
+                        description: "Macchina creata, ma errore nell’assegnazione al cliente.",
                         variant: "destructive",
                     });
+                    router.push("/equipment");
+                    return;
                 }
             }
 
@@ -273,7 +258,7 @@ export default function NewEquipmentPage() {
             console.error(e);
             toast({
                 title: "Errore salvataggio",
-                description: e?.message ?? "Errore creazione macchina",
+                description: e.message ?? "Errore creazione macchina",
                 variant: "destructive",
             });
         } finally {
@@ -282,33 +267,6 @@ export default function NewEquipmentPage() {
     };
 
     if (!mounted || loading) return null;
-
-    // IMPORTANT: do not render wrong branch when context is not ready
-    if (!orgType) {
-        return (
-            <MainLayout userRole={userRole as any}>
-                <SEO title="Nuova attrezzatura - MACHINA" />
-                <div className="container mx-auto py-10 px-4 max-w-3xl">
-                    <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                        <CardHeader>
-                            <CardTitle>Caricamento profilo…</CardTitle>
-                            <CardDescription>
-                                {ctxError ?? "Sto risolvendo organizzazione e permessi."}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex gap-2 justify-end">
-                            <Button variant="outline" onClick={() => router.push("/equipment")}>
-                                Torna
-                            </Button>
-                            <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={bootstrap}>
-                                <RefreshCw className="w-4 h-4 mr-2" /> Riprova
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
-            </MainLayout>
-        );
-    }
 
     return (
         <MainLayout userRole={userRole as any}>
@@ -348,11 +306,7 @@ export default function NewEquipmentPage() {
 
                                 {customers.length === 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        Nessun cliente trovato.{" "}
-                                        <Link href="/customers/new" className="text-[#FF6B35] underline">
-                                            Crea un cliente
-                                        </Link>{" "}
-                                        prima di aggiungere attrezzature.
+                                        Nessun cliente trovato. Crea prima un cliente.
                                     </p>
                                 )}
                             </div>
@@ -398,17 +352,14 @@ export default function NewEquipmentPage() {
                                 <Label>Nome *</Label>
                                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Pressa B1" />
                             </div>
-
                             <div className="space-y-2">
                                 <Label>Codice interno</Label>
                                 <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="es. PRS-B1" />
                             </div>
-
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Matricola</Label>
                                 <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="es. SN-12345" />
                             </div>
-
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Note</Label>
                                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Note..." />
@@ -416,7 +367,11 @@ export default function NewEquipmentPage() {
                         </div>
 
                         <div className="flex justify-end">
-                            <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            >
                                 <Save className="w-4 h-4 mr-2" />
                                 {saving ? "Salvataggio..." : "Salva"}
                             </Button>
