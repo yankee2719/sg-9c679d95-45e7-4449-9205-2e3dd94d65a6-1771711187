@@ -1,4 +1,5 @@
 // src/pages/equipment/new.tsx
+<p className="text-xs text-red-500">DEBUG ROUTE: pages/equipment/new.tsx</p>
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
