@@ -11,10 +11,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Factory, Building2 } from "lucide-react";
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type OrgType = "manufacturer" | "customer";
-
 type CustomerOrg = { id: string; name: string };
 type Plant = { id: string; name?: string | null; code?: string | null };
 type ProductionLine = { id: string; name?: string | null; code?: string | null; plant_id: string };
@@ -27,6 +34,7 @@ async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
         .single();
 
     if (error) throw error;
+
     const t = String((data as any)?.type ?? "").toLowerCase();
     if (t === "manufacturer") return "manufacturer";
     if (t === "customer") return "customer";
@@ -38,7 +46,7 @@ export default function NewEquipmentPage() {
     const { toast } = useToast();
 
     const [mounted, setMounted] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [pageLoading, setPageLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const [userRole, setUserRole] = useState < string > ("technician");
@@ -46,7 +54,9 @@ export default function NewEquipmentPage() {
     const [orgType, setOrgType] = useState < OrgType | null > (null);
 
     const isManufacturer = orgType === "manufacturer";
+    const canCreate = useMemo(() => userRole === "admin" || userRole === "supervisor", [userRole]);
 
+    // Common fields
     const [name, setName] = useState("");
     const [internalCode, setInternalCode] = useState("");
     const [serialNumber, setSerialNumber] = useState("");
@@ -63,12 +73,14 @@ export default function NewEquipmentPage() {
     const [selectedLineId, setSelectedLineId] = useState < string > ("");
     const [loadingLines, setLoadingLines] = useState(false);
 
-    const canCreate = useMemo(() => userRole === "admin" || userRole === "supervisor", [userRole]);
-
+    // =========================
+    // INIT (HARD GUARDED)
+    // =========================
     useEffect(() => {
         setMounted(true);
 
         const init = async () => {
+            setPageLoading(true);
             try {
                 const ctx: any = await getUserContext();
                 if (!ctx) {
@@ -84,19 +96,21 @@ export default function NewEquipmentPage() {
                 if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
                 setOrgId(effectiveOrgId);
 
-                // === HARDENING orgType (DB truth, no random ctx) ===
-                let resolvedType = ctx.orgType as OrgType | null;
+                // ✅ DB-TRUTH ALWAYS (ignore ctx.orgType completely)
+                const resolvedType = await getOrgTypeById(effectiveOrgId);
 
-                if (!resolvedType && effectiveOrgId) {
-                    resolvedType = await getOrgTypeById(effectiveOrgId);
-                }
-
-                // HARD FAIL (fondamentale)
+                // ✅ HARD FAIL (no UI random)
                 if (!resolvedType) {
-                    throw new Error("orgType non risolto - RLS o context errato");
+                    throw new Error("orgType non risolto - RLS o organizations.type errato");
                 }
 
                 setOrgType(resolvedType);
+
+                // Reset UI state to avoid “ghost” values between modes
+                setSelectedCustomerId("");
+                setSelectedPlantId("");
+                setSelectedLineId("");
+                setLines([]);
 
                 if (resolvedType === "manufacturer") {
                     // load customers of this manufacturer
@@ -109,8 +123,11 @@ export default function NewEquipmentPage() {
 
                     if (error) throw error;
                     setCustomers((data ?? []) as any);
+
+                    // IMPORTANT: clear plants for safety
+                    setPlants([]);
                 } else {
-                    // load plants (RLS will filter)
+                    // load plants
                     const { data, error } = await supabase
                         .from("plants")
                         .select("id,name,code")
@@ -119,26 +136,32 @@ export default function NewEquipmentPage() {
 
                     if (error) throw error;
                     setPlants((data ?? []) as any);
+
+                    // IMPORTANT: clear customers for safety
+                    setCustomers([]);
                 }
             } catch (e: any) {
                 console.error(e);
                 toast({
                     title: "Errore",
-                    description: e.message ?? "Errore caricamento",
+                    description: e?.message ?? "Errore caricamento",
                     variant: "destructive",
                 });
                 router.push("/equipment");
             } finally {
-                setLoading(false);
+                setPageLoading(false);
             }
         };
 
         init();
     }, [router, toast]);
 
+    // =========================
+    // LOAD LINES (customer only)
+    // =========================
     useEffect(() => {
         if (!mounted) return;
-        if (isManufacturer) return;
+        if (orgType !== "customer") return;
 
         const loadLines = async () => {
             if (!selectedPlantId) {
@@ -159,9 +182,10 @@ export default function NewEquipmentPage() {
                 setLines((data ?? []) as any);
                 setSelectedLineId("");
             } catch (e: any) {
+                console.error(e);
                 toast({
                     title: "Errore",
-                    description: e.message ?? "Errore caricamento linee",
+                    description: e?.message ?? "Errore caricamento linee",
                     variant: "destructive",
                 });
                 setLines([]);
@@ -172,8 +196,11 @@ export default function NewEquipmentPage() {
         };
 
         loadLines();
-    }, [selectedPlantId, isManufacturer, mounted, toast]);
+    }, [mounted, orgType, selectedPlantId, toast]);
 
+    // =========================
+    // SAVE
+    // =========================
     const handleSave = async () => {
         if (!canCreate) {
             toast({
@@ -185,11 +212,7 @@ export default function NewEquipmentPage() {
         }
 
         if (!name.trim()) {
-            toast({
-                title: "Errore",
-                description: "Inserisci un nome per la macchina/attrezzatura",
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: "Inserisci un nome", variant: "destructive" });
             return;
         }
 
@@ -198,18 +221,24 @@ export default function NewEquipmentPage() {
             return;
         }
 
-        if (isManufacturer && !selectedCustomerId) {
+        if (!orgType) {
+            toast({ title: "Errore", description: "orgType non risolto.", variant: "destructive" });
+            return;
+        }
+
+        if (orgType === "manufacturer" && !selectedCustomerId) {
             toast({ title: "Errore", description: "Seleziona un cliente", variant: "destructive" });
             return;
         }
 
-        if (!isManufacturer && !selectedPlantId) {
+        if (orgType === "customer" && !selectedPlantId) {
             toast({ title: "Errore", description: "Seleziona uno stabilimento", variant: "destructive" });
             return;
         }
 
         setSaving(true);
         try {
+            // Insert machine (organization_id ALWAYS = current org)
             const payload: any = {
                 organization_id: orgId,
                 name: name.trim(),
@@ -217,8 +246,8 @@ export default function NewEquipmentPage() {
                 serial_number: serialNumber.trim() || null,
                 notes: notes.trim() || null,
                 is_archived: false,
-                plant_id: isManufacturer ? null : selectedPlantId,
-                production_line_id: isManufacturer ? null : selectedLineId || null,
+                plant_id: orgType === "customer" ? selectedPlantId : null,
+                production_line_id: orgType === "customer" ? (selectedLineId || null) : null,
             };
 
             const { data: machine, error } = await supabase
@@ -229,8 +258,8 @@ export default function NewEquipmentPage() {
 
             if (error) throw error;
 
-            // Manufacturer: link machine to customer
-            if (isManufacturer && machine?.id) {
+            // Manufacturer: create assignment to customer
+            if (orgType === "manufacturer" && machine?.id) {
                 const { error: assignError } = await supabase.from("machine_assignments").insert({
                     machine_id: machine.id,
                     customer_org_id: selectedCustomerId,
@@ -239,17 +268,7 @@ export default function NewEquipmentPage() {
                     is_active: true,
                 });
 
-                if (assignError) {
-                    // non-fatal, ma te lo mostro
-                    console.error("Assignment error:", assignError);
-                    toast({
-                        title: "Creato (ma non assegnato)",
-                        description: "Macchina creata, ma errore nell’assegnazione al cliente.",
-                        variant: "destructive",
-                    });
-                    router.push("/equipment");
-                    return;
-                }
+                if (assignError) throw assignError;
             }
 
             toast({ title: "OK", description: "Attrezzatura creata" });
@@ -258,7 +277,7 @@ export default function NewEquipmentPage() {
             console.error(e);
             toast({
                 title: "Errore salvataggio",
-                description: e.message ?? "Errore creazione macchina",
+                description: e?.message ?? "Errore creazione macchina",
                 variant: "destructive",
             });
         } finally {
@@ -266,7 +285,8 @@ export default function NewEquipmentPage() {
         }
     };
 
-    if (!mounted || loading) return null;
+    // ✅ HARD GUARD RENDER (no flash wrong UI)
+    if (!mounted || pageLoading || !orgType) return null;
 
     return (
         <MainLayout userRole={userRole as any}>
@@ -281,85 +301,103 @@ export default function NewEquipmentPage() {
                     <CardHeader>
                         <CardTitle className="text-foreground">Nuova attrezzatura</CardTitle>
                         <CardDescription className="text-muted-foreground">
-                            {isManufacturer
+                            {orgType === "manufacturer"
                                 ? "Seleziona il cliente a cui assegnare l'attrezzatura"
                                 : "Seleziona lo stabilimento e, se serve, la linea (opzionale)"}
                         </CardDescription>
                     </CardHeader>
 
-                    <CardContent className="space-y-5">
-                        {isManufacturer ? (
+                    <CardContent className="space-y-6">
+                        {/* Org-specific selector */}
+                        {orgType === "manufacturer" ? (
                             <div className="space-y-2">
-                                <Label>Cliente *</Label>
-                                <select
-                                    value={selectedCustomerId}
-                                    onChange={(e) => setSelectedCustomerId(e.target.value)}
-                                    className="w-full border border-border bg-background rounded-md px-3 py-2"
-                                >
-                                    <option value="">— Seleziona cliente —</option>
-                                    {customers.map((c) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                <Label className="flex items-center gap-2">
+                                    <Factory className="w-4 h-4 text-purple-400" />
+                                    Cliente *
+                                </Label>
+
+                                <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                                    <SelectTrigger className="bg-muted border-border text-foreground">
+                                        <SelectValue placeholder="Seleziona cliente..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {customers.map((c) => (
+                                            <SelectItem key={c.id} value={c.id}>
+                                                {c.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
 
                                 {customers.length === 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        Nessun cliente trovato. Crea prima un cliente.
+                                        Nessun cliente trovato. Crea prima un cliente (organizations type=customer, manufacturer_org_id = la tua org).
                                     </p>
                                 )}
                             </div>
                         ) : (
-                            <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Stabilimento *</Label>
-                                    <select
-                                        value={selectedPlantId}
-                                        onChange={(e) => setSelectedPlantId(e.target.value)}
-                                        className="w-full border border-border bg-background rounded-md px-3 py-2"
-                                    >
-                                        <option value="">— Seleziona —</option>
-                                        {plants.map((p) => (
-                                            <option key={p.id} value={p.id}>
-                                                {p.name ?? p.code ?? p.id}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <Label className="flex items-center gap-2">
+                                        <Building2 className="w-4 h-4 text-blue-400" />
+                                        Stabilimento *
+                                    </Label>
+
+                                    <Select value={selectedPlantId} onValueChange={(v) => setSelectedPlantId(v)}>
+                                        <SelectTrigger className="bg-muted border-border text-foreground">
+                                            <SelectValue placeholder="Seleziona stabilimento..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {plants.map((p) => (
+                                                <SelectItem key={p.id} value={p.id}>
+                                                    {p.name ?? p.code ?? p.id}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label>Linea (opzionale)</Label>
-                                    <select
+
+                                    <Select
                                         value={selectedLineId}
-                                        onChange={(e) => setSelectedLineId(e.target.value)}
+                                        onValueChange={(v) => setSelectedLineId(v)}
                                         disabled={!selectedPlantId || loadingLines}
-                                        className="w-full border border-border bg-background rounded-md px-3 py-2 disabled:opacity-60"
                                     >
-                                        <option value="">— Nessuna —</option>
-                                        {lines.map((l) => (
-                                            <option key={l.id} value={l.id}>
-                                                {l.name ?? l.code ?? l.id}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        <SelectTrigger className="bg-muted border-border text-foreground disabled:opacity-60">
+                                            <SelectValue placeholder={!selectedPlantId ? "Seleziona prima lo stabilimento" : "Seleziona linea..."} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">Nessuna</SelectItem>
+                                            {lines.map((l) => (
+                                                <SelectItem key={l.id} value={l.id}>
+                                                    {l.name ?? l.code ?? l.id}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </>
+                            </div>
                         )}
 
+                        {/* Common fields */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Nome *</Label>
                                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Pressa B1" />
                             </div>
+
                             <div className="space-y-2">
                                 <Label>Codice interno</Label>
                                 <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="es. PRS-B1" />
                             </div>
+
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Matricola</Label>
                                 <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="es. SN-12345" />
                             </div>
+
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Note</Label>
                                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Note..." />
@@ -367,11 +405,7 @@ export default function NewEquipmentPage() {
                         </div>
 
                         <div className="flex justify-end">
-                            <Button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                            >
+                            <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
                                 <Save className="w-4 h-4 mr-2" />
                                 {saving ? "Salvataggio..." : "Salva"}
                             </Button>
