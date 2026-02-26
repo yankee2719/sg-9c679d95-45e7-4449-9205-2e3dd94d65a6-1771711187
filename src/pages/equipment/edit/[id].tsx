@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+// src/pages/equipment/edit/[id].tsx
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
@@ -24,6 +25,20 @@ interface CustomerOrg {
   name: string;
 }
 
+async function getOrgTypeById(orgId: string): Promise<"manufacturer" | "customer" | null> {
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("type")
+    .eq("id", orgId)
+    .single();
+
+  if (error) throw error;
+  const tRaw = String((data as any)?.type ?? "").toLowerCase();
+  if (tRaw === "manufacturer") return "manufacturer";
+  if (tRaw === "customer") return "customer";
+  return null;
+}
+
 export default function EditEquipment() {
   const router = useRouter();
   const { id } = router.query;
@@ -32,9 +47,12 @@ export default function EditEquipment() {
   const { t } = useLanguage();
 
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const [userRole, setUserRole] = useState("technician");
-  const [orgType, setOrgType] = useState<string | null>(null);
+
+  // DB-truth orgType (do not trust ctx.orgType)
+  const [orgType, setOrgType] = useState<"manufacturer" | "customer" | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
 
   // customer-mode data
@@ -64,53 +82,69 @@ export default function EditEquipment() {
 
   useEffect(() => {
     const init = async () => {
+      if (!id || typeof id !== "string") return;
+
+      setPageLoading(true);
       try {
-        const ctx = await getUserContext();
+        const ctx: any = await getUserContext();
         if (!ctx) {
           router.push("/login");
           return;
         }
 
         setUserRole(ctx.role ?? "technician");
-        setOrgType(ctx.orgType ?? null);
-        setOrgId(ctx.orgId ?? null);
 
-        // Carica dati macchina
-        if (id && typeof id === "string") {
-          await loadMachine(id);
+        const effectiveOrgId =
+          ctx.orgId || ctx.organizationId || ctx.organization_id || null;
+
+        if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
+
+        // ✅ DB-truth orgType
+        let resolvedType = await getOrgTypeById(effectiveOrgId);
+
+        // ✅ HARD FAIL: se non risolve, NON procedere (evita UI random)
+        if (!resolvedType) {
+          throw new Error("orgType non risolto - RLS o context errato");
         }
 
-        // Se manufacturer: carico clienti e assegnazione
-        if ((ctx.orgType ?? null) === "manufacturer" && ctx.orgId) {
+        setOrgId(effectiveOrgId);
+        setOrgType(resolvedType);
+
+        // 1) Carica macchina
+        await loadMachine(id);
+
+        // 2) Carica dati UI specifici per tipo
+        if (resolvedType === "manufacturer") {
+          // Carico clienti
           const { data: custData, error: custErr } = await supabase
             .from("organizations")
             .select("id,name")
-            .eq("manufacturer_org_id", ctx.orgId)
+            .eq("manufacturer_org_id", effectiveOrgId)
             .eq("type", "customer")
             .order("name", { ascending: true });
 
           if (custErr) console.error("customers load:", custErr);
           setCustomers((custData ?? []) as any);
 
-          // preseleziona cliente attuale (se esiste) per questa macchina
-          if (id && typeof id === "string") {
-            const { data: asg, error: asgErr } = await supabase
-              .from("machine_assignments")
-              .select("customer_org_id")
-              .eq("machine_id", id)
-              .eq("manufacturer_org_id", ctx.orgId)
-              .eq("is_active", true)
-              .order("assigned_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
+          // Preseleziona cliente attuale (assegnazione attiva)
+          const { data: asg, error: asgErr } = await supabase
+            .from("machine_assignments")
+            .select("customer_org_id")
+            .eq("machine_id", id)
+            .eq("manufacturer_org_id", effectiveOrgId)
+            .eq("is_active", true)
+            .order("assigned_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-            if (asgErr) console.error("assignment load:", asgErr);
-            if ((asg as any)?.customer_org_id) {
-              setSelectedCustomerId((asg as any).customer_org_id);
-            }
+          if (asgErr) console.error("assignment load:", asgErr);
+          if ((asg as any)?.customer_org_id) {
+            setSelectedCustomerId((asg as any).customer_org_id);
+          } else {
+            setSelectedCustomerId("");
           }
         } else {
-          // Se customer: carico plants
+          // customer: carico plants
           const { data: pData, error: pErr } = await supabase
             .from("plants")
             .select("id, name")
@@ -127,41 +161,45 @@ export default function EditEquipment() {
           description: e?.message ?? "Errore caricamento pagina",
           variant: "destructive",
         });
+        router.push("/equipment");
+      } finally {
+        setPageLoading(false);
       }
     };
 
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, router]);
 
   const loadMachine = async (machineId: string) => {
-    try {
-      const { data, error } = await supabase.from("machines").select("*").eq("id", machineId).single();
-      if (error) throw error;
+    const { data, error } = await supabase
+      .from("machines")
+      .select("*")
+      .eq("id", machineId)
+      .single();
 
-      const specs = data.specifications
-        ? typeof data.specifications === "string"
-          ? data.specifications
-          : data.specifications?.text || JSON.stringify(data.specifications)
-        : "";
+    if (error) throw error;
 
-      setFormData({
-        name: data.name || "",
-        internal_code: data.internal_code || "",
-        category: data.category || "",
-        brand: data.brand || "",
-        model: data.model || "",
-        serial_number: data.serial_number || "",
-        position: data.position || "",
-        lifecycle_state: data.lifecycle_state || "active",
-        specifications: specs,
-        notes: data.notes || "",
-        plant_id: data.plant_id || "",
-        qr_code_token: data.qr_code_token || "",
-      });
-    } catch (error) {
-      toast({ title: t("common.error"), description: "Impossibile caricare", variant: "destructive" });
-    }
+    const specs = data.specifications
+      ? typeof data.specifications === "string"
+        ? data.specifications
+        : (data.specifications as any)?.text || JSON.stringify(data.specifications)
+      : "";
+
+    setFormData({
+      name: data.name || "",
+      internal_code: data.internal_code || "",
+      category: data.category || "",
+      brand: data.brand || "",
+      model: data.model || "",
+      serial_number: data.serial_number || "",
+      position: data.position || "",
+      lifecycle_state: data.lifecycle_state || "active",
+      specifications: specs,
+      notes: data.notes || "",
+      plant_id: data.plant_id || "",
+      qr_code_token: data.qr_code_token || "",
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,7 +208,6 @@ export default function EditEquipment() {
 
     setLoading(true);
     try {
-      // Update machines base fields
       const updatePayload: any = {
         name: formData.name.trim(),
         internal_code: formData.internal_code.trim(),
@@ -180,26 +217,32 @@ export default function EditEquipment() {
         serial_number: formData.serial_number.trim() || null,
         position: formData.position.trim() || null,
         lifecycle_state: formData.lifecycle_state,
-        specifications: formData.specifications.trim() ? { text: formData.specifications.trim() } : null,
+        specifications: formData.specifications.trim()
+          ? { text: formData.specifications.trim() }
+          : null,
         notes: formData.notes.trim() || null,
         qr_code_token: formData.qr_code_token.trim() || null,
         updated_at: new Date().toISOString(),
       };
 
-      // Customer can set plant_id, manufacturer should NOT manage it here
+      // Customer può gestire plant_id; Manufacturer NO
       if (!isManufacturer) {
         updatePayload.plant_id = formData.plant_id || null;
       }
 
-      const { error: upErr } = await supabase.from("machines").update(updatePayload).eq("id", id);
+      const { error: upErr } = await supabase
+        .from("machines")
+        .update(updatePayload)
+        .eq("id", id);
+
       if (upErr) throw upErr;
 
-      // Manufacturer: set assignment to customer
+      // Manufacturer: aggiorna assegnazione cliente
       if (isManufacturer) {
         if (!orgId) throw new Error("Organization non trovata.");
         if (!selectedCustomerId) throw new Error("Seleziona un cliente.");
 
-        // disattiva eventuali assegnazioni precedenti per questa macchina (di questo manufacturer)
+        // disattiva assegnazioni precedenti per questo manufacturer
         const { error: deactErr } = await supabase
           .from("machine_assignments")
           .update({ is_active: false })
@@ -209,14 +252,16 @@ export default function EditEquipment() {
 
         if (deactErr) console.error("assignment deactivate (non-fatal):", deactErr);
 
-        // crea nuova assegnazione attiva
-        const { error: insErr } = await supabase.from("machine_assignments").insert({
-          machine_id: id,
-          customer_org_id: selectedCustomerId,
-          manufacturer_org_id: orgId,
-          assigned_at: new Date().toISOString(),
-          is_active: true,
-        });
+        // crea nuova assegnazione
+        const { error: insErr } = await supabase
+          .from("machine_assignments")
+          .insert({
+            machine_id: id,
+            customer_org_id: selectedCustomerId,
+            manufacturer_org_id: orgId,
+            assigned_at: new Date().toISOString(),
+            is_active: true,
+          });
 
         if (insErr) throw insErr;
       }
@@ -224,11 +269,17 @@ export default function EditEquipment() {
       toast({ title: t("common.success"), description: "Attrezzatura aggiornata" });
       router.push(`/equipment/${id}`);
     } catch (error: any) {
-      toast({ title: t("common.error"), description: error?.message || "Errore", variant: "destructive" });
+      toast({
+        title: t("common.error"),
+        description: error?.message || "Errore",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
+
+  if (pageLoading) return null;
 
   return (
     <MainLayout userRole={userRole as any}>
@@ -298,7 +349,10 @@ export default function EditEquipment() {
                     <Label className="text-foreground flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-blue-400" /> Stabilimento
                     </Label>
-                    <Select value={formData.plant_id} onValueChange={(v) => setFormData({ ...formData, plant_id: v })}>
+                    <Select
+                      value={formData.plant_id}
+                      onValueChange={(v) => setFormData({ ...formData, plant_id: v })}
+                    >
                       <SelectTrigger className="bg-muted border-border text-foreground">
                         <SelectValue placeholder="Seleziona stabilimento..." />
                       </SelectTrigger>
@@ -375,7 +429,10 @@ export default function EditEquipment() {
 
                 <div className="space-y-2">
                   <Label className="text-foreground">{t("equipment.status")}</Label>
-                  <Select value={formData.lifecycle_state} onValueChange={(v) => setFormData({ ...formData, lifecycle_state: v })}>
+                  <Select
+                    value={formData.lifecycle_state}
+                    onValueChange={(v) => setFormData({ ...formData, lifecycle_state: v })}
+                  >
                     <SelectTrigger className="bg-muted border-border text-foreground">
                       <SelectValue />
                     </SelectTrigger>
