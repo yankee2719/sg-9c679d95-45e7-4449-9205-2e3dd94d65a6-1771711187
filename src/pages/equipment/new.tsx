@@ -1,11 +1,16 @@
 // src/pages/equipment/new.tsx
-<p className="text-xs text-red-500">DEBUG ROUTE: pages/equipment/new.tsx</p>
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,14 +30,19 @@ import {
 type OrgType = "manufacturer" | "customer";
 type CustomerOrg = { id: string; name: string };
 type Plant = { id: string; name?: string | null; code?: string | null };
-type ProductionLine = { id: string; name?: string | null; code?: string | null; plant_id: string };
+type ProductionLine = {
+    id: string;
+    name?: string | null;
+    code?: string | null;
+    plant_id: string;
+};
 
 async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
     const { data, error } = await supabase
         .from("organizations")
         .select("type")
         .eq("id", orgId)
-        .single();
+        .maybeSingle();
 
     if (error) throw error;
 
@@ -54,8 +64,10 @@ export default function NewEquipmentPage() {
     const [orgId, setOrgId] = useState < string | null > (null);
     const [orgType, setOrgType] = useState < OrgType | null > (null);
 
-    const isManufacturer = orgType === "manufacturer";
-    const canCreate = useMemo(() => userRole === "admin" || userRole === "supervisor", [userRole]);
+    const canCreate = useMemo(
+        () => userRole === "admin" || userRole === "supervisor",
+        [userRole]
+    );
 
     // Common fields
     const [name, setName] = useState("");
@@ -141,6 +153,10 @@ export default function NewEquipmentPage() {
                     // IMPORTANT: clear customers for safety
                     setCustomers([]);
                 }
+
+                // Debug (useful to verify refresh behaviour)
+                // eslint-disable-next-line no-console
+                console.log("[EQUIPMENT NEW] orgType=", resolvedType, "orgId=", effectiveOrgId, "role=", ctx.role);
             } catch (e: any) {
                 console.error(e);
                 toast({
@@ -170,6 +186,7 @@ export default function NewEquipmentPage() {
                 setSelectedLineId("");
                 return;
             }
+
             setLoadingLines(true);
             try {
                 const { data, error } = await supabase
@@ -294,6 +311,8 @@ export default function NewEquipmentPage() {
             <SEO title="Nuova attrezzatura - MACHINA" />
 
             <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+                <p className="text-xs text-red-500">DEBUG ROUTE: pages/equipment/new.tsx</p>
+
                 <Button variant="ghost" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> Indietro
                 </Button>
@@ -332,7 +351,8 @@ export default function NewEquipmentPage() {
 
                                 {customers.length === 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        Nessun cliente trovato. Crea prima un cliente (organizations type=customer, manufacturer_org_id = la tua org).
+                                        Nessun cliente trovato. Crea prima un cliente (organizations type=customer,
+                                        manufacturer_org_id = la tua org).
                                     </p>
                                 )}
                             </div>
@@ -367,7 +387,11 @@ export default function NewEquipmentPage() {
                                         disabled={!selectedPlantId || loadingLines}
                                     >
                                         <SelectTrigger className="bg-muted border-border text-foreground disabled:opacity-60">
-                                            <SelectValue placeholder={!selectedPlantId ? "Seleziona prima lo stabilimento" : "Seleziona linea..."} />
+                                            <SelectValue
+                                                placeholder={
+                                                    !selectedPlantId ? "Seleziona prima lo stabilimento" : "Seleziona linea..."
+                                                }
+                                            />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="">Nessuna</SelectItem>
@@ -391,12 +415,20 @@ export default function NewEquipmentPage() {
 
                             <div className="space-y-2">
                                 <Label>Codice interno</Label>
-                                <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="es. PRS-B1" />
+                                <Input
+                                    value={internalCode}
+                                    onChange={(e) => setInternalCode(e.target.value)}
+                                    placeholder="es. PRS-B1"
+                                />
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Matricola</Label>
-                                <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="es. SN-12345" />
+                                <Input
+                                    value={serialNumber}
+                                    onChange={(e) => setSerialNumber(e.target.value)}
+                                    placeholder="es. SN-12345"
+                                />
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
@@ -406,7 +438,11 @@ export default function NewEquipmentPage() {
                         </div>
 
                         <div className="flex justify-end">
-                            <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            >
                                 <Save className="w-4 h-4 mr-2" />
                                 {saving ? "Salvataggio..." : "Salva"}
                             </Button>
