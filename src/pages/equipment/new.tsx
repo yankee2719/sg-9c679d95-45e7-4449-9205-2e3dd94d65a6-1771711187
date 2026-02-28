@@ -4,7 +4,13 @@ import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,23 +18,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { ArrowLeft, Save, Factory, Building2 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type OrgType = "manufacturer" | "customer";
 type CustomerOrg = { id: string; name: string };
 type Plant = { id: string; name?: string | null; code?: string | null };
-type ProductionLine = { id: string; name?: string | null; code?: string | null; plant_id: string };
+type ProductionLine = {
+    id: string;
+    name?: string | null;
+    code?: string | null;
+    plant_id: string;
+};
 
-async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
-    const { data, error } = await supabase
-        .from("organizations")
-        .select("type")
-        .eq("id", orgId)
-        .maybeSingle();
-
-    if (error) throw error;
-
-    const t = String((data as any)?.type ?? "").toLowerCase();
+function normalizeOrgType(x: any): OrgType | null {
+    const t = String(x ?? "").toLowerCase();
     if (t === "manufacturer") return "manufacturer";
     if (t === "customer") return "customer";
     return null;
@@ -38,16 +48,18 @@ export default function NewEquipmentPage() {
     const router = useRouter();
     const { toast } = useToast();
 
+    const [mounted, setMounted] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const [userRole, setUserRole] = useState < string > ("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
-
-    // ✅ ONLY DB TRUTH
     const [orgType, setOrgType] = useState < OrgType | null > (null);
 
-    const canCreate = useMemo(() => userRole === "admin" || userRole === "supervisor", [userRole]);
+    const canCreate = useMemo(
+        () => userRole === "admin" || userRole === "supervisor",
+        [userRole]
+    );
 
     // Common fields
     const [name, setName] = useState("");
@@ -70,6 +82,8 @@ export default function NewEquipmentPage() {
     // INIT (HARD GUARDED)
     // =========================
     useEffect(() => {
+        setMounted(true);
+
         const init = async () => {
             setPageLoading(true);
             try {
@@ -81,28 +95,31 @@ export default function NewEquipmentPage() {
 
                 setUserRole(ctx.role ?? "technician");
 
-                const effectiveOrgId = ctx.orgId ?? null;
-                if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
+                const effectiveOrgId =
+                    ctx.orgId || ctx.organizationId || ctx.organization_id || ctx.tenant_id || null;
 
+                if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
                 setOrgId(effectiveOrgId);
 
-                // ✅ IGNORE ctx.orgType COMPLETELY
-                const resolvedType = await getOrgTypeById(effectiveOrgId);
+                const resolvedType = normalizeOrgType(ctx.orgType);
 
-                // ✅ HARD FAIL (no UI random)
+                // HARD FAIL: niente UI random
                 if (!resolvedType) {
-                    throw new Error("orgType non risolto - RLS o organizations.type errato");
+                    throw new Error("orgType non risolto - controlla RPC get_my_context / organizations.type / RLS");
                 }
 
-                // Reset state to avoid ghost mode switching
+                // Set mode
                 setOrgType(resolvedType);
+
+                // Reset UI state to avoid “ghost” values between modes
                 setSelectedCustomerId("");
                 setSelectedPlantId("");
                 setSelectedLineId("");
                 setLines([]);
+                setCustomers([]);
+                setPlants([]);
 
                 if (resolvedType === "manufacturer") {
-                    // load customers of this manufacturer
                     const { data, error } = await supabase
                         .from("organizations")
                         .select("id,name")
@@ -112,9 +129,7 @@ export default function NewEquipmentPage() {
 
                     if (error) throw error;
                     setCustomers((data ?? []) as any);
-                    setPlants([]); // safety
                 } else {
-                    // load plants (RLS filters)
                     const { data, error } = await supabase
                         .from("plants")
                         .select("id,name,code")
@@ -123,7 +138,6 @@ export default function NewEquipmentPage() {
 
                     if (error) throw error;
                     setPlants((data ?? []) as any);
-                    setCustomers([]); // safety
                 }
             } catch (e: any) {
                 console.error(e);
@@ -139,12 +153,14 @@ export default function NewEquipmentPage() {
         };
 
         init();
-    }, [router, toast]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [router]);
 
     // =========================
     // LOAD LINES (customer only)
     // =========================
     useEffect(() => {
+        if (!mounted) return;
         if (orgType !== "customer") return;
 
         const loadLines = async () => {
@@ -180,7 +196,7 @@ export default function NewEquipmentPage() {
         };
 
         loadLines();
-    }, [orgType, selectedPlantId, toast]);
+    }, [mounted, orgType, selectedPlantId, toast]);
 
     // =========================
     // SAVE
@@ -222,7 +238,7 @@ export default function NewEquipmentPage() {
 
         setSaving(true);
         try {
-            // Insert machine (organization_id ALWAYS = current org)
+            // Machine belongs ALWAYS to current org (manufacturer or customer)
             const payload: any = {
                 organization_id: orgId,
                 name: name.trim(),
@@ -269,19 +285,14 @@ export default function NewEquipmentPage() {
         }
     };
 
-    // ✅ HARD GUARD RENDER (no flash wrong UI)
-    if (pageLoading || !orgType) return null;
+    // HARD GUARD RENDER (no flash wrong UI)
+    if (!mounted || pageLoading || !orgType) return null;
 
     return (
         <MainLayout userRole={userRole as any}>
             <SEO title="Nuova attrezzatura - MACHINA" />
 
             <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-                {/* ✅ DEBUG INSIDE COMPONENT (NO HYDRATION ISSUE) */}
-                <div className="text-xs text-red-500">
-                    DEBUG ROUTE: pages/equipment/new.tsx — orgType: <b>{orgType}</b> — orgId: <span className="font-mono">{orgId}</span>
-                </div>
-
                 <Button variant="ghost" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> Indietro
                 </Button>
@@ -297,6 +308,7 @@ export default function NewEquipmentPage() {
                     </CardHeader>
 
                     <CardContent className="space-y-6">
+                        {/* Org-specific selector */}
                         {orgType === "manufacturer" ? (
                             <div className="space-y-2">
                                 <Label className="flex items-center gap-2">
@@ -319,7 +331,7 @@ export default function NewEquipmentPage() {
 
                                 {customers.length === 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        Nessun cliente trovato. Crea prima un cliente (organizations: type=customer, manufacturer_org_id = la tua org).
+                                        Nessun cliente trovato. Verifica che i clienti abbiano: type=customer e manufacturer_org_id = la tua organization.
                                     </p>
                                 )}
                             </div>
@@ -331,7 +343,7 @@ export default function NewEquipmentPage() {
                                         Stabilimento *
                                     </Label>
 
-                                    <Select value={selectedPlantId} onValueChange={(v) => setSelectedPlantId(v)}>
+                                    <Select value={selectedPlantId} onValueChange={setSelectedPlantId}>
                                         <SelectTrigger className="bg-muted border-border text-foreground">
                                             <SelectValue placeholder="Seleziona stabilimento..." />
                                         </SelectTrigger>
@@ -350,16 +362,20 @@ export default function NewEquipmentPage() {
 
                                     <Select
                                         value={selectedLineId}
-                                        onValueChange={(v) => setSelectedLineId(v)}
+                                        onValueChange={setSelectedLineId}
                                         disabled={!selectedPlantId || loadingLines}
                                     >
                                         <SelectTrigger className="bg-muted border-border text-foreground disabled:opacity-60">
                                             <SelectValue
-                                                placeholder={!selectedPlantId ? "Seleziona prima lo stabilimento" : "Seleziona linea..."}
+                                                placeholder={
+                                                    !selectedPlantId
+                                                        ? "Seleziona prima lo stabilimento"
+                                                        : "Seleziona linea..."
+                                                }
                                             />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none">Nessuna</SelectItem>
+                                            <SelectItem value="__none__">Nessuna</SelectItem>
                                             {lines.map((l) => (
                                                 <SelectItem key={l.id} value={l.id}>
                                                     {l.name ?? l.code ?? l.id}
@@ -367,34 +383,59 @@ export default function NewEquipmentPage() {
                                             ))}
                                         </SelectContent>
                                     </Select>
+
+                                    {/* fix value for none */}
+                                    {selectedLineId === "__none__" ? setSelectedLineId("") : null}
                                 </div>
                             </div>
                         )}
 
+                        {/* Common fields */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Nome *</Label>
-                                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Pressa B1" />
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="es. Pressa B1"
+                                />
                             </div>
 
                             <div className="space-y-2">
                                 <Label>Codice interno</Label>
-                                <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="es. PRS-B1" />
+                                <Input
+                                    value={internalCode}
+                                    onChange={(e) => setInternalCode(e.target.value)}
+                                    placeholder="es. PRS-B1"
+                                />
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Matricola</Label>
-                                <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="es. SN-12345" />
+                                <Input
+                                    value={serialNumber}
+                                    onChange={(e) => setSerialNumber(e.target.value)}
+                                    placeholder="es. SN-12345"
+                                />
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Note</Label>
-                                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Note..." />
+                                <Textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    rows={3}
+                                    placeholder="Note..."
+                                />
                             </div>
                         </div>
 
                         <div className="flex justify-end">
-                            <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            >
                                 <Save className="w-4 h-4 mr-2" />
                                 {saving ? "Salvataggio..." : "Salva"}
                             </Button>
