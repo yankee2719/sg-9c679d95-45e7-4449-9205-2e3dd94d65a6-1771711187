@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { ArrowLeft, Save, Building2, QrCode, Factory } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
@@ -16,6 +22,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type OrgType = "manufacturer" | "customer";
+function normalizeOrgType(x: any): OrgType | null {
+    const t = String(x ?? "").toLowerCase();
+    if (t === "manufacturer") return "manufacturer";
+    if (t === "customer") return "customer";
+    return null;
+}
 
 interface Plant {
     id: string;
@@ -27,20 +39,21 @@ interface CustomerOrg {
     name: string;
 }
 
-async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
-    const { data, error } = await supabase
-        .from("organizations")
-        .select("type")
-        .eq("id", orgId)
-        .maybeSingle();
-
-    if (error) throw error;
-
-    const tRaw = String((data as any)?.type ?? "").toLowerCase();
-    if (tRaw === "manufacturer") return "manufacturer";
-    if (tRaw === "customer") return "customer";
-    return null;
-}
+type MachineRow = {
+    id: string;
+    name: string;
+    internal_code: string | null;
+    category: string | null;
+    brand: string | null;
+    model: string | null;
+    serial_number: string | null;
+    position: string | null;
+    lifecycle_state: string | null;
+    specifications: any;
+    notes: string | null;
+    plant_id: string | null;
+    qr_code_token: string | null;
+};
 
 export default function EditEquipment() {
     const router = useRouter();
@@ -53,8 +66,6 @@ export default function EditEquipment() {
     const [pageLoading, setPageLoading] = useState(true);
 
     const [userRole, setUserRole] = useState("technician");
-
-    // DB-truth orgType (hard-guard UI finché non c'è)
     const [orgType, setOrgType] = useState < OrgType | null > (null);
     const [orgId, setOrgId] = useState < string | null > (null);
 
@@ -83,6 +94,46 @@ export default function EditEquipment() {
     const isAdmin = userRole === "admin" || userRole === "supervisor";
     const isManufacturer = useMemo(() => orgType === "manufacturer", [orgType]);
 
+    // -------------------------
+    // Load machine row
+    // -------------------------
+    const loadMachine = async (machineId: string) => {
+        const { data, error } = await supabase
+            .from("machines")
+            .select(
+                "id,name,internal_code,category,brand,model,serial_number,position,lifecycle_state,specifications,notes,plant_id,qr_code_token"
+            )
+            .eq("id", machineId)
+            .single();
+
+        if (error) throw error;
+
+        const m = data as any as MachineRow;
+        const specs = m.specifications
+            ? typeof m.specifications === "string"
+                ? m.specifications
+                : (m.specifications as any)?.text || JSON.stringify(m.specifications)
+            : "";
+
+        setFormData({
+            name: m.name || "",
+            internal_code: m.internal_code || "",
+            category: m.category || "",
+            brand: m.brand || "",
+            model: m.model || "",
+            serial_number: m.serial_number || "",
+            position: m.position || "",
+            lifecycle_state: m.lifecycle_state || "active",
+            specifications: specs,
+            notes: m.notes || "",
+            plant_id: m.plant_id || "",
+            qr_code_token: m.qr_code_token || "",
+        });
+    };
+
+    // -------------------------
+    // INIT (HARD GUARDED)
+    // -------------------------
     useEffect(() => {
         const init = async () => {
             if (!id || typeof id !== "string") return;
@@ -98,30 +149,31 @@ export default function EditEquipment() {
                 setUserRole(ctx.role ?? "technician");
 
                 const effectiveOrgId =
-                    ctx.orgId || ctx.organizationId || ctx.organization_id || null;
+                    ctx.orgId || ctx.organizationId || ctx.organization_id || ctx.tenant_id || null;
 
                 if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
 
-                // ✅ DB-truth orgType
-                const resolvedType = await getOrgTypeById(effectiveOrgId);
+                const resolvedType = normalizeOrgType(ctx.orgType);
 
-                // ✅ HARD FAIL
+                // HARD FAIL: stop random UI
                 if (!resolvedType) {
-                    throw new Error("orgType non risolto - RLS o context errato");
+                    throw new Error("orgType non risolto - controlla RPC get_my_context / organizations.type / RLS");
                 }
 
                 setOrgId(effectiveOrgId);
                 setOrgType(resolvedType);
 
-                // 1) Carica macchina
+                // Reset mode-specific state (avoid ghost UI)
+                setCustomers([]);
+                setPlants([]);
+                setSelectedCustomerId("");
+
+                // 1) load machine
                 await loadMachine(id);
 
-                // 2) Dati UI per tipo
+                // 2) load UI per tipo
                 if (resolvedType === "manufacturer") {
-                    // pulizia: plant non deve "sporcare" UI manufacturer
-                    setPlants([]);
-                    setFormData((p) => ({ ...p, plant_id: "" }));
-
+                    // customers of this manufacturer
                     const { data: custData, error: custErr } = await supabase
                         .from("organizations")
                         .select("id,name")
@@ -129,10 +181,10 @@ export default function EditEquipment() {
                         .eq("type", "customer")
                         .order("name", { ascending: true });
 
-                    if (custErr) console.error("customers load:", custErr);
+                    if (custErr) throw custErr;
                     setCustomers((custData ?? []) as any);
 
-                    // Preseleziona cliente attuale (assegnazione attiva)
+                    // current assignment
                     const { data: asg, error: asgErr } = await supabase
                         .from("machine_assignments")
                         .select("customer_org_id")
@@ -143,20 +195,19 @@ export default function EditEquipment() {
                         .limit(1)
                         .maybeSingle();
 
-                    if (asgErr) console.error("assignment load:", asgErr);
+                    if (asgErr) {
+                        // non fatal
+                        console.error("assignment load:", asgErr);
+                    }
                     setSelectedCustomerId((asg as any)?.customer_org_id ?? "");
                 } else {
-                    // customer
-                    setCustomers([]);
-                    setSelectedCustomerId("");
-
                     const { data: pData, error: pErr } = await supabase
                         .from("plants")
                         .select("id, name")
                         .eq("is_archived", false)
                         .order("name");
 
-                    if (pErr) console.error("plants load:", pErr);
+                    if (pErr) throw pErr;
                     setPlants((pData ?? []) as any);
                 }
             } catch (e: any) {
@@ -176,40 +227,17 @@ export default function EditEquipment() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, router]);
 
-    const loadMachine = async (machineId: string) => {
-        const { data, error } = await supabase
-            .from("machines")
-            .select("*")
-            .eq("id", machineId)
-            .single();
-
-        if (error) throw error;
-
-        const specs = data.specifications
-            ? typeof data.specifications === "string"
-                ? data.specifications
-                : (data.specifications as any)?.text || JSON.stringify(data.specifications)
-            : "";
-
-        setFormData({
-            name: data.name || "",
-            internal_code: data.internal_code || "",
-            category: data.category || "",
-            brand: data.brand || "",
-            model: data.model || "",
-            serial_number: data.serial_number || "",
-            position: data.position || "",
-            lifecycle_state: data.lifecycle_state || "active",
-            specifications: specs,
-            notes: data.notes || "",
-            plant_id: data.plant_id || "",
-            qr_code_token: data.qr_code_token || "",
-        });
-    };
-
+    // -------------------------
+    // SUBMIT
+    // -------------------------
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!id || typeof id !== "string") return;
+
+        if (!orgType) {
+            toast({ title: t("common.error"), description: "orgType non risolto", variant: "destructive" });
+            return;
+        }
 
         setSaving(true);
         try {
@@ -231,7 +259,7 @@ export default function EditEquipment() {
             };
 
             // Customer può gestire plant_id; Manufacturer NO
-            if (!isManufacturer) {
+            if (orgType === "customer") {
                 updatePayload.plant_id = formData.plant_id || null;
             }
 
@@ -243,7 +271,7 @@ export default function EditEquipment() {
             if (upErr) throw upErr;
 
             // Manufacturer: aggiorna assegnazione cliente
-            if (isManufacturer) {
+            if (orgType === "manufacturer") {
                 if (!orgId) throw new Error("Organization non trovata.");
                 if (!selectedCustomerId) throw new Error("Seleziona un cliente.");
 
@@ -282,7 +310,7 @@ export default function EditEquipment() {
         }
     };
 
-    // ✅ FIX DEFINITIVO: niente UI finché orgType non è risolto
+    // HARD GUARD RENDER (no flash wrong UI)
     if (pageLoading || !orgType) return null;
 
     return (
@@ -330,6 +358,7 @@ export default function EditEquipment() {
                                         <Label className="text-foreground flex items-center gap-2">
                                             <Factory className="w-4 h-4 text-purple-400" /> Cliente *
                                         </Label>
+
                                         <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                                             <SelectTrigger className="bg-muted border-border text-foreground">
                                                 <SelectValue placeholder="Seleziona cliente..." />
@@ -342,9 +371,10 @@ export default function EditEquipment() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+
                                         {customers.length === 0 && (
                                             <p className="text-xs text-muted-foreground">
-                                                Nessun cliente trovato. Crea prima un cliente, poi assegna la macchina.
+                                                Nessun cliente trovato. Crea prima un cliente (organizations type=customer, manufacturer_org_id = la tua org).
                                             </p>
                                         )}
                                     </div>
@@ -353,6 +383,7 @@ export default function EditEquipment() {
                                         <Label className="text-foreground flex items-center gap-2">
                                             <Building2 className="w-4 h-4 text-blue-400" /> Stabilimento
                                         </Label>
+
                                         <Select
                                             value={formData.plant_id}
                                             onValueChange={(v) => setFormData({ ...formData, plant_id: v })}
