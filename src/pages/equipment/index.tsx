@@ -10,7 +10,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Plus,
     Search,
@@ -22,7 +28,10 @@ import {
     QrCode,
     Trash2,
     Building2,
+    LayoutGrid,
+    List,
     Factory,
+    Users,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -32,7 +41,7 @@ type OrgType = "manufacturer" | "customer";
 interface Machine {
     id: string;
     name: string;
-    internal_code: string;
+    internal_code: string | null;
     category: string | null;
     serial_number: string | null;
     model: string | null;
@@ -44,10 +53,17 @@ interface Machine {
     photo_url: string | null;
     organization_id: string | null;
 
-    // extra UI
-    _customerId?: string | null;
-    _customerName?: string | null;
-    _assignmentId?: string | null; // machine_assignments.id
+    // derived
+    _isAssigned?: boolean; // customer: assigned from manufacturer | manufacturer: assigned to a customer
+    _manufacturerName?: string | null; // customer view label
+    _customerId?: string | null; // manufacturer grouping
+    _customerName?: string | null; // manufacturer grouping
+    _isOwned?: boolean; // organization_id === my org
+}
+
+interface Plant {
+    id: string;
+    name: string;
 }
 
 interface CustomerOrg {
@@ -56,11 +72,16 @@ interface CustomerOrg {
 }
 
 async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
-    const { data, error } = await supabase.from("organizations").select("type").eq("id", orgId).maybeSingle();
+    const { data, error } = await supabase
+        .from("organizations")
+        .select("type")
+        .eq("id", orgId)
+        .maybeSingle();
+
     if (error) throw error;
-    const t = String((data as any)?.type ?? "").toLowerCase();
-    if (t === "manufacturer") return "manufacturer";
-    if (t === "customer") return "customer";
+    const tRaw = String((data as any)?.type ?? "").toLowerCase();
+    if (tRaw === "manufacturer") return "manufacturer";
+    if (tRaw === "customer") return "customer";
     return null;
 }
 
@@ -71,9 +92,8 @@ export default function EquipmentPage() {
 
     const [loading, setLoading] = useState(true);
     const [ctx, setCtx] = useState < UserContext | null > (null);
-
     const [orgType, setOrgType] = useState < OrgType | null > (null);
-    const [effectiveOrgId, setEffectiveOrgId] = useState < string | null > (null);
+    const [myOrgId, setMyOrgId] = useState < string | null > (null);
 
     const [machines, setMachines] = useState < Machine[] > ([]);
     const [filteredMachines, setFilteredMachines] = useState < Machine[] > ([]);
@@ -81,13 +101,22 @@ export default function EquipmentPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [categoryFilter, setCategoryFilter] = useState("all");
+    const [sourceFilter, setSourceFilter] = useState("all"); // all | own | assigned
+
     const [categories, setCategories] = useState < string[] > ([]);
     const [deleting, setDeleting] = useState < string | null > (null);
 
+    // customer grouping
+    const [plants, setPlants] = useState < Plant[] > ([]);
+    const [groupedView, setGroupedView] = useState(false);
+    const [expandedPlants, setExpandedPlants] = useState < Set < string >> (new Set());
+
     // manufacturer grouping
-    const [customers, setCustomers] = useState < CustomerOrg[] > ([]);
     const [expandedCustomers, setExpandedCustomers] = useState < Set < string >> (new Set());
 
+    // ----------------------------
+    // LOAD
+    // ----------------------------
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
@@ -99,84 +128,184 @@ export default function EquipmentPage() {
                 }
                 setCtx(userCtx);
 
-                const orgId =
+                const effectiveOrgId =
                     (userCtx as any)?.orgId ||
                     (userCtx as any)?.organizationId ||
-                    (userCtx as any)?.organization_id ||
-                    null;
+                    (userCtx as any)?.organization_id;
 
-                if (!orgId) throw new Error("Organization non trovata nel contesto utente.");
-                setEffectiveOrgId(orgId);
+                if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
 
-                const type = await getOrgTypeById(orgId);
-                if (!type) throw new Error("orgType non risolto (organizations.type errato / RLS).");
+                setMyOrgId(effectiveOrgId);
+
+                const type = await getOrgTypeById(effectiveOrgId);
+                if (!type) throw new Error("orgType non risolto (organizations.type).");
                 setOrgType(type);
 
-                if (type === "manufacturer") {
-                    // 1) load customers of manufacturer
-                    const { data: custData, error: custErr } = await supabase
-                        .from("organizations")
-                        .select("id,name")
-                        .eq("manufacturer_org_id", orgId)
-                        .eq("type", "customer")
-                        .order("name", { ascending: true });
+                // ----------------------------
+                // MACHINES FETCH
+                // ----------------------------
+                let allMachines: Machine[] = [];
 
-                    if (custErr) throw custErr;
+                if (type === "customer") {
+                    // Customer: load visible machines (RLS decides what they can see)
+                    const { data: machineData, error: machineErr } = await supabase
+                        .from("machines")
+                        .select("*")
+                        .order("name");
 
-                    const customerList = (custData ?? []) as any as CustomerOrg[];
-                    setCustomers(customerList);
-                    setExpandedCustomers(new Set(customerList.map((c) => c.id)));
+                    if (machineErr) throw machineErr;
 
-                    // 2) load assignments + machines
-                    const { data: asgData, error: asgErr } = await supabase
+                    allMachines = (machineData || []).map((m: any) => ({
+                        ...m,
+                        _isOwned: m.organization_id === effectiveOrgId,
+                        _isAssigned: m.organization_id !== effectiveOrgId, // may be refined by assignments
+                    }));
+
+                    // refine "assigned" using machine_assignments
+                    const { data: assignments, error: asgErr } = await supabase
                         .from("machine_assignments")
-                        .select("id, machine_id, customer_org_id, machines(*)")
-                        .eq("manufacturer_org_id", orgId)
+                        .select("machine_id")
+                        .eq("customer_org_id", effectiveOrgId)
                         .eq("is_active", true);
 
                     if (asgErr) throw asgErr;
 
-                    const rows = (asgData ?? []) as any[];
+                    const assignedIds = new Set((assignments ?? []).map((a: any) => a.machine_id));
+                    allMachines = allMachines.map((m) => ({
+                        ...m,
+                        _isAssigned: assignedIds.has(m.id) && m.organization_id !== effectiveOrgId,
+                    }));
 
-                    // attach customer name
-                    const custMap = new Map(customerList.map((c) => [c.id, c.name]));
+                    // manufacturer name for assigned machines
+                    if (allMachines.some((m) => m._isAssigned)) {
+                        const mfrOrgIds = [
+                            ...new Set(
+                                allMachines
+                                    .filter((m) => m._isAssigned)
+                                    .map((m) => m.organization_id)
+                                    .filter(Boolean)
+                            ),
+                        ] as string[];
 
-                    const allMachines: Machine[] = rows
-                        .map((r) => {
-                            const m = r.machines;
-                            if (!m?.id) return null;
+                        if (mfrOrgIds.length > 0) {
+                            const { data: mfrOrgs, error: mfrErr } = await supabase
+                                .from("organizations")
+                                .select("id, name")
+                                .in("id", mfrOrgIds);
+
+                            if (mfrErr) throw mfrErr;
+                            const mfrMap = new Map((mfrOrgs ?? []).map((o: any) => [o.id, o.name]));
+
+                            allMachines = allMachines.map((m) => ({
+                                ...m,
+                                _manufacturerName:
+                                    m._isAssigned && m.organization_id ? mfrMap.get(m.organization_id) || null : null,
+                            }));
+                        }
+                    }
+
+                    // Customer: plants list (only here!)
+                    const { data: plantsData, error: pErr } = await supabase
+                        .from("plants")
+                        .select("id, name")
+                        .eq("is_archived", false)
+                        .order("name");
+
+                    if (pErr) console.error("plants load:", pErr);
+                    setPlants((plantsData ?? []) as any);
+                    setExpandedPlants(new Set((plantsData ?? []).map((p: any) => p.id)));
+
+                    // only customer can toggle grouped-by-plant
+                    const hasAnyPlant = allMachines.some((m) => m.plant_id);
+                    setGroupedView(hasAnyPlant);
+                } else {
+                    // Manufacturer:
+                    // 1) load own machines (organization_id = manufacturer org)
+                    const { data: own, error: ownErr } = await supabase
+                        .from("machines")
+                        .select("*")
+                        .eq("organization_id", effectiveOrgId)
+                        .order("name");
+
+                    if (ownErr) throw ownErr;
+
+                    const ownMachines: Machine[] = (own ?? []).map((m: any) => ({
+                        ...m,
+                        _isOwned: true,
+                        _isAssigned: false,
+                        _customerId: null,
+                        _customerName: null,
+                    }));
+
+                    // 2) load assignments to customers for THIS manufacturer
+                    const { data: asg, error: asgErr } = await supabase
+                        .from("machine_assignments")
+                        .select("machine_id, customer_org_id, machines(*)")
+                        .eq("manufacturer_org_id", effectiveOrgId)
+                        .eq("is_active", true);
+
+                    if (asgErr) throw asgErr;
+
+                    const assignedMachinesRaw: Machine[] = (asg ?? [])
+                        .map((a: any) => {
+                            const m = a.machines;
+                            if (!m) return null;
                             return {
                                 ...(m as any),
-                                _assignmentId: r.id,
-                                _customerId: r.customer_org_id ?? null,
-                                _customerName: r.customer_org_id ? custMap.get(r.customer_org_id) ?? "Cliente" : "Cliente",
+                                _isOwned: (m as any)?.organization_id === effectiveOrgId,
+                                _isAssigned: true,
+                                _customerId: a.customer_org_id ?? null,
+                                _customerName: null,
                             } as Machine;
                         })
                         .filter(Boolean) as Machine[];
 
-                    // fallback: se non ci sono assignments, lista vuota
-                    setMachines(allMachines);
-                    setFilteredMachines(allMachines);
+                    // resolve customer names
+                    const customerIds = [
+                        ...new Set(assignedMachinesRaw.map((m) => m._customerId).filter(Boolean)),
+                    ] as string[];
 
-                    const cats = [...new Set(allMachines.map((m) => m.category).filter(Boolean))] as string[];
-                    setCategories(cats);
+                    let customerMap = new Map < string, string> ();
+                    if (customerIds.length > 0) {
+                        const { data: custOrgs, error: cErr } = await supabase
+                            .from("organizations")
+                            .select("id, name")
+                            .in("id", customerIds);
 
-                    return;
+                        if (cErr) throw cErr;
+                        customerMap = new Map((custOrgs ?? []).map((c: any) => [c.id, c.name]));
+                    }
+
+                    const assignedMachines = assignedMachinesRaw.map((m) => ({
+                        ...m,
+                        _customerName: m._customerId ? customerMap.get(m._customerId) || "Cliente" : "Cliente",
+                    }));
+
+                    // merge unique by id (avoid duplicates if own machine also appears in assignments)
+                    const map = new Map < string, Machine> ();
+                    [...ownMachines, ...assignedMachines].forEach((m) => map.set(m.id, m));
+                    allMachines = Array.from(map.values());
+
+                    // manufacturer doesn’t use plants UI at all
+                    setPlants([]);
+                    setGroupedView(false);
+
+                    // expand all customers by default
+                    setExpandedCustomers(new Set(customerIds));
                 }
 
-                // ===== CUSTOMER MODE (come prima, semplice) =====
-                const { data: machineData, error: machineErr } = await supabase.from("machines").select("*").order("name");
-                if (machineErr) throw machineErr;
-
-                const allMachines: Machine[] = (machineData ?? []) as any;
                 setMachines(allMachines);
                 setFilteredMachines(allMachines);
 
                 const cats = [...new Set(allMachines.map((m) => m.category).filter(Boolean))] as string[];
                 setCategories(cats);
-            } catch (e: any) {
-                console.error(e);
-                toast({ title: "Errore", description: e?.message ?? "Errore caricamento", variant: "destructive" });
+            } catch (error: any) {
+                console.error("Error loading:", error);
+                toast({
+                    title: "Errore",
+                    description: error?.message ?? "Errore caricamento",
+                    variant: "destructive",
+                });
             } finally {
                 setLoading(false);
             }
@@ -185,6 +314,9 @@ export default function EquipmentPage() {
         loadData();
     }, [router, toast]);
 
+    // ----------------------------
+    // FILTERS
+    // ----------------------------
     useEffect(() => {
         let filtered = machines;
 
@@ -193,81 +325,77 @@ export default function EquipmentPage() {
             filtered = filtered.filter(
                 (m) =>
                     m.name.toLowerCase().includes(q) ||
-                    m.internal_code?.toLowerCase().includes(q) ||
-                    m.serial_number?.toLowerCase().includes(q) ||
-                    m.position?.toLowerCase().includes(q) ||
-                    m.brand?.toLowerCase().includes(q) ||
-                    m._customerName?.toLowerCase().includes(q)
+                    (m.internal_code ?? "").toLowerCase().includes(q) ||
+                    (m.serial_number ?? "").toLowerCase().includes(q) ||
+                    (m.position ?? "").toLowerCase().includes(q) ||
+                    (m.brand ?? "").toLowerCase().includes(q) ||
+                    (m._customerName ?? "").toLowerCase().includes(q)
             );
         }
 
         if (statusFilter !== "all") filtered = filtered.filter((m) => m.lifecycle_state === statusFilter);
         if (categoryFilter !== "all") filtered = filtered.filter((m) => m.category === categoryFilter);
 
+        if (sourceFilter === "own") filtered = filtered.filter((m) => !!m._isOwned);
+        if (sourceFilter === "assigned") filtered = filtered.filter((m) => !!m._isAssigned);
+
         setFilteredMachines(filtered);
-    }, [searchQuery, statusFilter, categoryFilter, machines]);
+    }, [searchQuery, statusFilter, categoryFilter, sourceFilter, machines]);
 
-    const perms = useMemo(() => {
-        if (!ctx) return null;
-        return getPermissions({ role: ctx.role, orgType: orgType as any });
-    }, [ctx, orgType]);
-
+    // ----------------------------
+    // PERMS
+    // ----------------------------
+    const perms = ctx ? getPermissions({ role: ctx.role, orgType: orgType as any }) : null;
     const isAdmin = perms?.isAdminOrSupervisor ?? false;
+
+    const isCustomer = orgType === "customer";
     const isManufacturer = orgType === "manufacturer";
 
-    const toggleCustomer = (id: string) => {
-        setExpandedCustomers((prev) => {
-            const n = new Set(prev);
-            if (n.has(id)) n.delete(id);
-            else n.add(id);
-            return n;
-        });
-    };
+    const hasAssigned = machines.some((m) => m._isAssigned);
+    const hasOwned = machines.some((m) => m._isOwned);
 
-    const handleDelete = async (e: React.MouseEvent, machineId: string, name: string) => {
+    // ----------------------------
+    // DELETE
+    // ----------------------------
+    const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
         e.stopPropagation();
-        if (!isAdmin) return;
+        if (!confirm(`Sei sicuro di voler eliminare "${name}"?`)) return;
 
-        if (!confirm(`Sei sicuro di voler eliminare "${name}"?\n\nQuesta azione elimina anche le assegnazioni.`)) return;
-
-        setDeleting(machineId);
+        setDeleting(id);
         try {
-            // manufacturer: elimina tutte le assegnazioni di quella macchina per questo manufacturer
-            if (isManufacturer && effectiveOrgId) {
-                const { error: asgDelErr } = await supabase
-                    .from("machine_assignments")
-                    .delete()
-                    .eq("machine_id", machineId)
-                    .eq("manufacturer_org_id", effectiveOrgId);
+            // IMPORTANT:
+            // - Manufacturer can delete ONLY owned machines.
+            // - Customer can delete ONLY owned machines (never assigned).
+            const m = machines.find((x) => x.id === id);
+            if (!m) throw new Error("Macchina non trovata.");
+            if (!m._isOwned) throw new Error("Non puoi eliminare una macchina che non è di tua proprietà.");
 
-                if (asgDelErr) throw asgDelErr;
-            }
+            const { error } = await supabase.from("machines").delete().eq("id", id);
+            if (error) throw error;
 
-            // elimina macchina
-            const { error: mDelErr } = await supabase.from("machines").delete().eq("id", machineId);
-            if (mDelErr) throw mDelErr;
-
-            setMachines((prev) => prev.filter((m) => m.id !== machineId));
+            setMachines((prev) => prev.filter((x) => x.id !== id));
             toast({ title: "Eliminato", description: `"${name}" eliminato` });
-        } catch (err: any) {
-            console.error(err);
-            toast({ title: "Errore", description: err?.message ?? "Errore", variant: "destructive" });
+        } catch (error: any) {
+            toast({ title: "Errore", description: error?.message || "Errore", variant: "destructive" });
         } finally {
             setDeleting(null);
         }
     };
 
+    // ----------------------------
+    // UI helpers
+    // ----------------------------
     const getStatusConfig = (state: string | null) => {
         const configs: Record<string, { label: string; color: string }> = {
             active: {
                 label: "Attivo",
                 color:
-                    "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30",
+                    "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30",
             },
             commissioned: {
                 label: "Attivo",
                 color:
-                    "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30",
+                    "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-300 dark:border-green-500/30",
             },
             inactive: {
                 label: "Inattivo",
@@ -277,7 +405,7 @@ export default function EquipmentPage() {
             under_maintenance: {
                 label: "In Manutenzione",
                 color:
-                    "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30",
+                    "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-300 dark:border-amber-500/30",
             },
             decommissioned: {
                 label: "Dismesso",
@@ -294,21 +422,55 @@ export default function EquipmentPage() {
         );
     };
 
+    const togglePlant = (id: string) => {
+        setExpandedPlants((prev) => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id);
+            else n.add(id);
+            return n;
+        });
+    };
+
+    const toggleCustomer = (id: string) => {
+        setExpandedCustomers((prev) => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id);
+            else n.add(id);
+            return n;
+        });
+    };
+
     const MachineCard = ({ item }: { item: Machine }) => {
         const status = getStatusConfig(item.lifecycle_state);
 
+        // delete rules:
+        // - admin only
+        // - must be owned
+        // - customer cannot delete assigned
+        const canDelete =
+            isAdmin &&
+            !!item._isOwned &&
+            (isManufacturer ? true : !item._isAssigned);
+
         return (
             <Card
-                className="rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden"
+                className={`rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group overflow-hidden ${item._isAssigned ? "ring-1 ring-purple-200 dark:ring-purple-500/20" : ""
+                    }`}
                 onClick={() => router.push(`/equipment/${item.id}`)}
             >
                 <CardContent className="p-5">
                     <div className="flex items-start gap-4 mb-3">
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-blue-50 dark:bg-blue-500/10">
+                        <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${item._isAssigned ? "bg-purple-50 dark:bg-purple-500/10" : "bg-blue-50 dark:bg-blue-500/10"
+                                }`}
+                        >
                             {item.photo_url ? (
                                 <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
                             ) : (
-                                <Wrench className="w-6 h-6 text-blue-500 dark:text-blue-400" />
+                                <Wrench
+                                    className={`w-6 h-6 ${item._isAssigned ? "text-purple-500 dark:text-purple-400" : "text-blue-500 dark:text-blue-400"
+                                        }`}
+                                />
                             )}
                         </div>
 
@@ -316,7 +478,7 @@ export default function EquipmentPage() {
                             <div className="flex items-start justify-between">
                                 <div>
                                     <h3 className="font-bold text-foreground text-sm truncate">{item.name}</h3>
-                                    <p className="text-xs text-muted-foreground font-mono">{item.internal_code}</p>
+                                    <p className="text-xs text-muted-foreground font-mono">{item.internal_code ?? "—"}</p>
                                 </div>
 
                                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -326,7 +488,7 @@ export default function EquipmentPage() {
                                         </div>
                                     )}
 
-                                    {isAdmin && (
+                                    {canDelete && (
                                         <button
                                             onClick={(e) => handleDelete(e, item.id, item.name)}
                                             disabled={deleting === item.id}
@@ -350,10 +512,17 @@ export default function EquipmentPage() {
                             {item.category || "Generico"}
                         </Badge>
 
-                        {isManufacturer && item._customerName && (
+                        {isCustomer && item._isAssigned && (
                             <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
                                 <Factory className="w-3 h-3 mr-1" />
-                                {item._customerName}
+                                {item._manufacturerName || "Costruttore"}
+                            </Badge>
+                        )}
+
+                        {isManufacturer && item._isAssigned && (
+                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
+                                <Users className="w-3 h-3 mr-1" />
+                                {item._customerName || "Cliente"}
                             </Badge>
                         )}
                     </div>
@@ -369,46 +538,62 @@ export default function EquipmentPage() {
         );
     };
 
-    const renderManufacturerGrouped = () => {
-        // group by customer id
-        const byCustomer = new Map < string, Machine[]> ();
-        for (const m of filteredMachines) {
-            const cid = m._customerId || "unknown";
-            if (!byCustomer.has(cid)) byCustomer.set(cid, []);
-            byCustomer.get(cid)!.push(m);
-        }
+    // ----------------------------
+    // CUSTOMER GROUPED VIEW (plants)
+    // ----------------------------
+    const renderCustomerGroupedView = () => {
+        const unassigned = filteredMachines.filter((m) => !m.plant_id && !m._isAssigned);
+        const assignedMachines = filteredMachines.filter((m) => m._isAssigned);
+        const plantMachinesList = filteredMachines.filter((m) => m.plant_id && !m._isAssigned);
 
         return (
             <div className="space-y-4">
-                {customers.map((c) => {
-                    const list = byCustomer.get(c.id) ?? [];
-                    const isExpanded = expandedCustomers.has(c.id);
+                {assignedMachines.length > 0 && (
+                    <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <Factory className="w-5 h-5 text-purple-400" />
+                            <span className="text-foreground font-bold text-lg">Macchine dal Costruttore</span>
+                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-300 dark:border-purple-500/30 ml-2">
+                                {assignedMachines.length}
+                            </Badge>
+                        </div>
+                        <div className="px-4 pb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {assignedMachines.map((m) => (
+                                    <MachineCard key={m.id} item={m} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-                    // se stai cercando e non ci sono match, nascondi
-                    if (searchQuery && list.length === 0) return null;
+                {plants.map((plant) => {
+                    const plantMachines = plantMachinesList.filter((m) => m.plant_id === plant.id);
+                    const isExpanded = expandedPlants.has(plant.id);
+                    if (plantMachines.length === 0 && searchQuery) return null;
 
                     return (
-                        <div key={c.id} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
+                        <div key={plant.id} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                             <button
-                                onClick={() => toggleCustomer(c.id)}
+                                onClick={() => togglePlant(plant.id)}
                                 className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors"
                             >
                                 {isExpanded ? (
-                                    <ChevronDown className="w-5 h-5 text-purple-400" />
+                                    <ChevronDown className="w-5 h-5 text-blue-400" />
                                 ) : (
-                                    <ChevronRight className="w-5 h-5 text-purple-400" />
+                                    <ChevronRight className="w-5 h-5 text-blue-400" />
                                 )}
-                                <Building2 className="w-5 h-5 text-purple-400" />
-                                <span className="text-foreground font-bold text-lg">{c.name}</span>
-                                <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-500/30 ml-2">
-                                    {list.length}
+                                <Building2 className="w-5 h-5 text-blue-400" />
+                                <span className="text-foreground font-bold text-lg">{plant.name}</span>
+                                <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-300 dark:border-blue-500/30 ml-2">
+                                    {plantMachines.length}
                                 </Badge>
                             </button>
 
-                            {isExpanded && list.length > 0 && (
+                            {isExpanded && plantMachines.length > 0 && (
                                 <div className="px-4 pb-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {list.map((m) => (
+                                        {plantMachines.map((m) => (
                                             <MachineCard key={m.id} item={m} />
                                         ))}
                                     </div>
@@ -418,124 +603,246 @@ export default function EquipmentPage() {
                     );
                 })}
 
-                {/* eventuali macchine con customer sconosciuto */}
-                {byCustomer.get("unknown")?.length ? (
+                {unassigned.length > 0 && (
                     <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
                         <div className="flex items-center gap-3 px-5 py-4">
-                            <Factory className="w-5 h-5 text-muted-foreground" />
-                            <span className="text-foreground font-bold text-lg">Senza cliente (da sistemare)</span>
+                            <Wrench className="w-5 h-5 text-muted-foreground" />
+                            <span className="text-muted-foreground font-bold text-lg">Non assegnate a stabilimento</span>
                             <Badge className="bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30 ml-2">
-                                {byCustomer.get("unknown")!.length}
+                                {unassigned.length}
                             </Badge>
                         </div>
                         <div className="px-4 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {byCustomer.get("unknown")!.map((m) => (
+                                {unassigned.map((m) => (
                                     <MachineCard key={m.id} item={m} />
                                 ))}
                             </div>
                         </div>
                     </div>
-                ) : null}
+                )}
             </div>
         );
     };
 
-    if (loading) return null;
+    // ----------------------------
+    // MANUFACTURER GROUPED VIEW (customers)
+    // ----------------------------
+    const renderManufacturerGroupedView = () => {
+        // group by customer id; machines without customer go into "Non assegnate"
+        const assigned = filteredMachines.filter((m) => m._isAssigned && m._customerId);
+        const unassigned = filteredMachines.filter((m) => !m._customerId);
+
+        const groups = new Map < string, { customerId: string; customerName: string; items: Machine[]
+    }> ();
+    for (const m of assigned) {
+        const cid = m._customerId as string;
+        const cname = m._customerName || "Cliente";
+        if (!groups.has(cid)) groups.set(cid, { customerId: cid, customerName: cname, items: [] });
+        groups.get(cid)!.items.push(m);
+    }
+
+    const orderedGroups = Array.from(groups.values()).sort((a, b) =>
+        a.customerName.localeCompare(b.customerName)
+    );
 
     return (
-        <MainLayout userRole={ctx?.role as any}>
-            <SEO title={`${t("equipment.title")} - MACHINA`} />
+        <div className="space-y-4">
+            {orderedGroups.map((g) => {
+                const isExpanded = expandedCustomers.has(g.customerId);
+                return (
+                    <div key={g.customerId} className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
+                        <button
+                            onClick={() => toggleCustomer(g.customerId)}
+                            className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors"
+                        >
+                            {isExpanded ? (
+                                <ChevronDown className="w-5 h-5 text-purple-400" />
+                            ) : (
+                                <ChevronRight className="w-5 h-5 text-purple-400" />
+                            )}
+                            <Users className="w-5 h-5 text-purple-400" />
+                            <span className="text-foreground font-bold text-lg">{g.customerName}</span>
+                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-500/30 ml-2">
+                                {g.items.length}
+                            </Badge>
+                        </button>
 
-            <div className="space-y-6 max-w-7xl mx-auto">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">{t("equipment.title")}</h1>
-                        <p className="text-muted-foreground mt-1">{t("equipment.subtitle")}</p>
-                    </div>
-
-                    <div className="flex gap-2">
-                        {isAdmin && (
-                            <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => router.push("/equipment/new")}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                {t("equipment.addEquipment")}
-                            </Button>
+                        {isExpanded && (
+                            <div className="px-4 pb-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {g.items.map((m) => (
+                                        <MachineCard key={m.id} item={m} />
+                                    ))}
+                                </div>
+                            </div>
                         )}
                     </div>
+                );
+            })}
+
+            {unassigned.length > 0 && (
+                <div className="rounded-2xl border-0 shadow-sm bg-card overflow-hidden">
+                    <div className="flex items-center gap-3 px-5 py-4">
+                        <Wrench className="w-5 h-5 text-muted-foreground" />
+                        <span className="text-muted-foreground font-bold text-lg">Non assegnate a cliente</span>
+                        <Badge className="bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30 ml-2">
+                            {unassigned.length}
+                        </Badge>
+                    </div>
+                    <div className="px-4 pb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {unassigned.map((m) => (
+                                <MachineCard key={m.id} item={m} />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ----------------------------
+// RENDER
+// ----------------------------
+if (loading) return null;
+
+return (
+    <MainLayout userRole={ctx?.role as any}>
+        <SEO title={`Macchine - MACHINA`} />
+
+        <div className="space-y-6 max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">Macchine</h1>
+                    <p className="text-muted-foreground mt-1">
+                        {isManufacturer
+                            ? "Tutte le macchine assegnate ai tuoi clienti"
+                            : "Macchine dello stabilimento e macchine assegnate dal costruttore"}
+                    </p>
                 </div>
 
-                <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                    <CardContent className="p-4">
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <div className="flex-1 relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input
-                                    placeholder={t("common.search")}
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl"
-                                />
-                            </div>
+                <div className="flex gap-2">
+                    {isCustomer && plants.length > 0 && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setGroupedView(!groupedView)}
+                            className="border-border"
+                        >
+                            {groupedView ? <LayoutGrid className="w-4 h-4" /> : <List className="w-4 h-4" />}
+                            <span className="ml-2 hidden sm:inline">{groupedView ? "Griglia" : "Per stabilimento"}</span>
+                        </Button>
+                    )}
 
-                            <div className="flex gap-3 flex-wrap">
-                                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    {isAdmin && (
+                        <Button
+                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            onClick={() => router.push("/equipment/new")}
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nuova macchina
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                <CardContent className="p-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                                placeholder={t("common.search")}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl"
+                            />
+                        </div>
+
+                        <div className="flex gap-3 flex-wrap">
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
+                                    <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                                    <SelectValue placeholder={t("common.status")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">{t("common.all")}</SelectItem>
+                                    <SelectItem value="active">Attivo</SelectItem>
+                                    <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
+                                    <SelectItem value="inactive">Inattivo</SelectItem>
+                                    <SelectItem value="decommissioned">Dismesso</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {categories.length > 0 && (
+                                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                                     <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
-                                        <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                                        <SelectValue placeholder={t("common.status")} />
+                                        <SelectValue placeholder="Categoria" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">{t("common.all")}</SelectItem>
-                                        <SelectItem value="active">Attivo</SelectItem>
-                                        <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
-                                        <SelectItem value="inactive">Inattivo</SelectItem>
-                                        <SelectItem value="decommissioned">Dismesso</SelectItem>
+                                        {categories.map((cat) => (
+                                            <SelectItem key={cat} value={cat}>
+                                                {cat}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
+                            )}
 
-                                {categories.length > 0 && (
-                                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                        <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
-                                            <SelectValue placeholder="Categoria" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">{t("common.all")}</SelectItem>
-                                            {categories.map((cat) => (
-                                                <SelectItem key={cat} value={cat}>
-                                                    {cat}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </div>
+                            {(hasAssigned || hasOwned) && (
+                                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                                    <SelectTrigger className="w-[150px] bg-background border-border text-foreground rounded-xl">
+                                        <SelectValue placeholder="Provenienza" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Tutte</SelectItem>
+                                        <SelectItem value="own">Di mia proprietà</SelectItem>
+                                        <SelectItem value="assigned">
+                                            {isManufacturer ? "Assegnate ai clienti" : "Dal Costruttore"}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </CardContent>
+            </Card>
 
-                {orgType === "manufacturer" ? (
-                    renderManufacturerGrouped()
+            {isCustomer ? (
+                groupedView ? (
+                    renderCustomerGroupedView()
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredMachines.map((m) => (
                             <MachineCard key={m.id} item={m} />
                         ))}
                     </div>
-                )}
+                )
+            ) : (
+                // manufacturer ALWAYS grouped by customer (that’s what you asked)
+                renderManufacturerGroupedView()
+            )}
 
-                {filteredMachines.length === 0 && (
-                    <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
-                        <Wrench className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-foreground mb-2">{t("equipment.noEquipment")}</h3>
-                        <p className="text-muted-foreground mb-6">{t("equipment.noEquipmentDesc")}</p>
-                        {isAdmin && (
-                            <Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => router.push("/equipment/new")}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                {t("equipment.addFirst")}
-                            </Button>
-                        )}
-                    </Card>
-                )}
-            </div>
-        </MainLayout>
-    );
+            {filteredMachines.length === 0 && (
+                <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
+                    <Wrench className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-foreground mb-2">Nessuna macchina</h3>
+                    <p className="text-muted-foreground mb-6">Non ci sono macchine che corrispondono ai filtri.</p>
+                    {isAdmin && (
+                        <Button
+                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            onClick={() => router.push("/equipment/new")}
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Crea la prima macchina
+                        </Button>
+                    )}
+                </Card>
+            )}
+        </div>
+    </MainLayout>
+);
 }
