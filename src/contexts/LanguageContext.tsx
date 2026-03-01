@@ -1,5 +1,4 @@
-// src/contexts/LanguageContext.tsx
-import React, { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 export type Language = "it" | "en" | "fr" | "es";
 
@@ -8,8 +7,6 @@ interface LanguageContextType {
     setLanguage: (lang: Language) => void;
     t: (key: string) => string;
 }
-
-const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
 
 const translations: Record<Language, Record<string, string>> = {
     it: {
@@ -30,126 +27,147 @@ const translations: Record<Language, Record<string, string>> = {
         "common.no": "No",
         "common.all": "Tutti",
         "common.none": "Nessuno",
-        "common.actions": "Azioni",
-        "common.status": "Stato",
-        "common.date": "Data",
-        "common.time": "Ora",
-        "common.name": "Nome",
-        "common.description": "Descrizione",
-        "common.notes": "Note",
-        "common.priority": "Priorità",
-        "common.high": "Alta",
-        "common.medium": "Media",
-        "common.low": "Bassa",
-        "common.success": "Successo",
-        "common.error": "Errore",
-        "common.warning": "Attenzione",
-        "common.never": "Mai",
-        "common.noDescription": "Nessuna descrizione",
-        "common.show": "Mostra",
-        "common.clickToShow": "Clicca per mostrare",
 
-        "nav.dashboard": "Dashboard",
-        "nav.equipment": "Macchine",
-        "nav.maintenance": "Manutenzione",
-        "nav.workOrders": "Ordini di lavoro",
-        "nav.checklists": "Checklist",
-        "nav.analytics": "Analisi",
-        "nav.settings": "Impostazioni",
-        "nav.users": "Utenti",
-        "nav.notifications": "Notifiche",
-        "nav.logout": "Esci",
-        "nav.scanner": "Scanner QR",
+        // dashboard
+        "dashboard.title": "Dashboard",
+        "dashboard.subtitle": "Panoramica del sistema",
 
-        "language.selectLanguage": "Seleziona Lingua",
-
+        // equipment
         "equipment.title": "Macchine",
-        "equipment.subtitle": "Gestisci e monitora tutte le macchine",
-        "equipment.new": "Nuova Macchina",
-        "equipment.edit": "Modifica Macchina",
-        "equipment.details": "Dettagli Macchina",
-        "equipment.name": "Nome Macchina",
-        "equipment.code": "Codice Macchina",
-        "equipment.type": "Tipo",
-        // (il resto del file rimane uguale alle tue stringhe originali)
-    },
+        "equipment.subtitle": "Gestione macchine e attrezzature",
+        "equipment.new": "Nuova macchina",
+        "equipment.noEquipment": "Nessuna macchina trovata",
 
+        // fallback
+    },
     en: {
-        "nav.dashboard": "Dashboard",
-        "nav.equipment": "Machines",
-        "nav.maintenance": "Maintenance",
-        "nav.workOrders": "Work Orders",
-        "nav.checklists": "Checklists",
-        "nav.analytics": "Analytics",
-        "nav.settings": "Settings",
-        "nav.users": "Users",
-        "nav.notifications": "Notifications",
-        "nav.logout": "Logout",
-        "nav.scanner": "QR Scanner",
+        "common.loading": "Loading...",
+        "common.save": "Save",
+        "common.cancel": "Cancel",
+        "common.delete": "Delete",
+        "common.edit": "Edit",
+        "common.create": "Create",
+        "common.search": "Search",
+        "common.filter": "Filter",
+        "common.export": "Export",
+        "common.back": "Back",
+        "common.next": "Next",
+        "common.confirm": "Confirm",
+        "common.close": "Close",
+        "common.yes": "Yes",
+        "common.no": "No",
+        "common.all": "All",
+        "common.none": "None",
+
+        "dashboard.title": "Dashboard",
+        "dashboard.subtitle": "System overview",
 
         "equipment.title": "Machines",
+        "equipment.subtitle": "Machines & equipment management",
+        "equipment.new": "New machine",
         "equipment.noEquipment": "No machines found",
-        // (resto invariato)
     },
-
     fr: {
-        "nav.dashboard": "Tableau de bord",
-        "nav.equipment": "Machines",
-        "nav.maintenance": "Maintenance",
-        "nav.workOrders": "Ordres de travail",
-        "nav.checklists": "Checklists",
-        "nav.analytics": "Analytique",
-        "nav.settings": "Paramètres",
-        "nav.users": "Utilisateurs",
-        "nav.notifications": "Notifications",
-        "nav.logout": "Déconnexion",
-        "nav.scanner": "Scanner QR",
+        "common.loading": "Chargement...",
+        "common.save": "Enregistrer",
+        "common.cancel": "Annuler",
+        "common.delete": "Supprimer",
+        "common.edit": "Modifier",
+        "common.create": "Créer",
+        "common.search": "Rechercher",
+        "common.filter": "Filtrer",
+        "common.export": "Exporter",
+        "common.back": "Retour",
+        "common.next": "Suivant",
+        "common.confirm": "Confirmer",
+        "common.close": "Fermer",
+        "common.yes": "Oui",
+        "common.no": "Non",
+        "common.all": "Tous",
+        "common.none": "Aucun",
+
+        "dashboard.title": "Tableau de bord",
+        "dashboard.subtitle": "Aperçu du système",
 
         "equipment.title": "Machines",
-        // (resto invariato)
+        "equipment.subtitle": "Gestion des machines",
+        "equipment.new": "Nouvelle machine",
+        "equipment.noEquipment": "Aucune machine trouvée",
     },
-
     es: {
-        "nav.dashboard": "Panel de Control",
-        "nav.equipment": "Máquinas",
-        "nav.maintenance": "Mantenimiento",
-        "nav.workOrders": "Órdenes de trabajo",
-        "nav.checklists": "Checklist",
-        "nav.analytics": "Analítica",
-        "nav.settings": "Configuración",
-        "nav.users": "Usuarios",
-        "nav.notifications": "Notificaciones",
-        "nav.logout": "Salir",
-        "nav.scanner": "Escáner QR",
+        "common.loading": "Cargando...",
+        "common.save": "Guardar",
+        "common.cancel": "Cancelar",
+        "common.delete": "Eliminar",
+        "common.edit": "Editar",
+        "common.create": "Crear",
+        "common.search": "Buscar",
+        "common.filter": "Filtrar",
+        "common.export": "Exportar",
+        "common.back": "Atrás",
+        "common.next": "Siguiente",
+        "common.confirm": "Confirmar",
+        "common.close": "Cerrar",
+        "common.yes": "Sí",
+        "common.no": "No",
+        "common.all": "Todos",
+        "common.none": "Ninguno",
+
+        "dashboard.title": "Panel",
+        "dashboard.subtitle": "Resumen del sistema",
 
         "equipment.title": "Máquinas",
-        // (resto invariato)
+        "equipment.subtitle": "Gestión de máquinas",
+        "equipment.new": "Nueva máquina",
+        "equipment.noEquipment": "No se encontraron máquinas",
     },
 };
 
-export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
-    children,
-}) => {
-    const [language, setLanguage] = useState < Language > ("it");
+const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
 
-    const t = useMemo(() => {
-        return (key: string) => translations[language][key] || key;
-    }, [language]);
+export function LanguageProvider({ children }: { children: ReactNode }) {
+    const [language, setLanguageState] = useState < Language > ("it");
 
-    const value = useMemo(
-        () => ({ language, setLanguage, t }),
-        [language, t]
-    );
+    useEffect(() => {
+        const stored = localStorage.getItem("app-language") as Language | null;
+        if (stored && ["it", "en", "fr", "es"].includes(stored)) {
+            setLanguageState(stored);
+        }
+    }, []);
+
+    const setLanguage = (lang: Language) => {
+        setLanguageState(lang);
+        localStorage.setItem("app-language", lang);
+    };
+
+    const t = (key: string): string => {
+        return translations[language]?.[key] || translations["it"]?.[key] || key;
+    };
 
     return (
-        <LanguageContext.Provider value={value}>
+        <LanguageContext.Provider value={{ language, setLanguage, t }}>
             {children}
         </LanguageContext.Provider>
     );
+}
+
+export function useLanguage() {
+    const context = useContext(LanguageContext);
+    if (context === undefined) throw new Error("useLanguage must be used within a LanguageProvider");
+    return context;
+}
+
+/** ✅ Export richiesti da dashboard.tsx (fix build) */
+export const languageFlags: Record<Language, string> = {
+    it: "🇮🇹",
+    en: "🇬🇧",
+    fr: "🇫🇷",
+    es: "🇪🇸",
 };
 
-export const useLanguage = () => {
-    const ctx = useContext(LanguageContext);
-    if (!ctx) throw new Error("useLanguage must be used within a LanguageProvider");
-    return ctx;
+export const languageNames: Record<Language, string> = {
+    it: "Italiano",
+    en: "English",
+    fr: "Français",
+    es: "Español",
 };
