@@ -1,15 +1,23 @@
-// src/pages/equipment/index.tsx
+// src/pages/equipment/new.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext, UserContext } from "@/lib/supabaseHelpers";
-import { getPermissions } from "@/hooks/usePermissions";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { getUserContext } from "@/lib/supabaseHelpers";
+import { ArrowLeft, Save, Factory, Building2 } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -17,962 +25,451 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import {
-    Plus,
-    Search,
-    MapPin,
-    Filter,
-    ChevronRight,
-    ChevronDown,
-    QrCode,
-    Trash2,
-    Building2,
-    LayoutGrid,
-    List,
-    Factory,
-    Users,
-    Package,
-    EyeOff,
-    Eye,
-    UserPlus,
-} from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useToast } from "@/hooks/use-toast";
 
-interface Machine {
+type OrgType = "manufacturer" | "customer";
+type CustomerOrg = { id: string; name: string };
+type Plant = { id: string; name?: string | null; code?: string | null };
+type ProductionLine = {
     id: string;
-    name: string;
-    internal_code: string | null;
-    category: string | null;
-    serial_number: string | null;
-    model: string | null;
-    brand: string | null;
-    position: string | null;
-    lifecycle_state: string | null;
-    qr_code_token: string | null;
-    plant_id: string | null;
-    photo_url: string | null;
-    organization_id: string | null;
+    name?: string | null;
+    code?: string | null;
+    plant_id: string;
+};
 
-    // derived
-    _customerOrgId?: string | null; // manufacturer-view
-    _isAssignedToCustomer?: boolean; // customer-view OR manufacturer-view (derived)
-}
-
-interface Plant {
-    id: string;
-    name: string;
-}
-
-interface CustomerOrg {
-    id: string;
-    name: string;
-}
-
-async function getOrgTypeById(
-    orgId: string
-): Promise<"manufacturer" | "customer" | null> {
-    // ✅ FIX: nel tuo DB è organizations.type
+async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
     const { data, error } = await supabase
         .from("organizations")
         .select("type")
         .eq("id", orgId)
-        .maybeSingle();
+        .single();
 
     if (error) throw error;
+
     const t = String((data as any)?.type ?? "").toLowerCase();
     if (t === "manufacturer") return "manufacturer";
     if (t === "customer") return "customer";
     return null;
 }
 
-export default function EquipmentPage() {
+export default function NewEquipmentPage() {
     const router = useRouter();
-    const { t } = useLanguage();
     const { toast } = useToast();
 
-    const [loading, setLoading] = useState(true);
-    const [ctx, setCtx] = useState < UserContext | null > (null);
+    const [mounted, setMounted] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
-    const [orgType, setOrgType] = useState < "manufacturer" | "customer" | null > (
-        null
+    const [userRole, setUserRole] = useState < string > ("technician");
+    const [orgId, setOrgId] = useState < string | null > (null);
+    const [orgType, setOrgType] = useState < OrgType | null > (null);
+
+    const canCreate = useMemo(
+        () => userRole === "admin" || userRole === "supervisor",
+        [userRole]
     );
-    const [effectiveOrgId, setEffectiveOrgId] = useState < string | null > (null);
 
-    const [machines, setMachines] = useState < Machine[] > ([]);
-    const [filteredMachines, setFilteredMachines] = useState < Machine[] > ([]);
+    // Common fields
+    const [name, setName] = useState("");
+    const [internalCode, setInternalCode] = useState("");
+    const [serialNumber, setSerialNumber] = useState("");
+    const [notes, setNotes] = useState("");
 
-    // filters
-    const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState("all");
-    const [categoryFilter, setCategoryFilter] = useState("all");
-
-    // customer-only filter
-    const [sourceFilter, setSourceFilter] = useState("all"); // all|own|assigned
-
-    // manufacturer-only filter
-    const [assignmentFilter, setAssignmentFilter] = useState <
-        "all" | "assigned" | "unassigned"
-        > ("all");
-
-    // views
-    const [groupedView, setGroupedView] = useState(false);
-
-    // delete (manufacturer only)
-    const [deleting, setDeleting] = useState < string | null > (null);
-
-    // customer grouping
-    const [plants, setPlants] = useState < Plant[] > ([]);
-    const [expandedPlants, setExpandedPlants] = useState < Set < string >> (new Set());
-
-    // manufacturer grouping
+    // Manufacturer: select customer (OPTIONAL)
     const [customers, setCustomers] = useState < CustomerOrg[] > ([]);
-    const [expandedCustomers, setExpandedCustomers] = useState < Set < string >> (
-        new Set()
-    );
+    const [selectedCustomerId, setSelectedCustomerId] = useState < string > ("");
 
-    // customer-hidden machines (local archive)
-    const [hiddenMachineIds, setHiddenMachineIds] = useState < Set < string >> (
-        new Set()
-    );
-    const [showHiddenLocal, setShowHiddenLocal] = useState(false);
-    const [togglingHide, setTogglingHide] = useState < string | null > (null);
+    // Customer: select plant + line
+    const [plants, setPlants] = useState < Plant[] > ([]);
+    const [selectedPlantId, setSelectedPlantId] = useState < string > ("");
+    const [lines, setLines] = useState < ProductionLine[] > ([]);
+    const [selectedLineId, setSelectedLineId] = useState < string > ("");
+    const [loadingLines, setLoadingLines] = useState(false);
 
-    // manufacturer quick-assign dialog
-    const [assignOpen, setAssignOpen] = useState(false);
-    const [assignMachine, setAssignMachine] = useState < Machine | null > (null);
-    const [assignCustomerId, setAssignCustomerId] = useState < string > ("");
-    const [assigning, setAssigning] = useState(false);
-
-    // ---------------------------
-    // LOAD
-    // ---------------------------
+    // =========================
+    // INIT
+    // =========================
     useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
+        setMounted(true);
 
+        const init = async () => {
+            setPageLoading(true);
             try {
-                const userCtx = await getUserContext();
-                if (!userCtx) {
+                const ctx: any = await getUserContext();
+                if (!ctx) {
                     router.push("/login");
                     return;
                 }
-                setCtx(userCtx);
 
-                const orgId =
-                    (userCtx as any)?.orgId ||
-                    (userCtx as any)?.organizationId ||
-                    (userCtx as any)?.organization_id ||
+                setUserRole(ctx.role ?? "technician");
+
+                const effectiveOrgId =
+                    ctx.orgId ||
+                    ctx.organizationId ||
+                    ctx.organization_id ||
+                    ctx.tenant_id ||
                     null;
 
-                if (!orgId) throw new Error("Organization non trovata nel contesto utente.");
-                setEffectiveOrgId(orgId);
+                if (!effectiveOrgId)
+                    throw new Error("Organization non trovata nel contesto utente.");
+                setOrgId(effectiveOrgId);
 
-                const type = await getOrgTypeById(orgId);
-                if (!type) throw new Error("orgType non risolto");
-                setOrgType(type);
-
-                // customer: load hidden local
-                if (type === "customer") {
-                    const { data: hidden, error: hiddenErr } = await supabase
-                        .from("customer_hidden_machines")
-                        .select("machine_id")
-                        .eq("customer_org_id", orgId);
-
-                    if (hiddenErr) throw hiddenErr;
-                    setHiddenMachineIds(
-                        new Set((hidden ?? []).map((r: any) => r.machine_id))
+                // DB truth
+                const resolvedType = await getOrgTypeById(effectiveOrgId);
+                if (!resolvedType)
+                    throw new Error(
+                        "orgType non risolto (organizations.type errato / RLS)."
                     );
-                } else {
-                    setHiddenMachineIds(new Set());
-                }
+                setOrgType(resolvedType);
 
-                // load machines (RLS decides visibility)
-                const { data: machineData, error: machineErr } = await supabase
-                    .from("machines")
-                    .select(
-                        "id, name, internal_code, category, serial_number, model, brand, position, lifecycle_state, qr_code_token, plant_id, photo_url, organization_id"
-                    )
-                    .eq("is_archived", false)
-                    .order("name");
+                // reset UI state
+                setSelectedCustomerId("");
+                setSelectedPlantId("");
+                setSelectedLineId("");
+                setLines([]);
 
-                if (machineErr) throw machineErr;
-
-                let allMachines = (machineData ?? []) as Machine[];
-
-                // customer: mark assigned
-                if (type === "customer") {
-                    const { data: assigns, error: assErr } = await supabase
-                        .from("machine_assignments")
-                        .select("machine_id, is_active")
-                        .eq("customer_org_id", orgId)
-                        .eq("is_active", true);
-
-                    if (assErr) throw assErr;
-
-                    const assignedIds = new Set((assigns ?? []).map((a: any) => a.machine_id));
-
-                    allMachines = allMachines.map((m) => ({
-                        ...m,
-                        _isAssignedToCustomer: assignedIds.has(m.id),
-                    }));
-
-                    const { data: plantsData } = await supabase
-                        .from("plants")
-                        .select("id, name")
-                        .eq("is_archived", false)
-                        .order("name");
-
-                    setPlants((plantsData ?? []) as Plant[]);
-                    setGroupedView(true);
-                }
-
-                // manufacturer: group + assigned info + load customers list
-                if (type === "manufacturer") {
-                    const { data: assigns, error: assErr } = await supabase
-                        .from("machine_assignments")
-                        .select("machine_id, customer_org_id, is_active")
-                        .eq("manufacturer_org_id", orgId)
-                        .eq("is_active", true);
-
-                    if (assErr) throw assErr;
-
-                    const byMachine = new Map < string, string> ();
-                    for (const a of assigns ?? []) {
-                        if (a.machine_id && a.customer_org_id) byMachine.set(a.machine_id, a.customer_org_id);
-                    }
-
-                    allMachines = allMachines.map((m) => ({
-                        ...m,
-                        _customerOrgId: byMachine.get(m.id) || null,
-                        _isAssignedToCustomer: !!byMachine.get(m.id),
-                    }));
-
-                    const customerOrgIds = [
-                        ...new Set((assigns ?? []).map((a: any) => a.customer_org_id).filter(Boolean)),
-                    ] as string[];
-
-                    // customers list for grouping (assigned customers)
-                    if (customerOrgIds.length > 0) {
-                        const { data: custOrgs, error: custErr } = await supabase
-                            .from("organizations")
-                            .select("id, name")
-                            .in("id", customerOrgIds)
-                            .order("name");
-
-                        if (custErr) throw custErr;
-                        setCustomers((custOrgs ?? []) as CustomerOrg[]);
-                    } else {
-                        setCustomers([]);
-                    }
-
-                    // also load "available customers" for quick assign (all customers under manufacturer)
-                    const { data: allCust, error: allCustErr } = await supabase
+                if (resolvedType === "manufacturer") {
+                    const { data, error } = await supabase
                         .from("organizations")
-                        .select("id, name")
+                        .select("id,name")
+                        .eq("manufacturer_org_id", effectiveOrgId)
                         .eq("type", "customer")
-                        .eq("manufacturer_org_id", orgId)
                         .order("name", { ascending: true });
 
-                    if (allCustErr) throw allCustErr;
-                    // merge: prefer full list for dialog and also for names
-                    const fullList = (allCust ?? []) as CustomerOrg[];
-                    setCustomers((prev) => {
-                        const map = new Map < string, CustomerOrg> ();
-                        for (const c of prev) map.set(c.id, c);
-                        for (const c of fullList) map.set(c.id, c);
-                        return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-                    });
+                    if (error) throw error;
+                    setCustomers((data ?? []) as any);
 
-                    setGroupedView(true);
+                    // manufacturer non seleziona plant/line qui
+                    setPlants([]);
+                } else {
+                    const { data, error } = await supabase
+                        .from("plants")
+                        .select("id,name,code")
+                        .eq("is_archived", false)
+                        .order("name", { ascending: true });
+
+                    if (error) throw error;
+                    setPlants((data ?? []) as any);
+
+                    setCustomers([]);
                 }
-
-                setMachines(allMachines);
-            } catch (error: any) {
-                console.error(error);
+            } catch (e: any) {
+                console.error(e);
                 toast({
                     title: "Errore",
-                    description: error?.message || "Errore nel caricamento",
+                    description: e?.message ?? "Errore caricamento",
                     variant: "destructive",
                 });
+                router.push("/equipment");
             } finally {
-                setLoading(false);
+                setPageLoading(false);
             }
         };
 
-        loadData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        init();
+    }, [router, toast]);
 
-    const perms = useMemo(() => {
-        if (!ctx || !orgType) return null;
-        return getPermissions({ role: (ctx as any).role, orgType: orgType as any });
-    }, [ctx, orgType]);
+    // =========================
+    // LOAD LINES (customer only)
+    // =========================
+    useEffect(() => {
+        if (!mounted) return;
+        if (orgType !== "customer") return;
 
-    const isAdmin = perms?.isAdminOrSupervisor ?? false;
-    const isCustomer = orgType === "customer";
-    const isManufacturer = orgType === "manufacturer";
+        const loadLines = async () => {
+            if (!selectedPlantId) {
+                setLines([]);
+                setSelectedLineId("");
+                return;
+            }
+            setLoadingLines(true);
+            try {
+                const { data, error } = await supabase
+                    .from("production_lines")
+                    .select("id,name,code,plant_id")
+                    .eq("plant_id", selectedPlantId)
+                    .eq("is_archived", false)
+                    .order("name", { ascending: true });
 
-    const canDelete = isManufacturer && isAdmin;
-    const canLocalArchive = isCustomer && isAdmin;
-    const canQuickAssign = isManufacturer && isAdmin;
+                if (error) throw error;
+                setLines((data ?? []) as any);
+                setSelectedLineId("");
+            } catch (e: any) {
+                console.error(e);
+                toast({
+                    title: "Errore",
+                    description: e?.message ?? "Errore caricamento linee",
+                    variant: "destructive",
+                });
+                setLines([]);
+                setSelectedLineId("");
+            } finally {
+                setLoadingLines(false);
+            }
+        };
 
-    // ---------------------------
-    // ACTIONS
-    // ---------------------------
-    const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
-        e.stopPropagation();
-        if (!confirm(`Sei sicuro di voler eliminare "${name}"?`)) return;
+        loadLines();
+    }, [mounted, orgType, selectedPlantId, toast]);
 
-        setDeleting(id);
-        try {
-            const { error } = await supabase.from("machines").delete().eq("id", id);
-            if (error) throw error;
-
-            setMachines((prev) => prev.filter((m) => m.id !== id));
-            toast({ title: "Eliminato", description: `"${name}" eliminato` });
-        } catch (error: any) {
-            toast({
-                title: "Errore",
-                description: error?.message || "Errore",
-                variant: "destructive",
-            });
-        } finally {
-            setDeleting(null);
-        }
-    };
-
-    const toggleHideLocal = async (e: React.MouseEvent, machineId: string) => {
-        e.stopPropagation();
-        if (!isCustomer || !effectiveOrgId) return;
-
-        if (!isAdmin) {
+    // =========================
+    // SAVE
+    // =========================
+    const handleSave = async () => {
+        if (!canCreate) {
             toast({
                 title: "Permesso negato",
-                description: "Solo Admin/Supervisor possono archiviare.",
+                description: "Solo Admin/Supervisor possono creare macchine.",
                 variant: "destructive",
             });
             return;
         }
 
-        setTogglingHide(machineId);
-        try {
-            const isHidden = hiddenMachineIds.has(machineId);
-
-            if (isHidden) {
-                const { error } = await supabase
-                    .from("customer_hidden_machines")
-                    .delete()
-                    .eq("customer_org_id", effectiveOrgId)
-                    .eq("machine_id", machineId);
-
-                if (error) throw error;
-
-                setHiddenMachineIds((prev) => {
-                    const n = new Set(prev);
-                    n.delete(machineId);
-                    return n;
-                });
-
-                toast({ title: "Ripristinata", description: "Macchina ripristinata nella lista." });
-            } else {
-                const { error } = await supabase
-                    .from("customer_hidden_machines")
-                    .insert({ customer_org_id: effectiveOrgId, machine_id: machineId });
-
-                if (error) throw error;
-
-                setHiddenMachineIds((prev) => {
-                    const n = new Set(prev);
-                    n.add(machineId);
-                    return n;
-                });
-
-                toast({
-                    title: "Archiviata",
-                    description: "Macchina archiviata localmente (solo per questo cliente).",
-                });
-            }
-        } catch (err: any) {
-            console.error(err);
+        if (!name.trim()) {
             toast({
                 title: "Errore",
-                description: err?.message ?? "Errore",
+                description: "Inserisci un nome",
                 variant: "destructive",
             });
-        } finally {
-            setTogglingHide(null);
+            return;
         }
-    };
 
-    const openAssignDialog = (e: React.MouseEvent, m: Machine) => {
-        e.stopPropagation();
-        setAssignMachine(m);
-        setAssignCustomerId("");
-        setAssignOpen(true);
-    };
-
-    const doAssign = async () => {
-        if (!assignMachine || !assignCustomerId || !effectiveOrgId) return;
-
-        setAssigning(true);
-        try {
-            const { error } = await supabase.from("machine_assignments").insert({
-                machine_id: assignMachine.id,
-                customer_org_id: assignCustomerId,
-                manufacturer_org_id: effectiveOrgId,
-                assigned_at: new Date().toISOString(),
-                is_active: true,
+        if (!orgId || !orgType) {
+            toast({
+                title: "Errore",
+                description: "Context non valido (orgId/orgType).",
+                variant: "destructive",
             });
+            return;
+        }
+
+        if (orgType === "customer" && !selectedPlantId) {
+            toast({
+                title: "Errore",
+                description: "Seleziona uno stabilimento",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setSaving(true);
+        try {
+            // ✅ REGOLA CORRETTA:
+            // - se manufacturer: la macchina è SEMPRE di proprietà del manufacturer (orgId)
+            // - se customer: la macchina è di proprietà del customer (orgId)
+            const machineOrgId = orgId;
+
+            const payload: any = {
+                organization_id: machineOrgId,
+                name: name.trim(),
+                internal_code: internalCode.trim() || null,
+                serial_number: serialNumber.trim() || null,
+                notes: notes.trim() || null,
+                is_archived: false,
+                plant_id: orgType === "customer" ? selectedPlantId : null,
+                production_line_id:
+                    orgType === "customer" ? selectedLineId || null : null,
+            };
+
+            const { data: machine, error } = await supabase
+                .from("machines")
+                .insert(payload)
+                .select("id")
+                .single();
 
             if (error) throw error;
 
-            // Update local state immediately
-            setMachines((prev) =>
-                prev.map((x) =>
-                    x.id === assignMachine.id
-                        ? {
-                            ...x,
-                            _customerOrgId: assignCustomerId,
-                            _isAssignedToCustomer: true,
-                        }
-                        : x
-                )
-            );
+            // ✅ manufacturer: assegnazione OPZIONALE (solo se scelto un customer)
+            if (orgType === "manufacturer" && machine?.id && selectedCustomerId) {
+                const { error: assignError } = await supabase
+                    .from("machine_assignments")
+                    .insert({
+                        machine_id: machine.id,
+                        customer_org_id: selectedCustomerId,
+                        manufacturer_org_id: orgId,
+                        assigned_at: new Date().toISOString(),
+                        is_active: true,
+                    });
 
-            toast({ title: "OK", description: "Macchina assegnata" });
-            setAssignOpen(false);
+                if (assignError) throw assignError;
+            }
+
+            toast({
+                title: "OK",
+                description: selectedCustomerId
+                    ? "Macchina creata e assegnata"
+                    : "Macchina creata (non assegnata)",
+            });
+
+            router.push("/equipment");
         } catch (e: any) {
             console.error(e);
             toast({
-                title: "Errore",
-                description: e?.message ?? "Errore assegnazione",
+                title: "Errore salvataggio",
+                description: e?.message ?? "Errore creazione macchina",
                 variant: "destructive",
             });
         } finally {
-            setAssigning(false);
+            setSaving(false);
         }
     };
 
-    // ---------------------------
-    // FILTERS
-    // ---------------------------
-    useEffect(() => {
-        let filtered = machines;
-
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(
-                (m) =>
-                    m.name?.toLowerCase().includes(q) ||
-                    (m.internal_code ?? "").toLowerCase().includes(q) ||
-                    (m.serial_number ?? "").toLowerCase().includes(q) ||
-                    (m.position ?? "").toLowerCase().includes(q) ||
-                    (m.brand ?? "").toLowerCase().includes(q)
-            );
-        }
-
-        if (statusFilter !== "all") filtered = filtered.filter((m) => m.lifecycle_state === statusFilter);
-        if (categoryFilter !== "all") filtered = filtered.filter((m) => m.category === categoryFilter);
-
-        if (orgType === "customer") {
-            if (sourceFilter === "own") filtered = filtered.filter((m) => !m._isAssignedToCustomer);
-            if (sourceFilter === "assigned") filtered = filtered.filter((m) => !!m._isAssignedToCustomer);
-
-            if (!showHiddenLocal && hiddenMachineIds.size > 0) {
-                filtered = filtered.filter((m) => !hiddenMachineIds.has(m.id));
-            }
-        }
-
-        if (orgType === "manufacturer") {
-            if (assignmentFilter === "assigned") filtered = filtered.filter((m) => !!m._customerOrgId);
-            if (assignmentFilter === "unassigned") filtered = filtered.filter((m) => !m._customerOrgId);
-        }
-
-        setFilteredMachines(filtered);
-    }, [
-        machines,
-        searchQuery,
-        statusFilter,
-        categoryFilter,
-        sourceFilter,
-        orgType,
-        hiddenMachineIds,
-        showHiddenLocal,
-        assignmentFilter,
-    ]);
-
-    const categories = useMemo(() => {
-        const set = new Set < string > ();
-        for (const m of machines) if (m.category) set.add(m.category);
-        return Array.from(set).sort();
-    }, [machines]);
-
-    const statuses = useMemo(() => {
-        const set = new Set < string > ();
-        for (const m of machines) if (m.lifecycle_state) set.add(m.lifecycle_state);
-        return Array.from(set).sort();
-    }, [machines]);
-
-    const groupedByPlant = useMemo(() => {
-        const map = new Map < string, Machine[]> ();
-        for (const m of filteredMachines) {
-            const key = m.plant_id ?? "no-plant";
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(m);
-        }
-        for (const [k, arr] of map.entries()) {
-            map.set(k, arr.sort((a, b) => (a.name || "").localeCompare(b.name || "")));
-        }
-        return map;
-    }, [filteredMachines]);
-
-    const groupedByCustomer = useMemo(() => {
-        const map = new Map < string, Machine[]> ();
-        for (const m of filteredMachines) {
-            const key = m._customerOrgId ?? "unassigned";
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(m);
-        }
-        for (const [k, arr] of map.entries()) {
-            map.set(k, arr.sort((a, b) => (a.name || "").localeCompare(b.name || "")));
-        }
-        return map;
-    }, [filteredMachines]);
-
-    const plantName = (plantId: string) => {
-        if (plantId === "no-plant") return "Senza stabilimento";
-        return plants.find((p) => p.id === plantId)?.name || "Stabilimento";
-    };
-
-    const customerName = (customerOrgId: string) => {
-        if (customerOrgId === "unassigned") return "Non assegnate";
-        return customers.find((c) => c.id === customerOrgId)?.name || "Cliente";
-    };
-
-    const toggleExpandedPlant = (id: string) => {
-        setExpandedPlants((prev) => {
-            const n = new Set(prev);
-            if (n.has(id)) n.delete(id);
-            else n.add(id);
-            return n;
-        });
-    };
-
-    const toggleExpandedCustomer = (id: string) => {
-        setExpandedCustomers((prev) => {
-            const n = new Set(prev);
-            if (n.has(id)) n.delete(id);
-            else n.add(id);
-            return n;
-        });
-    };
-
-    const renderMachineCard = (item: Machine) => {
-        const isHiddenLocal = hiddenMachineIds.has(item.id);
-        const isUnassigned = isManufacturer && !item._customerOrgId;
-
-        return (
-            <Card
-                key={item.id}
-                className="group cursor-pointer hover:border-[#FF6B35]/40 transition-colors"
-                onClick={() => router.push(`/equipment/${item.id}`)}
-            >
-                <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <h3 className="font-semibold text-sm truncate">{item.name}</h3>
-                            <p className="text-xs text-muted-foreground truncate font-mono">
-                                {item.internal_code ?? "—"}
-                            </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            {item.qr_code_token && (
-                                <div className="p-1 rounded-md bg-muted/60">
-                                    <QrCode className="w-3.5 h-3.5 text-muted-foreground" />
-                                </div>
-                            )}
-
-                            {/* Manufacturer: quick assign (only if unassigned) */}
-                            {canQuickAssign && isUnassigned && (
-                                <button
-                                    onClick={(e) => openAssignDialog(e, item)}
-                                    title="Assegna a cliente"
-                                    className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <UserPlus className="w-3.5 h-3.5 text-muted-foreground" />
-                                </button>
-                            )}
-
-                            {/* Customer: local archive/unarchive */}
-                            {canLocalArchive && (
-                                <button
-                                    onClick={(e) => toggleHideLocal(e, item.id)}
-                                    disabled={togglingHide === item.id}
-                                    title={isHiddenLocal ? "Ripristina" : "Archivia localmente"}
-                                    className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                                >
-                                    {isHiddenLocal ? (
-                                        <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                                    ) : (
-                                        <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
-                                    )}
-                                </button>
-                            )}
-
-                            {/* Manufacturer: delete */}
-                            {canDelete && (
-                                <button
-                                    onClick={(e) => handleDelete(e, item.id, item.name)}
-                                    disabled={deleting === item.id}
-                                    title="Elimina"
-                                    className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                </button>
-                            )}
-
-                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {item.category && (
-                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-500/30">
-                                <Package className="w-3 h-3 mr-1" />
-                                {item.category}
-                            </Badge>
-                        )}
-
-                        {/* Manufacturer: assigned/unassigned badges */}
-                        {isManufacturer && item._customerOrgId && (
-                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
-                                <Factory className="w-3 h-3 mr-1" />
-                                {customerName(item._customerOrgId)}
-                            </Badge>
-                        )}
-
-                        {isManufacturer && !item._customerOrgId && (
-                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-500/30">
-                                Non assegnata
-                            </Badge>
-                        )}
-
-                        {isCustomer && item._isAssignedToCustomer && (
-                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
-                                <Factory className="w-3 h-3 mr-1" />
-                                Assegnata
-                            </Badge>
-                        )}
-
-                        {isCustomer && isHiddenLocal && (
-                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-500/30">
-                                Archiviata (locale)
-                            </Badge>
-                        )}
-                    </div>
-
-                    {item.position && (
-                        <div className="mt-2 flex items-center gap-1.5 text-muted-foreground text-xs">
-                            <MapPin className="w-3.5 h-3.5" />
-                            <span className="truncate">{item.position}</span>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        );
-    };
-
-    if (loading) {
-        return (
-            <MainLayout>
-                <SEO title={t("equipment.title")} />
-                <div className="p-6">{t("common.loading")}</div>
-            </MainLayout>
-        );
-    }
+    if (!mounted || pageLoading || !orgType) return null;
 
     return (
-        <MainLayout>
-            <SEO title={t("equipment.title")} />
-            <div className="p-6 space-y-6">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                        <h1 className="text-2xl font-bold">{t("equipment.title")}</h1>
-                        <p className="text-muted-foreground">{t("equipment.subtitle")}</p>
-                    </div>
+        <MainLayout userRole={userRole as any}>
+            <SEO title="Nuova macchina - MACHINA" />
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {(isCustomer || isManufacturer) && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setGroupedView((v) => !v)}
-                                className="border-border"
-                                title="Cambia visualizzazione"
-                            >
-                                {groupedView ? <LayoutGrid className="w-4 h-4" /> : <List className="w-4 h-4" />}
-                                <span className="ml-2 hidden sm:inline">
-                                    {groupedView ? "Griglia" : "Per gruppi"}
-                                </span>
-                            </Button>
+            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+                <Button variant="ghost" onClick={() => router.back()}>
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Indietro
+                </Button>
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-foreground">Nuova macchina</CardTitle>
+                        <CardDescription className="text-muted-foreground">
+                            {orgType === "manufacturer"
+                                ? "Puoi assegnarla subito a un cliente, oppure lasciarla non assegnata."
+                                : "Seleziona lo stabilimento e, se serve, la linea (opzionale)."}
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-6">
+                        {orgType === "manufacturer" ? (
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-2">
+                                    <Factory className="w-4 h-4 text-purple-400" />
+                                    Cliente (opzionale)
+                                </Label>
+
+                                <Select
+                                    value={selectedCustomerId}
+                                    onValueChange={setSelectedCustomerId}
+                                >
+                                    <SelectTrigger className="bg-muted border-border text-foreground">
+                                        <SelectValue placeholder="Non assegnare ora (opzionale)..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">Non assegnare ora</SelectItem>
+                                        {customers.map((c) => (
+                                            <SelectItem key={c.id} value={c.id}>
+                                                {c.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                {customers.length === 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Nessun cliente trovato. Crea prima un cliente (organizations:
+                                        type=customer, manufacturer_org_id = la tua org).
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <Building2 className="w-4 h-4 text-blue-400" />
+                                        Stabilimento *
+                                    </Label>
+
+                                    <Select
+                                        value={selectedPlantId}
+                                        onValueChange={(v) => setSelectedPlantId(v)}
+                                    >
+                                        <SelectTrigger className="bg-muted border-border text-foreground">
+                                            <SelectValue placeholder="Seleziona stabilimento..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {plants.map((p) => (
+                                                <SelectItem key={p.id} value={p.id}>
+                                                    {p.name ?? p.code ?? p.id}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Linea (opzionale)</Label>
+                                    <Select
+                                        value={selectedLineId}
+                                        onValueChange={(v) => setSelectedLineId(v)}
+                                        disabled={!selectedPlantId || loadingLines}
+                                    >
+                                        <SelectTrigger className="bg-muted border-border text-foreground disabled:opacity-60">
+                                            <SelectValue
+                                                placeholder={
+                                                    !selectedPlantId
+                                                        ? "Seleziona prima lo stabilimento"
+                                                        : "Seleziona linea..."
+                                                }
+                                            />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">Nessuna</SelectItem>
+                                            {lines.map((l) => (
+                                                <SelectItem key={l.id} value={l.id}>
+                                                    {l.name ?? l.code ?? l.id}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
                         )}
 
-                        {/* customer: show hidden */}
-                        {orgType === "customer" && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowHiddenLocal((v) => !v)}
-                                className="border-border"
-                                title={
-                                    showHiddenLocal
-                                        ? "Nascondi le macchine archiviate localmente"
-                                        : "Mostra le macchine archiviate localmente"
-                                }
-                            >
-                                {showHiddenLocal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                <span className="ml-2 hidden sm:inline">
-                                    {showHiddenLocal ? "Nascondi archiviate" : "Mostra archiviate"}
-                                </span>
-                            </Button>
-                        )}
-
-                        {isAdmin && (
-                            <Button
-                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                                onClick={() => router.push("/equipment/new")}
-                            >
-                                <Plus className="w-4 h-4 mr-2" />
-                                {t("equipment.new")}
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
-                {/* FILTER BAR */}
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex flex-col md:flex-row gap-3 md:items-center">
-                            <div className="flex-1 relative">
-                                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Nome *</Label>
                                 <Input
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={t("common.search")}
-                                    className="pl-9"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="es. Pressa B1"
                                 />
                             </div>
 
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <div className="flex items-center gap-1 text-muted-foreground text-xs">
-                                    <Filter className="w-4 h-4" />
-                                    <span>{t("common.filter")}</span>
-                                </div>
-
-                                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="Stato" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">{t("common.all")}</SelectItem>
-                                        {statuses.map((s) => (
-                                            <SelectItem key={s} value={s}>
-                                                {s}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                    <SelectTrigger className="w-[160px]">
-                                        <SelectValue placeholder="Categoria" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">{t("common.all")}</SelectItem>
-                                        {categories.map((c) => (
-                                            <SelectItem key={c} value={c}>
-                                                {c}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                {orgType === "customer" && (
-                                    <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                                        <SelectTrigger className="w-[200px]">
-                                            <SelectValue placeholder="Provenienza" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Tutte</SelectItem>
-                                            <SelectItem value="own">Solo mie</SelectItem>
-                                            <SelectItem value="assigned">Assegnate da costruttore</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-
-                                {/* ✅ Manufacturer-only filter: assigned/unassigned */}
-                                {orgType === "manufacturer" && (
-                                    <Select
-                                        value={assignmentFilter}
-                                        onValueChange={(v) =>
-                                            setAssignmentFilter(v as "all" | "assigned" | "unassigned")
-                                        }
-                                    >
-                                        <SelectTrigger className="w-[220px]">
-                                            <SelectValue placeholder="Assegnazione" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Tutte</SelectItem>
-                                            <SelectItem value="assigned">Solo assegnate</SelectItem>
-                                            <SelectItem value="unassigned">Solo non assegnate</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
+                            <div className="space-y-2">
+                                <Label>Codice interno</Label>
+                                <Input
+                                    value={internalCode}
+                                    onChange={(e) => setInternalCode(e.target.value)}
+                                    placeholder="es. PRS-B1"
+                                />
                             </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                                <Label>Matricola</Label>
+                                <Input
+                                    value={serialNumber}
+                                    onChange={(e) => setSerialNumber(e.target.value)}
+                                    placeholder="es. SN-12345"
+                                />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                                <Label>Note</Label>
+                                <Textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    rows={3}
+                                    placeholder="Note..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                            >
+                                <Save className="w-4 h-4 mr-2" />
+                                {saving ? "Salvataggio..." : "Salva"}
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* LIST */}
-                {!groupedView ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {filteredMachines.map(renderMachineCard)}
-                        {filteredMachines.length === 0 && (
-                            <div className="text-sm text-muted-foreground">{t("equipment.noEquipment")}</div>
-                        )}
-                    </div>
-                ) : isCustomer ? (
-                    <div className="space-y-3">
-                        {Array.from(groupedByPlant.entries())
-                            .sort((a, b) => plantName(a[0]).localeCompare(plantName(b[0])))
-                            .map(([plantId, list]) => {
-                                const open = expandedPlants.has(plantId);
-                                return (
-                                    <Card key={plantId}>
-                                        <CardContent className="p-4">
-                                            <button
-                                                className="w-full flex items-center justify-between"
-                                                onClick={() => toggleExpandedPlant(plantId)}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <Building2 className="w-4 h-4 text-muted-foreground" />
-                                                    <span className="font-semibold">{plantName(plantId)}</span>
-                                                    <Badge variant="secondary" className="rounded-full">
-                                                        {list.length}
-                                                    </Badge>
-                                                </div>
-                                                {open ? (
-                                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                                ) : (
-                                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                                )}
-                                            </button>
-
-                                            {open && (
-                                                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                                                    {list.map(renderMachineCard)}
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })}
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {Array.from(groupedByCustomer.entries())
-                            .sort((a, b) => customerName(a[0]).localeCompare(customerName(b[0])))
-                            .map(([custOrgId, list]) => {
-                                const open = expandedCustomers.has(custOrgId);
-                                return (
-                                    <Card key={custOrgId}>
-                                        <CardContent className="p-4">
-                                            <button
-                                                className="w-full flex items-center justify-between"
-                                                onClick={() => toggleExpandedCustomer(custOrgId)}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <Users className="w-4 h-4 text-muted-foreground" />
-                                                    <span className="font-semibold">{customerName(custOrgId)}</span>
-                                                    <Badge variant="secondary" className="rounded-full">
-                                                        {list.length}
-                                                    </Badge>
-                                                </div>
-                                                {open ? (
-                                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                                ) : (
-                                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                                )}
-                                            </button>
-
-                                            {open && (
-                                                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                                                    {list.map(renderMachineCard)}
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })}
-                    </div>
-                )}
-
-                {/* ✅ Quick assign dialog (manufacturer) */}
-                <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Assegna macchina</DialogTitle>
-                            <DialogDescription>
-                                Seleziona il cliente a cui assegnare{" "}
-                                <span className="font-medium">{assignMachine?.name}</span>.
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div className="space-y-2">
-                            <Select value={assignCustomerId} onValueChange={setAssignCustomerId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleziona cliente..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {customers.map((c) => (
-                                        <SelectItem key={c.id} value={c.id}>
-                                            {c.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            {customers.length === 0 && (
-                                <p className="text-xs text-muted-foreground">
-                                    Nessun cliente disponibile. Crea prima un cliente associato al tuo manufacturer.
-                                </p>
-                            )}
-                        </div>
-
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setAssignOpen(false)} disabled={assigning}>
-                                Annulla
-                            </Button>
-                            <Button
-                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                                onClick={doAssign}
-                                disabled={!assignCustomerId || assigning || !assignMachine}
-                            >
-                                {assigning ? "Assegnazione..." : "Assegna"}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
             </div>
         </MainLayout>
     );
