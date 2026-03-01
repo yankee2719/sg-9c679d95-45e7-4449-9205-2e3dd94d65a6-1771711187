@@ -33,6 +33,8 @@ import {
   Factory,
   Users,
   Package,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -69,7 +71,9 @@ interface CustomerOrg {
   name: string;
 }
 
-async function getOrgTypeById(orgId: string): Promise<"manufacturer" | "customer" | null> {
+async function getOrgTypeById(
+  orgId: string
+): Promise<"manufacturer" | "customer" | null> {
   const { data, error } = await supabase
     .from("organizations")
     .select("type")
@@ -92,7 +96,9 @@ export default function EquipmentPage() {
   const [ctx, setCtx] = useState<UserContext | null>(null);
 
   // DB-truth
-  const [orgType, setOrgType] = useState<"manufacturer" | "customer" | null>(null);
+  const [orgType, setOrgType] = useState<"manufacturer" | "customer" | null>(
+    null
+  );
   const [effectiveOrgId, setEffectiveOrgId] = useState<string | null>(null);
 
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -102,8 +108,9 @@ export default function EquipmentPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all"); // customer-only (all|own|assigned)
-
   const [categories, setCategories] = useState<string[]>([]);
+
+  // delete (manufacturer only)
   const [deleting, setDeleting] = useState<string | null>(null);
 
   // customer-only grouping
@@ -113,8 +120,20 @@ export default function EquipmentPage() {
 
   // manufacturer-only grouping
   const [customers, setCustomers] = useState<CustomerOrg[]>([]);
-  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(
+    new Set()
+  );
 
+  // customer-local archive (hide)
+  const [hiddenMachineIds, setHiddenMachineIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [showHiddenLocal, setShowHiddenLocal] = useState(false);
+  const [togglingHide, setTogglingHide] = useState<string | null>(null);
+
+  // ---------------------------
+  // LOAD
+  // ---------------------------
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -133,12 +152,24 @@ export default function EquipmentPage() {
           null;
 
         if (!orgId) throw new Error("Organization non trovata nel contesto utente.");
-
         setEffectiveOrgId(orgId);
 
         const type = await getOrgTypeById(orgId);
         if (!type) throw new Error("orgType non risolto");
         setOrgType(type);
+
+        // 0) customer-only: load local hidden
+        if (type === "customer") {
+          const { data: hidden, error: hiddenErr } = await supabase
+            .from("customer_hidden_machines")
+            .select("machine_id")
+            .eq("customer_org_id", orgId);
+
+          if (hiddenErr) throw hiddenErr;
+          setHiddenMachineIds(new Set((hidden ?? []).map((r: any) => r.machine_id)));
+        } else {
+          setHiddenMachineIds(new Set());
+        }
 
         // 1) carico macchine visibili (RLS decide cosa vedi)
         const { data: machineData, error: machineErr } = await supabase
@@ -147,7 +178,6 @@ export default function EquipmentPage() {
           .order("name");
 
         if (machineErr) throw machineErr;
-
         let allMachines: Machine[] = (machineData ?? []) as any;
 
         // ===== CUSTOMER VIEW =====
@@ -242,7 +272,7 @@ export default function EquipmentPage() {
             }
           });
 
-          // load customer names (in case customer list is incomplete)
+          // load customer names (fallback)
           let customerMap = new Map<string, string>();
           const uniqueCustomerIds = [...customerIds];
           if (uniqueCustomerIds.length > 0) {
@@ -273,7 +303,11 @@ export default function EquipmentPage() {
         setCategories(cats);
       } catch (error: any) {
         console.error("Error loading:", error);
-        toast({ title: "Errore", description: error?.message ?? "Errore caricamento", variant: "destructive" });
+        toast({
+          title: "Errore",
+          description: error?.message ?? "Errore caricamento",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -282,6 +316,9 @@ export default function EquipmentPage() {
     loadData();
   }, [router, toast]);
 
+  // ---------------------------
+  // FILTER
+  // ---------------------------
   useEffect(() => {
     let filtered = machines;
 
@@ -300,14 +337,28 @@ export default function EquipmentPage() {
     if (statusFilter !== "all") filtered = filtered.filter((m) => m.lifecycle_state === statusFilter);
     if (categoryFilter !== "all") filtered = filtered.filter((m) => m.category === categoryFilter);
 
-    // customer-only filter
+    // customer-only filter: provenance
     if (orgType === "customer") {
       if (sourceFilter === "own") filtered = filtered.filter((m) => !m._isAssignedToCustomer);
       if (sourceFilter === "assigned") filtered = filtered.filter((m) => !!m._isAssignedToCustomer);
+
+      // customer-only: hide locally (for BOTH own + assigned)
+      if (!showHiddenLocal && hiddenMachineIds.size > 0) {
+        filtered = filtered.filter((m) => !hiddenMachineIds.has(m.id));
+      }
     }
 
     setFilteredMachines(filtered);
-  }, [searchQuery, statusFilter, categoryFilter, sourceFilter, machines, orgType]);
+  }, [
+    machines,
+    searchQuery,
+    statusFilter,
+    categoryFilter,
+    sourceFilter,
+    orgType,
+    hiddenMachineIds,
+    showHiddenLocal,
+  ]);
 
   const perms = useMemo(() => {
     if (!ctx) return null;
@@ -318,6 +369,9 @@ export default function EquipmentPage() {
   const isCustomer = orgType === "customer";
   const isManufacturer = orgType === "manufacturer";
 
+  // ---------------------------
+  // ACTIONS
+  // ---------------------------
   const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation();
     if (!confirm(`Sei sicuro di voler eliminare "${name}"?`)) return;
@@ -325,12 +379,62 @@ export default function EquipmentPage() {
     try {
       const { error } = await supabase.from("machines").delete().eq("id", id);
       if (error) throw error;
+
       setMachines((prev) => prev.filter((m) => m.id !== id));
       toast({ title: "Eliminato", description: `"${name}" eliminato` });
     } catch (error: any) {
       toast({ title: "Errore", description: error?.message || "Errore", variant: "destructive" });
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const toggleHideLocal = async (e: React.MouseEvent, machineId: string) => {
+    e.stopPropagation();
+    if (!isCustomer || !effectiveOrgId) return;
+    if (!isAdmin) {
+      toast({ title: "Permesso negato", description: "Solo Admin/Supervisor possono archiviare.", variant: "destructive" });
+      return;
+    }
+
+    setTogglingHide(machineId);
+    try {
+      const isHidden = hiddenMachineIds.has(machineId);
+
+      if (isHidden) {
+        const { error } = await supabase
+          .from("customer_hidden_machines")
+          .delete()
+          .eq("customer_org_id", effectiveOrgId)
+          .eq("machine_id", machineId);
+        if (error) throw error;
+
+        setHiddenMachineIds((prev) => {
+          const n = new Set(prev);
+          n.delete(machineId);
+          return n;
+        });
+
+        toast({ title: "Ripristinata", description: "Macchina ripristinata nella lista." });
+      } else {
+        const { error } = await supabase
+          .from("customer_hidden_machines")
+          .insert({ customer_org_id: effectiveOrgId, machine_id: machineId });
+        if (error) throw error;
+
+        setHiddenMachineIds((prev) => {
+          const n = new Set(prev);
+          n.add(machineId);
+          return n;
+        });
+
+        toast({ title: "Archiviata", description: "Macchina archiviata localmente (solo per questo cliente)." });
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Errore", description: err?.message ?? "Errore", variant: "destructive" });
+    } finally {
+      setTogglingHide(null);
     }
   };
 
@@ -389,16 +493,23 @@ export default function EquipmentPage() {
     });
   };
 
+  // ---------------------------
+  // CARD
+  // ---------------------------
   const MachineCard = ({ item }: { item: Machine }) => {
     const status = getStatusConfig(item.lifecycle_state);
 
-    // DELETE/EDIT RULE:
-    // - customer cannot delete assigned-from-manufacturer
-    // - manufacturer can delete only machines it OWNS (organization_id === effectiveOrgId)
+    // DELETE RULE:
+    // - Manufacturer: can delete only machines it owns
+    // - Customer: cannot delete (ever) -> local archive only
     const canDelete =
+      isManufacturer &&
       isAdmin &&
       !!effectiveOrgId &&
-      item.organization_id === effectiveOrgId; // "owner" only
+      item.organization_id === effectiveOrgId;
+
+    const isHiddenLocal = isCustomer && hiddenMachineIds.has(item.id);
+    const canLocalArchive = isCustomer && isAdmin && !!effectiveOrgId;
 
     return (
       <Card
@@ -419,7 +530,9 @@ export default function EquipmentPage() {
               ) : (
                 <Wrench
                   className={`w-6 h-6 ${
-                    item._isAssignedToCustomer ? "text-purple-500 dark:text-purple-400" : "text-blue-500 dark:text-blue-400"
+                    item._isAssignedToCustomer
+                      ? "text-purple-500 dark:text-purple-400"
+                      : "text-blue-500 dark:text-blue-400"
                   }`}
                 />
               )}
@@ -439,11 +552,29 @@ export default function EquipmentPage() {
                     </div>
                   )}
 
+                  {/* Customer: local archive/unarchive */}
+                  {canLocalArchive && (
+                    <button
+                      onClick={(e) => toggleHideLocal(e, item.id)}
+                      disabled={togglingHide === item.id}
+                      title={isHiddenLocal ? "Ripristina" : "Archivia localmente"}
+                      className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    >
+                      {isHiddenLocal ? (
+                        <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                      ) : (
+                        <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                      )}
+                    </button>
+                  )}
+
+                  {/* Manufacturer: real delete */}
                   {canDelete && (
                     <button
                       onClick={(e) => handleDelete(e, item.id, item.name)}
                       disabled={deleting === item.id}
                       className="p-1 rounded-md bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                      title="Elimina definitivamente"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
                     </button>
@@ -454,7 +585,9 @@ export default function EquipmentPage() {
           </div>
 
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${status.color}`}>{status.label}</Badge>
+            <Badge className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${status.color}`}>
+              {status.label}
+            </Badge>
 
             <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-medium text-muted-foreground border-border">
               {item.category || "Generico"}
@@ -464,6 +597,12 @@ export default function EquipmentPage() {
               <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
                 <Factory className="w-3 h-3 mr-1" />
                 {item._manufacturerName || "Costruttore"}
+              </Badge>
+            )}
+
+            {isCustomer && isHiddenLocal && (
+              <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-500/30">
+                Archiviata (locale)
               </Badge>
             )}
           </div>
@@ -479,6 +618,9 @@ export default function EquipmentPage() {
     );
   };
 
+  // ---------------------------
+  // RENDER: CUSTOMER by PLANT
+  // ---------------------------
   const renderCustomerGroupedByPlant = () => {
     const assignedMachines = filteredMachines.filter((m) => !!m._isAssignedToCustomer);
     const plantMachinesList = filteredMachines.filter((m) => m.plant_id && !m._isAssignedToCustomer);
@@ -563,11 +705,13 @@ export default function EquipmentPage() {
     );
   };
 
+  // ---------------------------
+  // RENDER: MANUFACTURER by CUSTOMER
+  // ---------------------------
   const renderManufacturerGroupedByCustomer = () => {
     const assigned = filteredMachines.filter((m) => !!m._customerOrgId);
     const unassigned = filteredMachines.filter((m) => !m._customerOrgId);
 
-    // group by customer_org_id
     const byCustomer = new Map<string, Machine[]>();
     assigned.forEach((m) => {
       const key = m._customerOrgId as string;
@@ -575,7 +719,6 @@ export default function EquipmentPage() {
       byCustomer.get(key)!.push(m);
     });
 
-    // show customers in stable order (from organizations list); fallback for unknown ids
     const orderedCustomerIds = [
       ...customers.map((c) => c.id),
       ...[...byCustomer.keys()].filter((id) => !customers.some((c) => c.id === id)),
@@ -593,7 +736,6 @@ export default function EquipmentPage() {
             "Cliente";
 
           const expanded = expandedCustomers.has(cid);
-
           if (list.length === 0) return null;
 
           return (
@@ -652,7 +794,8 @@ export default function EquipmentPage() {
 
   if (loading) return null;
 
-  const hasAssignedForCustomer = orgType === "customer" && machines.some((m) => !!m._isAssignedToCustomer);
+  const hasAssignedForCustomer =
+    orgType === "customer" && machines.some((m) => !!m._isAssignedToCustomer);
 
   return (
     <MainLayout userRole={ctx?.role as any}>
@@ -665,7 +808,8 @@ export default function EquipmentPage() {
             <p className="text-muted-foreground mt-1">{t("equipment.subtitle")}</p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* customer: toggle view */}
             {orgType === "customer" && plants.length > 0 && (
               <Button
                 variant="outline"
@@ -678,6 +822,23 @@ export default function EquipmentPage() {
               </Button>
             )}
 
+            {/* customer: show hidden local */}
+            {orgType === "customer" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHiddenLocal((v) => !v)}
+                className="border-border"
+                title="Mostra/Nascondi archiviate localmente"
+              >
+                {showHiddenLocal ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                <span className="ml-2 hidden sm:inline">
+                  {showHiddenLocal ? "Mostra tutte" : "Nascondi archiviate"}
+                </span>
+              </Button>
+            )}
+
+            {/* create */}
             {isAdmin && (
               <Button
                 className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
