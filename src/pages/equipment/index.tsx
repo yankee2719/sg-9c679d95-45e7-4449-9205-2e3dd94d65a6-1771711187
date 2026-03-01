@@ -18,6 +18,14 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     Plus,
     Search,
     MapPin,
@@ -34,6 +42,7 @@ import {
     Package,
     EyeOff,
     Eye,
+    UserPlus,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -54,10 +63,8 @@ interface Machine {
     organization_id: string | null;
 
     // derived
-    _customerOrgId?: string | null;
-    _customerName?: string | null;
-    _isAssignedToCustomer?: boolean;
-    _manufacturerName?: string | null; // customer-view only
+    _customerOrgId?: string | null; // manufacturer-view
+    _isAssignedToCustomer?: boolean; // customer-view OR manufacturer-view (derived)
 }
 
 interface Plant {
@@ -73,7 +80,7 @@ interface CustomerOrg {
 async function getOrgTypeById(
     orgId: string
 ): Promise<"manufacturer" | "customer" | null> {
-    // ✅ FIX: nel tuo DB è organizations.type (NON organization_type)
+    // ✅ FIX: nel tuo DB è organizations.type
     const { data, error } = await supabase
         .from("organizations")
         .select("type")
@@ -81,9 +88,9 @@ async function getOrgTypeById(
         .maybeSingle();
 
     if (error) throw error;
-    const tRaw = String((data as any)?.type ?? "").toLowerCase();
-    if (tRaw === "manufacturer") return "manufacturer";
-    if (tRaw === "customer") return "customer";
+    const t = String((data as any)?.type ?? "").toLowerCase();
+    if (t === "manufacturer") return "manufacturer";
+    if (t === "customer") return "customer";
     return null;
 }
 
@@ -95,7 +102,6 @@ export default function EquipmentPage() {
     const [loading, setLoading] = useState(true);
     const [ctx, setCtx] = useState < UserContext | null > (null);
 
-    // DB-truth
     const [orgType, setOrgType] = useState < "manufacturer" | "customer" | null > (
         null
     );
@@ -104,20 +110,30 @@ export default function EquipmentPage() {
     const [machines, setMachines] = useState < Machine[] > ([]);
     const [filteredMachines, setFilteredMachines] = useState < Machine[] > ([]);
 
+    // filters
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [categoryFilter, setCategoryFilter] = useState("all");
-    const [sourceFilter, setSourceFilter] = useState("all"); // customer-only (all|own|assigned)
+
+    // customer-only filter
+    const [sourceFilter, setSourceFilter] = useState("all"); // all|own|assigned
+
+    // manufacturer-only filter
+    const [assignmentFilter, setAssignmentFilter] = useState <
+        "all" | "assigned" | "unassigned"
+        > ("all");
+
+    // views
+    const [groupedView, setGroupedView] = useState(false);
 
     // delete (manufacturer only)
     const [deleting, setDeleting] = useState < string | null > (null);
 
-    // customer-only grouping
+    // customer grouping
     const [plants, setPlants] = useState < Plant[] > ([]);
-    const [groupedView, setGroupedView] = useState(false);
     const [expandedPlants, setExpandedPlants] = useState < Set < string >> (new Set());
 
-    // manufacturer-only grouping
+    // manufacturer grouping
     const [customers, setCustomers] = useState < CustomerOrg[] > ([]);
     const [expandedCustomers, setExpandedCustomers] = useState < Set < string >> (
         new Set()
@@ -129,6 +145,12 @@ export default function EquipmentPage() {
     );
     const [showHiddenLocal, setShowHiddenLocal] = useState(false);
     const [togglingHide, setTogglingHide] = useState < string | null > (null);
+
+    // manufacturer quick-assign dialog
+    const [assignOpen, setAssignOpen] = useState(false);
+    const [assignMachine, setAssignMachine] = useState < Machine | null > (null);
+    const [assignCustomerId, setAssignCustomerId] = useState < string > ("");
+    const [assigning, setAssigning] = useState(false);
 
     // ---------------------------
     // LOAD
@@ -158,7 +180,7 @@ export default function EquipmentPage() {
                 if (!type) throw new Error("orgType non risolto");
                 setOrgType(type);
 
-                // customer: load local hidden
+                // customer: load hidden local
                 if (type === "customer") {
                     const { data: hidden, error: hiddenErr } = await supabase
                         .from("customer_hidden_machines")
@@ -166,7 +188,9 @@ export default function EquipmentPage() {
                         .eq("customer_org_id", orgId);
 
                     if (hiddenErr) throw hiddenErr;
-                    setHiddenMachineIds(new Set((hidden ?? []).map((r: any) => r.machine_id)));
+                    setHiddenMachineIds(
+                        new Set((hidden ?? []).map((r: any) => r.machine_id))
+                    );
                 } else {
                     setHiddenMachineIds(new Set());
                 }
@@ -211,7 +235,7 @@ export default function EquipmentPage() {
                     setGroupedView(true);
                 }
 
-                // manufacturer: group by customers (from assignments)
+                // manufacturer: group + assigned info + load customers list
                 if (type === "manufacturer") {
                     const { data: assigns, error: assErr } = await supabase
                         .from("machine_assignments")
@@ -236,6 +260,7 @@ export default function EquipmentPage() {
                         ...new Set((assigns ?? []).map((a: any) => a.customer_org_id).filter(Boolean)),
                     ] as string[];
 
+                    // customers list for grouping (assigned customers)
                     if (customerOrgIds.length > 0) {
                         const { data: custOrgs, error: custErr } = await supabase
                             .from("organizations")
@@ -245,7 +270,27 @@ export default function EquipmentPage() {
 
                         if (custErr) throw custErr;
                         setCustomers((custOrgs ?? []) as CustomerOrg[]);
+                    } else {
+                        setCustomers([]);
                     }
+
+                    // also load "available customers" for quick assign (all customers under manufacturer)
+                    const { data: allCust, error: allCustErr } = await supabase
+                        .from("organizations")
+                        .select("id, name")
+                        .eq("type", "customer")
+                        .eq("manufacturer_org_id", orgId)
+                        .order("name", { ascending: true });
+
+                    if (allCustErr) throw allCustErr;
+                    // merge: prefer full list for dialog and also for names
+                    const fullList = (allCust ?? []) as CustomerOrg[];
+                    setCustomers((prev) => {
+                        const map = new Map < string, CustomerOrg> ();
+                        for (const c of prev) map.set(c.id, c);
+                        for (const c of fullList) map.set(c.id, c);
+                        return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+                    });
 
                     setGroupedView(true);
                 }
@@ -269,7 +314,7 @@ export default function EquipmentPage() {
 
     const perms = useMemo(() => {
         if (!ctx || !orgType) return null;
-        return getPermissions({ role: ctx.role, orgType: orgType as any });
+        return getPermissions({ role: (ctx as any).role, orgType: orgType as any });
     }, [ctx, orgType]);
 
     const isAdmin = perms?.isAdminOrSupervisor ?? false;
@@ -278,6 +323,7 @@ export default function EquipmentPage() {
 
     const canDelete = isManufacturer && isAdmin;
     const canLocalArchive = isCustomer && isAdmin;
+    const canQuickAssign = isManufacturer && isAdmin;
 
     // ---------------------------
     // ACTIONS
@@ -367,6 +413,55 @@ export default function EquipmentPage() {
         }
     };
 
+    const openAssignDialog = (e: React.MouseEvent, m: Machine) => {
+        e.stopPropagation();
+        setAssignMachine(m);
+        setAssignCustomerId("");
+        setAssignOpen(true);
+    };
+
+    const doAssign = async () => {
+        if (!assignMachine || !assignCustomerId || !effectiveOrgId) return;
+
+        setAssigning(true);
+        try {
+            const { error } = await supabase.from("machine_assignments").insert({
+                machine_id: assignMachine.id,
+                customer_org_id: assignCustomerId,
+                manufacturer_org_id: effectiveOrgId,
+                assigned_at: new Date().toISOString(),
+                is_active: true,
+            });
+
+            if (error) throw error;
+
+            // Update local state immediately
+            setMachines((prev) =>
+                prev.map((x) =>
+                    x.id === assignMachine.id
+                        ? {
+                            ...x,
+                            _customerOrgId: assignCustomerId,
+                            _isAssignedToCustomer: true,
+                        }
+                        : x
+                )
+            );
+
+            toast({ title: "OK", description: "Macchina assegnata" });
+            setAssignOpen(false);
+        } catch (e: any) {
+            console.error(e);
+            toast({
+                title: "Errore",
+                description: e?.message ?? "Errore assegnazione",
+                variant: "destructive",
+            });
+        } finally {
+            setAssigning(false);
+        }
+    };
+
     // ---------------------------
     // FILTERS
     // ---------------------------
@@ -392,10 +487,14 @@ export default function EquipmentPage() {
             if (sourceFilter === "own") filtered = filtered.filter((m) => !m._isAssignedToCustomer);
             if (sourceFilter === "assigned") filtered = filtered.filter((m) => !!m._isAssignedToCustomer);
 
-            // hide locally unless showHiddenLocal
             if (!showHiddenLocal && hiddenMachineIds.size > 0) {
                 filtered = filtered.filter((m) => !hiddenMachineIds.has(m.id));
             }
+        }
+
+        if (orgType === "manufacturer") {
+            if (assignmentFilter === "assigned") filtered = filtered.filter((m) => !!m._customerOrgId);
+            if (assignmentFilter === "unassigned") filtered = filtered.filter((m) => !m._customerOrgId);
         }
 
         setFilteredMachines(filtered);
@@ -408,6 +507,7 @@ export default function EquipmentPage() {
         orgType,
         hiddenMachineIds,
         showHiddenLocal,
+        assignmentFilter,
     ]);
 
     const categories = useMemo(() => {
@@ -478,6 +578,7 @@ export default function EquipmentPage() {
 
     const renderMachineCard = (item: Machine) => {
         const isHiddenLocal = hiddenMachineIds.has(item.id);
+        const isUnassigned = isManufacturer && !item._customerOrgId;
 
         return (
             <Card
@@ -501,6 +602,18 @@ export default function EquipmentPage() {
                                 </div>
                             )}
 
+                            {/* Manufacturer: quick assign (only if unassigned) */}
+                            {canQuickAssign && isUnassigned && (
+                                <button
+                                    onClick={(e) => openAssignDialog(e, item)}
+                                    title="Assegna a cliente"
+                                    className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <UserPlus className="w-3.5 h-3.5 text-muted-foreground" />
+                                </button>
+                            )}
+
+                            {/* Customer: local archive/unarchive */}
                             {canLocalArchive && (
                                 <button
                                     onClick={(e) => toggleHideLocal(e, item.id)}
@@ -516,6 +629,7 @@ export default function EquipmentPage() {
                                 </button>
                             )}
 
+                            {/* Manufacturer: delete */}
                             {canDelete && (
                                 <button
                                     onClick={(e) => handleDelete(e, item.id, item.name)}
@@ -536,6 +650,20 @@ export default function EquipmentPage() {
                             <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-500/30">
                                 <Package className="w-3 h-3 mr-1" />
                                 {item.category}
+                            </Badge>
+                        )}
+
+                        {/* Manufacturer: assigned/unassigned badges */}
+                        {isManufacturer && item._customerOrgId && (
+                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
+                                <Factory className="w-3 h-3 mr-1" />
+                                {customerName(item._customerOrgId)}
+                            </Badge>
+                        )}
+
+                        {isManufacturer && !item._customerOrgId && (
+                            <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-500/30">
+                                Non assegnata
                             </Badge>
                         )}
 
@@ -599,7 +727,7 @@ export default function EquipmentPage() {
                             </Button>
                         )}
 
-                        {/* ✅ FIX: toggle archiviate non invertito */}
+                        {/* customer: show hidden */}
                         {orgType === "customer" && (
                             <Button
                                 variant="outline"
@@ -631,6 +759,7 @@ export default function EquipmentPage() {
                     </div>
                 </div>
 
+                {/* FILTER BAR */}
                 <Card>
                     <CardContent className="p-4">
                         <div className="flex flex-col md:flex-row gap-3 md:items-center">
@@ -690,11 +819,31 @@ export default function EquipmentPage() {
                                         </SelectContent>
                                     </Select>
                                 )}
+
+                                {/* ✅ Manufacturer-only filter: assigned/unassigned */}
+                                {orgType === "manufacturer" && (
+                                    <Select
+                                        value={assignmentFilter}
+                                        onValueChange={(v) =>
+                                            setAssignmentFilter(v as "all" | "assigned" | "unassigned")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-[220px]">
+                                            <SelectValue placeholder="Assegnazione" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Tutte</SelectItem>
+                                            <SelectItem value="assigned">Solo assegnate</SelectItem>
+                                            <SelectItem value="unassigned">Solo non assegnate</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
+                {/* LIST */}
                 {!groupedView ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         {filteredMachines.map(renderMachineCard)}
@@ -777,6 +926,53 @@ export default function EquipmentPage() {
                             })}
                     </div>
                 )}
+
+                {/* ✅ Quick assign dialog (manufacturer) */}
+                <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Assegna macchina</DialogTitle>
+                            <DialogDescription>
+                                Seleziona il cliente a cui assegnare{" "}
+                                <span className="font-medium">{assignMachine?.name}</span>.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-2">
+                            <Select value={assignCustomerId} onValueChange={setAssignCustomerId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Seleziona cliente..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {customers.map((c) => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            {customers.length === 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    Nessun cliente disponibile. Crea prima un cliente associato al tuo manufacturer.
+                                </p>
+                            )}
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setAssignOpen(false)} disabled={assigning}>
+                                Annulla
+                            </Button>
+                            <Button
+                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                onClick={doAssign}
+                                disabled={!assignCustomerId || assigning || !assignMachine}
+                            >
+                                {assigning ? "Assegnazione..." : "Assegna"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </MainLayout>
     );
