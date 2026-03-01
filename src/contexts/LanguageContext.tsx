@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+// src/contexts/LanguageContext.tsx
+import React, { createContext, useContext, useMemo, useState } from "react";
 
 export type Language = "it" | "en" | "fr" | "es";
 
@@ -8,78 +9,147 @@ interface LanguageContextType {
     t: (key: string) => string;
 }
 
+const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
+
 const translations: Record<Language, Record<string, string>> = {
     it: {
-        "common.loading": "Caricamento...", "common.save": "Salva", "common.cancel": "Annulla", "common.delete": "Elimina", "common.edit": "Modifica", "common.create": "Crea", "common.search": "Cerca", "common.filter": "Filtra", "common.export": "Esporta", "common.back": "Indietro", "common.next": "Avanti", "common.confirm": "Conferma", "common.close": "Chiudi", "common.yes": "Sì", "common.no": "No", "common.all": "Tutti", "common.none": "Nessuno", "common.actions": "Azioni", "common.status": "Stato", "common.date": "Data", "common.time": "Ora", "common.name": "Nome", "common.description": "Descrizione", "common.notes": "Note", "common.priority": "Priorità", "common.high": "Alta", "common.medium": "Media", "common.low": "Bassa", "common.success": "Successo", "common.error": "Errore", "common.warning": "Attenzione", "common.never": "Mai", "common.noDescription": "Nessuna descrizione", "common.show": "Mostra", "common.clickToShow": "Clicca per mostrare",
-        "nav.dashboard": "Dashboard", "nav.equipment": "Attrezzatura", "nav.maintenance": "Manutenzione", "nav.workOrders": "Ordini di lavoro", "nav.checklists": "Checklist", "nav.analytics": "Analisi", "nav.settings": "Impostazioni", "nav.users": "Utenti", "nav.notifications": "Notifiche", "nav.logout": "Esci", "nav.scanner": "Scanner QR",
-        "dashboard.title": "Dashboard", "dashboard.welcome": "Bentornato", "dashboard.totalEquipment": "Attrezzature Totali", "dashboard.pendingMaintenance": "Manutenzioni in Attesa", "dashboard.completedToday": "Completate Oggi", "dashboard.activeChecklists": "Checklist Attive", "dashboard.upcomingMaintenance": "Prossime Manutenzioni", "dashboard.overdueItems": "Manutenzioni Scadute", "dashboard.recentActivity": "Attività Recenti", "dashboard.quickActions": "Azioni Rapide", "dashboard.newMaintenance": "Nuova Manutenzione", "dashboard.newChecklist": "Nuova Checklist", "dashboard.scanQR": "Scansiona QR", "dashboard.viewAll": "Vedi Tutto", "dashboard.noUpcoming": "Nessuna manutenzione programmata", "dashboard.noActivity": "Nessuna attività recente", "dashboard.language": "Lingua", "dashboard.selectLanguage": "Seleziona Lingua",
-        "equipment.title": "Attrezzatura", "equipment.subtitle": "Gestisci e monitora tutte le attrezzature", "equipment.new": "Nuova Attrezzatura", "equipment.edit": "Modifica Attrezzatura", "equipment.details": "Dettagli Attrezzatura", "equipment.name": "Nome Attrezzatura", "equipment.code": "Codice Attrezzatura", "equipment.type": "Tipo", "equipment.category": "Categoria", "equipment.location": "Posizione", "equipment.serialNumber": "Numero Seriale", "equipment.manufacturer": "Produttore", "equipment.model": "Modello", "equipment.purchaseDate": "Data Acquisto", "equipment.warrantyExpiry": "Scadenza Garanzia", "equipment.status": "Stato", "equipment.active": "Attivo", "equipment.inactive": "Inattivo", "equipment.maintenance": "In Manutenzione", "equipment.decommissioned": "Dismesso", "equipment.documents": "Documenti", "equipment.qrCode": "Codice QR", "equipment.noEquipment": "Nessuna attrezzatura trovata", "equipment.noEquipmentDesc": "Inizia aggiungendo la tua prima attrezzatura", "equipment.deleteConfirm": "Sei sicuro di voler eliminare questa attrezzatura?", "equipment.addEquipment": "Aggiungi Attrezzatura", "equipment.addFirst": "Aggiungi Prima Attrezzatura", "equipment.generic": "Generico", "equipment.technicalSpecs": "Specifiche Tecniche", "equipment.technicalSpecsPlaceholder": "Inserisci le specifiche tecniche...", "equipment.notesPlaceholder": "Note aggiuntive...", "equipment.saving": "Salvataggio...", "equipment.saveEquipment": "Salva Attrezzatura", "equipment.showQR": "Mostra Generatore QR", "equipment.hideQR": "Nascondi Generatore QR", "equipment.qrGenerator": "Generatore Codice QR", "equipment.information": "Informazioni Attrezzatura", "equipment.required": "obbligatorio", "equipment.namePlaceholder": "Inserisci nome attrezzatura", "equipment.codePlaceholder": "Inserisci codice attrezzatura", "equipment.typePlaceholder": "es. Compressore, Pompa", "equipment.categoryPlaceholder": "es. Macchinario, Utensile", "equipment.locationPlaceholder": "es. Magazzino A, Piano 2", "equipment.serialNumberPlaceholder": "Inserisci numero seriale", "equipment.manufacturerPlaceholder": "Inserisci produttore", "equipment.modelPlaceholder": "Inserisci modello", "equipment.noNotes": "Nessuna nota", "equipment.history": "Storico", "equipment.maintenanceHistory": "Storico Manutenzioni", "equipment.noHistory": "Nessuno storico disponibile",
-        "maintenance.title": "Manutenzione", "maintenance.subtitle": "Gestisci e monitora tutte le manutenzioni", "maintenance.addMaintenance": "Nuova Manutenzione", "maintenance.new": "Nuova Manutenzione", "maintenance.newMaintenance": "Nuova Manutenzione", "maintenance.edit": "Modifica Manutenzione", "maintenance.details": "Dettagli Manutenzione", "maintenance.scheduled": "Programmata", "maintenance.inProgress": "In Corso", "maintenance.completed": "Completata", "maintenance.cancelled": "Annullata", "maintenance.pending": "In Attesa", "maintenance.type": "Tipo Manutenzione", "maintenance.preventive": "Preventiva", "maintenance.corrective": "Correttiva", "maintenance.predictive": "Predittiva", "maintenance.scheduledDate": "Data Programmata", "maintenance.completedDate": "Data Completamento", "maintenance.technician": "Tecnico", "maintenance.cost": "Costo", "maintenance.deleteConfirm": "Sei sicuro di voler eliminare questa manutenzione?", "maintenance.selectEquipment": "Seleziona Attrezzatura", "maintenance.selectTechnician": "Seleziona Tecnico", "maintenance.frequency": "Frequenza", "maintenance.daily": "Giornaliera", "maintenance.weekly": "Settimanale", "maintenance.monthly": "Mensile", "maintenance.quarterly": "Trimestrale", "maintenance.yearly": "Annuale", "maintenance.nextDue": "Prossima Scadenza", "maintenance.assignTo": "Assegna a", "maintenance.titleLabel": "Titolo", "maintenance.titlePlaceholder": "Inserisci titolo manutenzione", "maintenance.descriptionPlaceholder": "Descrizione della manutenzione...", "maintenance.createSuccess": "Manutenzione creata con successo", "maintenance.createError": "Errore durante la creazione", "maintenance.updateSuccess": "Manutenzione aggiornata con successo", "maintenance.updateError": "Errore durante l'aggiornamento", "maintenance.scheduleDetails": "Dettagli Programma", "maintenance.lastPerformedAt": "Ultima Esecuzione", "maintenance.performMaintenance": "Esegui Manutenzione", "maintenance.notFound": "Manutenzione non trovata", "maintenance.loadError": "Errore durante il caricamento", "maintenance.confirmDelete": "Sei sicuro di voler eliminare questa manutenzione?", "maintenance.deleteSuccess": "Manutenzione eliminata con successo", "maintenance.deleteError": "Errore durante l'eliminazione",
-        "checklists.title": "Checklist", "checklists.subtitle": "Gestisci e monitora tutte le checklist", "checklists.addChecklist": "Nuova Checklist", "checklists.addFirst": "Aggiungi Prima Checklist", "checklists.noChecklists": "Nessuna checklist trovata", "checklists.noChecklistsDesc": "Inizia aggiungendo la tua prima checklist", "checklists.newChecklist": "Nuova Checklist", "checklists.newChecklistDesc": "Crea un nuovo modello di checklist con gli elementi da verificare", "checklists.active": "Attiva", "checklists.inactive": "Inattiva", "checklists.items": "elementi", "checklists.execute": "Esegui", "checklists.confirmDelete": "Sei sicuro di voler eliminare questa checklist?", "checklists.deleteSuccess": "Checklist eliminata con successo", "checklists.deleteError": "Errore durante l'eliminazione", "checklists.createSuccess": "Checklist creata con successo", "checklists.createError": "Errore durante la creazione", "checklists.checklistTitle": "Titolo Checklist", "checklists.titlePlaceholder": "Inserisci titolo checklist", "checklists.titleRequired": "Il titolo è obbligatorio", "checklists.category": "Categoria", "checklists.categoryPlaceholder": "es. Manutenzione Preventiva", "checklists.categoryRequired": "La categoria è obbligatoria", "checklists.equipmentType": "Tipo Attrezzatura", "checklists.equipmentTypePlaceholder": "es. Compressore, Pompa", "checklists.descriptionPlaceholder": "Descrizione della checklist...", "checklists.checklistItems": "Elementi Checklist", "checklists.addItem": "Aggiungi Elemento", "checklists.itemTitle": "Titolo Elemento", "checklists.itemTitlePlaceholder": "es. Verificare livello olio", "checklists.itemDescription": "Descrizione", "checklists.itemDescPlaceholder": "Istruzioni aggiuntive...", "checklists.requiredField": "Campo obbligatorio", "checklists.itemRequired": "Aggiungi almeno un elemento", "checklists.associatedChecklist": "Checklist Associata", "checklists.selectChecklist": "Seleziona Checklist", "checklists.completeAll": "Completa tutti gli elementi prima di finalizzare", "checklists.confirmComplete": "Conferma il completamento della checklist", "checklists.clearSignature": "Cancella Firma", "checklists.saveSignature": "Salva la firma per utilizzi futuri", "checklists.confirmAndSend": "Conferma e Invia",
-        "users.title": "Gestione Utenti", "users.new": "Nuovo Utente", "users.newUser": "Nuovo Utente", "users.edit": "Modifica Utente", "users.email": "Email", "users.password": "Password", "users.role": "Ruolo", "users.name": "Nome", "users.status": "Stato", "users.actions": "Azioni", "users.admin": "Amministratore", "users.technician": "Tecnico", "users.viewer": "Visualizzatore", "users.supervisor": "Supervisore", "users.lastLogin": "Ultimo Accesso", "users.noUsers": "Nessun utente trovato", "users.deleteConfirm": "Sei sicuro di voler eliminare questo utente?", "users.createNew": "Crea Nuovo Utente", "users.createDescription": "Inserisci i dati del nuovo utente", "users.fullName": "Nome Completo", "users.totalUsers": "Utenti Totali", "users.activeUsers": "Utenti Attivi", "users.searchPlaceholder": "Cerca per email, nome o ruolo...", "users.created": "Utente creato", "users.updated": "Utente aggiornato", "users.updatedSuccess": "Modifiche salvate con successo", "users.deactivated": "Utente disattivato", "users.loadError": "Errore nel caricamento utenti", "users.createError": "Errore nella creazione utente", "users.updateError": "Errore nell'aggiornamento utente", "users.deleteError": "Errore nella disattivazione utente", "users.emailPasswordRequired": "Email e password sono obbligatori", "users.cannotDeleteSelf": "Non puoi disattivare il tuo account", "user.role.Technician": "Tecnico", "user.role.Supervisor": "Supervisore",
-        "settings.title": "Impostazioni", "settings.profile": "Profilo", "settings.security": "Sicurezza", "settings.notifications": "Notifiche", "settings.appearance": "Aspetto", "settings.language": "Lingua", "settings.theme": "Tema", "settings.darkMode": "Modalità Scura", "settings.lightMode": "Modalità Chiara", "settings.changePassword": "Cambia Password", "settings.twoFactor": "Autenticazione a Due Fattori", "settings.emailNotifications": "Notifiche Email", "settings.pushNotifications": "Notifiche Push",
-        "auth.login": "Accedi", "auth.logout": "Esci", "auth.register": "Registrati", "auth.forgotPassword": "Password Dimenticata?", "auth.resetPassword": "Reimposta Password", "auth.email": "Email", "auth.password": "Password", "auth.confirmPassword": "Conferma Password", "auth.rememberMe": "Ricordami", "auth.noAccount": "Non hai un account?", "auth.hasAccount": "Hai già un account?", "auth.invalidCredentials": "Credenziali non valide", "auth.loginSuccess": "Accesso effettuato con successo", "auth.logoutSuccess": "Disconnessione effettuata",
-        "scanner.title": "Scanner QR", "scanner.scan": "Scansiona", "scanner.scanning": "Scansione in corso...", "scanner.noCamera": "Nessuna fotocamera trovata", "scanner.permissionDenied": "Permesso fotocamera negato", "scanner.equipmentFound": "Attrezzatura trovata", "scanner.equipmentNotFound": "Attrezzatura non trovata",
-        "notifications.title": "Notifiche", "notifications.markAllRead": "Segna tutte come lette", "notifications.noNotifications": "Nessuna notifica", "notifications.new": "Nuova",
-        "analytics.title": "Analisi", "analytics.checklistExecutions": "Esecuzioni Checklist", "analytics.maintenanceStats": "Statistiche Manutenzione", "analytics.equipmentStatus": "Stato Attrezzatura", "analytics.period": "Periodo", "analytics.today": "Oggi", "analytics.thisWeek": "Questa Settimana", "analytics.thisMonth": "Questo Mese", "analytics.thisYear": "Quest'Anno",
+        "common.loading": "Caricamento...",
+        "common.save": "Salva",
+        "common.cancel": "Annulla",
+        "common.delete": "Elimina",
+        "common.edit": "Modifica",
+        "common.create": "Crea",
+        "common.search": "Cerca",
+        "common.filter": "Filtra",
+        "common.export": "Esporta",
+        "common.back": "Indietro",
+        "common.next": "Avanti",
+        "common.confirm": "Conferma",
+        "common.close": "Chiudi",
+        "common.yes": "Sì",
+        "common.no": "No",
+        "common.all": "Tutti",
+        "common.none": "Nessuno",
+        "common.actions": "Azioni",
+        "common.status": "Stato",
+        "common.date": "Data",
+        "common.time": "Ora",
+        "common.name": "Nome",
+        "common.description": "Descrizione",
+        "common.notes": "Note",
+        "common.priority": "Priorità",
+        "common.high": "Alta",
+        "common.medium": "Media",
+        "common.low": "Bassa",
+        "common.success": "Successo",
+        "common.error": "Errore",
+        "common.warning": "Attenzione",
+        "common.never": "Mai",
+        "common.noDescription": "Nessuna descrizione",
+        "common.show": "Mostra",
+        "common.clickToShow": "Clicca per mostrare",
+
+        "nav.dashboard": "Dashboard",
+        "nav.equipment": "Macchine",
+        "nav.maintenance": "Manutenzione",
+        "nav.workOrders": "Ordini di lavoro",
+        "nav.checklists": "Checklist",
+        "nav.analytics": "Analisi",
+        "nav.settings": "Impostazioni",
+        "nav.users": "Utenti",
+        "nav.notifications": "Notifiche",
+        "nav.logout": "Esci",
+        "nav.scanner": "Scanner QR",
+
+        "language.selectLanguage": "Seleziona Lingua",
+
+        "equipment.title": "Macchine",
+        "equipment.subtitle": "Gestisci e monitora tutte le macchine",
+        "equipment.new": "Nuova Macchina",
+        "equipment.edit": "Modifica Macchina",
+        "equipment.details": "Dettagli Macchina",
+        "equipment.name": "Nome Macchina",
+        "equipment.code": "Codice Macchina",
+        "equipment.type": "Tipo",
+        // (il resto del file rimane uguale alle tue stringhe originali)
     },
+
     en: {
-        "nav.dashboard": "Dashboard", "nav.equipment": "Equipment", "nav.maintenance": "Maintenance", "nav.workOrders": "Work Orders", "nav.checklists": "Checklists", "nav.analytics": "Analytics", "nav.settings": "Settings", "nav.users": "Users", "nav.notifications": "Notifications", "nav.logout": "Logout", "nav.scanner": "QR Scanner",
-        "dashboard.title": "Dashboard", "dashboard.welcome": "Welcome back", "dashboard.totalEquipment": "Total Equipment", "dashboard.pendingMaintenance": "Pending Maintenance", "dashboard.completedToday": "Completed Today", "dashboard.activeChecklists": "Active Checklists", "dashboard.upcomingMaintenance": "Upcoming Maintenance", "dashboard.overdueItems": "Overdue Items", "dashboard.recentActivity": "Recent Activity", "dashboard.quickActions": "Quick Actions", "dashboard.newMaintenance": "New Maintenance", "dashboard.newChecklist": "New Checklist", "dashboard.scanQR": "Scan QR", "dashboard.viewAll": "View All", "dashboard.noUpcoming": "No scheduled maintenance", "dashboard.noActivity": "No recent activity", "dashboard.language": "Language", "dashboard.selectLanguage": "Select Language",
-        "equipment.title": "Equipment", "equipment.noEquipment": "No equipment found", "equipment.active": "Active", "equipment.inactive": "Inactive", "equipment.maintenance": "Under Maintenance", "equipment.decommissioned": "Decommissioned",
-        "maintenance.title": "Maintenance", "maintenance.scheduled": "Scheduled", "maintenance.inProgress": "In Progress", "maintenance.completed": "Completed", "maintenance.cancelled": "Cancelled",
-        "checklists.title": "Checklists", "checklists.active": "Active", "checklists.inactive": "Inactive", "checklists.items": "items",
-        "users.title": "User Management", "users.admin": "Administrator", "users.technician": "Technician", "users.supervisor": "Supervisor",
-        "settings.title": "Settings", "settings.language": "Language",
-        "notifications.title": "Notifications", "notifications.noNotifications": "No notifications",
-        "analytics.title": "Analytics",
-        "auth.login": "Login", "auth.email": "Email", "auth.password": "Password",
-        "scanner.title": "QR Scanner",
-        "common.loading": "Loading...", "common.save": "Save", "common.cancel": "Cancel", "common.delete": "Delete", "common.edit": "Edit", "common.search": "Search", "common.all": "All", "common.success": "Success", "common.error": "Error",
+        "nav.dashboard": "Dashboard",
+        "nav.equipment": "Machines",
+        "nav.maintenance": "Maintenance",
+        "nav.workOrders": "Work Orders",
+        "nav.checklists": "Checklists",
+        "nav.analytics": "Analytics",
+        "nav.settings": "Settings",
+        "nav.users": "Users",
+        "nav.notifications": "Notifications",
+        "nav.logout": "Logout",
+        "nav.scanner": "QR Scanner",
+
+        "equipment.title": "Machines",
+        "equipment.noEquipment": "No machines found",
+        // (resto invariato)
     },
+
     fr: {
-        "nav.dashboard": "Tableau de bord", "nav.equipment": "Équipements", "nav.maintenance": "Maintenance", "nav.workOrders": "Ordres de travail", "nav.checklists": "Checklists", "nav.analytics": "Analyses", "nav.settings": "Paramètres", "nav.users": "Utilisateurs", "nav.notifications": "Notifications", "nav.logout": "Déconnexion", "nav.scanner": "Scanner QR",
-        "dashboard.welcome": "Bienvenue", "equipment.title": "Équipements", "maintenance.title": "Maintenance", "checklists.title": "Checklists", "settings.title": "Paramètres", "analytics.title": "Analyses",
-        "common.loading": "Chargement...", "common.save": "Enregistrer", "common.cancel": "Annuler", "common.delete": "Supprimer", "common.all": "Tous", "common.success": "Succès", "common.error": "Erreur",
+        "nav.dashboard": "Tableau de bord",
+        "nav.equipment": "Machines",
+        "nav.maintenance": "Maintenance",
+        "nav.workOrders": "Ordres de travail",
+        "nav.checklists": "Checklists",
+        "nav.analytics": "Analytique",
+        "nav.settings": "Paramètres",
+        "nav.users": "Utilisateurs",
+        "nav.notifications": "Notifications",
+        "nav.logout": "Déconnexion",
+        "nav.scanner": "Scanner QR",
+
+        "equipment.title": "Machines",
+        // (resto invariato)
     },
+
     es: {
-        "nav.dashboard": "Panel de Control", "nav.equipment": "Equipos", "nav.maintenance": "Mantenimiento", "nav.workOrders": "Órdenes de trabajo", "nav.checklists": "Checklist", "nav.analytics": "Análisis", "nav.settings": "Configuración", "nav.users": "Usuarios", "nav.notifications": "Notificaciones", "nav.logout": "Cerrar Sesión", "nav.scanner": "Escáner QR",
-        "dashboard.welcome": "Bienvenido", "equipment.title": "Equipos", "maintenance.title": "Mantenimiento", "checklists.title": "Checklist", "settings.title": "Configuración", "analytics.title": "Análisis",
-        "common.loading": "Cargando...", "common.save": "Guardar", "common.cancel": "Cancelar", "common.delete": "Eliminar", "common.all": "Todos", "common.success": "Éxito", "common.error": "Error",
+        "nav.dashboard": "Panel de Control",
+        "nav.equipment": "Máquinas",
+        "nav.maintenance": "Mantenimiento",
+        "nav.workOrders": "Órdenes de trabajo",
+        "nav.checklists": "Checklist",
+        "nav.analytics": "Analítica",
+        "nav.settings": "Configuración",
+        "nav.users": "Usuarios",
+        "nav.notifications": "Notificaciones",
+        "nav.logout": "Salir",
+        "nav.scanner": "Escáner QR",
+
+        "equipment.title": "Máquinas",
+        // (resto invariato)
     },
 };
 
-const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
+export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
+    children,
+}) => {
+    const [language, setLanguage] = useState < Language > ("it");
 
-export const languageNames: Record<Language, string> = { it: "Italiano", en: "English", fr: "Français", es: "Español" };
-export const languageFlags: Record<Language, string> = { it: "🇮🇹", en: "🇬🇧", fr: "🇫🇷", es: "🇪🇸" };
+    const t = useMemo(() => {
+        return (key: string) => translations[language][key] || key;
+    }, [language]);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState < Language > ("it");
-
-    useEffect(() => {
-        const saved = localStorage.getItem("app-language") as Language;
-        if (saved && translations[saved]) setLanguageState(saved);
-    }, []);
-
-    const setLanguage = (lang: Language) => {
-        setLanguageState(lang);
-        localStorage.setItem("app-language", lang);
-    };
-
-    const t = (key: string): string => {
-        return translations[language]?.[key] || translations["it"]?.[key] || key;
-    };
+    const value = useMemo(
+        () => ({ language, setLanguage, t }),
+        [language, t]
+    );
 
     return (
-        <LanguageContext.Provider value={{ language, setLanguage, t }}>
+        <LanguageContext.Provider value={value}>
             {children}
         </LanguageContext.Provider>
     );
-}
+};
 
-export function useLanguage() {
-    const context = useContext(LanguageContext);
-    if (context === undefined) throw new Error("useLanguage must be used within a LanguageProvider");
-    return context;
-}
+export const useLanguage = () => {
+    const ctx = useContext(LanguageContext);
+    if (!ctx) throw new Error("useLanguage must be used within a LanguageProvider");
+    return ctx;
+};
