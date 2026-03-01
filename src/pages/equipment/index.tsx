@@ -80,7 +80,7 @@ interface CustomerOrg {
 async function getOrgTypeById(
     orgId: string
 ): Promise<"manufacturer" | "customer" | null> {
-    // ✅ FIX: nel tuo DB è organizations.type
+    // ✅ nel tuo DB è organizations.type
     const { data, error } = await supabase
         .from("organizations")
         .select("type")
@@ -133,7 +133,7 @@ export default function EquipmentPage() {
     const [plants, setPlants] = useState < Plant[] > ([]);
     const [expandedPlants, setExpandedPlants] = useState < Set < string >> (new Set());
 
-    // manufacturer grouping
+    // manufacturer grouping + customers list
     const [customers, setCustomers] = useState < CustomerOrg[] > ([]);
     const [expandedCustomers, setExpandedCustomers] = useState < Set < string >> (
         new Set()
@@ -235,7 +235,7 @@ export default function EquipmentPage() {
                     setGroupedView(true);
                 }
 
-                // manufacturer: group + assigned info + load customers list
+                // manufacturer: assigned info + customers list
                 if (type === "manufacturer") {
                     const { data: assigns, error: assErr } = await supabase
                         .from("machine_assignments")
@@ -256,25 +256,7 @@ export default function EquipmentPage() {
                         _isAssignedToCustomer: !!byMachine.get(m.id),
                     }));
 
-                    const customerOrgIds = [
-                        ...new Set((assigns ?? []).map((a: any) => a.customer_org_id).filter(Boolean)),
-                    ] as string[];
-
-                    // customers list for grouping (assigned customers)
-                    if (customerOrgIds.length > 0) {
-                        const { data: custOrgs, error: custErr } = await supabase
-                            .from("organizations")
-                            .select("id, name")
-                            .in("id", customerOrgIds)
-                            .order("name");
-
-                        if (custErr) throw custErr;
-                        setCustomers((custOrgs ?? []) as CustomerOrg[]);
-                    } else {
-                        setCustomers([]);
-                    }
-
-                    // also load "available customers" for quick assign (all customers under manufacturer)
+                    // load ALL customers under this manufacturer (for dialog + labels)
                     const { data: allCust, error: allCustErr } = await supabase
                         .from("organizations")
                         .select("id, name")
@@ -283,15 +265,7 @@ export default function EquipmentPage() {
                         .order("name", { ascending: true });
 
                     if (allCustErr) throw allCustErr;
-                    // merge: prefer full list for dialog and also for names
-                    const fullList = (allCust ?? []) as CustomerOrg[];
-                    setCustomers((prev) => {
-                        const map = new Map < string, CustomerOrg> ();
-                        for (const c of prev) map.set(c.id, c);
-                        for (const c of fullList) map.set(c.id, c);
-                        return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-                    });
-
+                    setCustomers((allCust ?? []) as CustomerOrg[]);
                     setGroupedView(true);
                 }
 
@@ -425,25 +399,39 @@ export default function EquipmentPage() {
 
         setAssigning(true);
         try {
-            const { error } = await supabase.from("machine_assignments").insert({
+            const { data: userRes } = await supabase.auth.getUser();
+            const assignedBy = userRes?.user?.id ?? null;
+
+            // ✅ Step 1 (robusto): disattiva assignment attivo esistente per questa macchina
+            // (evita vincoli unique tipo "one active assignment per machine")
+            const { error: deactivateErr } = await supabase
+                .from("machine_assignments")
+                .update({ is_active: false })
+                .eq("machine_id", assignMachine.id)
+                .eq("manufacturer_org_id", effectiveOrgId)
+                .eq("is_active", true);
+
+            // Se la RLS blocca l'update, è un problema di policy.
+            if (deactivateErr) throw deactivateErr;
+
+            // ✅ Step 2: inserisci nuovo assignment con campi tipicamente NOT NULL
+            const payload: any = {
                 machine_id: assignMachine.id,
                 customer_org_id: assignCustomerId,
                 manufacturer_org_id: effectiveOrgId,
-                assigned_at: new Date().toISOString(),
                 is_active: true,
-            });
+                assigned_by: assignedBy,
+                assigned_at: new Date().toISOString(),
+            };
 
+            const { error } = await supabase.from("machine_assignments").insert(payload);
             if (error) throw error;
 
             // Update local state immediately
             setMachines((prev) =>
                 prev.map((x) =>
                     x.id === assignMachine.id
-                        ? {
-                            ...x,
-                            _customerOrgId: assignCustomerId,
-                            _isAssignedToCustomer: true,
-                        }
+                        ? { ...x, _customerOrgId: assignCustomerId, _isAssignedToCustomer: true }
                         : x
                 )
             );
@@ -451,10 +439,10 @@ export default function EquipmentPage() {
             toast({ title: "OK", description: "Macchina assegnata" });
             setAssignOpen(false);
         } catch (e: any) {
-            console.error(e);
+            console.error("ASSIGN ERROR", e);
             toast({
-                title: "Errore",
-                description: e?.message ?? "Errore assegnazione",
+                title: "Errore assegnazione",
+                description: e?.message ?? "Bad Request",
                 variant: "destructive",
             });
         } finally {
@@ -820,7 +808,7 @@ export default function EquipmentPage() {
                                     </Select>
                                 )}
 
-                                {/* ✅ Manufacturer-only filter: assigned/unassigned */}
+                                {/* Manufacturer-only filter */}
                                 {orgType === "manufacturer" && (
                                     <Select
                                         value={assignmentFilter}
@@ -927,7 +915,7 @@ export default function EquipmentPage() {
                     </div>
                 )}
 
-                {/* ✅ Quick assign dialog (manufacturer) */}
+                {/* Quick assign dialog (manufacturer) */}
                 <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
                     <DialogContent>
                         <DialogHeader>
