@@ -181,7 +181,9 @@ export default function CustomerDetailPage() {
             const { error } = await supabase.from("machine_assignments").insert({
                 machine_id: machineId,
                 customer_org_id: customer.id,
+                manufacturer_org_id: mfrOrgId,
                 assigned_by: ctx?.userId,
+                assigned_at: new Date().toISOString(),
                 is_active: true,
             });
             if (error) throw error;
