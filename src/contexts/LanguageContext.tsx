@@ -10,6 +10,7 @@ interface LanguageContextType {
 
 const translations: Record<Language, Record<string, string>> = {
     it: {
+        // common
         "common.loading": "Caricamento...",
         "common.save": "Salva",
         "common.cancel": "Annulla",
@@ -28,18 +29,26 @@ const translations: Record<Language, Record<string, string>> = {
         "common.all": "Tutti",
         "common.none": "Nessuno",
 
-        // dashboard
+        // ✅ NAV (fix sidebar)
+        "nav.dashboard": "Dashboard",
+        "nav.equipment": "Macchine",
+        "nav.maintenance": "Manutenzione",
+        "nav.workOrders": "Ordini di lavoro",
+        "nav.checklists": "Checklist",
+        "nav.scanner": "Scanner",
+        "nav.analytics": "Analisi",
+        "nav.compliance": "Compliance",
+
+        // pages
         "dashboard.title": "Dashboard",
         "dashboard.subtitle": "Panoramica del sistema",
 
-        // equipment
         "equipment.title": "Macchine",
         "equipment.subtitle": "Gestione macchine e attrezzature",
         "equipment.new": "Nuova macchina",
         "equipment.noEquipment": "Nessuna macchina trovata",
-
-        // fallback
     },
+
     en: {
         "common.loading": "Loading...",
         "common.save": "Save",
@@ -59,6 +68,16 @@ const translations: Record<Language, Record<string, string>> = {
         "common.all": "All",
         "common.none": "None",
 
+        // ✅ NAV
+        "nav.dashboard": "Dashboard",
+        "nav.equipment": "Machines",
+        "nav.maintenance": "Maintenance",
+        "nav.workOrders": "Work Orders",
+        "nav.checklists": "Checklists",
+        "nav.scanner": "Scanner",
+        "nav.analytics": "Analytics",
+        "nav.compliance": "Compliance",
+
         "dashboard.title": "Dashboard",
         "dashboard.subtitle": "System overview",
 
@@ -67,6 +86,7 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.new": "New machine",
         "equipment.noEquipment": "No machines found",
     },
+
     fr: {
         "common.loading": "Chargement...",
         "common.save": "Enregistrer",
@@ -86,6 +106,16 @@ const translations: Record<Language, Record<string, string>> = {
         "common.all": "Tous",
         "common.none": "Aucun",
 
+        // ✅ NAV
+        "nav.dashboard": "Tableau de bord",
+        "nav.equipment": "Machines",
+        "nav.maintenance": "Maintenance",
+        "nav.workOrders": "Ordres de travail",
+        "nav.checklists": "Listes de contrôle",
+        "nav.scanner": "Scanner",
+        "nav.analytics": "Analyses",
+        "nav.compliance": "Conformité",
+
         "dashboard.title": "Tableau de bord",
         "dashboard.subtitle": "Aperçu du système",
 
@@ -94,6 +124,7 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.new": "Nouvelle machine",
         "equipment.noEquipment": "Aucune machine trouvée",
     },
+
     es: {
         "common.loading": "Cargando...",
         "common.save": "Guardar",
@@ -112,6 +143,16 @@ const translations: Record<Language, Record<string, string>> = {
         "common.no": "No",
         "common.all": "Todos",
         "common.none": "Ninguno",
+
+        // ✅ NAV
+        "nav.dashboard": "Panel",
+        "nav.equipment": "Máquinas",
+        "nav.maintenance": "Mantenimiento",
+        "nav.workOrders": "Órdenes de trabajo",
+        "nav.checklists": "Listas de verificación",
+        "nav.scanner": "Escáner",
+        "nav.analytics": "Analíticas",
+        "nav.compliance": "Cumplimiento",
 
         "dashboard.title": "Panel",
         "dashboard.subtitle": "Resumen del sistema",
@@ -157,7 +198,7 @@ export function useLanguage() {
     return context;
 }
 
-/** ✅ Export richiesti da dashboard.tsx (fix build) */
+// exports richiesti dalla dashboard
 export const languageFlags: Record<Language, string> = {
     it: "🇮🇹",
     en: "🇬🇧",
