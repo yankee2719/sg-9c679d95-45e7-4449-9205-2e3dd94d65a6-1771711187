@@ -43,6 +43,8 @@ import {
   EyeOff,
   Eye,
   UserPlus,
+  Link2Off,
+  Archive,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -64,7 +66,7 @@ interface Machine {
 
   // derived
   _customerOrgId?: string | null; // manufacturer-view
-  _isAssignedToCustomer?: boolean; // customer-view OR manufacturer-view (derived)
+  _isAssignedToCustomer?: boolean;
 }
 
 interface Plant {
@@ -80,7 +82,6 @@ interface CustomerOrg {
 async function getOrgTypeById(
   orgId: string
 ): Promise<"manufacturer" | "customer" | null> {
-  // ✅ nel tuo DB è organizations.type
   const { data, error } = await supabase
     .from("organizations")
     .select("type")
@@ -126,8 +127,11 @@ export default function EquipmentPage() {
   // views
   const [groupedView, setGroupedView] = useState(false);
 
-  // delete (manufacturer only)
-  const [deleting, setDeleting] = useState<string | null>(null);
+  // archive action state
+  const [archiving, setArchiving] = useState<string | null>(null);
+
+  // revoke action state
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   // customer grouping
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -256,7 +260,6 @@ export default function EquipmentPage() {
             _isAssignedToCustomer: !!byMachine.get(m.id),
           }));
 
-          // load ALL customers under this manufacturer (for dialog + labels)
           const { data: allCust, error: allCustErr } = await supabase
             .from("organizations")
             .select("id, name")
@@ -295,35 +298,14 @@ export default function EquipmentPage() {
   const isCustomer = orgType === "customer";
   const isManufacturer = orgType === "manufacturer";
 
-  const canDelete = isManufacturer && isAdmin;
   const canLocalArchive = isCustomer && isAdmin;
   const canQuickAssign = isManufacturer && isAdmin;
+  const canRevoke = isManufacturer && isAdmin;
+  const canArchiveMachine = isManufacturer && isAdmin; // soft delete
 
   // ---------------------------
   // ACTIONS
   // ---------------------------
-  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
-    e.stopPropagation();
-    if (!confirm(`Sei sicuro di voler eliminare "${name}"?`)) return;
-
-    setDeleting(id);
-    try {
-      const { error } = await supabase.from("machines").delete().eq("id", id);
-      if (error) throw error;
-
-      setMachines((prev) => prev.filter((m) => m.id !== id));
-      toast({ title: "Eliminato", description: `"${name}" eliminato` });
-    } catch (error: any) {
-      toast({
-        title: "Errore",
-        description: error?.message || "Errore",
-        variant: "destructive",
-      });
-    } finally {
-      setDeleting(null);
-    }
-  };
-
   const toggleHideLocal = async (e: React.MouseEvent, machineId: string) => {
     e.stopPropagation();
     if (!isCustomer || !effectiveOrgId) return;
@@ -402,8 +384,7 @@ export default function EquipmentPage() {
       const { data: userRes } = await supabase.auth.getUser();
       const assignedBy = userRes?.user?.id ?? null;
 
-      // ✅ Step 1 (robusto): disattiva assignment attivo esistente per questa macchina
-      // (evita vincoli unique tipo "one active assignment per machine")
+      // disattiva eventuali assignment attivi (robusto)
       const { error: deactivateErr } = await supabase
         .from("machine_assignments")
         .update({ is_active: false })
@@ -411,10 +392,8 @@ export default function EquipmentPage() {
         .eq("manufacturer_org_id", effectiveOrgId)
         .eq("is_active", true);
 
-      // Se la RLS blocca l'update, è un problema di policy.
       if (deactivateErr) throw deactivateErr;
 
-      // ✅ Step 2: inserisci nuovo assignment con campi tipicamente NOT NULL
       const payload: any = {
         machine_id: assignMachine.id,
         customer_org_id: assignCustomerId,
@@ -427,7 +406,6 @@ export default function EquipmentPage() {
       const { error } = await supabase.from("machine_assignments").insert(payload);
       if (error) throw error;
 
-      // Update local state immediately
       setMachines((prev) =>
         prev.map((x) =>
           x.id === assignMachine.id
@@ -447,6 +425,88 @@ export default function EquipmentPage() {
       });
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const revokeAssignment = async (e: React.MouseEvent, m: Machine) => {
+    e.stopPropagation();
+    if (!effectiveOrgId) return;
+
+    if (!m._customerOrgId) {
+      toast({
+        title: "Nessuna assegnazione",
+        description: "La macchina risulta già non assegnata.",
+      });
+      return;
+    }
+
+    if (!confirm(`Vuoi revocare l'assegnazione di "${m.name}"?`)) return;
+
+    setRevoking(m.id);
+    try {
+      // Trigger audit in DB (blinded) compila revoked_at/by.
+      const { error } = await supabase
+        .from("machine_assignments")
+        .update({ is_active: false })
+        .eq("machine_id", m.id)
+        .eq("manufacturer_org_id", effectiveOrgId)
+        .eq("is_active", true);
+
+      if (error) throw error;
+
+      setMachines((prev) =>
+        prev.map((x) =>
+          x.id === m.id ? { ...x, _customerOrgId: null, _isAssignedToCustomer: false } : x
+        )
+      );
+
+      toast({ title: "OK", description: "Assegnazione revocata" });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Errore",
+        description: err?.message ?? "Errore revoca",
+        variant: "destructive",
+      });
+    } finally {
+      setRevoking(null);
+    }
+  };
+
+  const archiveMachine = async (e: React.MouseEvent, m: Machine) => {
+    e.stopPropagation();
+
+    if (m._customerOrgId) {
+      toast({
+        title: "Azione non consentita",
+        description: "Prima revoca l'assegnazione, poi puoi archiviare la macchina.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!confirm(`Vuoi ARCHIVIARE "${m.name}"? (non verrà eliminata)`)) return;
+
+    setArchiving(m.id);
+    try {
+      const { error } = await supabase
+        .from("machines")
+        .update({ is_archived: true })
+        .eq("id", m.id);
+
+      if (error) throw error;
+
+      setMachines((prev) => prev.filter((x) => x.id !== m.id));
+      toast({ title: "OK", description: "Macchina archiviata" });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Errore",
+        description: err?.message ?? "Errore archiviazione",
+        variant: "destructive",
+      });
+    } finally {
+      setArchiving(null);
     }
   };
 
@@ -567,6 +627,7 @@ export default function EquipmentPage() {
   const renderMachineCard = (item: Machine) => {
     const isHiddenLocal = hiddenMachineIds.has(item.id);
     const isUnassigned = isManufacturer && !item._customerOrgId;
+    const isAssigned = isManufacturer && !!item._customerOrgId;
 
     return (
       <Card
@@ -590,7 +651,7 @@ export default function EquipmentPage() {
                 </div>
               )}
 
-              {/* Manufacturer: quick assign (only if unassigned) */}
+              {/* Manufacturer: assign (only if unassigned) */}
               {canQuickAssign && isUnassigned && (
                 <button
                   onClick={(e) => openAssignDialog(e, item)}
@@ -601,7 +662,35 @@ export default function EquipmentPage() {
                 </button>
               )}
 
-              {/* Customer: local archive/unarchive */}
+              {/* Manufacturer: revoke (only if assigned) */}
+              {canRevoke && isAssigned && (
+                <button
+                  onClick={(e) => revokeAssignment(e, item)}
+                  disabled={revoking === item.id}
+                  title="Revoca assegnazione"
+                  className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                >
+                  <Link2Off className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
+
+              {/* Manufacturer: archive (soft delete) - enabled only if unassigned */}
+              {canArchiveMachine && (
+                <button
+                  onClick={(e) => archiveMachine(e, item)}
+                  disabled={archiving === item.id || isAssigned}
+                  title={
+                    isAssigned
+                      ? "Prima revoca l'assegnazione per archiviare"
+                      : "Archivia macchina"
+                  }
+                  className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                >
+                  <Archive className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
+
+              {/* Customer: local hide/unhide */}
               {canLocalArchive && (
                 <button
                   onClick={(e) => toggleHideLocal(e, item.id)}
@@ -617,18 +706,6 @@ export default function EquipmentPage() {
                 </button>
               )}
 
-              {/* Manufacturer: delete */}
-              {canDelete && (
-                <button
-                  onClick={(e) => handleDelete(e, item.id, item.name)}
-                  disabled={deleting === item.id}
-                  title="Elimina"
-                  className="p-1 rounded-md bg-muted/60 hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              )}
-
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </div>
           </div>
@@ -641,7 +718,6 @@ export default function EquipmentPage() {
               </Badge>
             )}
 
-            {/* Manufacturer: assigned/unassigned badges */}
             {isManufacturer && item._customerOrgId && (
               <Badge className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30">
                 <Factory className="w-3 h-3 mr-1" />
@@ -700,33 +776,25 @@ export default function EquipmentPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {(isCustomer || isManufacturer) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setGroupedView((v) => !v)}
-                className="border-border"
-                title="Cambia visualizzazione"
-              >
-                {groupedView ? <LayoutGrid className="w-4 h-4" /> : <List className="w-4 h-4" />}
-                <span className="ml-2 hidden sm:inline">
-                  {groupedView ? "Griglia" : "Per gruppi"}
-                </span>
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setGroupedView((v) => !v)}
+              className="border-border"
+              title="Cambia visualizzazione"
+            >
+              {groupedView ? <LayoutGrid className="w-4 h-4" /> : <List className="w-4 h-4" />}
+              <span className="ml-2 hidden sm:inline">
+                {groupedView ? "Griglia" : "Per gruppi"}
+              </span>
+            </Button>
 
-            {/* customer: show hidden */}
             {orgType === "customer" && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowHiddenLocal((v) => !v)}
                 className="border-border"
-                title={
-                  showHiddenLocal
-                    ? "Nascondi le macchine archiviate localmente"
-                    : "Mostra le macchine archiviate localmente"
-                }
               >
                 {showHiddenLocal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 <span className="ml-2 hidden sm:inline">
@@ -808,7 +876,6 @@ export default function EquipmentPage() {
                   </Select>
                 )}
 
-                {/* Manufacturer-only filter */}
                 {orgType === "manufacturer" && (
                   <Select
                     value={assignmentFilter}
