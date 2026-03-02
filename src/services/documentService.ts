@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 const BUCKET = "documents";
 
+// ⚠️ ENUM DB: usa valori UPPERCASE (altrimenti 22P02)
+export type DocumentCategory = "MANUAL" | "DRAWING" | "CERTIFICATE" | "REPORT" | "OTHER";
+
 export type DocumentRow = {
     id: string;
     organization_id: string;
@@ -10,7 +13,7 @@ export type DocumentRow = {
     machine_id: string | null;
     title: string;
     description: string | null;
-    category: any;
+    category: DocumentCategory | string; // string per compat eventuali record vecchi
     language: string | null;
     is_mandatory: boolean;
     regulatory_reference: string | null;
@@ -56,6 +59,9 @@ function safeExt(name: string) {
 }
 
 export async function listMachineDocuments(machineId: string) {
+    // ✅ FIX PGRST201: specifica la FK per l'embed
+    // FK name più comune: document_versions_document_id_fkey
+    // Se nel tuo DB il nome è diverso, cambialo qui.
     const { data, error } = await supabase
         .from("documents")
         .select(
@@ -63,8 +69,8 @@ export async function listMachineDocuments(machineId: string) {
       id, organization_id, plant_id, machine_id, title, description, category, language, is_mandatory,
       regulatory_reference, current_version_id, version_count, tags, created_at, updated_at, created_by,
       is_archived, archived_at,
-      document_versions (
-        id, version_number, previous_version_id, file_path, file_name, file_size, mime_type,
+      document_versions:document_versions!document_versions_document_id_fkey (
+        id, document_id, version_number, previous_version_id, file_path, file_name, file_size, mime_type,
         checksum_sha256, change_summary, signed_by, signed_at, signature_data, created_at, created_by
       )
     `
@@ -77,7 +83,9 @@ export async function listMachineDocuments(machineId: string) {
 
     const normalized = (data ?? []).map((d: any) => ({
         ...d,
-        document_versions: (d.document_versions ?? []).sort((a: any, b: any) => b.version_number - a.version_number),
+        document_versions: (d.document_versions ?? []).sort(
+            (a: any, b: any) => (b.version_number ?? 0) - (a.version_number ?? 0)
+        ),
     }));
 
     return normalized as Array<DocumentRow & { document_versions: DocumentVersionRow[] }>;
@@ -95,7 +103,7 @@ export async function createDocumentAndUploadV1(params: {
     plantId?: string | null;
     title: string;
     description?: string | null;
-    category: string;
+    category: DocumentCategory; // ✅ enum safe
     file: File;
     changeSummary?: string | null;
     language?: string | null;
@@ -116,7 +124,6 @@ export async function createDocumentAndUploadV1(params: {
         tags,
     } = params;
 
-    // 1) create document row
     const { data: doc, error: docErr } = await supabase
         .from("documents")
         .insert({
@@ -125,7 +132,7 @@ export async function createDocumentAndUploadV1(params: {
             plant_id: plantId ?? null,
             title: title.trim(),
             description: description?.trim() || null,
-            category,
+            category, // ✅ UPPERCASE
             language: language ?? "it",
             is_mandatory: Boolean(isMandatory),
             tags: tags ?? [],
@@ -138,7 +145,6 @@ export async function createDocumentAndUploadV1(params: {
 
     if (docErr) throw docErr;
 
-    // 2) upload file
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${doc.id}/v1_${Date.now()}.${ext}`;
     const { error: upErr } = await supabase.storage.from(BUCKET).upload(objectName, file);
@@ -146,7 +152,6 @@ export async function createDocumentAndUploadV1(params: {
 
     const checksum = await sha256(file);
 
-    // 3) create version v1
     const { data: ver, error: verErr } = await supabase
         .from("document_versions")
         .insert({
@@ -166,7 +171,6 @@ export async function createDocumentAndUploadV1(params: {
 
     if (verErr) throw verErr;
 
-    // 4) update document current_version_id + version_count
     const { error: updErr } = await supabase
         .from("documents")
         .update({
@@ -188,7 +192,6 @@ export async function uploadNewVersion(params: {
 }) {
     const { documentId, organizationId, file, changeSummary } = params;
 
-    // read last version
     const { data: doc, error: docErr } = await supabase
         .from("documents")
         .select("id,current_version_id,version_count")
@@ -199,7 +202,6 @@ export async function uploadNewVersion(params: {
 
     const nextVersion = (doc.version_count ?? 0) + 1;
 
-    // upload file
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${documentId}/v${nextVersion}_${Date.now()}.${ext}`;
 
@@ -208,7 +210,6 @@ export async function uploadNewVersion(params: {
 
     const checksum = await sha256(file);
 
-    // insert version
     const { data: ver, error: verErr } = await supabase
         .from("document_versions")
         .insert({
@@ -228,7 +229,6 @@ export async function uploadNewVersion(params: {
 
     if (verErr) throw verErr;
 
-    // update document
     const { error: updErr } = await supabase
         .from("documents")
         .update({
@@ -245,11 +245,10 @@ export async function uploadNewVersion(params: {
 
 export async function signDocumentVersion(params: {
     versionId: string;
-    signatureData: any; // { dataUrl, signerName?, note? }
+    signatureData: any;
 }) {
     const { versionId, signatureData } = params;
 
-    // NOTE: serve policy UPDATE su document_versions (ti lascio SQL sotto)
     const { data, error } = await supabase
         .from("document_versions")
         .update({
