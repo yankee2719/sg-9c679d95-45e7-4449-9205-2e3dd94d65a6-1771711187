@@ -161,7 +161,14 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const canAccessAdmin = () => {
         const currentRole = profile?.role || userRole;
-        return currentRole === "admin" || currentRole === "supervisor";
+
+        // Manufacturer: admin + supervisor can access management
+        if (orgType === "manufacturer") {
+            return currentRole === "admin" || currentRole === "supervisor";
+        }
+
+        // Customer: ONLY admin can access management (supervisor must not see plants/users management)
+        return currentRole === "admin";
     };
 
     const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
