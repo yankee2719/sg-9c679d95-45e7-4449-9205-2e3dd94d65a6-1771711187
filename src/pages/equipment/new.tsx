@@ -4,7 +4,13 @@ import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +18,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { ArrowLeft, Save, Factory, Building2 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type OrgType = "manufacturer" | "customer";
 type CustomerOrg = { id: string; name: string };
 type Plant = { id: string; name?: string | null; code?: string | null };
-type ProductionLine = { id: string; name?: string | null; code?: string | null; plant_id: string };
+type ProductionLine = {
+  id: string;
+  name?: string | null;
+  code?: string | null;
+  plant_id: string;
+};
 
 async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
   const { data, error } = await supabase
@@ -46,7 +63,10 @@ export default function NewEquipmentPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgType, setOrgType] = useState<OrgType | null>(null);
 
-  const canCreate = useMemo(() => userRole === "admin" || userRole === "supervisor", [userRole]);
+  const canCreate = useMemo(
+    () => userRole === "admin" || userRole === "supervisor",
+    [userRole]
+  );
 
   // Common fields
   const [name, setName] = useState("");
@@ -54,20 +74,17 @@ export default function NewEquipmentPage() {
   const [serialNumber, setSerialNumber] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Manufacturer: select customer
+  // Manufacturer: select customer (OPTIONAL)
   const [customers, setCustomers] = useState<CustomerOrg[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("none");
 
   // Customer: select plant + line
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState<string>("");
   const [lines, setLines] = useState<ProductionLine[]>([]);
-  const [selectedLineId, setSelectedLineId] = useState<string>("");
+  const [selectedLineId, setSelectedLineId] = useState<string>("none");
   const [loadingLines, setLoadingLines] = useState(false);
 
-  // =========================
-  // INIT (HARD GUARDED)
-  // =========================
   useEffect(() => {
     setMounted(true);
 
@@ -83,21 +100,25 @@ export default function NewEquipmentPage() {
         setUserRole(ctx.role ?? "technician");
 
         const effectiveOrgId =
-          ctx.orgId || ctx.organizationId || ctx.organization_id || ctx.tenant_id || null;
+          ctx.orgId ||
+          ctx.organizationId ||
+          ctx.organization_id ||
+          ctx.tenant_id ||
+          null;
 
-        if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
+        if (!effectiveOrgId)
+          throw new Error("Organization non trovata nel contesto utente.");
         setOrgId(effectiveOrgId);
 
-        // ✅ DB truth only
         const resolvedType = await getOrgTypeById(effectiveOrgId);
-        if (!resolvedType) throw new Error("orgType non risolto (organizations.type errato / RLS).");
-
+        if (!resolvedType)
+          throw new Error("orgType non risolto (organizations.type errato / RLS).");
         setOrgType(resolvedType);
 
         // reset UI state
-        setSelectedCustomerId("");
+        setSelectedCustomerId("none");
         setSelectedPlantId("");
-        setSelectedLineId("");
+        setSelectedLineId("none");
         setLines([]);
 
         if (resolvedType === "manufacturer") {
@@ -115,7 +136,7 @@ export default function NewEquipmentPage() {
           const { data, error } = await supabase
             .from("plants")
             .select("id,name,code")
-            .eq("organization_id", effectiveOrgId)
+            .eq("organization_id", effectiveOrgId) // ✅ filtro org
             .eq("is_archived", false)
             .order("name", { ascending: true });
 
@@ -139,9 +160,6 @@ export default function NewEquipmentPage() {
     init();
   }, [router, toast]);
 
-  // =========================
-  // LOAD LINES (customer only)
-  // =========================
   useEffect(() => {
     if (!mounted) return;
     if (orgType !== "customer") return;
@@ -149,9 +167,10 @@ export default function NewEquipmentPage() {
     const loadLines = async () => {
       if (!selectedPlantId) {
         setLines([]);
-        setSelectedLineId("");
+        setSelectedLineId("none");
         return;
       }
+
       setLoadingLines(true);
       try {
         const { data, error } = await supabase
@@ -162,8 +181,9 @@ export default function NewEquipmentPage() {
           .order("name", { ascending: true });
 
         if (error) throw error;
+
         setLines((data ?? []) as any);
-        setSelectedLineId("");
+        setSelectedLineId("none");
       } catch (e: any) {
         console.error(e);
         toast({
@@ -172,7 +192,7 @@ export default function NewEquipmentPage() {
           variant: "destructive",
         });
         setLines([]);
-        setSelectedLineId("");
+        setSelectedLineId("none");
       } finally {
         setLoadingLines(false);
       }
@@ -181,9 +201,6 @@ export default function NewEquipmentPage() {
     loadLines();
   }, [mounted, orgType, selectedPlantId, toast]);
 
-  // =========================
-  // SAVE
-  // =========================
   const handleSave = async () => {
     if (!canCreate) {
       toast({
@@ -200,24 +217,37 @@ export default function NewEquipmentPage() {
     }
 
     if (!orgId || !orgType) {
-      toast({ title: "Errore", description: "Context non valido (orgId/orgType).", variant: "destructive" });
+      toast({
+        title: "Errore",
+        description: "Context non valido (orgId/orgType).",
+        variant: "destructive",
+      });
       return;
     }
 
-    if (orgType === "manufacturer" && !selectedCustomerId) {
-      toast({ title: "Errore", description: "Seleziona un cliente", variant: "destructive" });
-      return;
-    }
-
+    // Customer must choose plant
     if (orgType === "customer" && !selectedPlantId) {
-      toast({ title: "Errore", description: "Seleziona uno stabilimento", variant: "destructive" });
+      toast({
+        title: "Errore",
+        description: "Seleziona uno stabilimento",
+        variant: "destructive",
+      });
       return;
     }
 
     setSaving(true);
     try {
-      // ✅ CRITICO: se manufacturer -> la macchina appartiene al cliente
-      const machineOrgId = orgType === "manufacturer" ? selectedCustomerId : orgId;
+      const wantsAssignToCustomer =
+        orgType === "manufacturer" && selectedCustomerId !== "none" && !!selectedCustomerId;
+
+      // ✅ If manufacturer and customer NOT selected -> create machine under manufacturer org (unassigned)
+      // ✅ If manufacturer and customer selected -> create machine under customer org (assigned)
+      const machineOrgId =
+        orgType === "manufacturer"
+          ? wantsAssignToCustomer
+            ? selectedCustomerId
+            : orgId
+          : orgId;
 
       const payload: any = {
         organization_id: machineOrgId,
@@ -226,8 +256,15 @@ export default function NewEquipmentPage() {
         serial_number: serialNumber.trim() || null,
         notes: notes.trim() || null,
         is_archived: false,
+
+        // only customer flow uses plants/lines
         plant_id: orgType === "customer" ? selectedPlantId : null,
-        production_line_id: orgType === "customer" ? (selectedLineId || null) : null,
+        production_line_id:
+          orgType === "customer"
+            ? selectedLineId === "none"
+              ? null
+              : selectedLineId
+            : null,
       };
 
       const { data: machine, error } = await supabase
@@ -238,13 +275,17 @@ export default function NewEquipmentPage() {
 
       if (error) throw error;
 
-      // manufacturer: crea assegnazione
-      if (orgType === "manufacturer" && machine?.id) {
+      // ✅ Only if manufacturer chose a customer: create assignment
+      if (orgType === "manufacturer" && wantsAssignToCustomer && machine?.id) {
+        const { data: userRes } = await supabase.auth.getUser();
+        const assignedBy = userRes?.user?.id ?? null;
+
         const { error: assignError } = await supabase.from("machine_assignments").insert({
           machine_id: machine.id,
           customer_org_id: selectedCustomerId,
           manufacturer_org_id: orgId,
           assigned_at: new Date().toISOString(),
+          assigned_by: assignedBy,
           is_active: true,
         });
 
@@ -281,8 +322,8 @@ export default function NewEquipmentPage() {
             <CardTitle className="text-foreground">Nuova attrezzatura</CardTitle>
             <CardDescription className="text-muted-foreground">
               {orgType === "manufacturer"
-                ? "Seleziona il cliente a cui assegnare l'attrezzatura"
-                : "Seleziona lo stabilimento e, se serve, la linea (opzionale)"}
+                ? "Se vuoi, assegna subito la macchina a un cliente. Altrimenti verrà creata come NON ASSEGNATA."
+                : "Seleziona lo stabilimento e, se serve, la linea (opzionale)."}
             </CardDescription>
           </CardHeader>
 
@@ -291,14 +332,15 @@ export default function NewEquipmentPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Factory className="w-4 h-4 text-purple-400" />
-                  Cliente *
+                  Cliente (opzionale)
                 </Label>
 
                 <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                   <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Seleziona cliente..." />
+                    <SelectValue placeholder="Non assegnare (crea non assegnata)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Non assegnare (crea non assegnata)</SelectItem>
                     {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
@@ -307,11 +349,10 @@ export default function NewEquipmentPage() {
                   </SelectContent>
                 </Select>
 
-                {customers.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Nessun cliente trovato. Crea prima un cliente (organizations: type=customer, manufacturer_org_id = la tua org).
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  Se selezioni un cliente, verrà creata anche l&apos;assegnazione. Se lasci “Non assegnare”, la
+                  macchina resta visibile solo al costruttore.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -343,10 +384,14 @@ export default function NewEquipmentPage() {
                     disabled={!selectedPlantId || loadingLines}
                   >
                     <SelectTrigger className="bg-muted border-border text-foreground disabled:opacity-60">
-                      <SelectValue placeholder={!selectedPlantId ? "Seleziona prima lo stabilimento" : "Seleziona linea..."} />
+                      <SelectValue
+                        placeholder={
+                          !selectedPlantId ? "Seleziona prima lo stabilimento" : "Seleziona linea..."
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nessuna</SelectItem>
+                      <SelectItem value="none">Nessuna</SelectItem>
                       {lines.map((l) => (
                         <SelectItem key={l.id} value={l.id}>
                           {l.name ?? l.code ?? l.id}
@@ -366,22 +411,39 @@ export default function NewEquipmentPage() {
 
               <div className="space-y-2">
                 <Label>Codice interno</Label>
-                <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="es. PRS-B1" />
+                <Input
+                  value={internalCode}
+                  onChange={(e) => setInternalCode(e.target.value)}
+                  placeholder="es. PRS-B1"
+                />
               </div>
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Matricola</Label>
-                <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="es. SN-12345" />
+                <Input
+                  value={serialNumber}
+                  onChange={(e) => setSerialNumber(e.target.value)}
+                  placeholder="es. SN-12345"
+                />
               </div>
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Note</Label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Note..." />
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Note..."
+                />
               </div>
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+              >
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? "Salvataggio..." : "Salva"}
               </Button>
