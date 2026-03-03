@@ -38,6 +38,10 @@ function pickOrgId(ctx: any): string | null {
   );
 }
 
+type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
+type WorkStatus = "draft" | "open" | "in_progress" | "done" | "cancelled"; // adatta se il tuo enum è diverso
+type WorkPriority = "low" | "medium" | "high" | "critical";
+
 export default function WorkOrderNewPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -48,18 +52,30 @@ export default function WorkOrderNewPage() {
   const [role, setRole] = useState<string>("technician");
   const canCreate = role === "admin" || role === "supervisor";
 
-  const typeFromQuery = useMemo(() => {
-    const t = router.query.type;
-    return typeof t === "string" && t.trim() ? t.trim() : "maintenance";
-  }, [router.query.type]);
+  // se arrivi da redirect maintenance, useremo work_type=preventive
+  const workTypeFromQuery = useMemo<WorkType>(() => {
+    const t = router.query.work_type;
+    if (typeof t !== "string") return "preventive";
+    const v = t.trim();
+    if (
+      v === "preventive" ||
+      v === "corrective" ||
+      v === "predictive" ||
+      v === "inspection" ||
+      v === "emergency"
+    ) return v;
+    return "preventive";
+  }, [router.query.work_type]);
 
   // form fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [type, setType] = useState(typeFromQuery);
-  const [status, setStatus] = useState("open");
-  const [priority, setPriority] = useState("medium");
-  const [dueDate, setDueDate] = useState<string>("");
+
+  const [workType, setWorkType] = useState<WorkType>(workTypeFromQuery);
+  const [status, setStatus] = useState<WorkStatus>("draft"); // default coerente con schema
+  const [priority, setPriority] = useState<WorkPriority>("medium");
+
+  const [dueDate, setDueDate] = useState<string>(""); // datetime-local
 
   // machine (optional)
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -68,7 +84,7 @@ export default function WorkOrderNewPage() {
   // resolved context
   const [orgId, setOrgId] = useState<string | null>(null);
 
-  useEffect(() => setType(typeFromQuery), [typeFromQuery]);
+  useEffect(() => setWorkType(workTypeFromQuery), [workTypeFromQuery]);
 
   useEffect(() => {
     const init = async () => {
@@ -86,7 +102,6 @@ export default function WorkOrderNewPage() {
 
         setRole(ctx.role ?? "technician");
 
-        // Load machines visible to the user (RLS decides)
         const { data, error } = await supabase
           .from("machines")
           .select("id,name,internal_code")
@@ -146,15 +161,19 @@ export default function WorkOrderNewPage() {
       const createdBy = userRes?.user?.id ?? null;
 
       const payload: any = {
-        organization_id: orgId, // ✅ fondamentale per RLS
+        organization_id: orgId,
         title: title.trim(),
         description: description.trim() || null,
-        type: type || "maintenance",
-        status,
-        priority,
+
+        work_type: workType,          // ✅ SOLO work_type
+        status,                       // enum work_order_status
+        priority,                     // enum work_order_priority
+
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
+
         machine_id: machineId === "none" ? null : machineId,
-        created_by: createdBy, // se la colonna non esiste, togli questa riga
+
+        created_by: createdBy, // se non esiste, togli
       };
 
       const { data, error } = await supabase
@@ -194,7 +213,7 @@ export default function WorkOrderNewPage() {
           <CardHeader>
             <CardTitle className="text-foreground">Nuovo Work Order</CardTitle>
             <CardDescription className="text-muted-foreground">
-              Crea un ordine di lavoro. Se arrivi da Maintenance, il tipo è già preimpostato.
+              Tipo gestito da <span className="font-mono">work_type</span>.
             </CardDescription>
           </CardHeader>
 
@@ -210,22 +229,24 @@ export default function WorkOrderNewPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select value={type} onValueChange={setType}>
+                <Label>Tipo (work_type)</Label>
+                <Select value={workType} onValueChange={(v) => setWorkType(v as WorkType)}>
                   <SelectTrigger className="bg-muted border-border text-foreground">
                     <SelectValue placeholder="Seleziona tipo..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="preventive">Preventive</SelectItem>
                     <SelectItem value="corrective">Corrective</SelectItem>
+                    <SelectItem value="predictive">Predictive</SelectItem>
                     <SelectItem value="inspection">Inspection</SelectItem>
+                    <SelectItem value="emergency">Emergency</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>Priorità</Label>
-                <Select value={priority} onValueChange={setPriority}>
+                <Select value={priority} onValueChange={(v) => setPriority(v as WorkPriority)}>
                   <SelectTrigger className="bg-muted border-border text-foreground">
                     <SelectValue placeholder="Seleziona priorità..." />
                   </SelectTrigger>
@@ -240,11 +261,12 @@ export default function WorkOrderNewPage() {
 
               <div className="space-y-2">
                 <Label>Stato</Label>
-                <Select value={status} onValueChange={setStatus}>
+                <Select value={status} onValueChange={(v) => setStatus(v as WorkStatus)}>
                   <SelectTrigger className="bg-muted border-border text-foreground">
                     <SelectValue placeholder="Seleziona stato..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="open">Open</SelectItem>
                     <SelectItem value="in_progress">In progress</SelectItem>
                     <SelectItem value="done">Done</SelectItem>
@@ -272,8 +294,7 @@ export default function WorkOrderNewPage() {
                     <SelectItem value="none">Nessuna (generico)</SelectItem>
                     {machines.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {m.name}
-                        {m.internal_code ? ` — ${m.internal_code}` : ""}
+                        {m.name}{m.internal_code ? ` — ${m.internal_code}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
