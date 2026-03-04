@@ -73,9 +73,7 @@ export default function WorkOrdersIndexPage() {
             const ql = q.trim().toLowerCase();
 
             const filtered =
-                !ql
-                    ? list
-                    : list.filter((wo) => (wo.title ?? "").toLowerCase().includes(ql));
+                !ql ? list : list.filter((wo) => (wo.title ?? "").toLowerCase().includes(ql));
 
             setItems(filtered);
         } catch (e: any) {
@@ -101,10 +99,10 @@ export default function WorkOrdersIndexPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q]);
 
-    const newHref = useMemo(() => {
+    const createHref = useMemo(() => {
         return workTypeFromQuery
-            ? `/work-orders/new?work_type=${encodeURIComponent(workTypeFromQuery)}`
-            : "/work-orders/new";
+            ? `/work-orders/create?work_type=${encodeURIComponent(workTypeFromQuery)}`
+            : "/work-orders/create";
     }, [workTypeFromQuery]);
 
     return (
@@ -114,17 +112,17 @@ export default function WorkOrdersIndexPage() {
                     <div>
                         <h1 className="text-2xl font-bold">Work Orders</h1>
                         <p className="text-muted-foreground">
-                            Unica entità. Il tipo è <span className="font-mono">work_type</span>.
+                            Unica entità. Tipo = <span className="font-mono">work_type</span>.
                         </p>
                     </div>
 
                     {canCreate && (
                         <Button
                             className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                            onClick={() => router.push(newHref)}
+                            onClick={() => router.push(createHref)}
                         >
                             <Plus className="w-4 h-4 mr-2" />
-                            Nuovo ordine
+                            Crea ordine
                         </Button>
                     )}
                 </div>
