@@ -1,16 +1,14 @@
-// src/pages/work-orders/create.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { SEO } from "@/components/SEO";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,316 +17,300 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 
-type Machine = { id: string; name: string; internal_code?: string | null };
-
-function pickOrgId(ctx: any): string | null {
-  return (
-    ctx?.orgId ||
-    ctx?.organizationId ||
-    ctx?.organization_id ||
-    ctx?.tenant_id ||
-    null
-  );
-}
+type Machine = {
+    id: string;
+    name: string;
+    internal_code?: string | null;
+};
 
 type WorkType =
-  | "preventive"
-  | "corrective"
-  | "predictive"
-  | "inspection"
-  | "emergency";
+    | "preventive"
+    | "corrective"
+    | "predictive"
+    | "inspection"
+    | "emergency";
 
-type WorkStatus = "draft" | "open" | "in_progress" | "done" | "cancelled";
+type WorkStatus =
+    | "draft"
+    | "scheduled"
+    | "in_progress"
+    | "pending_review"
+    | "completed"
+    | "cancelled";
+
 type WorkPriority = "low" | "medium" | "high" | "critical";
 
+function pickOrgId(ctx: any): string | null {
+    return (
+        ctx?.orgId ||
+        ctx?.organizationId ||
+        ctx?.organization_id ||
+        ctx?.tenant_id ||
+        null
+    );
+}
+
 export default function WorkOrderCreatePage() {
-  const router = useRouter();
-  const { toast } = useToast();
+    const router = useRouter();
+    const { toast } = useToast();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
-  const [role, setRole] = useState<string>("technician");
-  const canCreate = role === "admin" || role === "supervisor";
+    const [role, setRole] = useState < string > ("technician");
 
-  const workTypeFromQuery = useMemo<WorkType>(() => {
-    const t = router.query.work_type;
-    if (typeof t !== "string") return "preventive";
-    const v = t.trim();
-    if (
-      v === "preventive" ||
-      v === "corrective" ||
-      v === "predictive" ||
-      v === "inspection" ||
-      v === "emergency"
-    )
-      return v;
-    return "preventive";
-  }, [router.query.work_type]);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+    const [workType, setWorkType] = useState < WorkType > ("preventive");
+    const [status, setStatus] = useState < WorkStatus > ("draft");
+    const [priority, setPriority] = useState < WorkPriority > ("medium");
 
-  const [workType, setWorkType] = useState<WorkType>(workTypeFromQuery);
-  const [status, setStatus] = useState<WorkStatus>("draft");
-  const [priority, setPriority] = useState<WorkPriority>("medium");
-  const [dueDate, setDueDate] = useState<string>("");
+    const [dueDate, setDueDate] = useState("");
 
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [machineId, setMachineId] = useState<string>("none");
+    const [machines, setMachines] = useState < Machine[] > ([]);
+    const [machineId, setMachineId] = useState < string > ("none");
 
-  const [orgId, setOrgId] = useState<string | null>(null);
+    const [orgId, setOrgId] = useState < string | null > (null);
 
-  useEffect(() => setWorkType(workTypeFromQuery), [workTypeFromQuery]);
+    const canCreate = role === "admin" || role === "supervisor";
 
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      try {
-        const ctx: any = await getUserContext();
-        if (!ctx) {
-          router.push("/login");
-          return;
+    useEffect(() => {
+        const init = async () => {
+            try {
+                const ctx: any = await getUserContext();
+
+                setRole(ctx?.role ?? "technician");
+
+                const resolvedOrgId = pickOrgId(ctx);
+                setOrgId(resolvedOrgId);
+
+                const { data } = await supabase
+                    .from("machines")
+                    .select("id,name,internal_code")
+                    .eq("is_archived", false)
+                    .order("name");
+
+                setMachines((data ?? []) as any);
+            } catch (err) {
+                console.error(err);
+            }
+
+            setLoading(false);
+        };
+
+        init();
+    }, []);
+
+    const handleSave = async () => {
+        if (!title.trim()) {
+            toast({
+                title: "Errore",
+                description: "Inserisci titolo",
+                variant: "destructive",
+            });
+            return;
         }
 
-        setRole(ctx.role ?? "technician");
+        if (!orgId) {
+            toast({
+                title: "Errore",
+                description: "Organization non trovata",
+                variant: "destructive",
+            });
+            return;
+        }
 
-        const resolvedOrgId = pickOrgId(ctx);
-        if (!resolvedOrgId) throw new Error("Organization non trovata nel contesto utente.");
-        setOrgId(resolvedOrgId);
+        setSaving(true);
 
-        const { data, error } = await supabase
-          .from("machines")
-          .select("id,name,internal_code")
-          .eq("is_archived", false)
-          .order("name", { ascending: true })
-          .limit(500);
+        try {
+            const { data: userRes } = await supabase.auth.getUser();
 
-        if (error) throw error;
-        setMachines((data ?? []) as any);
-      } catch (e: any) {
-        console.error(e);
-        toast({
-          title: "Errore",
-          description: e?.message ?? "Errore caricamento",
-          variant: "destructive",
-        });
-        router.push("/work-orders");
-      } finally {
-        setLoading(false);
-      }
+            const createdBy = userRes?.user?.id ?? null;
+
+            const payload: any = {
+                organization_id: orgId,
+                title: title.trim(),
+                description: description || null,
+                work_type: workType,
+                status,
+                priority,
+                due_date: dueDate ? new Date(dueDate).toISOString() : null,
+                machine_id: machineId === "none" ? null : machineId,
+                created_by: createdBy,
+            };
+
+            const { data, error } = await supabase
+                .from("work_orders")
+                .insert(payload)
+                .select("id")
+                .single();
+
+            if (error) throw error;
+
+            toast({
+                title: "Creato",
+                description: "Work order creato correttamente",
+            });
+
+            router.push(`/work-orders/${data.id}`);
+        } catch (err: any) {
+            console.error(err);
+
+            toast({
+                title: "Errore",
+                description: err?.message ?? "Errore creazione",
+                variant: "destructive",
+            });
+        }
+
+        setSaving(false);
     };
 
-    init();
-  }, [router, toast]);
+    if (loading) return null;
 
-  const handleSave = async () => {
-    if (!canCreate) {
-      toast({
-        title: "Permesso negato",
-        description: "Solo Admin/Supervisor possono creare work orders.",
-        variant: "destructive",
-      });
-      return;
-    }
+    return (
+        <MainLayout userRole={role as any}>
+            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+                <Button variant="ghost" onClick={() => router.back()}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Indietro
+                </Button>
 
-    if (!title.trim()) {
-      toast({
-        title: "Errore",
-        description: "Inserisci un titolo",
-        variant: "destructive",
-      });
-      return;
-    }
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Nuovo Work Order</CardTitle>
+                        <CardDescription>Crea un ordine di lavoro</CardDescription>
+                    </CardHeader>
 
-    if (!orgId) {
-      toast({
-        title: "Errore",
-        description: "orgId mancante nel contesto utente.",
-        variant: "destructive",
-      });
-      return;
-    }
+                    <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                            <Label>Titolo</Label>
+                            <Input
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                            />
+                        </div>
 
-    setSaving(true);
-    try {
-      const { data: userRes } = await supabase.auth.getUser();
-      const createdBy = userRes?.user?.id ?? null;
+                        <div className="space-y-2">
+                            <Label>Tipo lavoro</Label>
 
-      const payload: any = {
-        organization_id: orgId,
-        title: title.trim(),
-        description: description.trim() || null,
-        work_type: workType,
-        status,
-        priority,
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
-        machine_id: machineId === "none" ? null : machineId,
-        created_by: createdBy, // se non esiste nel DB, elimina questa riga
-      };
+                            <Select
+                                value={workType}
+                                onValueChange={(v) => setWorkType(v as WorkType)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
 
-      const { data, error } = await supabase
-        .from("work_orders")
-        .insert(payload)
-        .select("id")
-        .single();
+                                <SelectContent>
+                                    <SelectItem value="preventive">Preventive</SelectItem>
+                                    <SelectItem value="corrective">Corrective</SelectItem>
+                                    <SelectItem value="predictive">Predictive</SelectItem>
+                                    <SelectItem value="inspection">Inspection</SelectItem>
+                                    <SelectItem value="emergency">Emergency</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-      if (error) throw error;
+                        <div className="space-y-2">
+                            <Label>Stato</Label>
 
-      toast({ title: "OK", description: "Work order creato" });
-      router.push(`/work-orders/${data.id}`);
-    } catch (e: any) {
-      console.error(e);
-      toast({
-        title: "Errore",
-        description: e?.message ?? "Errore creazione work order",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+                            <Select
+                                value={status}
+                                onValueChange={(v) => setStatus(v as WorkStatus)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
 
-  if (loading) return null;
+                                <SelectContent>
+                                    <SelectItem value="draft">Draft</SelectItem>
+                                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                                    <SelectItem value="in_progress">In progress</SelectItem>
+                                    <SelectItem value="pending_review">Pending review</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-  return (
-    <MainLayout userRole={role as any}>
-      <SEO title="Crea Work Order - MACHINA" />
+                        <div className="space-y-2">
+                            <Label>Priorità</Label>
 
-      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Indietro
-        </Button>
+                            <Select
+                                value={priority}
+                                onValueChange={(v) => setPriority(v as WorkPriority)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
 
-        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-foreground">Crea Work Order</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Route fissa: <span className="font-mono">/work-orders/create</span>
-            </CardDescription>
-          </CardHeader>
+                                <SelectContent>
+                                    <SelectItem value="low">Low</SelectItem>
+                                    <SelectItem value="medium">Medium</SelectItem>
+                                    <SelectItem value="high">High</SelectItem>
+                                    <SelectItem value="critical">Critical</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label>Titolo *</Label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="es. Sostituzione cinghia..."
-                />
-              </div>
+                        <div className="space-y-2">
+                            <Label>Macchina (opzionale)</Label>
 
-              <div className="space-y-2">
-                <Label>Tipo (work_type)</Label>
-                <Select value={workType} onValueChange={(v) => setWorkType(v as WorkType)}>
-                  <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Seleziona tipo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="preventive">Preventive</SelectItem>
-                    <SelectItem value="corrective">Corrective</SelectItem>
-                    <SelectItem value="predictive">Predictive</SelectItem>
-                    <SelectItem value="inspection">Inspection</SelectItem>
-                    <SelectItem value="emergency">Emergency</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                            <Select value={machineId} onValueChange={setMachineId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Nessuna" />
+                                </SelectTrigger>
 
-              <div className="space-y-2">
-                <Label>Priorità</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as WorkPriority)}>
-                  <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Seleziona priorità..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                                <SelectContent>
+                                    <SelectItem value="none">Nessuna</SelectItem>
 
-              <div className="space-y-2">
-                <Label>Stato</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as WorkStatus)}>
-                  <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Seleziona stato..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="in_progress">In progress</SelectItem>
-                    <SelectItem value="done">Done</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                                    {machines.map((m) => (
+                                        <SelectItem key={m.id} value={m.id}>
+                                            {m.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-              <div className="space-y-2">
-                <Label>Scadenza (opzionale)</Label>
-                <Input
-                  type="datetime-local"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
+                        <div className="space-y-2">
+                            <Label>Scadenza</Label>
 
-              <div className="space-y-2 md:col-span-2">
-                <Label>Macchina (opzionale)</Label>
-                <Select value={machineId} onValueChange={setMachineId}>
-                  <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Nessuna (generico)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nessuna (generico)</SelectItem>
-                    {machines.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name}{m.internal_code ? ` — ${m.internal_code}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                            <Input
+                                type="datetime-local"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                            />
+                        </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <Label>Descrizione</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  placeholder="Dettagli..."
-                />
-              </div>
+                        <div className="space-y-2">
+                            <Label>Descrizione</Label>
+
+                            <Textarea
+                                rows={4}
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex justify-end">
+                            <Button onClick={handleSave} disabled={saving}>
+                                <Save className="w-4 h-4 mr-2" />
+                                Salva
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
-
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {saving ? "Salvataggio..." : "Salva"}
-              </Button>
-            </div>
-
-            {!canCreate && (
-              <p className="text-xs text-muted-foreground">
-                Sei loggato come <span className="font-mono">{role}</span>: non puoi creare work orders.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </MainLayout>
-  );
+        </MainLayout>
+    );
 }
