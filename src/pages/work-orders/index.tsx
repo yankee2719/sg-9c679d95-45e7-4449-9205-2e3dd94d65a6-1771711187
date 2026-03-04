@@ -1,13 +1,21 @@
-// src/pages/work-orders/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Save } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -15,151 +23,237 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Plus, Search } from "lucide-react";
 
-type WorkOrder = {
+type Machine = {
     id: string;
-    title: string | null;
-    status: string | null;
-    priority: string | null;
-    work_type: string | null;
-    created_at?: string | null;
+    name: string;
+    internal_code?: string | null;
 };
 
-export default function WorkOrdersIndexPage() {
+type WorkType =
+    | "preventive"
+    | "corrective"
+    | "predictive"
+    | "inspection"
+    | "emergency";
+
+type WorkStatus =
+    | "draft"
+    | "scheduled"
+    | "in_progress"
+    | "pending_review"
+    | "completed"
+    | "cancelled";
+
+type WorkPriority = "low" | "medium" | "high" | "critical";
+
+function pickOrgId(ctx: any): string | null {
+    return (
+        ctx?.orgId ||
+        ctx?.organizationId ||
+        ctx?.organization_id ||
+        ctx?.tenant_id ||
+        null
+    );
+}
+
+export default function WorkOrderCreatePage() {
     const router = useRouter();
     const { toast } = useToast();
 
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
     const [role, setRole] = useState < string > ("technician");
 
-    const [items, setItems] = useState < WorkOrder[] > ([]);
-    const [q, setQ] = useState("");
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
 
-    const [status, setStatus] = useState("all");
-    const [priority, setPriority] = useState("all");
+    const [workType, setWorkType] = useState < WorkType > ("preventive");
+    const [status, setStatus] = useState < WorkStatus > ("draft");
+    const [priority, setPriority] = useState < WorkPriority > ("medium");
 
-    const workTypeFromQuery = useMemo(() => {
-        const t = router.query.work_type;
-        return typeof t === "string" && t.trim() ? t.trim() : null;
-    }, [router.query.work_type]);
+    const [dueDate, setDueDate] = useState("");
+
+    const [machines, setMachines] = useState < Machine[] > ([]);
+    const [machineId, setMachineId] = useState < string > ("none");
+
+    const [orgId, setOrgId] = useState < string | null > (null);
 
     const canCreate = role === "admin" || role === "supervisor";
 
-    const load = async () => {
-        setLoading(true);
-        try {
-            const ctx: any = await getUserContext();
-            if (!ctx) {
-                router.push("/login");
-                return;
+    useEffect(() => {
+        const init = async () => {
+            try {
+                const ctx: any = await getUserContext();
+
+                setRole(ctx?.role ?? "technician");
+
+                const resolvedOrgId = pickOrgId(ctx);
+                setOrgId(resolvedOrgId);
+
+                const { data } = await supabase
+                    .from("machines")
+                    .select("id,name,internal_code")
+                    .eq("is_archived", false)
+                    .order("name");
+
+                setMachines((data ?? []) as any);
+            } catch (err) {
+                console.error(err);
             }
-            setRole(ctx.role ?? "technician");
 
-            let query = supabase
-                .from("work_orders")
-                .select("id,title,status,priority,work_type,created_at")
-                .order("created_at", { ascending: false });
+            setLoading(false);
+        };
 
-            if (workTypeFromQuery) query = query.eq("work_type", workTypeFromQuery);
-            if (status !== "all") query = query.eq("status", status);
-            if (priority !== "all") query = query.eq("priority", priority);
+        init();
+    }, []);
 
-            const { data, error } = await query;
-            if (error) throw error;
-
-            const list = (data ?? []) as WorkOrder[];
-            const ql = q.trim().toLowerCase();
-
-            const filtered =
-                !ql ? list : list.filter((wo) => (wo.title ?? "").toLowerCase().includes(ql));
-
-            setItems(filtered);
-        } catch (e: any) {
-            console.error(e);
+    const handleSave = async () => {
+        if (!title.trim()) {
             toast({
                 title: "Errore",
-                description: e?.message ?? "Errore caricamento work orders",
+                description: "Inserisci titolo",
                 variant: "destructive",
             });
-        } finally {
-            setLoading(false);
+            return;
         }
+
+        if (!orgId) {
+            toast({
+                title: "Errore",
+                description: "Organization non trovata",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setSaving(true);
+
+        try {
+            const { data: userRes } = await supabase.auth.getUser();
+
+            const createdBy = userRes?.user?.id ?? null;
+
+            const payload: any = {
+                organization_id: orgId,
+                title: title.trim(),
+                description: description || null,
+                work_type: workType,
+                status,
+                priority,
+                due_date: dueDate ? new Date(dueDate).toISOString() : null,
+                machine_id: machineId === "none" ? null : machineId,
+                created_by: createdBy,
+            };
+
+            const { data, error } = await supabase
+                .from("work_orders")
+                .insert(payload)
+                .select("id")
+                .single();
+
+            if (error) throw error;
+
+            toast({
+                title: "Creato",
+                description: "Work order creato correttamente",
+            });
+
+            router.push(`/work-orders/${data.id}`);
+        } catch (err: any) {
+            console.error(err);
+
+            toast({
+                title: "Errore",
+                description: err?.message ?? "Errore creazione",
+                variant: "destructive",
+            });
+        }
+
+        setSaving(false);
     };
 
-    useEffect(() => {
-        load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workTypeFromQuery, status, priority]);
-
-    useEffect(() => {
-        const t = setTimeout(() => load(), 250);
-        return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q]);
-
-    const createHref = useMemo(() => {
-        return workTypeFromQuery
-            ? `/work-orders/create?work_type=${encodeURIComponent(workTypeFromQuery)}`
-            : "/work-orders/create";
-    }, [workTypeFromQuery]);
+    if (loading) return null;
 
     return (
         <MainLayout userRole={role as any}>
-            <div className="p-6 space-y-6">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                        <h1 className="text-2xl font-bold">Work Orders</h1>
-                        <p className="text-muted-foreground">
-                            Unica entità. Tipo = <span className="font-mono">work_type</span>.
-                        </p>
-                    </div>
-
-                    {canCreate && (
-                        <Button
-                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                            onClick={() => router.push(createHref)}
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Crea ordine
-                        </Button>
-                    )}
-                </div>
+            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+                <Button variant="ghost" onClick={() => router.back()}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Indietro
+                </Button>
 
                 <Card>
-                    <CardContent className="p-4 space-y-3">
-                        <div className="flex flex-col md:flex-row gap-3 md:items-center">
-                            <div className="flex-1 relative">
-                                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                                <Input
-                                    value={q}
-                                    onChange={(e) => setQ(e.target.value)}
-                                    placeholder="Cerca titolo..."
-                                    className="pl-9"
-                                />
-                            </div>
+                    <CardHeader>
+                        <CardTitle>Nuovo Work Order</CardTitle>
+                        <CardDescription>Crea un ordine di lavoro</CardDescription>
+                    </CardHeader>
 
-                            <Select value={status} onValueChange={setStatus}>
-                                <SelectTrigger className="w-[160px]">
-                                    <SelectValue placeholder="Stato" />
+                    <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                            <Label>Titolo</Label>
+                            <Input
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Tipo lavoro</Label>
+
+                            <Select
+                                value={workType}
+                                onValueChange={(v) => setWorkType(v as WorkType)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
                                 </SelectTrigger>
+
                                 <SelectContent>
-                                    <SelectItem value="all">Tutti</SelectItem>
+                                    <SelectItem value="preventive">Preventive</SelectItem>
+                                    <SelectItem value="corrective">Corrective</SelectItem>
+                                    <SelectItem value="predictive">Predictive</SelectItem>
+                                    <SelectItem value="inspection">Inspection</SelectItem>
+                                    <SelectItem value="emergency">Emergency</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Stato</Label>
+
+                            <Select
+                                value={status}
+                                onValueChange={(v) => setStatus(v as WorkStatus)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+
+                                <SelectContent>
                                     <SelectItem value="draft">Draft</SelectItem>
-                                    <SelectItem value="open">Open</SelectItem>
+                                    <SelectItem value="scheduled">Scheduled</SelectItem>
                                     <SelectItem value="in_progress">In progress</SelectItem>
-                                    <SelectItem value="done">Done</SelectItem>
+                                    <SelectItem value="pending_review">Pending review</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
                                     <SelectItem value="cancelled">Cancelled</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
 
-                            <Select value={priority} onValueChange={setPriority}>
-                                <SelectTrigger className="w-[160px]">
-                                    <SelectValue placeholder="Priorità" />
+                        <div className="space-y-2">
+                            <Label>Priorità</Label>
+
+                            <Select
+                                value={priority}
+                                onValueChange={(v) => setPriority(v as WorkPriority)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
                                 </SelectTrigger>
+
                                 <SelectContent>
-                                    <SelectItem value="all">Tutte</SelectItem>
                                     <SelectItem value="low">Low</SelectItem>
                                     <SelectItem value="medium">Medium</SelectItem>
                                     <SelectItem value="high">High</SelectItem>
@@ -168,41 +262,54 @@ export default function WorkOrdersIndexPage() {
                             </Select>
                         </div>
 
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Badge variant="outline">{items.length} risultati</Badge>
-                            {workTypeFromQuery && (
-                                <span>
-                                    filtro: <span className="font-mono">{workTypeFromQuery}</span>
-                                </span>
-                            )}
+                        <div className="space-y-2">
+                            <Label>Macchina (opzionale)</Label>
+
+                            <Select value={machineId} onValueChange={setMachineId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Nessuna" />
+                                </SelectTrigger>
+
+                                <SelectContent>
+                                    <SelectItem value="none">Nessuna</SelectItem>
+
+                                    {machines.map((m) => (
+                                        <SelectItem key={m.id} value={m.id}>
+                                            {m.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Scadenza</Label>
+
+                            <Input
+                                type="datetime-local"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Descrizione</Label>
+
+                            <Textarea
+                                rows={4}
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex justify-end">
+                            <Button onClick={handleSave} disabled={saving}>
+                                <Save className="w-4 h-4 mr-2" />
+                                Salva
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
-
-                {loading ? (
-                    <div className="text-sm text-muted-foreground">Caricamento...</div>
-                ) : items.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Nessun work order.</div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {items.map((wo) => (
-                            <Card
-                                key={wo.id}
-                                className="cursor-pointer hover:border-[#FF6B35]/40 transition-colors"
-                                onClick={() => router.push(`/work-orders/${wo.id}`)}
-                            >
-                                <CardContent className="p-4">
-                                    <div className="font-semibold text-sm truncate">
-                                        {wo.title ?? "Work Order"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                        {wo.work_type ?? "—"} • {wo.status ?? "—"} • {wo.priority ?? "—"}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                )}
             </div>
         </MainLayout>
     );
