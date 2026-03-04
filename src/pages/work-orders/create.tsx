@@ -28,12 +28,6 @@ type Machine = {
   id: string;
   name: string;
   internal_code?: string | null;
-  plant_id: string | null;
-};
-
-type Plant = {
-  id: string;
-  name: string;
 };
 
 type WorkType =
@@ -98,11 +92,8 @@ export default function WorkOrderCreatePage() {
   const [priority, setPriority] = useState<WorkPriority>("medium");
   const [dueDate, setDueDate] = useState<string>("");
 
-  const [plants, setPlants] = useState<Plant[]>([]);
-  const [plantId, setPlantId] = useState<string>("none");
-
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [machineId, setMachineId] = useState<string>("none");
+  const [machineId, setMachineId] = useState<string>("none"); // NOW REQUIRED
 
   useEffect(() => setWorkType(workTypeFromQuery), [workTypeFromQuery]);
 
@@ -122,28 +113,15 @@ export default function WorkOrderCreatePage() {
         if (!resolvedOrgId) throw new Error("Organization non trovata nel contesto utente.");
         setOrgId(resolvedOrgId);
 
-        const [{ data: plantData, error: plantErr }, { data: machineData, error: machineErr }] =
-          await Promise.all([
-            supabase
-              .from("plants")
-              .select("id,name")
-              .eq("organization_id", resolvedOrgId)
-              .eq("is_archived", false)
-              .order("name", { ascending: true })
-              .limit(500),
-            supabase
-              .from("machines")
-              .select("id,name,internal_code,plant_id")
-              .eq("is_archived", false)
-              .order("name", { ascending: true })
-              .limit(500),
-          ]);
+        const { data, error } = await supabase
+          .from("machines")
+          .select("id,name,internal_code")
+          .eq("is_archived", false)
+          .order("name", { ascending: true })
+          .limit(500);
 
-        if (plantErr) throw plantErr;
-        if (machineErr) throw machineErr;
-
-        setPlants((plantData ?? []) as any);
-        setMachines((machineData ?? []) as any);
+        if (error) throw error;
+        setMachines((data ?? []) as any);
       } catch (e: any) {
         console.error(e);
         toast({
@@ -159,16 +137,6 @@ export default function WorkOrderCreatePage() {
 
     init();
   }, [router, toast]);
-
-  // When machine changes: auto-set plant_id from machine (if present)
-  useEffect(() => {
-    if (machineId === "none") return;
-
-    const m = machines.find((x) => x.id === machineId);
-    if (m?.plant_id) {
-      setPlantId(m.plant_id);
-    }
-  }, [machineId, machines]);
 
   const handleSave = async () => {
     if (!canCreate) {
@@ -198,13 +166,11 @@ export default function WorkOrderCreatePage() {
       return;
     }
 
-    // plant_id is NOT NULL in DB -> enforce in UI:
-    // - if machine chosen and machine has plant_id => ok (auto)
-    // - else user must choose a plant
-    if (plantId === "none") {
+    // IMPORTANT: machine required (because plant_id is NOT NULL in DB)
+    if (machineId === "none") {
       toast({
         title: "Errore",
-        description: "Seleziona uno stabilimento (plant).",
+        description: "Seleziona una macchina. (Plant viene preso automaticamente dalla macchina)",
         variant: "destructive",
       });
       return;
@@ -212,6 +178,26 @@ export default function WorkOrderCreatePage() {
 
     setSaving(true);
     try {
+      // get plant_id from machine
+      const { data: mRow, error: mErr } = await supabase
+        .from("machines")
+        .select("plant_id")
+        .eq("id", machineId)
+        .single();
+
+      if (mErr) throw mErr;
+
+      const plantId = (mRow as any)?.plant_id ?? null;
+      if (!plantId) {
+        toast({
+          title: "Errore",
+          description:
+            "Questa macchina non ha uno stabilimento (plant_id). Assegna lo stabilimento alla macchina e riprova.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data: userRes } = await supabase.auth.getUser();
       const createdBy = userRes?.user?.id ?? null;
 
@@ -223,8 +209,8 @@ export default function WorkOrderCreatePage() {
         status,
         priority,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
-        machine_id: machineId === "none" ? null : machineId,
-        plant_id: plantId, // required by DB
+        machine_id: machineId,
+        plant_id: plantId, // derived
         created_by: createdBy, // remove if column doesn't exist
       };
 
@@ -263,7 +249,7 @@ export default function WorkOrderCreatePage() {
           <CardHeader>
             <CardTitle className="text-foreground">Crea Work Order</CardTitle>
             <CardDescription className="text-muted-foreground">
-              Route fissa: <span className="font-mono">/work-orders/create</span>
+              Macchina obbligatoria (plant viene preso automaticamente).
             </CardDescription>
           </CardHeader>
 
@@ -332,13 +318,13 @@ export default function WorkOrderCreatePage() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>Macchina (opzionale)</Label>
+                <Label>Macchina *</Label>
                 <Select value={machineId} onValueChange={setMachineId}>
                   <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Nessuna (generico)" />
+                    <SelectValue placeholder="Seleziona macchina..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nessuna (generico)</SelectItem>
+                    <SelectItem value="none">Seleziona macchina...</SelectItem>
                     {machines.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.name}
@@ -348,27 +334,7 @@ export default function WorkOrderCreatePage() {
                   </SelectContent>
                 </Select>
                 <div className="text-xs text-muted-foreground">
-                  Se selezioni una macchina, lo stabilimento viene impostato automaticamente (se presente).
-                </div>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label>Stabilimento (plant) *</Label>
-                <Select value={plantId} onValueChange={setPlantId}>
-                  <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Seleziona stabilimento..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Seleziona stabilimento...</SelectItem>
-                    {plants.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="text-xs text-muted-foreground">
-                  Obbligatorio perché <span className="font-mono">work_orders.plant_id</span> è NOT NULL nel DB.
+                  Lo stabilimento viene preso automaticamente dalla macchina.
                 </div>
               </div>
 
