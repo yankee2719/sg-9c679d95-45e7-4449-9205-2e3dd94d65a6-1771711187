@@ -20,12 +20,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Save, User, Wrench, CalendarClock, XCircle } from "lucide-react";
 
-type WorkType =
-    | "preventive"
-    | "corrective"
-    | "predictive"
-    | "inspection"
-    | "emergency";
+type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
 
 type WorkStatus =
     | "draft"
@@ -47,7 +42,7 @@ type WorkOrder = {
     work_type: WorkType;
     status: WorkStatus;
     priority: WorkPriority;
-    due_date: string | null; // timestamp or date -> treat as ISO string
+    due_date: string | null; // timestamptz / date -> ISO string
     scheduled_date: string | null; // date
     scheduled_start_time: string | null; // timestamptz
     assigned_to: string | null; // auth.users id
@@ -75,7 +70,6 @@ function formatName(p: Profile) {
 function toDatetimeLocalValue(iso: string | null): string {
     if (!iso) return "";
     const d = new Date(iso);
-    // yyyy-MM-ddTHH:mm for input datetime-local (local time)
     const pad = (n: number) => String(n).padStart(2, "0");
     const yyyy = d.getFullYear();
     const mm = pad(d.getMonth() + 1);
@@ -97,15 +91,15 @@ export default function WorkOrderDetailPage() {
         return typeof q === "string" ? q : null;
     }, [router.query.id]);
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState < boolean > (true);
+    const [saving, setSaving] = useState < boolean > (false);
 
     const [wo, setWo] = useState < WorkOrder | null > (null);
     const [machineName, setMachineName] = useState < string | null > (null);
 
     // editable fields
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
+    const [title, setTitle] = useState < string > ("");
+    const [description, setDescription] = useState < string > ("");
     const [workType, setWorkType] = useState < WorkType > ("preventive");
     const [status, setStatus] = useState < WorkStatus > ("draft");
     const [priority, setPriority] = useState < WorkPriority > ("medium");
@@ -127,7 +121,7 @@ export default function WorkOrderDetailPage() {
         init();
     }, []);
 
-    // Guard: if someone hits /work-orders/new by mistake (legacy), avoid id=eq.new
+    // Guard: if someone hits /work-orders/new by mistake, avoid id=eq.new queries
     useEffect(() => {
         if (!id) return;
         if (id === "new") {
@@ -136,8 +130,7 @@ export default function WorkOrderDetailPage() {
     }, [id, router]);
 
     const loadAssignees = async (organizationId: string) => {
-        // We load members of org via organization_memberships, then profiles in second step.
-        // This avoids PostgREST embed ambiguity.
+        // Load members from organization_memberships, then profiles in second step
         const { data: members, error: mErr } = await supabase
             .from("organization_memberships")
             .select("user_id")
@@ -147,7 +140,10 @@ export default function WorkOrderDetailPage() {
 
         if (mErr) throw mErr;
 
-        const userIds = (members ?? []).map((m: any) => m.user_id).filter(Boolean);
+        const userIds = (members ?? [])
+            .map((m: any) => m.user_id)
+            .filter(Boolean);
+
         if (userIds.length === 0) {
             setAssignees([]);
             return;
@@ -190,19 +186,19 @@ export default function WorkOrderDetailPage() {
             setDueDate(toDatetimeLocalValue(row.due_date));
             setAssignedTo(row.assigned_to ? row.assigned_to : "none");
 
-            // machine name (optional)
+            // machine name
             if (row.machine_id) {
                 const { data: m, error: me } = await supabase
                     .from("machines")
                     .select("name")
                     .eq("id", row.machine_id)
                     .single();
+
                 if (!me) setMachineName((m as any)?.name ?? null);
             } else {
                 setMachineName(null);
             }
 
-            // assignees list for this org
             await loadAssignees(row.organization_id);
         } catch (e: any) {
             console.error(e);
@@ -314,18 +310,23 @@ export default function WorkOrderDetailPage() {
                         <Badge variant="outline">{wo.work_type}</Badge>
                         <Badge variant="outline">{wo.status}</Badge>
                         <Badge variant="outline">{wo.priority}</Badge>
+
+                        <Button
+                            className="bg-orange-500 hover:bg-orange-600"
+                            onClick={() => router.push(`/work-orders/${wo.id}/execute-checklist`)}
+                            disabled={!wo.machine_id}
+                            title={!wo.machine_id ? "Questo work order non ha una macchina associata" : ""}
+                        >
+                            Esegui checklist
+                        </Button>
                     </div>
                 </div>
-                <Button
-                    className="bg-orange-500 hover:bg-orange-600"
-                    onClick={() => router.push(`/work-orders/${id}/execute-checklist`)}
-                >
-                    Esegui checklist
-                </Button>
+
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle className="text-xl">Dettaglio Work Order</CardTitle>
                     </CardHeader>
+
                     <CardContent className="space-y-6">
                         {/* Summary */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -337,7 +338,9 @@ export default function WorkOrderDetailPage() {
                                     <div className="font-semibold text-sm">
                                         {machineName ?? "Generico (senza macchina)"}
                                     </div>
-                                    <div className="text-xs text-muted-foreground break-all">{wo.machine_id ?? "—"}</div>
+                                    <div className="text-xs text-muted-foreground break-all">
+                                        {wo.machine_id ?? "—"}
+                                    </div>
                                 </CardContent>
                             </Card>
 
@@ -348,10 +351,15 @@ export default function WorkOrderDetailPage() {
                                     </div>
                                     <div className="font-semibold text-sm">
                                         {wo.assigned_to
-                                            ? formatName(assignees.find((a) => a.id === wo.assigned_to) ?? ({ id: wo.assigned_to } as any))
+                                            ? formatName(
+                                                assignees.find((a) => a.id === wo.assigned_to) ??
+                                                ({ id: wo.assigned_to } as any)
+                                            )
                                             : "Non assegnato"}
                                     </div>
-                                    <div className="text-xs text-muted-foreground break-all">{wo.assigned_to ?? "—"}</div>
+                                    <div className="text-xs text-muted-foreground break-all">
+                                        {wo.assigned_to ?? "—"}
+                                    </div>
                                 </CardContent>
                             </Card>
 
@@ -374,12 +382,20 @@ export default function WorkOrderDetailPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Titolo</Label>
-                                <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!canEdit} />
+                                <Input
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    disabled={!canEdit}
+                                />
                             </div>
 
                             <div className="space-y-2">
                                 <Label>work_type</Label>
-                                <Select value={workType} onValueChange={(v) => setWorkType(v as WorkType)} disabled={!canEdit}>
+                                <Select
+                                    value={workType}
+                                    onValueChange={(v) => setWorkType(v as WorkType)}
+                                    disabled={!canEdit}
+                                >
                                     <SelectTrigger className="bg-muted border-border text-foreground">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -395,7 +411,11 @@ export default function WorkOrderDetailPage() {
 
                             <div className="space-y-2">
                                 <Label>priority</Label>
-                                <Select value={priority} onValueChange={(v) => setPriority(v as WorkPriority)} disabled={!canEdit}>
+                                <Select
+                                    value={priority}
+                                    onValueChange={(v) => setPriority(v as WorkPriority)}
+                                    disabled={!canEdit}
+                                >
                                     <SelectTrigger className="bg-muted border-border text-foreground">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -410,7 +430,11 @@ export default function WorkOrderDetailPage() {
 
                             <div className="space-y-2">
                                 <Label>status</Label>
-                                <Select value={status} onValueChange={(v) => setStatus(v as WorkStatus)} disabled={!canEdit}>
+                                <Select
+                                    value={status}
+                                    onValueChange={(v) => setStatus(v as WorkStatus)}
+                                    disabled={!canEdit}
+                                >
                                     <SelectTrigger className="bg-muted border-border text-foreground">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -474,7 +498,12 @@ export default function WorkOrderDetailPage() {
                                         <Button
                                             variant="secondary"
                                             onClick={() => quickSetStatus("in_progress")}
-                                            disabled={saving || wo.status === "in_progress" || wo.status === "completed" || wo.status === "cancelled"}
+                                            disabled={
+                                                saving ||
+                                                wo.status === "in_progress" ||
+                                                wo.status === "completed" ||
+                                                wo.status === "cancelled"
+                                            }
                                         >
                                             Start
                                         </Button>
@@ -482,7 +511,12 @@ export default function WorkOrderDetailPage() {
                                         <Button
                                             variant="secondary"
                                             onClick={() => quickSetStatus("pending_review")}
-                                            disabled={saving || wo.status === "pending_review" || wo.status === "completed" || wo.status === "cancelled"}
+                                            disabled={
+                                                saving ||
+                                                wo.status === "pending_review" ||
+                                                wo.status === "completed" ||
+                                                wo.status === "cancelled"
+                                            }
                                         >
                                             Send to review
                                         </Button>
