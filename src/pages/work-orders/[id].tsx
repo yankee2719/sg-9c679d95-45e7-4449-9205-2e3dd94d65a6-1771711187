@@ -316,7 +316,12 @@ export default function WorkOrderDetailPage() {
                         <Badge variant="outline">{wo.priority}</Badge>
                     </div>
                 </div>
-
+                <Button
+                    className="bg-orange-500 hover:bg-orange-600"
+                    onClick={() => router.push(`/work-orders/${id}/execute-checklist`)}
+                >
+                    Esegui checklist
+                </Button>
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle className="text-xl">Dettaglio Work Order</CardTitle>
