@@ -1,4 +1,3 @@
-// src/pages/work-orders/create.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,7 +93,7 @@ export default function WorkOrderCreatePage() {
     const [dueDate, setDueDate] = useState < string > ("");
 
     const [machines, setMachines] = useState < Machine[] > ([]);
-    const [machineId, setMachineId] = useState < string > ("none"); // REQUIRED
+    const [machineId, setMachineId] = useState < string > ("none"); // NOW REQUIRED
 
     useEffect(() => setWorkType(workTypeFromQuery), [workTypeFromQuery]);
 
@@ -108,20 +107,18 @@ export default function WorkOrderCreatePage() {
                     return;
                 }
 
-                setRole(ctx?.role ?? "technician");
+                setRole(ctx.role ?? "technician");
 
                 const resolvedOrgId = pickOrgId(ctx);
                 if (!resolvedOrgId) throw new Error("Organization non trovata nel contesto utente.");
                 setOrgId(resolvedOrgId);
 
-                // IMPORTANT:
-                // Machines list should already be filtered by your RLS (manufacturer sees its scope)
                 const { data, error } = await supabase
                     .from("machines")
                     .select("id,name,internal_code")
                     .eq("is_archived", false)
                     .order("name", { ascending: true })
-                    .limit(1000);
+                    .limit(500);
 
                 if (error) throw error;
                 setMachines((data ?? []) as any);
@@ -169,12 +166,11 @@ export default function WorkOrderCreatePage() {
             return;
         }
 
-        // We enforce machine REQUIRED to keep the model consistent.
-        // plant_id is allowed to be NULL (manufacturer case) only if DB column is nullable.
+        // IMPORTANT: machine required (because plant_id is NOT NULL in DB)
         if (machineId === "none") {
             toast({
                 title: "Errore",
-                description: "Seleziona una macchina.",
+                description: "Seleziona una macchina. (Plant viene preso automaticamente dalla macchina)",
                 variant: "destructive",
             });
             return;
@@ -182,6 +178,26 @@ export default function WorkOrderCreatePage() {
 
         setSaving(true);
         try {
+            // get plant_id from machine
+            const { data: mRow, error: mErr } = await supabase
+                .from("machines")
+                .select("plant_id")
+                .eq("id", machineId)
+                .single();
+
+            if (mErr) throw mErr;
+
+            const plantId = (mRow as any)?.plant_id ?? null;
+            if (!plantId) {
+                toast({
+                    title: "Errore",
+                    description:
+                        "Questa macchina non ha uno stabilimento (plant_id). Assegna lo stabilimento alla macchina e riprova.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
             const { data: userRes } = await supabase.auth.getUser();
             const createdBy = userRes?.user?.id ?? null;
 
@@ -194,14 +210,9 @@ export default function WorkOrderCreatePage() {
                 priority,
                 due_date: dueDate ? new Date(dueDate).toISOString() : null,
                 machine_id: machineId,
-                // KEY: manufacturer machines may not have plant_id. DB must allow NULL.
-                // Optional trigger can fill it if machine has plant_id.
-                plant_id: null,
-                created_by: createdBy, // remove if your DB doesn't have this column
+                plant_id: plantId, // derived
+                created_by: createdBy, // remove if column doesn't exist
             };
-
-            // Debug (leave it for now, remove later)
-            // console.log("WORK_ORDER INSERT PAYLOAD", payload);
 
             const { data, error } = await supabase
                 .from("work_orders")
@@ -238,7 +249,7 @@ export default function WorkOrderCreatePage() {
                     <CardHeader>
                         <CardTitle className="text-foreground">Crea Work Order</CardTitle>
                         <CardDescription className="text-muted-foreground">
-                            Macchina obbligatoria. (Plant viene gestito lato DB quando disponibile.)
+                            Macchina obbligatoria (plant viene preso automaticamente).
                         </CardDescription>
                     </CardHeader>
 
@@ -322,6 +333,9 @@ export default function WorkOrderCreatePage() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <div className="text-xs text-muted-foreground">
+                                    Lo stabilimento viene preso automaticamente dalla macchina.
+                                </div>
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
