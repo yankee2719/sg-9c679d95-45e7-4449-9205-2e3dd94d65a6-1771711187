@@ -1,4 +1,3 @@
-// src/pages/work-orders/[id].tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,18 +17,10 @@ import {
     SelectContent,
     SelectItem,
 } from "@/components/ui/select";
-import { ArrowLeft, Save, User, Wrench, CalendarClock, XCircle } from "lucide-react";
+import { ArrowLeft, Save, User, Wrench, CalendarClock, ClipboardCheck } from "lucide-react";
 
 type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
-
-type WorkStatus =
-    | "draft"
-    | "scheduled"
-    | "in_progress"
-    | "pending_review"
-    | "completed"
-    | "cancelled";
-
+type WorkStatus = "draft" | "scheduled" | "in_progress" | "pending_review" | "completed" | "cancelled";
 type WorkPriority = "low" | "medium" | "high" | "critical";
 
 type WorkOrder = {
@@ -42,16 +33,16 @@ type WorkOrder = {
     work_type: WorkType;
     status: WorkStatus;
     priority: WorkPriority;
-    due_date: string | null; // timestamptz / date -> ISO string
-    scheduled_date: string | null; // date
-    scheduled_start_time: string | null; // timestamptz
-    assigned_to: string | null; // auth.users id
+    due_date: string | null;
+    scheduled_date: string | null;
+    scheduled_start_time: string | null;
+    assigned_to: string | null;
     created_at: string;
     updated_at: string;
 };
 
 type Profile = {
-    id: string; // auth.users id
+    id: string;
     display_name: string | null;
     first_name: string | null;
     last_name: string | null;
@@ -61,9 +52,7 @@ type Profile = {
 function formatName(p: Profile) {
     const dn = p.display_name?.trim();
     if (dn) return dn;
-    const fn = p.first_name?.trim() ?? "";
-    const ln = p.last_name?.trim() ?? "";
-    const full = `${fn} ${ln}`.trim();
+    const full = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
     return full || p.id;
 }
 
@@ -71,135 +60,139 @@ function toDatetimeLocalValue(iso: string | null): string {
     if (!iso) return "";
     const d = new Date(iso);
     const pad = (n: number) => String(n).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    const mm = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const hh = pad(d.getHours());
-    const mi = pad(d.getMinutes());
-    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatDateTime(iso: string | null) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("it-IT", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function statusLabel(status: WorkStatus) {
+    switch (status) {
+        case "draft": return "Bozza";
+        case "scheduled": return "Pianificato";
+        case "in_progress": return "In corso";
+        case "pending_review": return "In revisione";
+        case "completed": return "Completato";
+        case "cancelled": return "Annullato";
+        default: return status;
+    }
 }
 
 export default function WorkOrderDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
 
-    const [role, setRole] = useState < string > ("technician");
-    const canEdit = role === "admin" || role === "supervisor";
-
     const id = useMemo(() => {
         const q = router.query.id;
         return typeof q === "string" ? q : null;
     }, [router.query.id]);
+
+    const [role, setRole] = useState < string > ("technician");
+    const [orgId, setOrgId] = useState < string | null > (null);
+    const canEdit = role === "admin" || role === "supervisor";
 
     const [loading, setLoading] = useState < boolean > (true);
     const [saving, setSaving] = useState < boolean > (false);
 
     const [wo, setWo] = useState < WorkOrder | null > (null);
     const [machineName, setMachineName] = useState < string | null > (null);
+    const [assignees, setAssignees] = useState < Profile[] > ([]);
 
-    // editable fields
     const [title, setTitle] = useState < string > ("");
     const [description, setDescription] = useState < string > ("");
     const [workType, setWorkType] = useState < WorkType > ("preventive");
     const [status, setStatus] = useState < WorkStatus > ("draft");
     const [priority, setPriority] = useState < WorkPriority > ("medium");
-    const [dueDate, setDueDate] = useState < string > (""); // datetime-local
+    const [dueDate, setDueDate] = useState < string > ("");
     const [assignedTo, setAssignedTo] = useState < string > ("none");
 
-    // assignees
-    const [assignees, setAssignees] = useState < Profile[] > ([]);
-
-    useEffect(() => {
-        const init = async () => {
-            try {
-                const ctx: any = await getUserContext();
-                setRole(ctx?.role ?? "technician");
-            } catch {
-                // ignore
-            }
-        };
-        init();
-    }, []);
-
-    // Guard: if someone hits /work-orders/new by mistake, avoid id=eq.new queries
-    useEffect(() => {
-        if (!id) return;
-        if (id === "new") {
-            router.replace("/work-orders/create");
-        }
-    }, [id, router]);
-
     const loadAssignees = async (organizationId: string) => {
-        // Load members from organization_memberships, then profiles in second step
-        const { data: members, error: mErr } = await supabase
+        const { data: members, error: memberErr } = await supabase
             .from("organization_memberships")
             .select("user_id")
             .eq("organization_id", organizationId)
-            .eq("is_active", true)
-            .limit(500);
+            .eq("is_active", true);
 
-        if (mErr) throw mErr;
+        if (memberErr) throw memberErr;
 
-        const userIds = (members ?? [])
-            .map((m: any) => m.user_id)
-            .filter(Boolean);
-
+        const userIds = Array.from(new Set((members ?? []).map((m: any) => m.user_id).filter(Boolean)));
         if (userIds.length === 0) {
             setAssignees([]);
             return;
         }
 
-        const { data: profs, error: pErr } = await supabase
+        const { data: profiles, error: profileErr } = await supabase
             .from("profiles")
-            .select("id,display_name,first_name,last_name,email")
+            .select("id, display_name, first_name, last_name, email")
             .in("id", userIds)
             .order("display_name", { ascending: true });
 
-        if (pErr) throw pErr;
-        setAssignees((profs ?? []) as any);
+        if (profileErr) throw profileErr;
+        setAssignees((profiles ?? []) as Profile[]);
     };
 
     const load = async () => {
         if (!id || id === "new") return;
-
         setLoading(true);
+
         try {
+            const ctx = await getUserContext();
+            if (!ctx) {
+                router.push("/login");
+                return;
+            }
+
+            const activeOrgId = ctx.orgId ?? null;
+            if (!activeOrgId) throw new Error("Organizzazione attiva non trovata nel contesto utente.");
+
+            setRole(ctx.role ?? "technician");
+            setOrgId(activeOrgId);
+
             const { data, error } = await supabase
                 .from("work_orders")
                 .select(
-                    "id,organization_id,machine_id,plant_id,title,description,work_type,status,priority,due_date,scheduled_date,scheduled_start_time,assigned_to,created_at,updated_at"
+                    "id, organization_id, machine_id, plant_id, title, description, work_type, status, priority, due_date, scheduled_date, scheduled_start_time, assigned_to, created_at, updated_at"
                 )
                 .eq("id", id)
+                .eq("organization_id", activeOrgId)
                 .single();
 
             if (error) throw error;
 
-            const row = data as unknown as WorkOrder;
+            const row = data as WorkOrder;
             setWo(row);
-
-            // populate fields
             setTitle(row.title ?? "");
             setDescription(row.description ?? "");
             setWorkType(row.work_type);
             setStatus(row.status);
             setPriority(row.priority);
             setDueDate(toDatetimeLocalValue(row.due_date));
-            setAssignedTo(row.assigned_to ? row.assigned_to : "none");
+            setAssignedTo(row.assigned_to ?? "none");
 
-            // machine name
             if (row.machine_id) {
-                const { data: m, error: me } = await supabase
+                const { data: machineRow, error: machineErr } = await supabase
                     .from("machines")
                     .select("name")
                     .eq("id", row.machine_id)
                     .single();
 
-                if (!me) setMachineName((m as any)?.name ?? null);
+                if (machineErr) throw machineErr;
+                setMachineName((machineRow as any)?.name ?? null);
             } else {
                 setMachineName(null);
             }
 
-            await loadAssignees(row.organization_id);
+            await loadAssignees(activeOrgId);
         } catch (e: any) {
             console.error(e);
             toast({
@@ -214,8 +207,12 @@ export default function WorkOrderDetailPage() {
     };
 
     useEffect(() => {
+        if (!id) return;
+        if (id === "new") {
+            router.replace("/work-orders/create");
+            return;
+        }
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const handleSave = async () => {
@@ -224,18 +221,14 @@ export default function WorkOrderDetailPage() {
         if (!canEdit) {
             toast({
                 title: "Permesso negato",
-                description: "Solo Admin/Supervisor possono modificare un work order.",
+                description: "Solo Admin e Supervisor possono modificare un work order.",
                 variant: "destructive",
             });
             return;
         }
 
         if (!title.trim()) {
-            toast({
-                title: "Errore",
-                description: "Titolo obbligatorio",
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: "Titolo obbligatorio.", variant: "destructive" });
             return;
         }
 
@@ -252,42 +245,16 @@ export default function WorkOrderDetailPage() {
                 updated_at: new Date().toISOString(),
             };
 
-            const { error } = await supabase.from("work_orders").update(payload).eq("id", wo.id);
+            const { error } = await supabase.from("work_orders").update(payload).eq("id", wo.id).eq("organization_id", orgId);
             if (error) throw error;
 
-            toast({ title: "OK", description: "Work order aggiornato" });
+            toast({ title: "OK", description: "Work order aggiornato." });
             await load();
         } catch (e: any) {
             console.error(e);
             toast({
                 title: "Errore",
-                description: e?.message ?? "Errore salvataggio",
-                variant: "destructive",
-            });
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const quickSetStatus = async (next: WorkStatus) => {
-        if (!wo) return;
-        if (!canEdit) return;
-
-        setSaving(true);
-        try {
-            const { error } = await supabase
-                .from("work_orders")
-                .update({ status: next, updated_at: new Date().toISOString() })
-                .eq("id", wo.id);
-
-            if (error) throw error;
-            toast({ title: "OK", description: `Stato aggiornato: ${next}` });
-            await load();
-        } catch (e: any) {
-            console.error(e);
-            toast({
-                title: "Errore",
-                description: e?.message ?? "Errore cambio stato",
+                description: e?.message ?? "Errore aggiornamento work order",
                 variant: "destructive",
             });
         } finally {
@@ -299,267 +266,163 @@ export default function WorkOrderDetailPage() {
 
     return (
         <MainLayout userRole={role as any}>
-            <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <Button variant="ghost" onClick={() => router.push("/work-orders")}>
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Work Orders
-                    </Button>
+            <div className="container mx-auto py-8 px-4 max-w-5xl space-y-6">
+                <Button variant="ghost" onClick={() => router.push("/work-orders")}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Indietro
+                </Button>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline">{wo.work_type}</Badge>
-                        <Badge variant="outline">{wo.status}</Badge>
-                        <Badge variant="outline">{wo.priority}</Badge>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm lg:col-span-2">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <ClipboardCheck className="w-5 h-5" />
+                                Dettaglio Work Order
+                            </CardTitle>
+                        </CardHeader>
 
-                        <Button
-                            className="bg-orange-500 hover:bg-orange-600"
-                            onClick={() => router.push(`/work-orders/${wo.id}/execute-checklist`)}
-                            disabled={!wo.machine_id}
-                            title={!wo.machine_id ? "Questo work order non ha una macchina associata" : ""}
-                        >
-                            Esegui checklist
-                        </Button>
-                    </div>
-                </div>
+                        <CardContent className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label>Titolo</Label>
+                                    <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!canEdit} />
+                                </div>
 
-                <Card className="rounded-2xl">
-                    <CardHeader>
-                        <CardTitle className="text-xl">Dettaglio Work Order</CardTitle>
-                    </CardHeader>
+                                <div className="space-y-2">
+                                    <Label>Tipo lavoro</Label>
+                                    <Select value={workType} onValueChange={(v) => setWorkType(v as WorkType)} disabled={!canEdit}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="preventive">Preventive</SelectItem>
+                                            <SelectItem value="corrective">Corrective</SelectItem>
+                                            <SelectItem value="predictive">Predictive</SelectItem>
+                                            <SelectItem value="inspection">Inspection</SelectItem>
+                                            <SelectItem value="emergency">Emergency</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                    <CardContent className="space-y-6">
-                        {/* Summary */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <Card className="rounded-2xl">
-                                <CardContent className="p-4 space-y-1">
-                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <Wrench className="w-4 h-4" /> Macchina
-                                    </div>
-                                    <div className="font-semibold text-sm">
-                                        {machineName ?? "Generico (senza macchina)"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground break-all">
-                                        {wo.machine_id ?? "—"}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                <div className="space-y-2">
+                                    <Label>Stato</Label>
+                                    <Select value={status} onValueChange={(v) => setStatus(v as WorkStatus)} disabled={!canEdit}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="draft">Bozza</SelectItem>
+                                            <SelectItem value="scheduled">Pianificato</SelectItem>
+                                            <SelectItem value="in_progress">In corso</SelectItem>
+                                            <SelectItem value="pending_review">In revisione</SelectItem>
+                                            <SelectItem value="completed">Completato</SelectItem>
+                                            <SelectItem value="cancelled">Annullato</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                            <Card className="rounded-2xl">
-                                <CardContent className="p-4 space-y-1">
-                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <User className="w-4 h-4" /> Assegnato a
-                                    </div>
-                                    <div className="font-semibold text-sm">
-                                        {wo.assigned_to
-                                            ? formatName(
-                                                assignees.find((a) => a.id === wo.assigned_to) ??
-                                                ({ id: wo.assigned_to } as any)
-                                            )
-                                            : "Non assegnato"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground break-all">
-                                        {wo.assigned_to ?? "—"}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                <div className="space-y-2">
+                                    <Label>Priorità</Label>
+                                    <Select value={priority} onValueChange={(v) => setPriority(v as WorkPriority)} disabled={!canEdit}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="low">Bassa</SelectItem>
+                                            <SelectItem value="medium">Media</SelectItem>
+                                            <SelectItem value="high">Alta</SelectItem>
+                                            <SelectItem value="critical">Critica</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                            <Card className="rounded-2xl">
-                                <CardContent className="p-4 space-y-1">
-                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <CalendarClock className="w-4 h-4" /> Scadenza
-                                    </div>
-                                    <div className="font-semibold text-sm">
-                                        {wo.due_date ? new Date(wo.due_date).toLocaleString() : "—"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        Creato: {new Date(wo.created_at).toLocaleString()}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
+                                <div className="space-y-2">
+                                    <Label>Assegnato a</Label>
+                                    <Select value={assignedTo} onValueChange={setAssignedTo} disabled={!canEdit}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Non assegnato</SelectItem>
+                                            {assignees.map((profile) => (
+                                                <SelectItem key={profile.id} value={profile.id}>
+                                                    {formatName(profile)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                        {/* Edit form */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Titolo</Label>
-                                <Input
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    disabled={!canEdit}
-                                />
-                            </div>
+                                <div className="space-y-2">
+                                    <Label>Scadenza</Label>
+                                    <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!canEdit} />
+                                </div>
 
-                            <div className="space-y-2">
-                                <Label>work_type</Label>
-                                <Select
-                                    value={workType}
-                                    onValueChange={(v) => setWorkType(v as WorkType)}
-                                    disabled={!canEdit}
-                                >
-                                    <SelectTrigger className="bg-muted border-border text-foreground">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="preventive">preventive</SelectItem>
-                                        <SelectItem value="corrective">corrective</SelectItem>
-                                        <SelectItem value="predictive">predictive</SelectItem>
-                                        <SelectItem value="inspection">inspection</SelectItem>
-                                        <SelectItem value="emergency">emergency</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>priority</Label>
-                                <Select
-                                    value={priority}
-                                    onValueChange={(v) => setPriority(v as WorkPriority)}
-                                    disabled={!canEdit}
-                                >
-                                    <SelectTrigger className="bg-muted border-border text-foreground">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="low">low</SelectItem>
-                                        <SelectItem value="medium">medium</SelectItem>
-                                        <SelectItem value="high">high</SelectItem>
-                                        <SelectItem value="critical">critical</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>status</Label>
-                                <Select
-                                    value={status}
-                                    onValueChange={(v) => setStatus(v as WorkStatus)}
-                                    disabled={!canEdit}
-                                >
-                                    <SelectTrigger className="bg-muted border-border text-foreground">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="draft">draft</SelectItem>
-                                        <SelectItem value="scheduled">scheduled</SelectItem>
-                                        <SelectItem value="in_progress">in_progress</SelectItem>
-                                        <SelectItem value="pending_review">pending_review</SelectItem>
-                                        <SelectItem value="completed">completed</SelectItem>
-                                        <SelectItem value="cancelled">cancelled</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>assigned_to</Label>
-                                <Select value={assignedTo} onValueChange={setAssignedTo} disabled={!canEdit}>
-                                    <SelectTrigger className="bg-muted border-border text-foreground">
-                                        <SelectValue placeholder="Non assegnato" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Non assegnato</SelectItem>
-                                        {assignees.map((p) => (
-                                            <SelectItem key={p.id} value={p.id}>
-                                                {formatName(p)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <div className="text-xs text-muted-foreground">
-                                    (lista utenti da organization_memberships → profiles)
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label>Descrizione</Label>
+                                    <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={6} disabled={!canEdit} />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>due_date</Label>
-                                <Input
-                                    type="datetime-local"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
-                                    disabled={!canEdit}
-                                />
-                            </div>
-
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Descrizione</Label>
-                                <Textarea
-                                    rows={5}
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    disabled={!canEdit}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div className="flex gap-2 flex-wrap">
-                                {canEdit && (
-                                    <>
-                                        <Button
-                                            variant="secondary"
-                                            onClick={() => quickSetStatus("in_progress")}
-                                            disabled={
-                                                saving ||
-                                                wo.status === "in_progress" ||
-                                                wo.status === "completed" ||
-                                                wo.status === "cancelled"
-                                            }
-                                        >
-                                            Start
-                                        </Button>
-
-                                        <Button
-                                            variant="secondary"
-                                            onClick={() => quickSetStatus("pending_review")}
-                                            disabled={
-                                                saving ||
-                                                wo.status === "pending_review" ||
-                                                wo.status === "completed" ||
-                                                wo.status === "cancelled"
-                                            }
-                                        >
-                                            Send to review
-                                        </Button>
-
-                                        <Button
-                                            variant="secondary"
-                                            onClick={() => quickSetStatus("completed")}
-                                            disabled={saving || wo.status === "completed" || wo.status === "cancelled"}
-                                        >
-                                            Complete
-                                        </Button>
-
-                                        <Button
-                                            variant="destructive"
-                                            onClick={() => quickSetStatus("cancelled")}
-                                            disabled={saving || wo.status === "cancelled"}
-                                        >
-                                            <XCircle className="w-4 h-4 mr-2" />
-                                            Cancel
-                                        </Button>
-                                    </>
-                                )}
-                            </div>
-
                             {canEdit && (
-                                <Button
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                    className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                                >
-                                    <Save className="w-4 h-4 mr-2" />
-                                    {saving ? "Salvataggio..." : "Salva modifiche"}
-                                </Button>
+                                <div className="flex justify-end">
+                                    <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {saving ? "Salvataggio..." : "Salva modifiche"}
+                                    </Button>
+                                </div>
                             )}
-                        </div>
+                        </CardContent>
+                    </Card>
 
-                        {!canEdit && (
-                            <div className="text-xs text-muted-foreground">
-                                Sei loggato come <span className="font-mono">{role}</span>: puoi vedere ma non modificare.
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                    <div className="space-y-6">
+                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                            <CardHeader>
+                                <CardTitle>Riepilogo</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4 text-sm">
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Stato</span>
+                                    <Badge variant="outline">{statusLabel(wo.status)}</Badge>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Macchina</span>
+                                    <span className="text-right">{machineName ?? "—"}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Creato</span>
+                                    <span className="text-right">{formatDateTime(wo.created_at)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">Aggiornato</span>
+                                    <span className="text-right">{formatDateTime(wo.updated_at)}</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                            <CardHeader>
+                                <CardTitle>Azioni</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {wo.machine_id && (
+                                    <Button variant="outline" className="w-full justify-start" onClick={() => router.push(`/equipment/${wo.machine_id}`)}>
+                                        <Wrench className="w-4 h-4 mr-2" />
+                                        Vai alla macchina
+                                    </Button>
+                                )}
+
+                                <Button variant="outline" className="w-full justify-start" onClick={() => router.push(`/work-orders/${wo.id}/execute-checklist`)}>
+                                    <ClipboardCheck className="w-4 h-4 mr-2" />
+                                    Esegui checklist
+                                </Button>
+
+                                <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <User className="w-3.5 h-3.5" />
+                                        Solo l&apos;owner operativo gestisce work order e checklist.
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <CalendarClock className="w-3.5 h-3.5" />
+                                        Il costruttore non modifica i dati operativi del cliente finale.
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
             </div>
         </MainLayout>
     );
