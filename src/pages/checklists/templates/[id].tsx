@@ -3,11 +3,13 @@ import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
 import {
@@ -18,19 +20,23 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
+type TargetType = "machine" | "production_line";
+type InputType = "boolean" | "text" | "number" | "value";
+
 type Template = {
     id: string;
     organization_id: string;
     name: string;
     description: string | null;
-    target_type: "machine" | "production_line";
+    target_type: TargetType;
     version: number;
     is_active: boolean;
 };
 
-type Item = {
+type TemplateItem = {
     id: string;
     template_id: string;
+    organization_id: string;
     title: string;
     description: string | null;
     input_type: string;
@@ -44,60 +50,71 @@ function canManage(role?: string) {
     return role === "admin" || role === "supervisor";
 }
 
-export default function ChecklistTemplateEditorPage() {
+export default function ChecklistTemplateDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
     const templateId = typeof router.query.id === "string" ? router.query.id : null;
 
     const [role, setRole] = useState < string > ("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
-    const allow = useMemo(() => canManage(role), [role]);
-
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [addingItem, setAddingItem] = useState(false);
 
-    const [tpl, setTpl] = useState < Template | null > (null);
-    const [items, setItems] = useState < Item[] > ([]);
+    const [template, setTemplate] = useState < Template | null > (null);
+    const [items, setItems] = useState < TemplateItem[] > ([]);
 
     const [newTitle, setNewTitle] = useState("");
-    const [newDesc, setNewDesc] = useState("");
-    const [newType, setNewType] = useState < string > ("boolean");
+    const [newDescription, setNewDescription] = useState("");
+    const [newInputType, setNewInputType] = useState < InputType > ("boolean");
     const [newRequired, setNewRequired] = useState(true);
+
+    const allow = useMemo(() => canManage(role), [role]);
 
     const load = async () => {
         if (!templateId) return;
+
         setLoading(true);
         try {
-            const ctx: any = await getUserContext();
-            const r = ctx?.role ?? "technician";
-            setRole(r);
+            const ctx = await getUserContext();
+            if (!ctx) {
+                router.push("/login");
+                return;
+            }
 
-            const oid =
-                ctx?.orgId || ctx?.organizationId || ctx?.organization_id || ctx?.tenant_id || null;
-            if (!oid) throw new Error("Organization non trovata.");
-            setOrgId(oid);
+            const activeOrgId = ctx.orgId ?? null;
+            if (!activeOrgId) throw new Error("Organizzazione attiva non trovata nel contesto utente.");
 
-            const { data: tData, error: tErr } = await supabase
+            setRole(ctx.role ?? "technician");
+            setOrgId(activeOrgId);
+
+            const { data: tplData, error: tplErr } = await supabase
                 .from("checklist_templates")
-                .select("id,organization_id,name,description,target_type,version,is_active")
+                .select("id, organization_id, name, description, target_type, version, is_active")
                 .eq("id", templateId)
+                .eq("organization_id", activeOrgId)
                 .single();
 
-            if (tErr) throw tErr;
-            setTpl(tData as any);
+            if (tplErr) throw tplErr;
+            setTemplate(tplData as Template);
 
-            const { data: iData, error: iErr } = await supabase
+            const { data: itemRows, error: itemsErr } = await supabase
                 .from("checklist_template_items")
-                .select("id,template_id,title,description,input_type,is_required,order_index,metadata,created_at")
+                .select("id, template_id, organization_id, title, description, input_type, is_required, order_index, metadata, created_at")
                 .eq("template_id", templateId)
                 .order("order_index", { ascending: true })
                 .order("created_at", { ascending: true });
 
-            if (iErr) throw iErr;
-            setItems((iData ?? []) as any);
+            if (itemsErr) throw itemsErr;
+            setItems((itemRows ?? []) as TemplateItem[]);
         } catch (e: any) {
             console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore caricamento", variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: e?.message ?? "Errore caricamento template",
+                variant: "destructive",
+            });
+            router.push("/checklists/templates");
         } finally {
             setLoading(false);
         }
@@ -105,48 +122,60 @@ export default function ChecklistTemplateEditorPage() {
 
     useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [templateId]);
 
     const saveTemplate = async () => {
-        if (!allow || !tpl) return;
+        if (!template || !allow) return;
+
+        if (!template.name.trim()) {
+            toast({ title: "Errore", description: "Il nome template è obbligatorio.", variant: "destructive" });
+            return;
+        }
+
         setSaving(true);
         try {
             const { error } = await supabase
                 .from("checklist_templates")
                 .update({
-                    name: tpl.name.trim(),
-                    description: tpl.description?.trim() || null,
+                    name: template.name.trim(),
+                    description: template.description?.trim() || null,
+                    target_type: template.target_type,
+                    is_active: template.is_active,
                 })
-                .eq("id", tpl.id);
+                .eq("id", template.id)
+                .eq("organization_id", orgId);
 
             if (error) throw error;
-            toast({ title: "OK", description: "Template salvato." });
+
+            toast({ title: "OK", description: "Template aggiornato." });
+            await load();
         } catch (e: any) {
             console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore salvataggio", variant: "destructive" });
+            toast({ title: "Errore", description: e?.message ?? "Errore salvataggio template", variant: "destructive" });
         } finally {
             setSaving(false);
         }
     };
 
     const addItem = async () => {
-        if (!allow || !orgId || !templateId) return;
+        if (!allow || !orgId || !template) return;
+
         if (!newTitle.trim()) {
-            toast({ title: "Errore", description: "Titolo item obbligatorio.", variant: "destructive" });
+            toast({ title: "Errore", description: "Il titolo item è obbligatorio.", variant: "destructive" });
             return;
         }
+
+        setAddingItem(true);
         try {
-            const id = crypto.randomUUID();
-            const nextOrder = items.length > 0 ? Math.max(...items.map((x) => x.order_index)) + 1 : 0;
+            const nextOrder = items.length > 0 ? Math.max(...items.map((x) => x.order_index ?? 0)) + 1 : 0;
 
             const { error } = await supabase.from("checklist_template_items").insert({
-                id,
-                template_id: templateId,
+                id: crypto.randomUUID(),
+                template_id: template.id,
                 organization_id: orgId,
                 title: newTitle.trim(),
-                description: newDesc.trim() || null,
-                input_type: newType,
+                description: newDescription.trim() || null,
+                input_type: newInputType,
                 is_required: newRequired,
                 order_index: nextOrder,
                 metadata: {},
@@ -155,23 +184,28 @@ export default function ChecklistTemplateEditorPage() {
             if (error) throw error;
 
             setNewTitle("");
-            setNewDesc("");
-            setNewType("boolean");
+            setNewDescription("");
+            setNewInputType("boolean");
             setNewRequired(true);
 
+            toast({ title: "OK", description: "Item aggiunto al template." });
             await load();
-            toast({ title: "OK", description: "Item aggiunto." });
         } catch (e: any) {
             console.error(e);
             toast({ title: "Errore", description: e?.message ?? "Errore aggiunta item", variant: "destructive" });
+        } finally {
+            setAddingItem(false);
         }
     };
 
-    const deleteItem = async (id: string) => {
+    const deleteItem = async (itemId: string) => {
         if (!allow) return;
+        if (!confirm("Eliminare questo item dal template?")) return;
+
         try {
-            const { error } = await supabase.from("checklist_template_items").delete().eq("id", id);
+            const { error } = await supabase.from("checklist_template_items").delete().eq("id", itemId);
             if (error) throw error;
+            toast({ title: "OK", description: "Item eliminato." });
             await load();
         } catch (e: any) {
             console.error(e);
@@ -187,7 +221,7 @@ export default function ChecklistTemplateEditorPage() {
         );
     }
 
-    if (!tpl) {
+    if (!template) {
         return (
             <MainLayout userRole={role as any}>
                 <div className="p-6">Template non trovato.</div>
@@ -197,53 +231,87 @@ export default function ChecklistTemplateEditorPage() {
 
     return (
         <MainLayout userRole={role as any}>
-            <div className="p-6 space-y-6">
+            <div className="container mx-auto px-4 py-8 max-w-6xl space-y-6">
                 <Button variant="ghost" onClick={() => router.push("/checklists/templates")}>
-                    <ArrowLeft className="w-4 h-4 mr-2" /> Indietro
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Indietro
                 </Button>
 
-                <Card>
+                <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Template</CardTitle>
+                        <CardTitle>Template checklist</CardTitle>
+                        <CardDescription>
+                            I template appartengono all&apos;owner operativo. Da qui definisci struttura e campi di compilazione.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Nome</Label>
-                            <Input
-                                value={tpl.name}
-                                onChange={(e) => setTpl({ ...tpl, name: e.target.value })}
-                                disabled={!allow}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Descrizione</Label>
-                            <Textarea
-                                value={tpl.description ?? ""}
-                                onChange={(e) => setTpl({ ...tpl, description: e.target.value })}
-                                disabled={!allow}
-                                rows={3}
-                            />
-                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2 md:col-span-2">
+                                <Label>Nome *</Label>
+                                <Input
+                                    value={template.name}
+                                    onChange={(e) => setTemplate({ ...template, name: e.target.value })}
+                                    disabled={!allow}
+                                />
+                            </div>
 
-                        <div className="text-xs text-muted-foreground">
-                            target: {tpl.target_type} • v{tpl.version} • {tpl.is_active ? "active" : "inactive"}
+                            <div className="space-y-2">
+                                <Label>Target</Label>
+                                <Select
+                                    value={template.target_type}
+                                    onValueChange={(v) => setTemplate({ ...template, target_type: v as TargetType })}
+                                    disabled={!allow}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="machine">Macchina</SelectItem>
+                                        <SelectItem value="production_line">Linea</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex items-end gap-2">
+                                <Button
+                                    variant={template.is_active ? "default" : "outline"}
+                                    onClick={() => allow && setTemplate({ ...template, is_active: !template.is_active })}
+                                    disabled={!allow}
+                                >
+                                    {template.is_active ? "Template attivo" : "Template inattivo"}
+                                </Button>
+                                <Badge variant="outline">v{template.version}</Badge>
+                            </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                                <Label>Descrizione</Label>
+                                <Textarea
+                                    value={template.description ?? ""}
+                                    onChange={(e) => setTemplate({ ...template, description: e.target.value })}
+                                    rows={3}
+                                    disabled={!allow}
+                                />
+                            </div>
                         </div>
 
                         <div className="flex justify-end">
-                            <Button onClick={saveTemplate} disabled={!allow || saving} className="bg-orange-500 hover:bg-orange-600">
+                            <Button onClick={saveTemplate} disabled={!allow || saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
                                 <Save className="w-4 h-4 mr-2" />
-                                {saving ? "Salvataggio..." : "Salva"}
+                                {saving ? "Salvataggio..." : "Salva template"}
                             </Button>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Items (Domande)</CardTitle>
+                        <CardTitle>Items del template</CardTitle>
+                        <CardDescription>
+                            Ogni item corrisponde a una domanda o controllo che il tecnico compilerà in esecuzione.
+                        </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <CardContent className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl border p-4">
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Titolo item *</Label>
                                 <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} disabled={!allow} />
@@ -251,65 +319,66 @@ export default function ChecklistTemplateEditorPage() {
 
                             <div className="space-y-2 md:col-span-2">
                                 <Label>Descrizione</Label>
-                                <Textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} disabled={!allow} rows={2} />
+                                <Textarea value={newDescription} onChange={(e) => setNewDescription(e.target.value)} rows={2} disabled={!allow} />
                             </div>
 
                             <div className="space-y-2">
                                 <Label>Tipo input</Label>
-                                <Select value={newType} onValueChange={setNewType} disabled={!allow}>
+                                <Select value={newInputType} onValueChange={(v) => setNewInputType(v as InputType)} disabled={!allow}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleziona..." />
+                                        <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="boolean">Sì/No</SelectItem>
+                                        <SelectItem value="boolean">Sì / No</SelectItem>
                                         <SelectItem value="text">Testo</SelectItem>
                                         <SelectItem value="number">Numero</SelectItem>
-                                        <SelectItem value="photo">Foto</SelectItem>
+                                        <SelectItem value="value">Valore generico</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Obbligatorio</Label>
-                                <Select value={newRequired ? "yes" : "no"} onValueChange={(v) => setNewRequired(v === "yes")} disabled={!allow}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleziona..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="yes">Sì</SelectItem>
-                                        <SelectItem value="no">No</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex items-end gap-3 rounded-xl border px-3 py-2">
+                                <Checkbox
+                                    checked={newRequired}
+                                    onCheckedChange={(checked) => setNewRequired(Boolean(checked))}
+                                    disabled={!allow}
+                                    id="new-required"
+                                />
+                                <Label htmlFor="new-required">Item obbligatorio</Label>
+                            </div>
+
+                            <div className="md:col-span-2 flex justify-end">
+                                <Button onClick={addItem} disabled={!allow || addingItem}>
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    {addingItem ? "Aggiunta..." : "Aggiungi item"}
+                                </Button>
                             </div>
                         </div>
 
-                        <div className="flex justify-end">
-                            <Button onClick={addItem} disabled={!allow} className="bg-orange-500 hover:bg-orange-600">
-                                <Plus className="w-4 h-4 mr-2" />
-                                Aggiungi item
-                            </Button>
-                        </div>
+                        <div className="space-y-3">
+                            {items.length === 0 && (
+                                <div className="text-sm text-muted-foreground">Nessun item presente nel template.</div>
+                            )}
 
-                        <div className="space-y-2">
-                            {items.map((it) => (
-                                <div key={it.id} className="flex items-start justify-between gap-4 border rounded-xl p-3">
-                                    <div>
-                                        <div className="font-medium">
-                                            {it.order_index}. {it.title}
+                            {items.map((item) => (
+                                <div key={item.id} className="rounded-xl border p-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                    <div className="space-y-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <div className="font-medium">{item.order_index + 1}. {item.title}</div>
+                                            <Badge variant="secondary">{item.input_type}</Badge>
+                                            {item.is_required && <Badge variant="outline">Obbligatorio</Badge>}
                                         </div>
-                                        <div className="text-sm text-muted-foreground">{it.description ?? "—"}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            type: {it.input_type} • required: {it.is_required ? "yes" : "no"}
-                                        </div>
+                                        {item.description && <div className="text-sm text-muted-foreground">{item.description}</div>}
                                     </div>
-                                    {allow && (
-                                        <Button variant="ghost" className="text-destructive" onClick={() => deleteItem(it.id)}>
-                                            <Trash2 className="w-4 h-4" />
+
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => deleteItem(item.id)} disabled={!allow}>
+                                            <Trash2 className="w-4 h-4 mr-2" />
+                                            Elimina
                                         </Button>
-                                    )}
+                                    </div>
                                 </div>
                             ))}
-                            {items.length === 0 && <div className="text-sm text-muted-foreground">Nessun item ancora.</div>}
                         </div>
                     </CardContent>
                 </Card>
