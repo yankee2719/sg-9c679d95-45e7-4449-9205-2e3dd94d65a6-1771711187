@@ -99,12 +99,10 @@ export default function NewEquipmentPage() {
 
         setUserRole(ctx.role ?? "technician");
 
-        const effectiveOrgId =
-          ctx.orgId ||
-          ctx.organizationId ||
-          ctx.organization_id ||
-          ctx.tenant_id ||
-          null;
+          const effectiveOrgId = ctx.orgId ?? null;
+          if (!effectiveOrgId) {
+              throw new Error("Organization non trovata nel contesto utente.");
+          }
 
         if (!effectiveOrgId)
           throw new Error("Organization non trovata nel contesto utente.");
