@@ -4,15 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 export interface UserContext {
   userId: string;
   orgId: string | null;
-  orgType: string | null; // "manufacturer" | "customer" | null
-  role: string; // "admin" | "supervisor" | "technician" | ...
+  orgType: "manufacturer" | "customer" | null;
+  role: string;
   displayName: string;
   email: string;
 }
 
-/**
- * Small sleep helper
- */
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -21,7 +18,7 @@ type OrgType = "manufacturer" | "customer";
 
 type MembershipRow = {
   organization_id: string;
-  role: string;
+  role: string | null;
   is_active: boolean;
 };
 
@@ -31,191 +28,182 @@ type OrgRow = {
   name?: string | null;
 };
 
-function normalizeOrgType(raw: any): OrgType | null {
+function normalizeOrgType(raw: unknown): OrgType | null {
   const t = String(raw ?? "").toLowerCase();
   if (t === "manufacturer") return "manufacturer";
   if (t === "customer") return "customer";
   return null;
 }
 
-/**
- * Pick the "best" org for this user:
- * 1) prefer manufacturer (so builders always land in builder mode)
- * 2) otherwise customer
- * 3) otherwise fallback to profile.default_organization_id (if present)
- */
-function pickBestOrg(
-  memberships: Array<MembershipRow & { org?: OrgRow | null }>,
-  fallbackOrgId: string | null
+function selectActiveOrganization(
+  memberships: MembershipRow[],
+  orgMap: Map<string, OrgRow>,
+  defaultOrgId: string | null
 ): { orgId: string | null; orgType: OrgType | null; role: string } {
-  const active = memberships.filter((m) => m.is_active && m.organization_id);
+  const activeMemberships = memberships.filter(
+    (m) => m.is_active && !!m.organization_id
+  );
 
-  // manufacturer first
-  const manufacturer = active.find((m) => normalizeOrgType(m.org?.type) === "manufacturer");
-  if (manufacturer) {
+  if (activeMemberships.length === 0) {
     return {
-      orgId: manufacturer.organization_id,
-      orgType: "manufacturer",
-      role: manufacturer.role || "technician",
+      orgId: defaultOrgId ?? null,
+      orgType: null,
+      role: "technician",
     };
   }
 
-  // customer second
-  const customer = active.find((m) => normalizeOrgType(m.org?.type) === "customer");
-  if (customer) {
-    return {
-      orgId: customer.organization_id,
-      orgType: "customer",
-      role: customer.role || "technician",
-    };
+  // 1) Real active org from profile.default_organization_id
+  if (defaultOrgId) {
+    const defaultMembership = activeMemberships.find(
+      (m) => m.organization_id === defaultOrgId
+    );
+
+    if (defaultMembership) {
+      const org = orgMap.get(defaultOrgId) ?? null;
+      return {
+        orgId: defaultOrgId,
+        orgType: normalizeOrgType(org?.type),
+        role: defaultMembership.role || "technician",
+      };
+    }
   }
 
-  // fallback: default_organization_id (unknown type until fetched)
-  if (fallbackOrgId) {
-    return { orgId: fallbackOrgId, orgType: null, role: "technician" };
-  }
+  // 2) Fallback: first active membership
+  // Stable enough until you add an explicit org switcher everywhere.
+  const first = activeMemberships[0];
+  const org = orgMap.get(first.organization_id) ?? null;
 
-  return { orgId: null, orgType: null, role: "technician" };
+  return {
+    orgId: first.organization_id,
+    orgType: normalizeOrgType(org?.type),
+    role: first.role || "technician",
+  };
 }
 
 /**
- * Robust user context (NO RANDOM):
- * - Always uses auth.getSession()
- * - Always resolves orgId from membership priority (manufacturer first)
- * - Always resolves orgType from organizations table (DB truth)
- * - HARD FAIL if orgType cannot be resolved (prevents wrong UI on refresh)
+ * Robust user context:
+ * - reads current session
+ * - resolves active org from profiles.default_organization_id
+ * - falls back to first active membership only if needed
+ * - resolves orgType ONLY from organizations.type (DB truth)
+ * - fails hard if orgId exists but orgType cannot be resolved
  */
 export async function getUserContext(): Promise<UserContext | null> {
-  const maxAttempts = 8; // ~1.6s total with 200ms sleeps
+  const maxAttempts = 8;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 1) Session first
-    const {
-      data: { session },
-      error: sessErr,
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    if (sessErr) {
-      if (attempt < maxAttempts) {
-        await sleep(200);
-        continue;
-      }
-      throw sessErr;
-    }
+      if (sessionError) throw sessionError;
 
-    const user = session?.user ?? null;
-    if (!user) {
-      if (attempt < maxAttempts) {
-        await sleep(200);
-        continue;
-      }
-      return null;
-    }
-
-    // 2) Profile
-    const { data: profile, error: profileErr } = await supabase
-      .from("profiles")
-      .select("default_organization_id, display_name, email, first_name, last_name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileErr) {
-      if (attempt < maxAttempts) {
-        await sleep(200);
-        continue;
-      }
-      throw profileErr;
-    }
-
-    const fallbackOrgId = (profile as any)?.default_organization_id ?? null;
-
-    // 3) Memberships (active) + org types
-    const { data: memRows, error: memErr } = await supabase
-      .from("organization_memberships")
-      .select("organization_id, role, is_active")
-      .eq("user_id", user.id)
-      .eq("is_active", true);
-
-    if (memErr) {
-      if (attempt < maxAttempts) {
-        await sleep(200);
-        continue;
-      }
-      throw memErr;
-    }
-
-    const membershipList = (memRows ?? []) as MembershipRow[];
-    const orgIds = Array.from(new Set(membershipList.map((m) => m.organization_id).filter(Boolean)));
-
-    let orgMap = new Map<string, OrgRow>();
-    if (orgIds.length > 0) {
-      const { data: orgRows, error: orgErr } = await supabase
-        .from("organizations")
-        .select("id,type,name")
-        .in("id", orgIds);
-
-      if (orgErr) {
+      const user = session?.user ?? null;
+      if (!user) {
         if (attempt < maxAttempts) {
           await sleep(200);
           continue;
         }
-        throw orgErr;
+        return null;
       }
 
-      (orgRows ?? []).forEach((o: any) => orgMap.set(o.id, o));
-    }
-
-    const enriched = membershipList.map((m) => ({
-      ...m,
-      org: orgMap.get(m.organization_id) ?? null,
-    }));
-
-    // 4) Pick best org
-    const picked = pickBestOrg(enriched, fallbackOrgId);
-
-    // 5) If we still don't have orgType, fetch it by orgId (fallback path)
-    let finalOrgType: OrgType | null = picked.orgType;
-    if (!finalOrgType && picked.orgId) {
-      const { data: orgRow, error: orgErr2 } = await supabase
-        .from("organizations")
-        .select("type")
-        .eq("id", picked.orgId)
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("default_organization_id, display_name, email, first_name, last_name")
+        .eq("id", user.id)
         .maybeSingle();
 
-      if (orgErr2) {
-        if (attempt < maxAttempts) {
-          await sleep(200);
-          continue;
-        }
-        throw orgErr2;
+      if (profileError) throw profileError;
+
+      const defaultOrgId =
+        (profile as any)?.default_organization_id ?? null;
+
+      const { data: membershipRows, error: membershipError } = await supabase
+        .from("organization_memberships")
+        .select("organization_id, role, is_active")
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+
+      if (membershipError) throw membershipError;
+
+      const memberships = (membershipRows ?? []) as MembershipRow[];
+
+      const orgIds = Array.from(
+        new Set(
+          memberships
+            .map((m) => m.organization_id)
+            .filter(Boolean)
+        )
+      );
+
+      if (defaultOrgId && !orgIds.includes(defaultOrgId)) {
+        orgIds.push(defaultOrgId);
       }
 
-      finalOrgType = normalizeOrgType((orgRow as any)?.type);
-    }
+      const orgMap = new Map<string, OrgRow>();
 
-    // HARD FAIL: if we have orgId but not orgType -> no more random UI
-    if (picked.orgId && !finalOrgType) {
+      if (orgIds.length > 0) {
+        const { data: orgRows, error: orgError } = await supabase
+          .from("organizations")
+          .select("id, type, name")
+          .in("id", orgIds);
+
+        if (orgError) throw orgError;
+
+        for (const row of orgRows ?? []) {
+          orgMap.set((row as any).id, row as OrgRow);
+        }
+      }
+
+      const selected = selectActiveOrganization(
+        memberships,
+        orgMap,
+        defaultOrgId
+      );
+
+      let resolvedOrgType = selected.orgType;
+
+      if (!resolvedOrgType && selected.orgId) {
+        const { data: orgRow, error: orgError } = await supabase
+          .from("organizations")
+          .select("type")
+          .eq("id", selected.orgId)
+          .maybeSingle();
+
+        if (orgError) throw orgError;
+
+        resolvedOrgType = normalizeOrgType((orgRow as any)?.type);
+      }
+
+      if (selected.orgId && !resolvedOrgType) {
+        throw new Error(
+          "orgType non risolto: organizations.type mancante o non accessibile via RLS"
+        );
+      }
+
+      const displayName =
+        (profile as any)?.display_name ||
+        (profile as any)?.first_name ||
+        user.email?.split("@")[0] ||
+        "User";
+
+      return {
+        userId: user.id,
+        orgId: selected.orgId,
+        orgType: resolvedOrgType,
+        role: selected.role || "technician",
+        displayName,
+        email: (profile as any)?.email || user.email || "",
+      };
+    } catch (error) {
       if (attempt < maxAttempts) {
         await sleep(200);
         continue;
       }
-      throw new Error("orgType non risolto - membership/default org incoerenti o RLS blocca organizations.type");
+      throw error;
     }
-
-    const displayName =
-      (profile as any)?.display_name ||
-      (profile as any)?.first_name ||
-      user.email?.split("@")[0] ||
-      "User";
-
-    return {
-      userId: user.id,
-      orgId: picked.orgId,
-      orgType: finalOrgType,
-      role: picked.role || "technician",
-      displayName,
-      email: (profile as any)?.email || user.email || "",
-    };
   }
 
   return null;
@@ -231,8 +219,8 @@ export async function getProfileData(userId: string) {
   if (error) throw error;
   if (!data) return null;
 
-  // Keep old behavior here (used in UI places), but now context is robust anyway.
   let role = "technician";
+
   if ((data as any).default_organization_id) {
     const { data: membership, error: memErr } = await supabase
       .from("organization_memberships")
