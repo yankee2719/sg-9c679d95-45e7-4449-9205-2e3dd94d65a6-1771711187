@@ -206,12 +206,7 @@ export default function EquipmentPage() {
       }
       setCtx(userCtx);
 
-      const orgId =
-        (userCtx as any)?.orgId ||
-        (userCtx as any)?.organizationId ||
-        (userCtx as any)?.organization_id ||
-        (userCtx as any)?.tenant_id ||
-        null;
+        const orgId = userCtx.orgId ?? null;
 
       if (!orgId) throw new Error("Organization non trovata nel contesto utente.");
       setEffectiveOrgId(orgId);
