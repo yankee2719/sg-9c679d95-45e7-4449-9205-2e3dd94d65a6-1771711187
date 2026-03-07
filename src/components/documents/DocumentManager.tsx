@@ -74,18 +74,14 @@ const DOCUMENT_CATEGORY_OPTIONS: Array<{ label: string; value: DocumentCategory 
     { label: "Dichiarazione CE", value: "ce_declaration" },
     { label: "Schema elettrico", value: "electrical_schema" },
     { label: "Manuale uso e manutenzione", value: "maintenance_manual" },
-    { label: "Catalogo ricambi", value: "spare parts_catalog" as any },
+    { label: "Catalogo ricambi", value: "spare_parts_catalog" },
     { label: "Materiale formazione", value: "training_material" },
     { label: "Rapporto ispezione", value: "inspection_report" },
     { label: "Certificato", value: "certificate" },
     { label: "Foto", value: "photo" },
     { label: "Video", value: "video" },
     { label: "Altro", value: "other" },
-].map((x) =>
-    x.value === ("spare parts_catalog" as any)
-        ? { ...x, value: "spare_parts_catalog" as DocumentCategory }
-        : (x as { label: string; value: DocumentCategory })
-);
+];
 
 const DOCUMENT_SCOPE_OPTIONS: Array<{ label: string; value: DocumentScope }> = [
     { label: "Documento costruttore", value: "manufacturer" },
@@ -279,7 +275,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
         try {
             const fileExt = selectedFile.name.includes(".") ? selectedFile.name.split(".").pop() : "";
             const safeFileName = selectedFile.name.replace(/\s+/g, "_");
-            const storagePath = `${props.machineId}/${Date.now()}_${safeFileName}`;
+            const storagePath = `${ctxOrgId}/${props.machineId}/${Date.now()}_${safeFileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from("documents")
