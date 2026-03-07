@@ -1,224 +1,273 @@
-import { useEffect, useMemo, useState } from "react";
+// src/pages/equipment/[id].tsx
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { SEO } from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
-import { getUserContext, UserContext } from "@/lib/supabaseHelpers";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import MainLayout from "@/components/Layout/MainLayout";
+import { SEO } from "@/components/SEO";
+import DocumentManager from "@/components/documents/DocumentManager";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building2, FileText, Factory, Wrench } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DocumentManager } from "@/components/documents/DocumentManager";
+import { getUserContext } from "@/lib/supabaseHelpers";
 
 type OrgType = "manufacturer" | "customer";
 
-type MachineRow = {
+interface MachineRow {
     id: string;
-    name: string;
+    name: string | null;
     internal_code: string | null;
     serial_number: string | null;
-    category: string | null;
+    model: string | null;
+    brand: string | null;
+    notes: string | null;
     lifecycle_state: string | null;
+    organization_id: string | null;
     plant_id: string | null;
     production_line_id: string | null;
-    organization_id: string | null;
     is_archived: boolean | null;
-    created_at?: string;
-};
+    created_at?: string | null;
+}
+
+interface PlantRow {
+    id: string;
+    name: string | null;
+    code?: string | null;
+}
+
+interface LineRow {
+    id: string;
+    name: string | null;
+    code?: string | null;
+}
 
 export default function EquipmentDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const id = router.query.id as string | undefined;
+    const { id } = router.query;
 
     const [loading, setLoading] = useState(true);
-    const [ctx, setCtx] = useState < UserContext | null > (null);
+    const [userRole, setUserRole] = useState < string > ("technician");
+    const [orgId, setOrgId] = useState < string | null > (null);
+    const [orgType, setOrgType] = useState < OrgType | null > (null);
+
     const [machine, setMachine] = useState < MachineRow | null > (null);
+    const [plant, setPlant] = useState < PlantRow | null > (null);
+    const [line, setLine] = useState < LineRow | null > (null);
 
     useEffect(() => {
-        if (!router.isReady) return;
-        if (id === "new") {
-            router.replace("/equipment/new");
-            return;
-        }
-        if (id === "edit") {
-            router.replace("/equipment");
-        }
-    }, [router, router.isReady, id]);
+        if (!router.isReady || !id || typeof id !== "string") return;
 
-    const machineId = useMemo(() => {
-        if (typeof id !== "string") return null;
-        if (id === "new" || id === "edit") return null;
-        return id;
-    }, [id]);
+        const load = async () => {
+            setLoading(true);
 
-    const load = async () => {
-        if (!machineId) return;
+            try {
+                const ctx = await getUserContext();
+                if (!ctx?.orgId || !ctx?.orgType) {
+                    router.replace("/settings/organization");
+                    return;
+                }
 
-        setLoading(true);
-        try {
-            const userCtx = await getUserContext();
-            if (!userCtx) {
-                router.push("/login");
-                return;
-            }
-            setCtx(userCtx);
+                setUserRole(ctx.role ?? "technician");
+                setOrgId(ctx.orgId);
+                setOrgType(ctx.orgType as OrgType);
 
-            const { data, error } = await supabase
-                .from("machines")
-                .select(
-                    "id,name,internal_code,serial_number,category,lifecycle_state,plant_id,production_line_id,organization_id,is_archived,created_at"
-                )
-                .eq("id", machineId)
-                .maybeSingle();
+                const { data: machineRow, error: machineError } = await supabase
+                    .from("machines")
+                    .select("*")
+                    .eq("id", id)
+                    .maybeSingle();
 
-            if (error) throw error;
+                if (machineError) throw machineError;
+                if (!machineRow) {
+                    toast({
+                        title: "Macchina non trovata",
+                        description: "La macchina richiesta non esiste oppure non è accessibile.",
+                        variant: "destructive",
+                    });
+                    router.replace("/equipment");
+                    return;
+                }
 
-            if (!data) {
+                setMachine(machineRow as MachineRow);
+
+                const machineData = machineRow as MachineRow;
+
+                if (machineData.plant_id) {
+                    const { data: plantRow } = await supabase
+                        .from("plants")
+                        .select("id, name, code")
+                        .eq("id", machineData.plant_id)
+                        .maybeSingle();
+
+                    setPlant((plantRow as PlantRow) ?? null);
+                } else {
+                    setPlant(null);
+                }
+
+                if (machineData.production_line_id) {
+                    const { data: lineRow } = await supabase
+                        .from("production_lines")
+                        .select("id, name, code")
+                        .eq("id", machineData.production_line_id)
+                        .maybeSingle();
+
+                    setLine((lineRow as LineRow) ?? null);
+                } else {
+                    setLine(null);
+                }
+            } catch (error: any) {
+                console.error(error);
                 toast({
-                    title: "Non trovata",
-                    description: "Macchina non trovata.",
+                    title: "Errore",
+                    description: error?.message ?? "Errore caricamento dettaglio macchina.",
                     variant: "destructive",
                 });
-                router.push("/equipment");
-                return;
+            } finally {
+                setLoading(false);
             }
+        };
 
-            setMachine(data as MachineRow);
-        } catch (e: any) {
-            console.error(e);
-            toast({
-                title: "Errore",
-                description: e?.message ?? "Errore caricamento macchina.",
-                variant: "destructive",
-            });
-            router.push("/equipment");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!router.isReady) return;
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router.isReady, machineId]);
+    }, [router, router.isReady, id, toast]);
 
-    if (!router.isReady) return null;
-    if (id === "new") return null;
-    if (loading) return null;
-    if (!machineId || !machine) return null;
+    if (loading) {
+        return (
+            <MainLayout userRole={userRole as any}>
+                <SEO title="Macchina - MACHINA" />
+                <div className="container mx-auto max-w-7xl px-4 py-8">
+                    <div className="text-sm text-muted-foreground">Caricamento macchina...</div>
+                </div>
+            </MainLayout>
+        );
+    }
 
-    const currentOrgType = (ctx?.orgType ?? null) as OrgType | null;
-    const currentOrgId = ctx?.orgId ?? null;
-    const machineOwnerOrgId = machine.organization_id ?? null;
-    const isMachineOwnedByActiveOrg = currentOrgId !== null && currentOrgId === machineOwnerOrgId;
+    if (!machine) {
+        return (
+            <MainLayout userRole={userRole as any}>
+                <SEO title="Macchina - MACHINA" />
+                <div className="container mx-auto max-w-7xl px-4 py-8">
+                    <div className="text-sm text-muted-foreground">Macchina non trovata.</div>
+                </div>
+            </MainLayout>
+        );
+    }
 
     return (
-        <MainLayout userRole={ctx?.role as any}>
-            <SEO title={`${machine.name} - MACHINA`} />
+        <MainLayout userRole={userRole as any}>
+            <SEO title={`${machine.name ?? "Macchina"} - MACHINA`} />
 
-            <div className="max-w-7xl mx-auto space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-3">
-                        <Button variant="ghost" onClick={() => router.back()}>
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Indietro
+            <div className="container mx-auto max-w-7xl px-4 py-8 space-y-6">
+                <div className="flex items-center justify-between gap-4">
+                    <Button variant="ghost" onClick={() => router.push("/equipment")}>
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Torna a Macchine
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href={`/equipment/${machine.id}/maintenance`}>
+                                <Wrench className="mr-2 h-4 w-4" />
+                                Maintenance
+                            </Link>
                         </Button>
-
-                        <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <h1 className="text-2xl font-bold text-foreground">{machine.name}</h1>
-                                <Badge variant="outline">{machine.lifecycle_state ?? "active"}</Badge>
-                                {isMachineOwnedByActiveOrg ? (
-                                    <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/30">
-                                        Della tua organizzazione
-                                    </Badge>
-                                ) : (
-                                    <Badge className="bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-400 border-slate-300 dark:border-slate-500/30">
-                                        Visibile via assignment
-                                    </Badge>
-                                )}
-                            </div>
-                            <div className="text-sm text-muted-foreground font-mono">
-                                {machine.internal_code ?? "—"}
-                                {machine.serial_number ? ` • SN ${machine.serial_number}` : ""}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {currentOrgType === "manufacturer" ? (
-                            <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-500/30">
-                                <Factory className="w-3.5 h-3.5 mr-1" />
-                                Contesto costruttore
-                            </Badge>
-                        ) : (
-                            <Badge className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30">
-                                <Building2 className="w-3.5 h-3.5 mr-1" />
-                                Contesto cliente finale
-                            </Badge>
-                        )}
-
-                        <Badge className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/30">
-                            <Wrench className="w-3.5 h-3.5 mr-1" />
-                            Macchina
-                        </Badge>
                     </div>
                 </div>
 
-                <Tabs defaultValue="documents" className="w-full">
-                    <TabsList>
-                        <TabsTrigger value="documents">
-                            <FileText className="w-4 h-4 mr-2" />
-                            Documenti
-                        </TabsTrigger>
-                        <TabsTrigger value="details">Dettagli</TabsTrigger>
-                    </TabsList>
+                <Card className="rounded-2xl">
+                    <CardHeader>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <CardTitle className="text-2xl">{machine.name ?? "Macchina"}</CardTitle>
+                                <CardDescription>
+                                    Dettaglio macchina e documentazione collegata.
+                                </CardDescription>
+                            </div>
 
-                    <TabsContent value="documents" className="mt-4">
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground">Document manager</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <DocumentManager
-                                    currentOrganizationId={currentOrgId}
-                                    currentOrgType={currentOrgType}
-                                    machineId={machine.id}
-                                    machineOwnerOrganizationId={machineOwnerOrgId}
-                                    plantId={machine.plant_id}
-                                    userRole={ctx?.role ?? "technician"}
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                            <div className="flex flex-wrap gap-2">
+                                {orgType === "manufacturer" ? (
+                                    <Badge className="gap-1">
+                                        <Factory className="w-3 h-3" />
+                                        Costruttore
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="gap-1">
+                                        <Building2 className="w-3 h-3" />
+                                        Cliente finale
+                                    </Badge>
+                                )}
 
-                    <TabsContent value="details" className="mt-4">
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground">Dettagli macchina</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
-                                <div>
-                                    <b>Categoria:</b> {machine.category ?? "—"}
-                                </div>
-                                <div>
-                                    <b>Stato:</b> {machine.lifecycle_state ?? "—"}
-                                </div>
-                                <div>
-                                    <b>Owner macchina:</b>{" "}
-                                    <span className="font-mono">{machineOwnerOrgId ?? "—"}</span>
-                                </div>
-                                <div>
-                                    <b>ID macchina:</b> <span className="font-mono">{machine.id}</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                </Tabs>
+                                {machine.lifecycle_state && (
+                                    <Badge variant="secondary">{machine.lifecycle_state}</Badge>
+                                )}
+
+                                {machine.is_archived && (
+                                    <Badge variant="destructive">Archiviata</Badge>
+                                )}
+                            </div>
+                        </div>
+                    </CardHeader>
+
+                    <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="rounded-xl border border-border p-4">
+                            <div className="text-xs text-muted-foreground mb-1">Codice interno</div>
+                            <div className="font-medium">{machine.internal_code || "—"}</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border p-4">
+                            <div className="text-xs text-muted-foreground mb-1">Matricola</div>
+                            <div className="font-medium">{machine.serial_number || "—"}</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border p-4">
+                            <div className="text-xs text-muted-foreground mb-1">Modello</div>
+                            <div className="font-medium">{machine.model || "—"}</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border p-4">
+                            <div className="text-xs text-muted-foreground mb-1">Marca</div>
+                            <div className="font-medium">{machine.brand || "—"}</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border p-4">
+                            <div className="text-xs text-muted-foreground mb-1">Stabilimento</div>
+                            <div className="font-medium">{plant?.name || plant?.code || "—"}</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border p-4">
+                            <div className="text-xs text-muted-foreground mb-1">Linea</div>
+                            <div className="font-medium">{line?.name || line?.code || "—"}</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border p-4 md:col-span-2 xl:col-span-3">
+                            <div className="text-xs text-muted-foreground mb-1">Note</div>
+                            <div className="font-medium whitespace-pre-wrap">{machine.notes || "—"}</div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <FileText className="h-4 w-4" />
+                            Documentazione
+                        </CardTitle>
+                        <CardDescription>
+                            Gestione documenti collegati alla macchina nel contesto attivo.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <DocumentManager
+                            machineId={machine.id}
+                            machineOwnerOrgId={machine.organization_id}
+                            currentOrgId={orgId}
+                            currentOrgType={orgType}
+                            currentUserRole={userRole}
+                        />
+                    </CardContent>
+                </Card>
             </div>
         </MainLayout>
     );
