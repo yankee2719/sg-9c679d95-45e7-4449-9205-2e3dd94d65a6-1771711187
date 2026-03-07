@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
+// src/components/Layout/MainLayout.tsx
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { getProfileData, getNotificationCount } from "@/lib/supabaseHelpers";
-import { OfflineStatusBar } from "@/components/Offline/OfflineStatusBar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
+import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import {
     LayoutDashboard,
     Wrench,
@@ -28,384 +28,260 @@ import {
     QrCode,
     ChevronDown,
     BarChart3,
-    ShieldCheck,
     CalendarClock,
     Building2,
     Factory,
     Package,
-    ClipboardCheck,
+    FileText,
+    ShieldCheck,
+    CheckSquare,
 } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
 
-type UserRole = "admin" | "supervisor" | "technician";
+type UserRole = "admin" | "supervisor" | "technician" | string;
 
 interface MainLayoutProps {
     children: React.ReactNode;
     userRole?: UserRole;
 }
 
+interface NavItem {
+    href: string;
+    label: string;
+    icon: any;
+    roles?: string[];
+}
+
+function cn(...classes: Array<string | false | null | undefined>) {
+    return classes.filter(Boolean).join(" ");
+}
+
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
     const router = useRouter();
-    const { t } = useLanguage();
-    const [user, setUser] = useState < { id: string; email?: string } | null > (null);
-    const [profile, setProfile] = useState < { full_name?: string; role?: string } | null > (null);
-    const [orgType, setOrgType] = useState < string | null > (null);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+    const [profileName, setProfileName] = useState("User");
+    const [profileRole, setProfileRole] = useState < string > (userRole);
+    const [notificationCount, setNotificationCount] = useState(0);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [loadingHeader, setLoadingHeader] = useState(true);
 
     useEffect(() => {
-        const loadUser = async () => {
+        const loadHeaderData = async () => {
             try {
-                const { data: { user: authUser } } = await supabase.auth.getUser();
-                if (!authUser) return;
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
 
-                setUser({ id: authUser.id, email: authUser.email });
-
-                const profileData = await getProfileData(authUser.id);
-                if (profileData) {
-                    setProfile({
-                        full_name: profileData.full_name || undefined,
-                        role: profileData.role || undefined
-                    });
-
-                    // Fetch org type
-                    if (profileData.tenant_id) {
-                        const { data: org } = await supabase
-                            .from("organizations")
-                            .select("type")
-                            .eq("id", profileData.tenant_id)
-                            .single();
-                        if (org?.type) setOrgType(org.type);
-                    }
+                if (!user) {
+                    setLoadingHeader(false);
+                    return;
                 }
 
-                const count = await getNotificationCount(authUser.id);
-                setUnreadNotifications(count);
+                const [profile, notifCount] = await Promise.all([
+                    getProfileData(user.id),
+                    getNotificationCount(user.id),
+                ]);
 
-                // Realtime subscription for new notifications
-                const channel = supabase
-                    .channel(`layout-notif-${authUser.id}`)
-                    .on(
-                        "postgres_changes",
-                        {
-                            event: "INSERT",
-                            schema: "public",
-                            table: "notifications",
-                            filter: `user_id=eq.${authUser.id}`,
-                        },
-                        () => {
-                            setUnreadNotifications(prev => prev + 1);
-                        }
-                    )
-                    .subscribe();
-
-                // Cleanup on unmount
-                return () => { supabase.removeChannel(channel); };
+                setProfileName(profile?.full_name || user.email?.split("@")[0] || "User");
+                setProfileRole(profile?.role || userRole || "technician");
+                setNotificationCount(notifCount || 0);
             } catch (error) {
-                console.error("Error loading user:", error);
+                console.error("MainLayout load error:", error);
+            } finally {
+                setLoadingHeader(false);
             }
         };
-        loadUser();
-    }, []);
+
+        loadHeaderData();
+    }, [userRole]);
+
+    const initials = useMemo(() => {
+        const parts = (profileName || "User")
+            .split(" ")
+            .map((p) => p.trim())
+            .filter(Boolean);
+
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+    }, [profileName]);
+
+    const navItems: NavItem[] = [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/equipment", label: "Macchine", icon: Factory },
+        { href: "/documents", label: "Documenti", icon: FileText },
+        { href: "/work-orders", label: "Work Orders", icon: ClipboardList },
+        { href: "/checklists/templates", label: "Checklist", icon: CheckSquare },
+        { href: "/plants", label: "Stabilimenti", icon: Building2, roles: ["admin", "supervisor"] },
+        { href: "/maintenance", label: "Manutenzione", icon: Wrench },
+        { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+        { href: "/qr", label: "QR", icon: QrCode },
+        { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
+        { href: "/users", label: "Utenti", icon: Users, roles: ["admin", "supervisor"] },
+        { href: "/settings/organization", label: "Organizzazione attiva", icon: Package },
+        { href: "/settings", label: "Impostazioni", icon: Settings },
+    ];
+
+    const filteredNavItems = navItems.filter((item) => {
+        if (!item.roles || item.roles.length === 0) return true;
+        return item.roles.includes(profileRole);
+    });
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/login");
-    };
-
-    const getInitials = (name: string) => {
-        if (!name) return "U";
-        return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    };
-
-    // Navigation items based on role
-    const getNavigationItems = () => {
-        const currentRole = profile?.role || userRole;
-
-        const baseNav = [
-            { name: t("nav.dashboard"), href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.equipment"), href: "/equipment", icon: Wrench, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.maintenance"), href: "/maintenance", icon: CalendarClock, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.workOrders") || "Ordini di Lavoro", href: "/work-orders", icon: ClipboardCheck, roles: ["admin", "supervisor", "technician"] },
-            { name: "Checklist Templates", href: "/checklists/templates", icon: ClipboardList, roles: ["admin", "supervisor"] },
-            { name: "Assegnazioni Checklist", href: "/checklists/assignments", icon: Package, roles: ["admin", "supervisor"] }, ,
-            { name: t("nav.scanner"), href: "/scanner", icon: QrCode, roles: ["admin", "supervisor", "technician"] },
-            { name: t("nav.analytics"), href: "/analytics/checklist-executions", icon: BarChart3, roles: ["admin", "supervisor"] },
-            { name: "Compliance", href: "/compliance", icon: ShieldCheck, roles: ["admin", "supervisor"] },
-        ];
-
-        return baseNav.filter(item => item.roles.includes(currentRole));
-    };
-
-    const navigation = getNavigationItems();
-
-    // Manufacturer-specific nav
-    const manufacturerNavigation = [
-        { name: "Clienti", href: "/customers", icon: Building2 },
-        { name: "Assegnazioni", href: "/assignments", icon: Package },
-        { name: t("nav.users"), href: "/admin/users", icon: Users },
-    ];
-
-    // Customer-specific admin nav
-    const customerAdminNavigation = [
-        { name: "Stabilimenti", href: "/plants", icon: Building2 },
-        { name: "Costruttori", href: "/manufacturers", icon: Factory },
-        { name: t("nav.users"), href: "/admin/users", icon: Users },
-    ];
-
-    const adminNavigation = orgType === "manufacturer" ? manufacturerNavigation : customerAdminNavigation;
-
-    const isActive = (href: string) => {
-        if (href === "/dashboard") return router.pathname === "/dashboard";
-        return router.pathname.startsWith(href);
-    };
-
-    const canAccessAdmin = () => {
-        const currentRole = profile?.role || userRole;
-
-        // Manufacturer: admin + supervisor can access management
-        if (orgType === "manufacturer") {
-            return currentRole === "admin" || currentRole === "supervisor";
+        try {
+            await supabase.auth.signOut();
+            router.push("/login");
+        } catch (error) {
+            console.error("Logout error:", error);
         }
-
-        // Customer: ONLY admin can access management (supervisor must not see plants/users management)
-        return currentRole === "admin";
     };
 
-    const NavLinks = ({ mobile = false }: { mobile?: boolean }) => (
-        <nav className={`flex ${mobile ? "flex-col" : "flex-col"} gap-1`}>
-            {navigation.map((item) => {
-                const active = isActive(item.href);
-                return (
-                    <Link
-                        key={item.name}
-                        href={item.href}
-                        onClick={() => mobile && setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                            ? "bg-primary text-primary-foreground shadow-lg"
-                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                            }`}
-                    >
-                        <item.icon className="w-5 h-5" />
-                        {item.name}
-                    </Link>
-                );
-            })}
-
-            {canAccessAdmin() && (
-                <>
-                    <div className="my-3 px-4">
-                        <div className="h-px bg-border" />
+    const NavContent = () => (
+        <div className="flex h-full flex-col">
+            <div className="border-b border-border px-4 py-4">
+                <Link href="/dashboard" className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
+                        <Factory className="h-5 w-5 text-primary" />
                     </div>
-                    <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        Gestione
-                    </p>
-                    {adminNavigation.map((item) => {
-                        const active = isActive(item.href);
-                        return (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                onClick={() => mobile && setMobileMenuOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${active
-                                    ? "bg-primary text-primary-foreground shadow-lg"
-                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                                    }`}
-                            >
-                                <item.icon className="w-5 h-5" />
-                                {item.name}
-                            </Link>
-                        );
-                    })}
-                </>
-            )}
-        </nav>
+                    <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">MACHINA</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                            Industrial asset management
+                        </div>
+                    </div>
+                </Link>
+            </div>
+
+            <div className="px-4 py-4">
+                <OrganizationSwitcher />
+            </div>
+
+            <nav className="flex-1 space-y-1 px-3 pb-4">
+                {filteredNavItems.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                        router.pathname === item.href ||
+                        (item.href !== "/dashboard" && router.pathname.startsWith(item.href));
+
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setSidebarOpen(false)}
+                            className={cn(
+                                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                                active
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-foreground hover:bg-muted"
+                            )}
+                        >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{item.label}</span>
+                        </Link>
+                    );
+                })}
+            </nav>
+
+            <div className="border-t border-border p-3">
+                <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="w-full justify-start rounded-xl"
+                >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Esci
+                </Button>
+            </div>
+        </div>
     );
 
     return (
-        <div className="min-h-screen bg-background">
-            {/* Desktop Sidebar */}
-            <aside className="fixed left-0 top-0 z-40 h-screen w-64 hidden lg:flex flex-col border-r border-border/60 bg-card shadow-sm">
-                {/* Logo */}
-                <div className="p-6 border-b border-border">
-                    <Link href="/dashboard" className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg">
-                            <Wrench className="w-5 h-5 text-primary-foreground" />
-                        </div>
-                        <div>
-                            <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                            <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
-                        </div>
-                    </Link>
-                </div>
+        <div className="min-h-screen bg-background text-foreground">
+            <div className="flex min-h-screen">
+                <aside className="hidden w-72 border-r border-border bg-card lg:block">
+                    <NavContent />
+                </aside>
 
-                {/* Navigation */}
-                <div className="flex-1 p-4 overflow-y-auto">
-                    <NavLinks />
-                </div>
+                <div className="flex min-w-0 flex-1 flex-col">
+                    <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+                        <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-6">
+                            <div className="flex items-center gap-3">
+                                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                                    <SheetTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="lg:hidden">
+                                            <Menu className="h-5 w-5" />
+                                        </Button>
+                                    </SheetTrigger>
+                                    <SheetContent side="left" className="w-80 p-0">
+                                        <NavContent />
+                                    </SheetContent>
+                                </Sheet>
 
-                {/* User Section */}
-                <div className="p-4 border-t border-border">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent transition-colors">
-                                <Avatar className="w-10 h-10 bg-primary">
-                                    <AvatarFallback className="text-primary-foreground font-semibold">
-                                        {getInitials(profile?.full_name || user?.email || "")}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 text-left min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">
-                                        {profile?.full_name || user?.email?.split("@")[0] || "User"}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
-                                </div>
-                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem asChild className="cursor-pointer">
-                                <Link href="/settings" className="flex items-center gap-2">
-                                    <Settings className="w-4 h-4" />
-                                    {t("nav.settings")}
-                                </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={handleLogout}
-                                className="text-destructive focus:text-destructive cursor-pointer"
-                            >
-                                <LogOut className="w-4 h-4 mr-2" />
-                                {t("nav.logout")}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </aside>
-
-            {/* Mobile Header */}
-            <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 bg-card border-b border-border flex items-center justify-between px-4">
-                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                    <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                            <Menu className="w-6 h-6" />
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="left" className="w-72 p-0 bg-card border-border">
-                        {/* Mobile Logo */}
-                        <div className="p-6 border-b border-border">
-                            <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
-                                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                                    <Wrench className="w-5 h-5 text-primary-foreground" />
-                                </div>
                                 <div>
-                                    <h1 className="font-bold text-foreground text-lg">MACHINA</h1>
-                                    <p className="text-xs text-muted-foreground">{t("nav.maintenance")}</p>
-                                </div>
-                            </Link>
-                        </div>
-
-                        {/* Mobile Navigation */}
-                        <div className="p-4">
-                            <NavLinks mobile />
-                        </div>
-
-                        {/* Mobile User Section */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
-                            <div className="flex items-center gap-3 mb-4">
-                                <Avatar className="w-10 h-10 bg-primary">
-                                    <AvatarFallback className="text-primary-foreground font-semibold">
-                                        {getInitials(profile?.full_name || user?.email || "")}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">
-                                        {profile?.full_name || user?.email?.split("@")[0] || "User"}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || userRole}</p>
+                                    <div className="text-sm font-semibold">MACHINA</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        Gestione documentazione e macchine industriali
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1"
-                                    onClick={() => {
-                                        setMobileMenuOpen(false);
-                                        router.push("/settings");
-                                    }}
-                                >
-                                    <Settings className="w-4 h-4 mr-2" />
-                                    {t("nav.settings")}
+
+                            <div className="flex items-center gap-2">
+                                <Button variant="ghost" size="icon" className="relative">
+                                    <Bell className="h-5 w-5" />
+                                    {notificationCount > 0 && (
+                                        <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full px-1 text-[10px]">
+                                            {notificationCount > 99 ? "99+" : notificationCount}
+                                        </Badge>
+                                    )}
                                 </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={handleLogout}
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                </Button>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" className="h-10 gap-2 rounded-xl px-2">
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarFallback>{initials}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="hidden text-left sm:block">
+                                                <div className="max-w-[160px] truncate text-sm font-medium">
+                                                    {loadingHeader ? "..." : profileName}
+                                                </div>
+                                                <div className="text-xs capitalize text-muted-foreground">
+                                                    {loadingHeader ? "..." : profileRole}
+                                                </div>
+                                            </div>
+                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-64">
+                                        <div className="px-2 py-2">
+                                            <div className="text-sm font-medium">{profileName}</div>
+                                            <div className="text-xs capitalize text-muted-foreground">
+                                                {profileRole}
+                                            </div>
+                                        </div>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/settings/organization">Organizzazione attiva</Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/settings">Impostazioni</Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={handleLogout}>
+                                            <LogOut className="mr-2 h-4 w-4" />
+                                            Esci
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
-                    </SheetContent>
-                </Sheet>
+                    </header>
 
-                {/* Mobile Logo */}
-                <Link href="/dashboard" className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                        <Wrench className="w-4 h-4 text-primary-foreground" />
-                    </div>
-                    <span className="font-bold text-foreground">MACHINA</span>
-                </Link>
-
-                {/* Mobile Actions */}
-                <div className="flex items-center gap-2">
-                    <ThemeSwitch />
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-foreground relative"
-                        onClick={() => router.push("/notifications")}
-                    >
-                        <Bell className="w-5 h-5" />
-                        {unreadNotifications > 0 && (
-                            <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
-                                {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                            </Badge>
-                        )}
-                    </Button>
+                    <main className="min-h-0 flex-1">
+                        {children}
+                    </main>
                 </div>
-            </header>
-
-            {/* Main Content */}
-            <main className="lg:ml-64 min-h-screen">
-                {/* Desktop Top Bar */}
-                <header className="hidden lg:flex h-16 items-center justify-end gap-4 px-6 border-b border-border/60 bg-card/80 backdrop-blur-sm sticky top-0 z-30">
-                    <ThemeSwitch />
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-foreground relative"
-                        onClick={() => router.push("/notifications")}
-                    >
-                        <Bell className="w-5 h-5" />
-                        {unreadNotifications > 0 && (
-                            <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-destructive text-destructive-foreground text-xs">
-                                {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                            </Badge>
-                        )}
-                    </Button>
-                </header>
-
-                {/* Offline/Sync Status Bar */}
-                <OfflineStatusBar />
-
-                {/* Page Content */}
-                <div className="p-4 lg:p-8 pt-20 lg:pt-8">
-                    {children}
-                </div>
-            </main>
+            </div>
         </div>
     );
 }
+
+export default MainLayout;
