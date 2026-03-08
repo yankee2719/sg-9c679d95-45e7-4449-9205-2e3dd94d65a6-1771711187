@@ -1,4 +1,3 @@
-// src/pages/equipment/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,31 +45,17 @@ interface HiddenRow {
     machine_id: string;
 }
 
-function CardShell({
-    children,
-    className = "",
-}: {
-    children: React.ReactNode;
-    className?: string;
-}) {
-    return (
-        <div
-            className={`rounded-[20px] border border-border bg-card text-card-foreground shadow-sm ${className}`}
-        >
-            {children}
-        </div>
-    );
+function CardShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+    return <div className={`rounded-[20px] border border-border bg-card shadow-sm ${className}`}>{children}</div>;
 }
 
 export default function EquipmentPage() {
     const [userRole, setUserRole] = useState("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
     const [orgType, setOrgType] = useState < OrgType | null > (null);
-
     const [machines, setMachines] = useState < MachineRow[] > ([]);
     const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
     const [hiddenRows, setHiddenRows] = useState < HiddenRow[] > ([]);
-
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [showHidden, setShowHidden] = useState(false);
@@ -78,7 +63,6 @@ export default function EquipmentPage() {
     useEffect(() => {
         const load = async () => {
             setLoading(true);
-
             try {
                 const ctx = await getUserContext();
                 if (!ctx?.orgId || !ctx?.orgType) return;
@@ -90,14 +74,9 @@ export default function EquipmentPage() {
                 const [machinesRes, assignmentsRes] = await Promise.all([
                     supabase
                         .from("machines")
-                        .select(
-                            "id, name, internal_code, serial_number, model, brand, lifecycle_state, organization_id, plant_id, production_line_id, is_archived, created_at"
-                        )
+                        .select("id, name, internal_code, serial_number, model, brand, lifecycle_state, organization_id, plant_id, production_line_id, is_archived, created_at")
                         .order("created_at", { ascending: false }),
-                    supabase
-                        .from("machine_assignments")
-                        .select("machine_id, customer_org_id, manufacturer_org_id, is_active")
-                        .eq("is_active", true),
+                    supabase.from("machine_assignments").select("machine_id, customer_org_id, manufacturer_org_id, is_active").eq("is_active", true),
                 ]);
 
                 if (machinesRes.error) throw machinesRes.error;
@@ -107,11 +86,7 @@ export default function EquipmentPage() {
                 setAssignments((assignmentsRes.data ?? []) as AssignmentRow[]);
 
                 if (ctx.orgType === "customer") {
-                    const hiddenRes = await supabase
-                        .from("customer_hidden_machines")
-                        .select("machine_id")
-                        .eq("customer_org_id", ctx.orgId);
-
+                    const hiddenRes = await supabase.from("customer_hidden_machines").select("machine_id").eq("customer_org_id", ctx.orgId);
                     if (hiddenRes.error) throw hiddenRes.error;
                     setHiddenRows((hiddenRes.data ?? []) as HiddenRow[]);
                 } else {
@@ -127,10 +102,7 @@ export default function EquipmentPage() {
         load();
     }, []);
 
-    const hiddenMachineIds = useMemo(
-        () => new Set(hiddenRows.map((x) => x.machine_id)),
-        [hiddenRows]
-    );
+    const hiddenMachineIds = useMemo(() => new Set(hiddenRows.map((x) => x.machine_id)), [hiddenRows]);
 
     const visibleMachines = useMemo(() => {
         let rows = machines;
@@ -140,15 +112,8 @@ export default function EquipmentPage() {
         }
 
         if (orgType === "customer" && orgId) {
-            const assignedIds = new Set(
-                assignments
-                    .filter((a) => a.customer_org_id === orgId && a.is_active)
-                    .map((a) => a.machine_id)
-            );
-
-            rows = rows.filter(
-                (machine) => machine.organization_id === orgId || assignedIds.has(machine.id)
-            );
+            const assignedIds = new Set(assignments.filter((a) => a.customer_org_id === orgId && a.is_active).map((a) => a.machine_id));
+            rows = rows.filter((machine) => machine.organization_id === orgId || assignedIds.has(machine.id));
         }
 
         if (!showHidden && orgType === "customer") {
@@ -157,15 +122,13 @@ export default function EquipmentPage() {
 
         if (search.trim()) {
             const q = search.toLowerCase();
-            rows = rows.filter((machine) => {
-                return (
-                    (machine.name ?? "").toLowerCase().includes(q) ||
-                    (machine.internal_code ?? "").toLowerCase().includes(q) ||
-                    (machine.serial_number ?? "").toLowerCase().includes(q) ||
-                    (machine.model ?? "").toLowerCase().includes(q) ||
-                    (machine.brand ?? "").toLowerCase().includes(q)
-                );
-            });
+            rows = rows.filter((machine) =>
+                (machine.name ?? "").toLowerCase().includes(q) ||
+                (machine.internal_code ?? "").toLowerCase().includes(q) ||
+                (machine.serial_number ?? "").toLowerCase().includes(q) ||
+                (machine.model ?? "").toLowerCase().includes(q) ||
+                (machine.brand ?? "").toLowerCase().includes(q),
+            );
         }
 
         return rows;
@@ -206,7 +169,7 @@ export default function EquipmentPage() {
 
                             <Link
                                 href="/equipment/new"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
                             >
                                 <Plus className="h-4 w-4" />
                                 Nuova Macchina
@@ -215,28 +178,28 @@ export default function EquipmentPage() {
 
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                             <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-300">
+                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-300">
                                     <Factory className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground">Macchine Visibili</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Macchine Visibili</div>
                             </CardShell>
 
                             <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
+                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
                                     <Package className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.assigned}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground">Assegnazioni Attive</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Assegnazioni Attive</div>
                             </CardShell>
 
                             {orgType === "customer" && (
                                 <CardShell className="p-6">
-                                    <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300">
+                                    <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
                                         <EyeOff className="h-5 w-5" />
                                     </div>
                                     <div className="text-5xl font-bold leading-none text-foreground">{stats.hidden}</div>
-                                    <div className="mt-2 text-[22px] font-medium text-foreground">Macchine Nascoste</div>
+                                    <div className="mt-2 text-[22px] font-medium text-muted-foreground">Macchine Nascoste</div>
                                 </CardShell>
                             )}
                         </div>
@@ -275,66 +238,41 @@ export default function EquipmentPage() {
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {visibleMachines.map((machine) => {
-                                        const isAssigned =
-                                            !!orgId &&
-                                            assignments.some(
-                                                (a) => a.machine_id === machine.id && a.customer_org_id === orgId && a.is_active
-                                            );
-
+                                        const isAssigned = !!orgId && assignments.some((a) => a.machine_id === machine.id && a.customer_org_id === orgId && a.is_active);
                                         const isOwner = machine.organization_id === orgId;
 
                                         return (
                                             <Link key={machine.id} href={`/equipment/${machine.id}`} className="block">
-                                                <CardShell className="p-5 transition hover:translate-y-[-2px]">
+                                                <CardShell className="p-5 transition hover:-translate-y-[2px]">
                                                     <div className="space-y-4">
                                                         <div className="flex items-center justify-between gap-3">
                                                             <div className="flex min-w-0 items-center gap-4">
-                                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-300">
+                                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-300">
                                                                     <Wrench className="h-5 w-5" />
                                                                 </div>
                                                                 <div className="min-w-0">
-                                                                    <div className="truncate text-xl font-semibold text-foreground">
-                                                                        {machine.name ?? "Macchina"}
-                                                                    </div>
-                                                                    <div className="truncate text-sm text-muted-foreground">
-                                                                        {machine.serial_number ?? machine.internal_code ?? "—"}
-                                                                    </div>
+                                                                    <div className="truncate text-xl font-semibold text-foreground">{machine.name ?? "Macchina"}</div>
+                                                                    <div className="truncate text-sm text-muted-foreground">{machine.serial_number ?? machine.internal_code ?? "—"}</div>
                                                                 </div>
                                                             </div>
                                                             <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                         </div>
 
                                                         <div className="flex flex-wrap gap-2">
-                                                            {isOwner && (
-                                                                <span className="rounded-full bg-blue-500/15 px-3 py-1 text-sm font-semibold text-blue-300">
-                                                                    Propria
-                                                                </span>
-                                                            )}
-                                                            {isAssigned && (
-                                                                <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-semibold text-emerald-300">
-                                                                    Assegnata
-                                                                </span>
-                                                            )}
-                                                            {machine.lifecycle_state && (
-                                                                <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold text-foreground">
-                                                                    {machine.lifecycle_state}
-                                                                </span>
-                                                            )}
-                                                            {machine.is_archived && (
-                                                                <span className="rounded-full bg-red-500/15 px-3 py-1 text-sm font-semibold text-red-300">
-                                                                    Archiviata
-                                                                </span>
-                                                            )}
+                                                            {isOwner && <span className="rounded-full bg-blue-500/15 px-3 py-1 text-sm font-semibold text-blue-600 dark:text-blue-300">Propria</span>}
+                                                            {isAssigned && <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-semibold text-emerald-600 dark:text-emerald-300">Assegnata</span>}
+                                                            {machine.lifecycle_state && <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">{machine.lifecycle_state}</span>}
+                                                            {machine.is_archived && <span className="rounded-full bg-red-500/15 px-3 py-1 text-sm font-semibold text-red-600 dark:text-red-300">Archiviata</span>}
                                                         </div>
 
                                                         <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-                                                            <div className="rounded-2xl bg-slate-900/35 p-3">
+                                                            <div className="rounded-2xl border border-border bg-muted/40 p-3">
                                                                 <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Marca</div>
-                                                                <div className="truncate">{machine.brand ?? "—"}</div>
+                                                                <div className="truncate text-foreground">{machine.brand ?? "—"}</div>
                                                             </div>
-                                                            <div className="rounded-2xl bg-slate-900/35 p-3">
+                                                            <div className="rounded-2xl border border-border bg-muted/40 p-3">
                                                                 <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Modello</div>
-                                                                <div className="truncate">{machine.model ?? "—"}</div>
+                                                                <div className="truncate text-foreground">{machine.model ?? "—"}</div>
                                                             </div>
                                                         </div>
 
