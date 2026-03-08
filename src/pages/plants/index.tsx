@@ -28,11 +28,7 @@ function CardShell({
     children: React.ReactNode;
     className?: string;
 }) {
-    return (
-        <div className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
-            {children}
-        </div>
-    );
+    return <div className={`surface-panel ${className}`}>{children}</div>;
 }
 
 export default function PlantsPage() {
@@ -179,7 +175,7 @@ export default function PlantsPage() {
                                             setShowPlantForm((v) => !v);
                                             setShowLineForm(false);
                                         }}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
                                     >
                                         <Plus className="h-4 w-4" />
                                         Nuovo Stabilimento
@@ -190,7 +186,7 @@ export default function PlantsPage() {
                                             setShowLineForm((v) => !v);
                                             setShowPlantForm(false);
                                         }}
-                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-accent"
+                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-[#223451]"
                                     >
                                         <GitBranch className="h-4 w-4" />
                                         Nuova Linea
@@ -205,7 +201,7 @@ export default function PlantsPage() {
                                     <Building2 className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{plants.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Stabilimenti Attivi</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Stabilimenti Attivi</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -213,7 +209,7 @@ export default function PlantsPage() {
                                     <GitBranch className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{lines.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Linee Attive</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Linee Attive</div>
                             </CardShell>
                         </div>
 
@@ -226,7 +222,7 @@ export default function PlantsPage() {
                                     </div>
                                     <button
                                         onClick={() => setShowPlantForm(false)}
-                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
                                     >
                                         <X className="h-5 w-5" />
                                     </button>
@@ -234,22 +230,22 @@ export default function PlantsPage() {
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-foreground/90">Nome stabilimento *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Nome stabilimento *</label>
                                         <input
                                             value={plantName}
                                             onChange={(e) => setPlantName(e.target.value)}
                                             placeholder="Es. Plant Test 01"
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-foreground/90">Codice</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Codice</label>
                                         <input
                                             value={plantCode}
                                             onChange={(e) => setPlantCode(e.target.value)}
                                             placeholder="Es. PLT-01"
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>
@@ -258,7 +254,7 @@ export default function PlantsPage() {
                                     <button
                                         onClick={handleCreatePlant}
                                         disabled={!plantName.trim() || savingPlant}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         <Save className="h-4 w-4" />
                                         {savingPlant ? "Salvataggio..." : "Salva Stabilimento"}
@@ -276,7 +272,7 @@ export default function PlantsPage() {
                                     </div>
                                     <button
                                         onClick={() => setShowLineForm(false)}
-                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
                                     >
                                         <X className="h-5 w-5" />
                                     </button>
@@ -284,11 +280,11 @@ export default function PlantsPage() {
 
                                 <div className="grid gap-4 md:grid-cols-3">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-foreground/90">Stabilimento *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Stabilimento *</label>
                                         <select
                                             value={linePlantId}
                                             onChange={(e) => setLinePlantId(e.target.value)}
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
                                         >
                                             <option value="">Seleziona</option>
                                             {plants.map((plant) => (
@@ -300,22 +296,22 @@ export default function PlantsPage() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-foreground/90">Nome linea *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Nome linea *</label>
                                         <input
                                             value={lineName}
                                             onChange={(e) => setLineName(e.target.value)}
                                             placeholder="Es. Linea Test 01"
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-foreground/90">Codice</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Codice</label>
                                         <input
                                             value={lineCode}
                                             onChange={(e) => setLineCode(e.target.value)}
                                             placeholder="Es. LN-01"
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>
@@ -324,7 +320,7 @@ export default function PlantsPage() {
                                     <button
                                         onClick={handleCreateLine}
                                         disabled={!lineName.trim() || !linePlantId || savingLine}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         <Save className="h-4 w-4" />
                                         {savingLine ? "Salvataggio..." : "Salva Linea"}
@@ -364,8 +360,8 @@ export default function PlantsPage() {
                                                             <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                         </div>
 
-                                                        <div className="rounded-2xl bg-muted/60 p-3">
-                                                            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground/90">
+                                                        <div className="rounded-2xl bg-muted/55 p-3">
+                                                            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                                                                 <GitBranch className="h-4 w-4 text-emerald-300" />
                                                                 Linee collegate
                                                             </div>
