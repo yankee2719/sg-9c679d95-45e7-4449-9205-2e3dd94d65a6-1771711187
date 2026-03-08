@@ -37,13 +37,7 @@ function CardShell({
     children: React.ReactNode;
     className?: string;
 }) {
-    return (
-        <div
-            className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
-        >
-            {children}
-        </div>
-    );
+    return <div className={`surface-panel ${className}`}>{children}</div>;
 }
 
 export default function NewEquipmentPage() {
@@ -175,20 +169,20 @@ export default function NewEquipmentPage() {
                             <div className="space-y-2">
                                 <button
                                     onClick={() => router.push("/equipment")}
-                                    className="inline-flex items-center gap-2 text-sm font-semibold text-slate-300 transition hover:text-white"
+                                    className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
                                 >
                                     <ArrowLeft className="h-4 w-4" />
                                     Torna a Macchine
                                 </button>
 
-                                <h1 className="text-4xl font-bold tracking-tight text-white">{pageTitle}</h1>
-                                <p className="text-base text-slate-300">{pageSubtitle}</p>
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+                                <p className="text-base text-muted-foreground">{pageSubtitle}</p>
                             </div>
 
                             <button
                                 onClick={handleSave}
                                 disabled={!canSave || saving}
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 <Save className="h-4 w-4" />
                                 {saving ? "Salvataggio..." : "Salva Macchina"}
@@ -202,8 +196,8 @@ export default function NewEquipmentPage() {
                                         <Wrench className="h-5 w-5" />
                                     </div>
                                     <div>
-                                        <div className="text-2xl font-bold text-white">Dati macchina</div>
-                                        <div className="text-sm text-slate-300">
+                                        <div className="text-2xl font-bold text-foreground">Dati macchina</div>
+                                        <div className="text-sm text-muted-foreground">
                                             Compila i dati principali della macchina.
                                         </div>
                                     </div>
@@ -211,61 +205,61 @@ export default function NewEquipmentPage() {
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-semibold text-slate-200">Nome macchina *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Nome macchina *</label>
                                         <input
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
                                             placeholder="Es. Trituratore TSS 180"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-slate-200">Codice interno</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Codice interno</label>
                                         <input
                                             value={internalCode}
                                             onChange={(e) => setInternalCode(e.target.value)}
                                             placeholder="Es. MCH-001"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-slate-200">Matricola</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Matricola</label>
                                         <input
                                             value={serialNumber}
                                             onChange={(e) => setSerialNumber(e.target.value)}
                                             placeholder="Es. SN-2026-001"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-slate-200">Marca</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Marca</label>
                                         <input
                                             value={brand}
                                             onChange={(e) => setBrand(e.target.value)}
                                             placeholder="Es. ITR / OMAR"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-slate-200">Modello</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Modello</label>
                                         <input
                                             value={model}
                                             onChange={(e) => setModel(e.target.value)}
                                             placeholder="Es. TSS 180"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-semibold text-slate-200">Stato lifecycle</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Stato lifecycle</label>
                                         <select
                                             value={lifecycleState}
                                             onChange={(e) => setLifecycleState(e.target.value)}
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
                                         >
                                             <option value="active">Attiva</option>
                                             <option value="commissioning">Commissioning</option>
@@ -275,13 +269,13 @@ export default function NewEquipmentPage() {
                                     </div>
 
                                     <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-semibold text-slate-200">Note</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">Note</label>
                                         <textarea
                                             value={notes}
                                             onChange={(e) => setNotes(e.target.value)}
                                             rows={4}
                                             placeholder="Note tecniche, configurazione, dettagli aggiuntivi..."
-                                            className="w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 py-3 text-white outline-none placeholder:text-slate-400"
+                                            className="w-full rounded-2xl border border-blue-500/30 bg-background px-4 py-3 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>
@@ -292,8 +286,8 @@ export default function NewEquipmentPage() {
                                     <div className="mb-4 flex items-center gap-3">
                                         <div
                                             className={`flex h-11 w-11 items-center justify-center rounded-2xl ${orgType === "manufacturer"
-                                                    ? "bg-orange-500/20 text-orange-300"
-                                                    : "bg-blue-500/20 text-blue-300"
+                                                ? "bg-orange-500/20 text-orange-300"
+                                                : "bg-blue-500/20 text-blue-300"
                                                 }`}
                                         >
                                             {orgType === "manufacturer" ? (
@@ -303,8 +297,8 @@ export default function NewEquipmentPage() {
                                             )}
                                         </div>
                                         <div>
-                                            <div className="text-xl font-bold text-white">Contesto</div>
-                                            <div className="text-sm text-slate-300">
+                                            <div className="text-xl font-bold text-foreground">Contesto</div>
+                                            <div className="text-sm text-muted-foreground">
                                                 {orgType === "manufacturer"
                                                     ? "Creazione macchina lato costruttore"
                                                     : "Creazione macchina lato cliente finale"}
@@ -312,7 +306,7 @@ export default function NewEquipmentPage() {
                                         </div>
                                     </div>
 
-                                    <div className="rounded-2xl bg-slate-900/35 p-4 text-sm text-slate-300">
+                                    <div className="rounded-2xl bg-muted/55 p-4 text-sm text-muted-foreground">
                                         {orgType === "manufacturer"
                                             ? "La macchina sarà creata nel catalogo del costruttore. Potrà essere assegnata successivamente a un cliente finale."
                                             : "La macchina sarà creata come macchina propria del cliente finale e potrà essere collegata a stabilimento e linea."}
@@ -326,8 +320,8 @@ export default function NewEquipmentPage() {
                                                 <Layers3 className="h-5 w-5" />
                                             </div>
                                             <div>
-                                                <div className="text-xl font-bold text-white">Collocazione</div>
-                                                <div className="text-sm text-slate-300">
+                                                <div className="text-xl font-bold text-foreground">Collocazione</div>
+                                                <div className="text-sm text-muted-foreground">
                                                     Collega la macchina al contesto produttivo.
                                                 </div>
                                             </div>
@@ -335,14 +329,14 @@ export default function NewEquipmentPage() {
 
                                         <div className="space-y-4">
                                             <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-200">Stabilimento</label>
+                                                <label className="text-sm font-semibold text-muted-foreground">Stabilimento</label>
                                                 <select
                                                     value={plantId}
                                                     onChange={(e) => {
                                                         setPlantId(e.target.value);
                                                         setProductionLineId("");
                                                     }}
-                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none"
+                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
                                                 >
                                                     <option value="">Nessuno</option>
                                                     {plants.map((plant) => (
@@ -354,11 +348,11 @@ export default function NewEquipmentPage() {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-200">Linea</label>
+                                                <label className="text-sm font-semibold text-muted-foreground">Linea</label>
                                                 <select
                                                     value={productionLineId}
                                                     onChange={(e) => setProductionLineId(e.target.value)}
-                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none"
+                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
                                                 >
                                                     <option value="">Nessuna</option>
                                                     {filteredLines.map((line) => (
