@@ -36,13 +36,7 @@ function CardShell({
     children: React.ReactNode;
     className?: string;
 }) {
-    return (
-        <div
-            className={`rounded-[20px] border border-border bg-card text-card-foreground shadow-sm ${className}`}
-        >
-            {children}
-        </div>
-    );
+    return <div className={`surface-panel ${className}`}>{children}</div>;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -203,7 +197,7 @@ export default function WorkOrdersPage() {
                                     <ClipboardList className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground">Totali</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Totali</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -211,7 +205,7 @@ export default function WorkOrdersPage() {
                                     <Wrench className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.open}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground">Aperti</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Aperti</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -219,7 +213,7 @@ export default function WorkOrdersPage() {
                                     <AlertTriangle className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.urgent}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground">Alta Priorità</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Alta Priorità</div>
                             </CardShell>
                         </div>
 
@@ -231,7 +225,7 @@ export default function WorkOrdersPage() {
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         placeholder="Cerca work order"
-                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                        className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
                                     />
                                 </div>
 
