@@ -108,7 +108,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/maintenance", label: "Manutenzione", icon: Wrench },
         { href: "/work-orders", label: "Ordini di lavoro", icon: ClipboardList },
         { href: "/checklists/templates", label: "Checklist", icon: CheckSquare },
-        { href: "/qr", label: "Scanner QR", icon: QrCode },
+        { href: "/scanner", label: "Scanner QR", icon: QrCode },
         { href: "/analytics", label: "Analisi", icon: BarChart3, roles: ["admin", "supervisor"] },
         { href: "/compliance", label: "Compliance", icon: ShieldCheck },
         { href: "/documents", label: "Documenti", icon: FileText },
