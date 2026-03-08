@@ -1,38 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
-import {
-    notificationService,
-    type Notification,
-    type NotificationType,
-} from "@/services/notificationService";
-import {
-    Bell,
-    ClipboardList,
-    AlertTriangle,
-    Clock,
-    Wrench,
-    CheckCircle2,
-    Trash2,
-    CheckCheck,
-    User,
-} from "lucide-react";
+import { notificationService, type Notification, type NotificationType } from "@/services/notificationService";
+import { Bell, ClipboardList, AlertTriangle, Clock, Wrench, CheckCircle2, Trash2, CheckCheck, BellOff, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const typeConfig: Record<string, { label: string; icon: React.ComponentType<any>; color: string; bgColor: string }> = {
-    maintenance_due: { label: "Manutenzione", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-500/10" },
-    maintenance_overdue: { label: "Scaduta", icon: AlertTriangle, color: "text-red-500", bgColor: "bg-red-500/10" },
-    equipment_status: { label: "Macchina", icon: Wrench, color: "text-blue-500", bgColor: "bg-blue-500/10" },
-    checklist_assigned: { label: "Checklist", icon: ClipboardList, color: "text-purple-500", bgColor: "bg-purple-500/10" },
-    checklist_completed: { label: "Checklist", icon: CheckCircle2, color: "text-green-500", bgColor: "bg-green-500/10" },
-    wo_assigned: { label: "WO Assegnato", icon: User, color: "text-cyan-500", bgColor: "bg-cyan-500/10" },
-    wo_completed: { label: "WO Completato", icon: CheckCircle2, color: "text-green-500", bgColor: "bg-green-500/10" },
-    system: { label: "Sistema", icon: Bell, color: "text-gray-500", bgColor: "bg-gray-500/10" },
+const typeConfig: Record<string, { label: string; icon: any; chip: string }> = {
+    maintenance_due: { label: "Manutenzione", icon: Clock, chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+    maintenance_overdue: { label: "Scaduta", icon: AlertTriangle, chip: "bg-red-500/15 text-red-700 dark:text-red-300" },
+    equipment_status: { label: "Macchina", icon: Wrench, chip: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
+    checklist_assigned: { label: "Checklist", icon: ClipboardList, chip: "bg-purple-500/15 text-purple-700 dark:text-purple-300" },
+    checklist_completed: { label: "Checklist", icon: CheckCircle2, chip: "bg-green-500/15 text-green-700 dark:text-green-300" },
+    wo_assigned: { label: "WO Assegnato", icon: User, chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300" },
+    wo_completed: { label: "WO Completato", icon: CheckCircle2, chip: "bg-green-500/15 text-green-700 dark:text-green-300" },
+    system: { label: "Sistema", icon: Bell, chip: "bg-slate-500/15 text-slate-700 dark:text-slate-300" },
 };
 
 function getEntityRoute(n: Notification): string | null {
@@ -74,8 +58,8 @@ export default function NotificationsPage() {
 
     const loadNotifications = useCallback(async () => {
         const result = await notificationService.getMyNotifications({ limit: 100 });
-        setNotifications(result.notifications || []);
-        setUnreadCount(result.unreadCount || 0);
+        setNotifications(result.notifications);
+        setUnreadCount(result.unreadCount);
     }, []);
 
     useEffect(() => {
@@ -85,7 +69,7 @@ export default function NotificationsPage() {
                 router.push("/login");
                 return;
             }
-            setUserRole(ctx.role as any);
+            setUserRole((ctx.role as any) ?? "technician");
             await loadNotifications();
             setLoading(false);
         };
@@ -95,9 +79,7 @@ export default function NotificationsPage() {
     useEffect(() => {
         let channel: any = null;
         const setup = async () => {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
+            const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
             channel = notificationService.subscribeToMyNotifications(user.id, (newNotif) => {
                 setNotifications((prev) => [newNotif, ...prev]);
@@ -160,13 +142,11 @@ export default function NotificationsPage() {
 
     return (
         <MainLayout userRole={userRole}>
-            <div className="mx-auto max-w-3xl space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="mx-auto max-w-4xl space-y-6 px-5 py-6 lg:px-8 lg:py-8">
+                <div className="flex items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Notifiche</h1>
-                        <p className="mt-1 text-muted-foreground">
-                            {unreadCount > 0 ? `${unreadCount} non lette` : "Tutto aggiornato"}
-                        </p>
+                        <p className="mt-1 text-muted-foreground">{unreadCount > 0 ? `${unreadCount} non lette` : "Tutto aggiornato"}</p>
                     </div>
                     <div className="flex gap-2">
                         {unreadCount > 0 && (
@@ -182,77 +162,61 @@ export default function NotificationsPage() {
 
                 <div className="flex flex-wrap gap-2">
                     {filterButtons.map((fb) => (
-                        <Button
+                        <button
                             key={fb.key}
-                            size="sm"
-                            variant={activeFilter === fb.key ? "default" : "outline"}
-                            className={
-                                activeFilter === fb.key
-                                    ? "rounded-xl bg-[#FF6B35] text-white hover:bg-[#e55a2b]"
-                                    : "rounded-xl"
-                            }
+                            type="button"
                             onClick={() => setActiveFilter(fb.key as any)}
+                            className={activeFilter === fb.key ? "rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white" : "rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"}
                         >
                             {fb.label}
-                            {fb.count !== undefined && fb.count > 0 && (
-                                <Badge className="ml-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white/20 p-0 text-xs text-current">
-                                    {fb.count}
-                                </Badge>
-                            )}
-                        </Button>
+                            {fb.count !== undefined && fb.count > 0 && <span className="ml-2 rounded-full bg-black/10 px-1.5 py-0.5 text-xs dark:bg-white/15">{fb.count}</span>}
+                        </button>
                     ))}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {filtered.length === 0 ? (
-                        <Card className="rounded-2xl bg-card p-12 text-center shadow-sm">
-                            <Bell className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
+                        <div className="surface-panel p-12 text-center">
+                            <BellOff className="mx-auto mb-3 h-12 w-12 text-muted-foreground/50" />
                             <h3 className="mb-1 text-lg font-bold text-foreground">Nessuna notifica</h3>
-                            <p className="text-sm text-muted-foreground">Le notifiche appariranno qui automaticamente</p>
-                        </Card>
+                            <p className="text-sm text-muted-foreground">Le notifiche appariranno qui quando ci saranno aggiornamenti.</p>
+                        </div>
                     ) : (
                         filtered.map((n) => {
-                            const config = typeConfig[n.type] || typeConfig.system;
+                            const config = typeConfig[n.type] ?? typeConfig.system;
                             const Icon = config.icon || Bell;
-                            const route = getEntityRoute(n);
-
                             return (
-                                <Card
+                                <button
                                     key={n.id}
-                                    className={`group rounded-2xl shadow-sm transition-all ${route ? "cursor-pointer hover:shadow-md" : ""} ${n.is_read ? "bg-card opacity-70" : "border-l-4 border-l-[#FF6B35] bg-card"}`}
+                                    type="button"
                                     onClick={() => handleClick(n)}
+                                    className={`surface-panel w-full p-5 text-left transition hover:-translate-y-0.5 ${!n.is_read ? "ring-1 ring-orange-500/30" : ""}`}
                                 >
-                                    <CardContent className="flex items-start gap-4 p-4">
-                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${config.bgColor}`}>
-                                            <Icon className={`h-5 w-5 ${config.color}`} />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="truncate font-semibold text-foreground">{n.title}</h3>
-                                                        {!n.is_read && <div className="h-2 w-2 shrink-0 rounded-full bg-[#FF6B35]" />}
-                                                    </div>
-                                                    <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{n.message}</p>
-                                                </div>
-                                                <div className="flex shrink-0 items-center gap-1">
-                                                    <span className="text-xs text-muted-foreground">{formatRelative(n.created_at)}</span>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-                                                        onClick={(e) => handleDelete(e, n.id)}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                                                    </Button>
-                                                </div>
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex min-w-0 gap-4">
+                                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${config.chip}`}>
+                                                <Icon className="h-5 w-5" />
                                             </div>
-                                            <Badge variant="outline" className="mt-1.5 text-xs">
-                                                {config.label}
-                                            </Badge>
+                                            <div className="min-w-0 space-y-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-base font-semibold text-foreground">{n.title}</span>
+                                                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${config.chip}`}>{config.label}</span>
+                                                    {!n.is_read && <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-semibold text-orange-700 dark:text-orange-300">Nuova</span>}
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">{n.message}</p>
+                                                <div className="text-xs text-muted-foreground">{formatRelative(n.created_at)}</div>
+                                            </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleDelete(e, n.id)}
+                                            className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                            aria-label="Elimina notifica"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </button>
                             );
                         })
                     )}
