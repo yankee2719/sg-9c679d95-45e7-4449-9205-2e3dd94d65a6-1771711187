@@ -36,7 +36,7 @@ interface HiddenRow {
 }
 
 function CardShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-    return <div className={`rounded-[22px] border border-border bg-card text-card-foreground shadow-[0_18px_32px_-24px_rgba(15,23,42,0.24),0_1px_0_rgba(15,23,42,0.08)] dark:shadow-[0_20px_40px_-28px_rgba(0,0,0,0.6)] ${className}`}>{children}</div>;
+    return <div className={`rounded-[22px] border border-border bg-card text-card-foreground shadow-[0_16px_30px_-22px_rgba(15,23,42,0.28)] ${className}`}>{children}</div>;
 }
 
 export default function EquipmentPage() {
@@ -110,7 +110,9 @@ export default function EquipmentPage() {
 
         if (search.trim()) {
             const q = search.toLowerCase();
-            rows = rows.filter((machine) => [machine.name, machine.internal_code, machine.serial_number, machine.model, machine.brand].some((value) => (value ?? "").toLowerCase().includes(q)));
+            rows = rows.filter((machine) =>
+                [machine.name, machine.internal_code, machine.serial_number, machine.model, machine.brand].some((value) => (value ?? "").toLowerCase().includes(q))
+            );
         }
 
         return rows;
@@ -125,7 +127,10 @@ export default function EquipmentPage() {
         return { total: visibleMachines.length, assigned: assignedCount, hidden: orgType === "customer" ? hiddenRows.length : 0 };
     }, [visibleMachines.length, assignments, orgType, orgId, hiddenRows.length]);
 
-    const subtitle = orgType === "manufacturer" ? "Gestisci il catalogo macchine del costruttore attivo." : "Gestisci macchine proprie e macchine assegnate nel contesto cliente attivo.";
+    const subtitle =
+        orgType === "manufacturer"
+            ? "Gestisci il catalogo macchine del costruttore attivo."
+            : "Gestisci macchine proprie e macchine assegnate nel contesto cliente attivo.";
 
     return (
         <OrgContextGuard>
@@ -152,7 +157,7 @@ export default function EquipmentPage() {
                                     <Factory className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/78">Macchine Visibili</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Macchine Visibili</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -160,7 +165,7 @@ export default function EquipmentPage() {
                                     <Package className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.assigned}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/78">Assegnazioni Attive</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Assegnazioni Attive</div>
                             </CardShell>
 
                             {orgType === "customer" && (
@@ -169,7 +174,7 @@ export default function EquipmentPage() {
                                         <EyeOff className="h-5 w-5" />
                                     </div>
                                     <div className="text-5xl font-bold leading-none text-foreground">{stats.hidden}</div>
-                                    <div className="mt-2 text-[22px] font-medium text-foreground/78">Macchine Nascoste</div>
+                                    <div className="mt-2 text-[22px] font-medium text-muted-foreground">Macchine Nascoste</div>
                                 </CardShell>
                             )}
                         </div>
@@ -178,11 +183,19 @@ export default function EquipmentPage() {
                             <div className="flex flex-col gap-4 xl:flex-row">
                                 <div className="relative flex-1">
                                     <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca macchina" className="h-12 w-full rounded-2xl border border-border bg-card pl-12 pr-4 text-foreground outline-none shadow-inner placeholder:text-muted-foreground" />
+                                    <input
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        placeholder="Cerca macchina"
+                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                    />
                                 </div>
 
                                 {orgType === "customer" && (
-                                    <button onClick={() => setShowHidden((v) => !v)} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-muted">
+                                    <button
+                                        onClick={() => setShowHidden((v) => !v)}
+                                        className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-background px-4 font-semibold text-foreground transition hover:bg-muted"
+                                    >
                                         {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                                         {showHidden ? "Nascondi archiviate locali" : "Mostra nascoste"}
                                     </button>
@@ -228,11 +241,11 @@ export default function EquipmentPage() {
                                                         </div>
 
                                                         <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-                                                            <div className="rounded-2xl border border-border bg-muted/55 p-3">
+                                                            <div className="surface-muted p-3">
                                                                 <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Marca</div>
                                                                 <div className="truncate text-foreground">{machine.brand ?? "—"}</div>
                                                             </div>
-                                                            <div className="rounded-2xl border border-border bg-muted/55 p-3">
+                                                            <div className="surface-muted p-3">
                                                                 <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Modello</div>
                                                                 <div className="truncate text-foreground">{machine.model ?? "—"}</div>
                                                             </div>
