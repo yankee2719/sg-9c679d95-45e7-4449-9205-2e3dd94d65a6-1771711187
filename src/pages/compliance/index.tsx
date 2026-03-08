@@ -41,7 +41,7 @@ export default function ComplianceIndexPage() {
                         const Icon = item.icon;
                         return (
                             <Link key={item.href} href={item.href} className="block">
-                                <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                                <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-md">
                                     <CardHeader>
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
