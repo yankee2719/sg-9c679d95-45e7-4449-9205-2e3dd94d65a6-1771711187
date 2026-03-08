@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
-import { Badge } from "@/components/ui/badge";
 import {
     LayoutDashboard,
     Wrench,
@@ -26,6 +25,7 @@ import {
     Layers3,
     X,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 type UserRole = "admin" | "supervisor" | "technician" | string;
 type OrgType = "manufacturer" | "customer" | null;
@@ -49,7 +49,6 @@ function cn(...classes: Array<string | false | null | undefined>) {
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
     const router = useRouter();
-
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [profileName, setProfileName] = useState("Utente");
     const [profileRole, setProfileRole] = useState < string > (userRole);
@@ -71,10 +70,14 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         .select("name")
                         .eq("id", ctx.orgId)
                         .maybeSingle();
+
                     setOrgName((org as any)?.name ?? "Organizzazione");
                 }
 
-                const { data: { user } } = await supabase.auth.getUser();
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
+
                 if (user) {
                     const notif = await getNotificationCount(user.id);
                     setNotificationCount(notif || 0);
@@ -123,7 +126,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     });
 
     const mainItems = filteredNavItems.filter(
-        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href),
+        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
     );
     const managementItems = filteredNavItems.filter((item) => ["/customers", "/assignments", "/users"].includes(item.href));
     const settingsItems = filteredNavItems.filter((item) => ["/settings/organization", "/settings"].includes(item.href));
@@ -137,8 +140,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         }
     };
 
-    const isActive = (href: string) =>
-        router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
+    const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
 
     const NavLink = ({ href, label, icon: Icon }: NavItem) => (
         <Link
@@ -148,7 +150,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
                 isActive(href)
                     ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
-                    : "text-foreground/80 hover:bg-muted hover:text-foreground",
+                    : "text-foreground/75 hover:bg-muted hover:text-foreground"
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
@@ -157,14 +159,14 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     );
 
     const SideContent = () => (
-        <div className="flex h-full flex-col bg-card text-card-foreground">
-            <div className="border-b border-border px-6 py-6">
+        <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
+            <div className="border-b border-border px-5 py-5">
                 <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                        <div className="truncate text-[30px] leading-none font-bold tracking-tight">MACHINA</div>
+                        <div className="truncate text-2xl leading-none font-bold tracking-tight">MACHINA</div>
                         <div className="truncate text-sm text-muted-foreground">
                             {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Utilizzatore finale" : "Piattaforma"}
                         </div>
@@ -173,56 +175,37 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             <div className="px-4 py-4">
-                <div className="rounded-2xl border border-border bg-muted/40 p-3">
+                <div className="rounded-2xl border border-border bg-muted/35 p-3">
                     <OrganizationSwitcher />
                 </div>
             </div>
 
-            <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
-                <div className="space-y-2">
-                    {mainItems.map((item) => (
-                        <NavLink key={item.href} {...item} />
-                    ))}
-                </div>
+            <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-4 space-y-6">
+                <div className="space-y-2">{mainItems.map((item) => <NavLink key={item.href} {...item} />)}</div>
 
                 {managementItems.length > 0 && (
                     <div className="space-y-2">
                         <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Gestione</div>
-                        {managementItems.map((item) => (
-                            <NavLink key={item.href} {...item} />
-                        ))}
+                        {managementItems.map((item) => <NavLink key={item.href} {...item} />)}
                     </div>
                 )}
 
                 {settingsItems.length > 0 && (
                     <div className="space-y-2">
                         <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Sistema</div>
-                        {settingsItems.map((item) => (
-                            <NavLink key={item.href} {...item} />
-                        ))}
+                        {settingsItems.map((item) => <NavLink key={item.href} {...item} />)}
                     </div>
                 )}
             </div>
 
             <div className="border-t border-border p-4">
-                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/40 p-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background text-foreground">
-                        {initials}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold">{profileName}</div>
-                        <div className="truncate text-sm text-muted-foreground">
-                            {orgName} · <span className="capitalize">{profileRole}</span>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleLogout}
-                        className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                        title="Esci"
-                    >
-                        <LogOut className="h-4 w-4" />
-                    </button>
-                </div>
+                <button
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+                >
+                    <LogOut className="h-5 w-5 shrink-0" />
+                    <span>Esci</span>
+                </button>
             </div>
         </div>
     );
@@ -230,13 +213,15 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="flex min-h-screen">
-                <aside className="hidden w-[250px] shrink-0 border-r border-border lg:block">
-                    <SideContent />
+                <aside className="hidden w-[280px] shrink-0 lg:block">
+                    <div className="sticky top-0 h-screen">
+                        <SideContent />
+                    </div>
                 </aside>
 
                 <div className="flex min-w-0 flex-1 flex-col">
                     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-                        <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-8">
+                        <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
                             <div className="flex items-center gap-3">
                                 <button
                                     className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
@@ -254,23 +239,17 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                             <div className="flex items-center gap-3">
                                 <ThemeSwitch />
-
-                                <button
-                                    type="button"
-                                    className="relative rounded-xl border border-border bg-card p-2 text-foreground transition hover:bg-muted"
-                                    onClick={() => router.push("/notifications")}
-                                    title="Notifiche"
-                                >
+                                <Link href="/notifications" className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted">
                                     <Bell className="h-5 w-5" />
                                     {notificationCount > 0 && (
-                                        <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full border-0 bg-orange-500 px-1 text-[10px] text-white hover:bg-orange-500">
+                                        <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full bg-orange-500 px-1 text-[10px] text-white hover:bg-orange-500">
                                             {notificationCount > 99 ? "99+" : notificationCount}
                                         </Badge>
                                     )}
-                                </button>
+                                </Link>
 
-                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
                                         {initials}
                                     </div>
                                     <div className="min-w-0">
@@ -289,9 +268,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             {sidebarOpen && (
                 <div className="fixed inset-0 z-50 lg:hidden">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-                    <div className="absolute inset-y-0 left-0 w-[280px] border-r border-border bg-card shadow-2xl">
+                    <div className="absolute inset-y-0 left-0 w-[280px] shadow-2xl">
                         <button
-                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-background p-2 text-foreground"
+                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
                             onClick={() => setSidebarOpen(false)}
                         >
                             <X className="h-4 w-4" />
