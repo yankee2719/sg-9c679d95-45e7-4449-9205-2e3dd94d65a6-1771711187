@@ -102,7 +102,7 @@ export default function DocumentsHomePage() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                     <Link href="/equipment" className="block">
-                        <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                        <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-md">
                             <CardHeader>
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
@@ -120,7 +120,7 @@ export default function DocumentsHomePage() {
                     </Link>
 
                     <Link href="/compliance" className="block">
-                        <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                        <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-md">
                             <CardHeader>
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
