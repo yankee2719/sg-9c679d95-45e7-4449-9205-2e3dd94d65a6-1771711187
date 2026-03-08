@@ -1,4 +1,4 @@
-A// src/components/DocumentDetailModal.tsx
+// src/components/DocumentDetailModal.tsx
 import * as Mod from "@/components/documents/DocumentDetailModal";
 
 const Component = ((Mod as any).default ?? (Mod as any).DocumentDetailModal) as React.ComponentType<any>;
