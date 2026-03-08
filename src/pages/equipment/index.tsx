@@ -55,7 +55,7 @@ function CardShell({
 }) {
     return (
         <div
-            className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+            className={`rounded-[20px] border border-border bg-card text-card-foreground shadow-sm ${className}`}
         >
             {children}
         </div>
@@ -200,13 +200,13 @@ export default function EquipmentPage() {
                     <div className="mx-auto max-w-[1440px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-white">Macchine</h1>
-                                <p className="text-base text-slate-300">{subtitle}</p>
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">Macchine</h1>
+                                <p className="text-base text-muted-foreground">{subtitle}</p>
                             </div>
 
                             <Link
                                 href="/equipment/new"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
                             >
                                 <Plus className="h-4 w-4" />
                                 Nuova Macchina
@@ -218,16 +218,16 @@ export default function EquipmentPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-300">
                                     <Factory className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Macchine Visibili</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground">Macchine Visibili</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <Package className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.assigned}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Assegnazioni Attive</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.assigned}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground">Assegnazioni Attive</div>
                             </CardShell>
 
                             {orgType === "customer" && (
@@ -235,8 +235,8 @@ export default function EquipmentPage() {
                                     <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300">
                                         <EyeOff className="h-5 w-5" />
                                     </div>
-                                    <div className="text-5xl font-bold leading-none text-white">{stats.hidden}</div>
-                                    <div className="mt-2 text-[22px] font-medium text-slate-200">Macchine Nascoste</div>
+                                    <div className="text-5xl font-bold leading-none text-foreground">{stats.hidden}</div>
+                                    <div className="mt-2 text-[22px] font-medium text-foreground">Macchine Nascoste</div>
                                 </CardShell>
                             )}
                         </div>
@@ -244,19 +244,19 @@ export default function EquipmentPage() {
                         <CardShell className="p-5">
                             <div className="flex flex-col gap-4 xl:flex-row">
                                 <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                                     <input
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         placeholder="Cerca macchina"
-                                        className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] pl-12 pr-4 text-white outline-none placeholder:text-slate-400"
+                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
                                     />
                                 </div>
 
                                 {orgType === "customer" && (
                                     <button
                                         onClick={() => setShowHidden((v) => !v)}
-                                        className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#07152f] px-4 font-semibold text-white transition hover:bg-[#0d2045]"
+                                        className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-background px-4 font-semibold text-foreground transition hover:bg-muted"
                                     >
                                         {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                                         {showHidden ? "Nascondi archiviate locali" : "Mostra nascoste"}
@@ -266,12 +266,12 @@ export default function EquipmentPage() {
                         </CardShell>
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-white">Elenco Macchine</h2>
+                            <h2 className="text-[32px] font-bold text-foreground">Elenco Macchine</h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-slate-300">Caricamento macchine...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Caricamento macchine...</CardShell>
                             ) : visibleMachines.length === 0 ? (
-                                <CardShell className="p-6 text-slate-300">Nessuna macchina trovata.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Nessuna macchina trovata.</CardShell>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {visibleMachines.map((machine) => {
@@ -293,15 +293,15 @@ export default function EquipmentPage() {
                                                                     <Wrench className="h-5 w-5" />
                                                                 </div>
                                                                 <div className="min-w-0">
-                                                                    <div className="truncate text-xl font-semibold text-white">
+                                                                    <div className="truncate text-xl font-semibold text-foreground">
                                                                         {machine.name ?? "Macchina"}
                                                                     </div>
-                                                                    <div className="truncate text-sm text-slate-300">
+                                                                    <div className="truncate text-sm text-muted-foreground">
                                                                         {machine.serial_number ?? machine.internal_code ?? "—"}
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <ArrowRight className="h-5 w-5 shrink-0 text-slate-400" />
+                                                            <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                         </div>
 
                                                         <div className="flex flex-wrap gap-2">
@@ -316,7 +316,7 @@ export default function EquipmentPage() {
                                                                 </span>
                                                             )}
                                                             {machine.lifecycle_state && (
-                                                                <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold text-slate-200">
+                                                                <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold text-foreground">
                                                                     {machine.lifecycle_state}
                                                                 </span>
                                                             )}
@@ -327,19 +327,19 @@ export default function EquipmentPage() {
                                                             )}
                                                         </div>
 
-                                                        <div className="grid grid-cols-2 gap-3 text-sm text-slate-300">
+                                                        <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                                                             <div className="rounded-2xl bg-slate-900/35 p-3">
-                                                                <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">Marca</div>
+                                                                <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Marca</div>
                                                                 <div className="truncate">{machine.brand ?? "—"}</div>
                                                             </div>
                                                             <div className="rounded-2xl bg-slate-900/35 p-3">
-                                                                <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">Modello</div>
+                                                                <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Modello</div>
                                                                 <div className="truncate">{machine.model ?? "—"}</div>
                                                             </div>
                                                         </div>
 
                                                         {machine.plant_id && (
-                                                            <div className="inline-flex items-center gap-2 text-sm text-slate-300">
+                                                            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                                                                 <Building2 className="h-4 w-4" />
                                                                 Collegata a stabilimento
                                                             </div>
