@@ -38,7 +38,7 @@ function CardShell({
 }) {
     return (
         <div
-            className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+            className={`rounded-[20px] border border-border bg-card text-card-foreground shadow-sm ${className}`}
         >
             {children}
         </div>
@@ -182,15 +182,15 @@ export default function WorkOrdersPage() {
                     <div className="mx-auto max-w-[1440px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-white">Ordini di lavoro</h1>
-                                <p className="text-base text-slate-300">
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">Ordini di lavoro</h1>
+                                <p className="text-base text-muted-foreground">
                                     Pianifica, assegna e monitora le attività operative sulle macchine.
                                 </p>
                             </div>
 
                             <Link
                                 href="/work-orders/create"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
                             >
                                 <Plus className="h-4 w-4" />
                                 Nuovo Work Order
@@ -202,41 +202,41 @@ export default function WorkOrdersPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
                                     <ClipboardList className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Totali</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground">Totali</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <Wrench className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.open}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Aperti</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.open}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground">Aperti</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-red-300">
                                     <AlertTriangle className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.urgent}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Alta Priorità</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.urgent}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground">Alta Priorità</div>
                             </CardShell>
                         </div>
 
                         <CardShell className="p-5">
                             <div className="flex flex-col gap-4 xl:flex-row">
                                 <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                                     <input
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         placeholder="Cerca work order"
-                                        className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] pl-12 pr-4 text-white outline-none placeholder:text-slate-400"
+                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
                                     />
                                 </div>
 
-                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-blue-500/20 bg-[#07152f] px-4 text-white xl:w-[180px]">
-                                    <Filter className="h-5 w-5 text-slate-400" />
+                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-blue-500/20 bg-background px-4 text-foreground xl:w-[180px]">
+                                    <Filter className="h-5 w-5 text-muted-foreground" />
                                     <select
                                         value={priorityFilter}
                                         onChange={(e) => setPriorityFilter(e.target.value)}
@@ -252,12 +252,12 @@ export default function WorkOrdersPage() {
                         </CardShell>
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-white">Elenco Work Orders</h2>
+                            <h2 className="text-[32px] font-bold text-foreground">Elenco Work Orders</h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-slate-300">Caricamento work orders...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Caricamento work orders...</CardShell>
                             ) : filteredRows.length === 0 ? (
-                                <CardShell className="p-6 text-slate-300">Nessun work order trovato.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Nessun work order trovato.</CardShell>
                             ) : (
                                 <div className="space-y-4">
                                     {filteredRows.map((row) => {
@@ -273,11 +273,11 @@ export default function WorkOrdersPage() {
                                                             </div>
 
                                                             <div className="min-w-0">
-                                                                <div className="truncate text-2xl font-bold text-white">
+                                                                <div className="truncate text-2xl font-bold text-foreground">
                                                                     {row.title ?? "Work Order"}
                                                                 </div>
 
-                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-slate-300">
+                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-muted-foreground">
                                                                     <span className="inline-flex items-center gap-1.5">
                                                                         <Wrench className="h-4 w-4" />
                                                                         {row.machine_name ?? "Macchina"}
@@ -295,7 +295,7 @@ export default function WorkOrdersPage() {
                                                             <div className={`rounded-full px-4 py-1.5 text-lg font-semibold ${style.badge}`}>
                                                                 {style.label}
                                                             </div>
-                                                            <ArrowRight className="h-6 w-6 text-slate-400" />
+                                                            <ArrowRight className="h-6 w-6 text-muted-foreground" />
                                                         </div>
                                                     </div>
                                                 </CardShell>
