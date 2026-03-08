@@ -113,13 +113,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/analytics", label: "Analisi", icon: BarChart3, roles: ["admin", "supervisor"] },
         { href: "/compliance", label: "Compliance", icon: ShieldCheck },
         { href: "/documents", label: "Documenti", icon: FileText },
-
         { href: "/plants", label: "Stabilimenti", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
         { href: "/users", label: "Utenti", icon: Users, roles: ["admin", "supervisor"] },
-
         { href: "/customers", label: "Clienti", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
         { href: "/assignments", label: "Assegnazioni", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-
         { href: "/settings/organization", label: "Organizzazione attiva", icon: Package },
         { href: "/settings", label: "Impostazioni", icon: Settings },
     ];
@@ -157,10 +154,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             href={href}
             onClick={() => setSidebarOpen(false)}
             className={cn(
-                "flex items-center gap-3 rounded-2xl border px-4 py-3 text-[15px] font-medium transition-all",
+                "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
                 isActive(href)
-                    ? "border-orange-500 bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
-                    : "border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
+                    ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
@@ -169,7 +166,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     );
 
     const SideContent = () => (
-        <div className="flex h-full flex-col bg-card text-card-foreground">
+        <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
             <div className="border-b border-border px-6 py-6">
                 <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
@@ -185,12 +182,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             <div className="px-4 py-4">
-                <div className="rounded-2xl border border-border bg-muted/60 p-3">
+                <div className="rounded-2xl border border-border bg-muted/50 p-3">
                     <OrganizationSwitcher />
                 </div>
             </div>
 
-            <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
+            <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-4 pb-4">
                 <div className="space-y-2">
                     {mainItems.map((item) => (
                         <NavLink key={item.href} {...item} />
@@ -221,7 +218,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             <div className="border-t border-border p-4">
-                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/50 p-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/40 p-3 shadow-sm">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background text-foreground">
                         {initials}
                     </div>
@@ -233,7 +230,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     </div>
                     <button
                         onClick={handleLogout}
-                        className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                        className="rounded-xl p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
                         title="Esci"
                     >
                         <LogOut className="h-4 w-4" />
@@ -246,7 +243,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="flex min-h-screen">
-                <aside className="hidden w-[250px] shrink-0 border-r border-border lg:block">
+                <aside className="hidden w-[250px] shrink-0 lg:block">
                     <SideContent />
                 </aside>
 
@@ -255,13 +252,13 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-8">
                             <div className="flex items-center gap-3">
                                 <button
-                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
+                                    className="rounded-xl p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground lg:hidden"
                                     onClick={() => setSidebarOpen(true)}
                                 >
                                     <Menu className="h-5 w-5" />
                                 </button>
                                 <div>
-                                    <div className="text-lg font-semibold">Dashboard</div>
+                                    <div className="text-lg font-semibold text-foreground">Dashboard</div>
                                     <div className="text-xs text-muted-foreground">
                                         {orgName} · {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Customer" : "Contesto"}
                                     </div>
@@ -271,12 +268,11 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             <div className="flex items-center gap-2 md:gap-3">
                                 <ThemeSwitch />
 
-                                <button
-                                    type="button"
-                                    onClick={() => router.push("/notifications")}
-                                    className="relative rounded-xl border border-border bg-card p-2 text-foreground transition hover:bg-muted"
-                                    title="Notifiche"
+                                <Link
+                                    href="/notifications"
+                                    className="relative rounded-xl border border-border bg-card p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
                                     aria-label="Apri notifiche"
+                                    title="Notifiche"
                                 >
                                     <Bell className="h-5 w-5" />
                                     {notificationCount > 0 && (
@@ -284,14 +280,14 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                             {notificationCount > 99 ? "99+" : notificationCount}
                                         </Badge>
                                     )}
-                                </button>
+                                </Link>
 
-                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-sm md:flex">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-sm font-semibold text-foreground">
                                         {initials}
                                     </div>
                                     <div className="min-w-0">
-                                        <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
+                                        <div className="max-w-[180px] truncate text-sm font-semibold text-foreground">{profileName}</div>
                                         <div className="text-xs text-muted-foreground capitalize">{profileRole}</div>
                                     </div>
                                 </div>
@@ -306,7 +302,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             {sidebarOpen && (
                 <div className="fixed inset-0 z-50 lg:hidden">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-                    <div className="absolute inset-y-0 left-0 w-[280px] border-r border-border shadow-2xl">
+                    <div className="absolute inset-y-0 left-0 w-[280px] shadow-2xl">
                         <button
                             className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-background/80 p-2 text-foreground"
                             onClick={() => setSidebarOpen(false)}
