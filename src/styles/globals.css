@@ -109,7 +109,8 @@
     }
 
     .surface-muted {
-        @apply rounded-2xl border border-border bg-muted/72 text-foreground;
+        @apply rounded-2xl border border-border text-foreground;
+        background-color: hsl(var(--muted) / 0.72);
     }
 
     table {
@@ -121,7 +122,11 @@
     }
 
     tbody tr {
-        @apply border-b border-border hover:bg-muted/50;
+        @apply border-b border-border;
+    }
+
+    tbody tr:hover {
+        background-color: hsl(var(--muted) / 0.5);
     }
 
     th,
@@ -130,7 +135,8 @@
     }
 
     .custom-scrollbar::-webkit-scrollbar {
-        @apply w-2 h-2;
+        width: 0.5rem;
+        height: 0.5rem;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
@@ -138,10 +144,11 @@
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        @apply bg-muted-foreground/30 rounded-full;
+        border-radius: 9999px;
+        background-color: hsl(var(--muted-foreground) / 0.3);
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        @apply bg-muted-foreground/50;
+        background-color: hsl(var(--muted-foreground) / 0.5);
     }
 }
