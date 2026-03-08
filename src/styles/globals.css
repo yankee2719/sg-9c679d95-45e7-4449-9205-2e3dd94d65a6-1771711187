@@ -95,12 +95,6 @@
     :root .card-professional,
     :root [data-slot="card"] {
         border-color: hsl(var(--border));
-        box-shadow: 0 10px 30px -24px rgb(15 23 42 / 0.22);
-    }
-
-    .dark .card-professional,
-    .dark [data-slot="card"] {
-        box-shadow: none;
     }
 
     /* Button Variants */
