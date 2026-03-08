@@ -1,286 +1,237 @@
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
-import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
+import { useMemo } from "react";
 import {
     LayoutDashboard,
+    Factory,
     Wrench,
     ClipboardList,
-    Settings,
-    LogOut,
-    Menu,
-    Bell,
-    Users,
+    CheckSquare,
     QrCode,
     BarChart3,
-    Building2,
-    Factory,
-    FileText,
     ShieldCheck,
-    CheckSquare,
-    Package,
-    Layers3,
-    X,
+    FileText,
+    Building2,
+    Users,
+    Settings,
+    Bell,
+    LogOut,
+    Globe,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
-type UserRole = "admin" | "supervisor" | "technician" | string;
-type OrgType = "manufacturer" | "customer" | null;
+import { ThemeSwitch } from "@/components/ThemeSwitch";
+import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { cn } from "@/lib/utils";
 
-interface MainLayoutProps {
-    children: React.ReactNode;
-    userRole?: UserRole;
-}
+type Role = "admin" | "supervisor" | "operator" | "viewer";
+type OrgType = "manufacturer" | "customer";
 
-interface NavItem {
+type NavItem = {
     href: string;
-    label: string;
+    labelKey: string;
     icon: any;
-    roles?: string[];
-    orgTypes?: Array<"manufacturer" | "customer">;
-}
+    roles?: Role[];
+    orgTypes?: OrgType[];
+};
 
-function cn(...classes: Array<string | false | null | undefined>) {
-    return classes.filter(Boolean).join(" ");
-}
+type MainLayoutProps = {
+    children: React.ReactNode;
+    profile?: {
+        full_name?: string | null;
+        role?: Role | null;
+    } | null;
+    organization?: {
+        name?: string | null;
+        org_type?: OrgType | null;
+    } | null;
+    notificationCount?: number;
+};
 
-export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
+export function MainLayout({
+    children,
+    profile,
+    organization,
+    notificationCount = 0,
+}: MainLayoutProps) {
     const router = useRouter();
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [profileName, setProfileName] = useState("Utente");
-    const [profileRole, setProfileRole] = useState < string > (userRole);
-    const [orgType, setOrgType] = useState < OrgType > (null);
-    const [orgName, setOrgName] = useState("Organizzazione");
-    const [notificationCount, setNotificationCount] = useState(0);
+    const { t, language, setLanguage } = useLanguage();
 
-    useEffect(() => {
-        const loadHeader = async () => {
-            try {
-                const ctx = await getUserContext();
-                if (ctx?.displayName) setProfileName(ctx.displayName);
-                if (ctx?.role) setProfileRole(ctx.role);
-                if (ctx?.orgType) setOrgType(ctx.orgType as OrgType);
+    const role = (profile?.role ?? "viewer") as Role;
+    const orgType = (organization?.org_type ?? "customer") as OrgType;
 
-                if (ctx?.orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", ctx.orgId)
-                        .maybeSingle();
+    const navItems: NavItem[] = useMemo(
+        () => [
+            { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+            { href: "/equipment", labelKey: "nav.equipment", icon: Factory },
+            { href: "/maintenance", labelKey: "nav.maintenance", icon: Wrench },
+            { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
+            { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
+            { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
+            { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
+            { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
+            { href: "/documents", labelKey: "nav.documents", icon: FileText },
+            { href: "/plants", labelKey: "nav.plants", icon: Building2 },
+            { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
+            { href: "/settings", labelKey: "nav.settings", icon: Settings, roles: ["admin"] },
+        ],
+        []
+    );
 
-                    setOrgName((org as any)?.name ?? "Organizzazione");
-                }
-
-                const {
-                    data: { user },
-                } = await supabase.auth.getUser();
-
-                if (user) {
-                    const notif = await getNotificationCount(user.id);
-                    setNotificationCount(notif || 0);
-                }
-            } catch (error) {
-                console.error("MainLayout loadHeader error:", error);
-            }
-        };
-
-        loadHeader();
-    }, [userRole, router.asPath]);
-
-    const initials = useMemo(() => {
-        const parts = (profileName || "Utente")
-            .split(" ")
-            .map((p) => p.trim())
-            .filter(Boolean);
-
-        if (parts.length === 0) return "U";
-        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }, [profileName]);
-
-    const navItems: NavItem[] = [
-        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { href: "/equipment", label: "Macchine", icon: Factory },
-        { href: "/maintenance", label: "Manutenzione", icon: Wrench },
-        { href: "/work-orders", label: "Ordini di lavoro", icon: ClipboardList },
-        { href: "/checklists/templates", label: "Checklist", icon: CheckSquare },
-        { href: "/scanner", label: "Scanner QR", icon: QrCode },
-        { href: "/analytics", label: "Analisi", icon: BarChart3, roles: ["admin", "supervisor"] },
-        { href: "/compliance", label: "Compliance", icon: ShieldCheck },
-        { href: "/documents", label: "Documenti", icon: FileText },
-        { href: "/plants", label: "Stabilimenti", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
-        { href: "/users", label: "Utenti", icon: Users, roles: ["admin", "supervisor"] },
-        { href: "/customers", label: "Clienti", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/assignments", label: "Assegnazioni", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/settings/organization", label: "Organizzazione attiva", icon: Package },
-        { href: "/settings", label: "Impostazioni", icon: Settings },
-    ];
-
-    const filteredNavItems = navItems.filter((item) => {
-        const roleOk = !item.roles || item.roles.includes(profileRole);
-        const orgOk = !item.orgTypes || (orgType ? item.orgTypes.includes(orgType) : true);
-        return roleOk && orgOk;
+    const filteredItems = navItems.filter((item) => {
+        if (item.roles && !item.roles.includes(role)) return false;
+        if (item.orgTypes && !item.orgTypes.includes(orgType)) return false;
+        return true;
     });
 
-    const mainItems = filteredNavItems.filter(
-        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
-    );
-    const managementItems = filteredNavItems.filter((item) => ["/customers", "/assignments", "/users"].includes(item.href));
-    const settingsItems = filteredNavItems.filter((item) => ["/settings/organization", "/settings"].includes(item.href));
+    const orgTypeLabel =
+        orgType === "manufacturer" ? t("org.manufacturer") : t("org.customer");
 
-    const handleLogout = async () => {
-        try {
-            await supabase.auth.signOut();
-            router.push("/login");
-        } catch (error) {
-            console.error("Logout error:", error);
-        }
-    };
-
-    const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
-
-    const NavLink = ({ href, label, icon: Icon }: NavItem) => (
-        <Link
-            href={href}
-            onClick={() => setSidebarOpen(false)}
-            className={cn(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
-                isActive(href)
-                    ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
-                    : "text-foreground/75 hover:bg-muted hover:text-foreground"
-            )}
-        >
-            <Icon className="h-5 w-5 shrink-0" />
-            <span className="truncate">{label}</span>
-        </Link>
-    );
-
-    const SideContent = () => (
-        <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
-            <div className="border-b border-border px-4 py-4">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
-                        <Wrench className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                        <div className="text-xl leading-none font-bold tracking-tight">MACHINA</div>
-                        <div className="truncate text-sm text-muted-foreground">
-                            {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Utilizzatore finale" : "Piattaforma"}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="px-4 py-4">
-                <div className="rounded-2xl border border-border bg-muted/35 p-3">
-                    <OrganizationSwitcher />
-                </div>
-            </div>
-
-            <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-4 space-y-6">
-                <div className="space-y-2">{mainItems.map((item) => <NavLink key={item.href} {...item} />)}</div>
-
-                {managementItems.length > 0 && (
-                    <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Gestione</div>
-                        {managementItems.map((item) => <NavLink key={item.href} {...item} />)}
-                    </div>
-                )}
-
-                {settingsItems.length > 0 && (
-                    <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Sistema</div>
-                        {settingsItems.map((item) => <NavLink key={item.href} {...item} />)}
-                    </div>
-                )}
-            </div>
-
-            <div className="border-t border-border p-4">
-                <button
-                    onClick={handleLogout}
-                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
-                >
-                    <LogOut className="h-5 w-5 shrink-0" />
-                    <span>Esci</span>
-                </button>
-            </div>
-        </div>
-    );
+    const currentPageTitle =
+        filteredItems.find((item) => router.pathname.startsWith(item.href))?.labelKey ?? "nav.dashboard";
 
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="flex min-h-screen">
-                <aside className="hidden w-[280px] shrink-0 lg:block">
-                    <div className="sticky top-0 h-screen">
-                        <SideContent />
-                    </div>
-                </aside>
-
-                <div className="flex min-w-0 flex-1 flex-col">
-                    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-                        <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
+                <aside className="w-[248px] shrink-0 border-r border-border bg-card">
+                    <div className="flex h-full flex-col">
+                        <div className="border-b border-border px-4 py-4">
                             <div className="flex items-center gap-3">
-                                <button
-                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
-                                    onClick={() => setSidebarOpen(true)}
-                                >
-                                    <Menu className="h-5 w-5" />
-                                </button>
-                                <div>
-                                    <div className="text-lg font-semibold">Dashboard</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {orgName} · {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Customer" : "Contesto"}
-                                    </div>
+                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+                                    <Wrench className="h-5 w-5" />
                                 </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <ThemeSwitch />
-                                <Link href="/notifications" className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted">
-                                    <Bell className="h-5 w-5" />
-                                    {notificationCount > 0 && (
-                                        <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full bg-orange-500 px-1 text-[10px] text-white hover:bg-orange-500">
-                                            {notificationCount > 99 ? "99+" : notificationCount}
-                                        </Badge>
-                                    )}
-                                </Link>
-
-                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                                        {initials}
+                                <div className="min-w-0">
+                                    <div className="truncate text-[1.75rem] font-extrabold leading-none tracking-tight text-foreground">
+                                        MACHINA
                                     </div>
-                                    <div className="min-w-0">
-                                        <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
-                                        <div className="text-xs text-muted-foreground capitalize">{profileRole}</div>
+                                    <div className="mt-1 text-sm text-muted-foreground">
+                                        {orgTypeLabel}
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <div className="px-3 py-4">
+                            <div className="surface-panel rounded-2xl p-4">
+                                <div className="truncate text-base font-semibold text-foreground">
+                                    {organization?.name ?? "Organization"}
+                                </div>
+                                <div className="mt-1 text-sm text-muted-foreground">
+                                    {orgTypeLabel} · {profile?.role ?? "viewer"}
+                                </div>
+                            </div>
+                        </div>
+
+                        <nav className="flex-1 space-y-1 px-3 pb-4">
+                            {filteredItems.map((item) => {
+                                const Icon = item.icon;
+                                const active =
+                                    item.href === "/dashboard"
+                                        ? router.pathname === "/dashboard"
+                                        : router.pathname.startsWith(item.href);
+
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        className={cn(
+                                            "flex items-center gap-3 rounded-2xl px-4 py-3 text-base font-medium transition-colors",
+                                            active
+                                                ? "bg-primary text-primary-foreground shadow-sm"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        )}
+                                    >
+                                        <Icon className="h-5 w-5 shrink-0" />
+                                        <span className="truncate">{t(item.labelKey)}</span>
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+                    </div>
+                </aside>
+
+                <div className="flex min-w-0 flex-1 flex-col">
+                    <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+                        <div className="flex items-center justify-between px-6 py-3">
+                            <div className="min-w-0">
+                                <h1 className="truncate text-2xl font-bold text-foreground">
+                                    {t(currentPageTitle)}
+                                </h1>
+                                <p className="text-sm text-muted-foreground">
+                                    {organization?.name ?? "Organization"} · {orgTypeLabel}
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <div className="surface-panel flex items-center gap-2 rounded-2xl px-3 py-2">
+                                    <Globe className="h-4 w-4 text-muted-foreground" />
+                                    <select
+                                        value={language}
+                                        onChange={(e) => setLanguage(e.target.value as "it" | "en" | "fr" | "es")}
+                                        className="bg-transparent text-sm font-medium text-foreground outline-none"
+                                        aria-label={t("common.language")}
+                                    >
+                                        <option value="it">IT</option>
+                                        <option value="en">EN</option>
+                                        <option value="fr">FR</option>
+                                        <option value="es">ES</option>
+                                    </select>
+                                </div>
+
+                                <ThemeSwitch />
+
+                                <Link
+                                    href="/notifications"
+                                    className="surface-panel relative flex h-11 w-11 items-center justify-center rounded-2xl"
+                                    aria-label={t("common.notifications")}
+                                >
+                                    <Bell className="h-5 w-5 text-foreground" />
+                                    {notificationCount > 0 && (
+                                        <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-primary-foreground">
+                                            {notificationCount > 99 ? "99+" : notificationCount}
+                                        </span>
+                                    )}
+                                </Link>
+
+                                <div className="surface-panel flex items-center gap-3 rounded-2xl px-3 py-2">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-bold text-foreground">
+                                        {profile?.full_name
+                                            ? profile.full_name
+                                                .split(" ")
+                                                .map((p) => p[0])
+                                                .join("")
+                                                .slice(0, 2)
+                                                .toUpperCase()
+                                            : "U"}
+                                    </div>
+                                    <div className="hidden sm:block">
+                                        <div className="text-sm font-semibold text-foreground">
+                                            {profile?.full_name ?? "User"}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {profile?.role ?? "viewer"}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Button
+                                    variant="outline"
+                                    className="rounded-2xl"
+                                    onClick={() => {
+                                        localStorage.removeItem("app-language");
+                                        router.push("/login");
+                                    }}
+                                >
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    {t("common.logout")}
+                                </Button>
+                            </div>
+                        </div>
                     </header>
 
-                    <main className="min-h-0 flex-1 bg-background">{children}</main>
+                    <main className="flex-1 px-6 py-6">{children}</main>
                 </div>
             </div>
-
-            {sidebarOpen && (
-                <div className="fixed inset-0 z-50 lg:hidden">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-                    <div className="absolute inset-y-0 left-0 w-[280px] shadow-2xl">
-                        <button
-                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
-                            onClick={() => setSidebarOpen(false)}
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                        <SideContent />
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
-
-export default MainLayout;
