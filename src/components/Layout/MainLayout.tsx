@@ -51,8 +51,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const router = useRouter();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [profileName, setProfileName] = useState("Utente");
-    const [profileRole, setProfileRole] = useState < string > (userRole);
-    const [orgType, setOrgType] = useState < OrgType > (null);
+    const [profileRole, setProfileRole] = useState<string>(userRole);
+    const [orgType, setOrgType] = useState<OrgType>(null);
     const [orgName, setOrgName] = useState("Organizzazione");
     const [notificationCount, setNotificationCount] = useState(0);
 
@@ -65,12 +65,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 if (ctx?.orgType) setOrgType(ctx.orgType as OrgType);
 
                 if (ctx?.orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", ctx.orgId)
-                        .maybeSingle();
-
+                    const { data: org } = await supabase.from("organizations").select("name").eq("id", ctx.orgId).maybeSingle();
                     setOrgName((org as any)?.name ?? "Organizzazione");
                 }
 
@@ -125,9 +120,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         return roleOk && orgOk;
     });
 
-    const mainItems = filteredNavItems.filter(
-        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
-    );
+    const mainItems = filteredNavItems.filter((item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href));
     const managementItems = filteredNavItems.filter((item) => ["/customers", "/assignments", "/users"].includes(item.href));
     const settingsItems = filteredNavItems.filter((item) => ["/settings/organization", "/settings"].includes(item.href));
 
@@ -148,9 +141,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             onClick={() => setSidebarOpen(false)}
             className={cn(
                 "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
-                isActive(href)
-                    ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
-                    : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                isActive(href) ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]" : "text-foreground/75 hover:bg-muted hover:text-foreground"
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
@@ -160,13 +151,13 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const SideContent = () => (
         <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
-            <div className="border-b border-border px-5 py-5">
-                <div className="flex items-center gap-4">
+            <div className="border-b border-border px-4 py-4">
+                <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
-                    <div className="min-w-0">
-                        <div className="truncate text-2xl leading-none font-bold tracking-tight">MACHINA</div>
+                    <div className="min-w-0 flex-1">
+                        <div className="truncate text-[1.7rem] leading-none font-bold tracking-[-0.03em]">MACHINA</div>
                         <div className="truncate text-sm text-muted-foreground">
                             {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Utilizzatore finale" : "Piattaforma"}
                         </div>
@@ -175,12 +166,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             <div className="px-4 py-4">
-                <div className="rounded-2xl border border-border bg-muted/35 p-3">
+                <div className="rounded-2xl border border-border bg-muted/35 p-3 shadow-[0_14px_28px_-24px_rgba(15,23,42,0.28)]">
                     <OrganizationSwitcher />
                 </div>
             </div>
 
-            <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-4 space-y-6">
+            <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-4 pb-4">
                 <div className="space-y-2">{mainItems.map((item) => <NavLink key={item.href} {...item} />)}</div>
 
                 {managementItems.length > 0 && (
@@ -199,10 +190,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             <div className="border-t border-border p-4">
-                <button
-                    onClick={handleLogout}
-                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
-                >
+                <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground">
                     <LogOut className="h-5 w-5 shrink-0" />
                     <span>Esci</span>
                 </button>
@@ -213,7 +201,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="flex min-h-screen">
-                <aside className="hidden w-[280px] shrink-0 lg:block">
+                <aside className="hidden w-[272px] shrink-0 lg:block">
                     <div className="sticky top-0 h-screen">
                         <SideContent />
                     </div>
@@ -223,23 +211,19 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
                         <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
                             <div className="flex items-center gap-3">
-                                <button
-                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
-                                    onClick={() => setSidebarOpen(true)}
-                                >
+                                <button className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden" onClick={() => setSidebarOpen(true)}>
                                     <Menu className="h-5 w-5" />
                                 </button>
                                 <div>
-                                    <div className="text-lg font-semibold">Dashboard</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {orgName} · {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Customer" : "Contesto"}
-                                    </div>
+                                    <div className="text-[15px] font-semibold text-foreground">{router.pathname === "/dashboard" ? "Dashboard" : orgName}</div>
+                                    <div className="text-sm text-muted-foreground">{orgName}{orgType ? ` · ${orgType === "manufacturer" ? "Costruttore" : "Customer"}` : ""}</div>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-3">
                                 <ThemeSwitch />
-                                <Link href="/notifications" className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted">
+
+                                <Link href="/notifications" className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-card text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted">
                                     <Bell className="h-5 w-5" />
                                     {notificationCount > 0 && (
                                         <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full bg-orange-500 px-1 text-[10px] text-white hover:bg-orange-500">
@@ -248,32 +232,27 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     )}
                                 </Link>
 
-                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                                        {initials}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
-                                        <div className="text-xs text-muted-foreground capitalize">{profileRole}</div>
+                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.24)] md:flex">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-muted font-semibold text-foreground">{initials}</div>
+                                    <div className="max-w-[180px] min-w-0">
+                                        <div className="truncate text-[15px] font-semibold text-foreground">{profileName}</div>
+                                        <div className="truncate text-sm text-muted-foreground">{profileRole}</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <main className="min-h-0 flex-1 bg-background">{children}</main>
+                    <main className="flex-1">{children}</main>
                 </div>
             </div>
 
             {sidebarOpen && (
                 <div className="fixed inset-0 z-50 lg:hidden">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-                    <div className="absolute inset-y-0 left-0 w-[280px] shadow-2xl">
-                        <button
-                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
-                            onClick={() => setSidebarOpen(false)}
-                        >
-                            <X className="h-4 w-4" />
+                    <div className="absolute inset-0 bg-black/45" onClick={() => setSidebarOpen(false)} />
+                    <div className="absolute left-0 top-0 h-full w-[272px] bg-card shadow-2xl">
+                        <button className="absolute right-3 top-3 rounded-xl p-2 text-foreground transition hover:bg-muted" onClick={() => setSidebarOpen(false)}>
+                            <X className="h-5 w-5" />
                         </button>
                         <SideContent />
                     </div>
