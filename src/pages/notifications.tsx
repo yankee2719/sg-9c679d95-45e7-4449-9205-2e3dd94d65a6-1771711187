@@ -12,14 +12,16 @@ import {
     type NotificationType,
 } from "@/services/notificationService";
 import {
-    Bell, ClipboardList, AlertTriangle, Clock, Wrench,
-    CheckCircle2, Trash2, CheckCheck, BellOff, User,
+    Bell,
+    ClipboardList,
+    AlertTriangle,
+    Clock,
+    Wrench,
+    CheckCircle2,
+    Trash2,
+    User,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// =============================================================================
-// CONFIG
-// =============================================================================
 
 const typeConfig: Record<string, { label: string; icon: any; color: string; bgColor: string }> = {
     maintenance_due: { label: "Manutenzione", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-500/10" },
@@ -35,11 +37,16 @@ const typeConfig: Record<string, { label: string; icon: any; color: string; bgCo
 function getEntityRoute(n: Notification): string | null {
     if (!n.related_entity_type || !n.related_entity_id) return null;
     switch (n.related_entity_type) {
-        case "work_order": return `/work-orders/${n.related_entity_id}`;
-        case "maintenance_plan": return `/maintenance/${n.related_entity_id}`;
-        case "machine": return `/equipment/${n.related_entity_id}`;
-        case "checklist_execution": return `/checklist/${n.related_entity_id}`;
-        default: return null;
+        case "work_order":
+            return `/work-orders/${n.related_entity_id}`;
+        case "maintenance_plan":
+            return `/maintenance/${n.related_entity_id}`;
+        case "machine":
+            return `/equipment/${n.related_entity_id}`;
+        case "checklist_execution":
+            return `/checklist/${n.related_entity_id}`;
+        default:
+            return null;
     }
 }
 
@@ -55,22 +62,14 @@ function formatRelative(d: string): string {
     return new Date(d).toLocaleDateString("it-IT");
 }
 
-// =============================================================================
-// COMPONENT
-// =============================================================================
-
 export default function NotificationsPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const [userRole, setUserRole] = useState<"admin" | "supervisor" | "technician">("technician");
+    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("technician");
     const [loading, setLoading] = useState(true);
-    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [notifications, setNotifications] = useState < Notification[] > ([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [activeFilter, setActiveFilter] = useState<"all" | "unread" | NotificationType>("all");
-
-    // =========================================================================
-    // LOAD
-    // =========================================================================
+    const [activeFilter, setActiveFilter] = useState < "all" | "unread" | NotificationType > ("all");
 
     const loadNotifications = useCallback(async () => {
         const result = await notificationService.getMyNotifications({ limit: 100 });
@@ -81,38 +80,38 @@ export default function NotificationsPage() {
     useEffect(() => {
         const init = async () => {
             const ctx = await getUserContext();
-            if (!ctx) { router.push("/login"); return; }
-            setUserRole(ctx.role as any);
+            if (!ctx) {
+                router.push("/login");
+                return;
+            }
+            setUserRole((ctx.role as any) ?? "technician");
             await loadNotifications();
             setLoading(false);
         };
         init();
     }, [router, loadNotifications]);
 
-    // Realtime
     useEffect(() => {
         let channel: any = null;
         const setup = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
             channel = notificationService.subscribeToMyNotifications(user.id, (newNotif) => {
-                setNotifications(prev => [newNotif, ...prev]);
-                setUnreadCount(prev => prev + 1);
+                setNotifications((prev) => [newNotif, ...prev]);
+                setUnreadCount((prev) => prev + 1);
             });
         };
         setup();
-        return () => { if (channel) notificationService.unsubscribe(channel); };
+        return () => {
+            if (channel) notificationService.unsubscribe(channel);
+        };
     }, []);
-
-    // =========================================================================
-    // HANDLERS
-    // =========================================================================
 
     const handleClick = async (n: Notification) => {
         if (!n.is_read) {
             await notificationService.markAsRead(n.id);
-            setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
+            setUnreadCount((prev) => Math.max(0, prev - 1));
         }
         const route = getEntityRoute(n);
         if (route) router.push(route);
@@ -120,30 +119,26 @@ export default function NotificationsPage() {
 
     const handleMarkAllRead = async () => {
         await notificationService.markAllAsRead();
-        setNotifications(prev => prev.map(x => ({ ...x, is_read: true })));
+        setNotifications((prev) => prev.map((x) => ({ ...x, is_read: true })));
         setUnreadCount(0);
         toast({ title: "Tutte lette" });
     };
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        const n = notifications.find(x => x.id === id);
+        const n = notifications.find((x) => x.id === id);
         await notificationService.deleteNotification(id);
-        setNotifications(prev => prev.filter(x => x.id !== id));
-        if (n && !n.is_read) setUnreadCount(prev => Math.max(0, prev - 1));
+        setNotifications((prev) => prev.filter((x) => x.id !== id));
+        if (n && !n.is_read) setUnreadCount((prev) => Math.max(0, prev - 1));
     };
 
     const handleDeleteAllRead = async () => {
         await notificationService.deleteAllRead();
-        setNotifications(prev => prev.filter(x => !x.is_read));
+        setNotifications((prev) => prev.filter((x) => !x.is_read));
         toast({ title: "Notifiche lette eliminate" });
     };
 
-    // =========================================================================
-    // FILTER
-    // =========================================================================
-
-    const filtered = notifications.filter(n => {
+    const filtered = notifications.filter((n) => {
         if (activeFilter === "all") return true;
         if (activeFilter === "unread") return !n.is_read;
         return n.type === activeFilter;
@@ -158,90 +153,96 @@ export default function NotificationsPage() {
         { key: "system", label: "Sistema" },
     ];
 
-    // =========================================================================
-    // RENDER
-    // =========================================================================
-
     if (loading) return null;
 
     return (
         <MainLayout userRole={userRole}>
-            <div className="space-y-6 max-w-3xl mx-auto">
-                {/* Header */}
-                <div className="flex items-center justify-between">
+            <div className="mx-auto max-w-3xl space-y-6 px-5 py-6 lg:px-8 lg:py-8">
+                <div className="flex items-center justify-between gap-3">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Notifiche</h1>
-                        <p className="text-muted-foreground mt-1">
-                            {unreadCount > 0 ? `${unreadCount} non lette` : "Tutto aggiornato"}
-                        </p>
+                        <p className="mt-1 text-muted-foreground">{unreadCount > 0 ? `${unreadCount} non lette` : "Tutto aggiornato"}</p>
                     </div>
                     <div className="flex gap-2">
                         {unreadCount > 0 && (
                             <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
-                                <CheckCheck className="w-4 h-4 mr-1" /> Segna tutte lette
+                                Segna tutte lette
                             </Button>
                         )}
                         <Button variant="ghost" size="sm" onClick={handleDeleteAllRead} title="Elimina lette">
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="h-4 w-4" />
                         </Button>
                     </div>
                 </div>
 
-                {/* Filters */}
                 <div className="flex flex-wrap gap-2">
-                    {filterButtons.map(fb => (
-                        <Button key={fb.key} size="sm"
+                    {filterButtons.map((fb) => (
+                        <Button
+                            key={fb.key}
+                            size="sm"
                             variant={activeFilter === fb.key ? "default" : "outline"}
-                            className={activeFilter === fb.key ? "bg-[#FF6B35] hover:bg-[#e55a2b] text-white rounded-xl" : "rounded-xl"}
-                            onClick={() => setActiveFilter(fb.key as any)}>
+                            className={activeFilter === fb.key ? "rounded-xl bg-[#FF6B35] text-white hover:bg-[#e55a2b]" : "rounded-xl"}
+                            onClick={() => setActiveFilter(fb.key as any)}
+                        >
                             {fb.label}
                             {fb.count !== undefined && fb.count > 0 && (
-                                <Badge className="ml-1.5 h-5 min-w-[20px] p-0 flex items-center justify-center rounded-full bg-white/20 text-current text-xs">{fb.count}</Badge>
+                                <Badge className="ml-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white/20 p-0 text-xs text-current">
+                                    {fb.count}
+                                </Badge>
                             )}
                         </Button>
                     ))}
                 </div>
 
-                {/* List */}
                 <div className="space-y-2">
                     {filtered.length === 0 ? (
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm p-12 text-center">
-                            <BellOff className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                            <h3 className="text-lg font-bold text-foreground mb-1">Nessuna notifica</h3>
-                            <p className="text-muted-foreground text-sm">Le notifiche appariranno qui automaticamente</p>
+                        <Card className="rounded-2xl border border-border bg-card p-12 text-center shadow-sm">
+                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                                <Bell className="h-6 w-6 text-muted-foreground" />
+                            </div>
+                            <h3 className="mb-1 text-lg font-bold text-foreground">Nessuna notifica</h3>
+                            <p className="text-sm text-muted-foreground">Le notifiche appariranno qui automaticamente</p>
                         </Card>
                     ) : (
-                        filtered.map(n => {
+                        filtered.map((n) => {
                             const config = typeConfig[n.type] || typeConfig.system;
-                            const Icon = config.icon;
+                            const Icon = config.icon || Bell;
                             const route = getEntityRoute(n);
 
                             return (
-                                <Card key={n.id}
-                                    className={`rounded-2xl border-0 shadow-sm transition-all group ${route ? "cursor-pointer hover:shadow-md" : ""} ${n.is_read ? "bg-card opacity-70" : "bg-card border-l-4 border-l-[#FF6B35]"}`}
-                                    onClick={() => handleClick(n)}>
-                                    <CardContent className="p-4 flex items-start gap-4">
-                                        <div className={`w-10 h-10 rounded-xl ${config.bgColor} flex items-center justify-center shrink-0`}>
-                                            <Icon className={`w-5 h-5 ${config.color}`} />
+                                <Card
+                                    key={n.id}
+                                    className={`group rounded-2xl border shadow-sm transition-all ${route ? "cursor-pointer hover:shadow-md" : ""} ${n.is_read ? "bg-card opacity-80" : "border-l-4 border-l-[#FF6B35] bg-card"}`}
+                                    onClick={() => handleClick(n)}
+                                >
+                                    <CardContent className="flex items-start gap-4 p-4">
+                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${config.bgColor}`}>
+                                            <Icon className={`h-5 w-5 ${config.color}`} />
                                         </div>
-                                        <div className="flex-1 min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <div className="flex items-start justify-between gap-2">
-                                                <div className="flex-1 min-w-0">
+                                                <div className="min-w-0 flex-1">
                                                     <div className="flex items-center gap-2">
-                                                        <h3 className={`font-semibold truncate ${n.is_read ? "text-foreground" : "text-foreground"}`}>{n.title}</h3>
-                                                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-[#FF6B35] shrink-0" />}
+                                                        <h3 className="truncate font-semibold text-foreground">{n.title}</h3>
+                                                        {!n.is_read && <div className="h-2 w-2 shrink-0 rounded-full bg-[#FF6B35]" />}
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                                                    <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{n.message}</p>
                                                 </div>
-                                                <div className="flex items-center gap-1 shrink-0">
+                                                <div className="flex shrink-0 items-center gap-1">
                                                     <span className="text-xs text-muted-foreground">{formatRelative(n.created_at)}</span>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={(e) => handleDelete(e, n.id)}>
-                                                        <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-red-500" />
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                                                        onClick={(e) => handleDelete(e, n.id)}
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
                                                     </Button>
                                                 </div>
                                             </div>
-                                            <Badge variant="outline" className="mt-1.5 text-xs">{config.label}</Badge>
+                                            <Badge variant="outline" className="mt-1.5 text-xs">
+                                                {config.label}
+                                            </Badge>
                                         </div>
                                     </CardContent>
                                 </Card>
