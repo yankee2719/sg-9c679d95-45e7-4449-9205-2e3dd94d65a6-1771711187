@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
-import { languageFlags, languageNames, type Language, useLanguage } from "@/contexts/LanguageContext";
 import {
     LayoutDashboard,
     Wrench,
@@ -25,8 +24,6 @@ import {
     Package,
     Layers3,
     X,
-    Languages,
-    ChevronDown,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -48,51 +45,6 @@ interface NavItem {
 
 function cn(...classes: Array<string | false | null | undefined>) {
     return classes.filter(Boolean).join(" ");
-}
-
-function LanguageSwitcher() {
-    const { language, setLanguage } = useLanguage();
-    const [open, setOpen] = useState(false);
-
-    const options: Language[] = ["it", "en", "fr", "es"];
-
-    return (
-        <div className="relative hidden md:block">
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted"
-            >
-                <Languages className="h-4 w-4 text-muted-foreground" />
-                <span>{languageFlags[language]}</span>
-                <span className="hidden lg:inline">{language.toUpperCase()}</span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
-
-            {open && (
-                <div className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[180px] overflow-hidden rounded-2xl border border-border bg-card p-1 shadow-[0_18px_35px_-20px_rgba(15,23,42,0.38)]">
-                    {options.map((option) => (
-                        <button
-                            key={option}
-                            type="button"
-                            onClick={() => {
-                                setLanguage(option);
-                                setOpen(false);
-                            }}
-                            className={cn(
-                                "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
-                                language === option ? "bg-muted text-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
-                            )}
-                        >
-                            <span>{languageFlags[option]}</span>
-                            <span className="flex-1">{languageNames[option]}</span>
-                            <span className="text-xs uppercase text-muted-foreground">{option}</span>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
@@ -213,9 +165,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">MACHINA</div>
-                        <div className="text-sm text-muted-foreground">
+                    <div className="min-w-0">
+                        <div className="text-xl leading-none font-bold tracking-tight">MACHINA</div>
+                        <div className="truncate text-sm text-muted-foreground">
                             {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Utilizzatore finale" : "Piattaforma"}
                         </div>
                     </div>
@@ -228,7 +180,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 </div>
             </div>
 
-            <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-4 pb-4">
+            <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-4 space-y-6">
                 <div className="space-y-2">{mainItems.map((item) => <NavLink key={item.href} {...item} />)}</div>
 
                 {managementItems.length > 0 && (
@@ -261,7 +213,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     return (
         <div className="min-h-screen bg-background text-foreground">
             <div className="flex min-h-screen">
-                <aside className="hidden w-[272px] shrink-0 lg:block xl:w-[288px]">
+                <aside className="hidden w-[280px] shrink-0 lg:block">
                     <div className="sticky top-0 h-screen">
                         <SideContent />
                     </div>
@@ -286,7 +238,6 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             </div>
 
                             <div className="flex items-center gap-3">
-                                <LanguageSwitcher />
                                 <ThemeSwitch />
                                 <Link href="/notifications" className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted">
                                     <Bell className="h-5 w-5" />
@@ -297,13 +248,13 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     )}
                                 </Link>
 
-                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] md:flex">
+                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
                                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
                                         {initials}
                                     </div>
                                     <div className="min-w-0">
                                         <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
-                                        <div className="text-xs capitalize text-muted-foreground">{profileRole}</div>
+                                        <div className="text-xs text-muted-foreground capitalize">{profileRole}</div>
                                     </div>
                                 </div>
                             </div>
