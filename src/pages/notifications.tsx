@@ -19,11 +19,12 @@ import {
     Wrench,
     CheckCircle2,
     Trash2,
+    CheckCheck,
     User,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const typeConfig: Record<string, { label: string; icon: any; color: string; bgColor: string }> = {
+const typeConfig: Record<string, { label: string; icon: React.ComponentType<any>; color: string; bgColor: string }> = {
     maintenance_due: { label: "Manutenzione", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-500/10" },
     maintenance_overdue: { label: "Scaduta", icon: AlertTriangle, color: "text-red-500", bgColor: "bg-red-500/10" },
     equipment_status: { label: "Macchina", icon: Wrench, color: "text-blue-500", bgColor: "bg-blue-500/10" },
@@ -73,8 +74,8 @@ export default function NotificationsPage() {
 
     const loadNotifications = useCallback(async () => {
         const result = await notificationService.getMyNotifications({ limit: 100 });
-        setNotifications(result.notifications);
-        setUnreadCount(result.unreadCount);
+        setNotifications(result.notifications || []);
+        setUnreadCount(result.unreadCount || 0);
     }, []);
 
     useEffect(() => {
@@ -84,7 +85,7 @@ export default function NotificationsPage() {
                 router.push("/login");
                 return;
             }
-            setUserRole((ctx.role as any) ?? "technician");
+            setUserRole(ctx.role as any);
             await loadNotifications();
             setLoading(false);
         };
@@ -94,7 +95,9 @@ export default function NotificationsPage() {
     useEffect(() => {
         let channel: any = null;
         const setup = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
             if (!user) return;
             channel = notificationService.subscribeToMyNotifications(user.id, (newNotif) => {
                 setNotifications((prev) => [newNotif, ...prev]);
@@ -126,10 +129,10 @@ export default function NotificationsPage() {
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        const n = notifications.find((x) => x.id === id);
+        const current = notifications.find((x) => x.id === id);
         await notificationService.deleteNotification(id);
         setNotifications((prev) => prev.filter((x) => x.id !== id));
-        if (n && !n.is_read) setUnreadCount((prev) => Math.max(0, prev - 1));
+        if (current && !current.is_read) setUnreadCount((prev) => Math.max(0, prev - 1));
     };
 
     const handleDeleteAllRead = async () => {
@@ -157,16 +160,18 @@ export default function NotificationsPage() {
 
     return (
         <MainLayout userRole={userRole}>
-            <div className="mx-auto max-w-3xl space-y-6 px-5 py-6 lg:px-8 lg:py-8">
-                <div className="flex items-center justify-between gap-3">
+            <div className="mx-auto max-w-3xl space-y-6">
+                <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Notifiche</h1>
-                        <p className="mt-1 text-muted-foreground">{unreadCount > 0 ? `${unreadCount} non lette` : "Tutto aggiornato"}</p>
+                        <p className="mt-1 text-muted-foreground">
+                            {unreadCount > 0 ? `${unreadCount} non lette` : "Tutto aggiornato"}
+                        </p>
                     </div>
                     <div className="flex gap-2">
                         {unreadCount > 0 && (
                             <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
-                                Segna tutte lette
+                                <CheckCheck className="mr-1 h-4 w-4" /> Segna tutte lette
                             </Button>
                         )}
                         <Button variant="ghost" size="sm" onClick={handleDeleteAllRead} title="Elimina lette">
@@ -181,7 +186,11 @@ export default function NotificationsPage() {
                             key={fb.key}
                             size="sm"
                             variant={activeFilter === fb.key ? "default" : "outline"}
-                            className={activeFilter === fb.key ? "rounded-xl bg-[#FF6B35] text-white hover:bg-[#e55a2b]" : "rounded-xl"}
+                            className={
+                                activeFilter === fb.key
+                                    ? "rounded-xl bg-[#FF6B35] text-white hover:bg-[#e55a2b]"
+                                    : "rounded-xl"
+                            }
                             onClick={() => setActiveFilter(fb.key as any)}
                         >
                             {fb.label}
@@ -196,10 +205,8 @@ export default function NotificationsPage() {
 
                 <div className="space-y-2">
                     {filtered.length === 0 ? (
-                        <Card className="rounded-2xl border border-border bg-card p-12 text-center shadow-sm">
-                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                                <Bell className="h-6 w-6 text-muted-foreground" />
-                            </div>
+                        <Card className="rounded-2xl bg-card p-12 text-center shadow-sm">
+                            <Bell className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
                             <h3 className="mb-1 text-lg font-bold text-foreground">Nessuna notifica</h3>
                             <p className="text-sm text-muted-foreground">Le notifiche appariranno qui automaticamente</p>
                         </Card>
@@ -212,7 +219,7 @@ export default function NotificationsPage() {
                             return (
                                 <Card
                                     key={n.id}
-                                    className={`group rounded-2xl border shadow-sm transition-all ${route ? "cursor-pointer hover:shadow-md" : ""} ${n.is_read ? "bg-card opacity-80" : "border-l-4 border-l-[#FF6B35] bg-card"}`}
+                                    className={`group rounded-2xl shadow-sm transition-all ${route ? "cursor-pointer hover:shadow-md" : ""} ${n.is_read ? "bg-card opacity-70" : "border-l-4 border-l-[#FF6B35] bg-card"}`}
                                     onClick={() => handleClick(n)}
                                 >
                                     <CardContent className="flex items-start gap-4 p-4">
