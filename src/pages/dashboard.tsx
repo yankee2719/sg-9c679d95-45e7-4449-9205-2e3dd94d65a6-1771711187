@@ -7,13 +7,14 @@ import { SEO } from "@/components/SEO";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import {
     Wrench,
-    Package,
     Users,
     ArrowRight,
     Factory,
     FileText,
     ClipboardList,
     CheckSquare,
+    Package,
+    Building2,
 } from "lucide-react";
 
 type OrgType = "manufacturer" | "customer" | null;
@@ -41,7 +42,7 @@ interface RecentCustomer {
 }
 
 function CardShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-    return <div className={`rounded-[20px] border border-border bg-card shadow-sm ${className}`}>{children}</div>;
+    return <div className={`surface-panel ${className}`}>{children}</div>;
 }
 
 export default function DashboardPage() {
@@ -130,7 +131,7 @@ export default function DashboardPage() {
         if (orgType === "manufacturer") {
             return [
                 { title: "Macchine Prodotte", value: stats.machines, icon: Wrench, accent: "bg-violet-500/15 text-violet-600 dark:text-violet-300" },
-                { title: "Clienti", value: stats.customers, icon: FileText, accent: "bg-blue-500/15 text-blue-600 dark:text-blue-300" },
+                { title: "Clienti", value: stats.customers, icon: Building2, accent: "bg-blue-500/15 text-blue-600 dark:text-blue-300" },
                 { title: "Macchine Assegnate", value: stats.assignedMachines, icon: Package, accent: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" },
                 { title: "Account Clienti", value: stats.customerAccounts, icon: Users, accent: "bg-amber-500/15 text-amber-600 dark:text-amber-300" },
             ];
@@ -169,87 +170,107 @@ export default function DashboardPage() {
                     <div className="mx-auto max-w-[1220px] space-y-8">
                         <div className="space-y-2">
                             <h1 className="text-4xl font-bold tracking-tight text-foreground">Dashboard</h1>
-                            <p className="text-base text-muted-foreground">Vista rapida del contesto organizzativo attivo.</p>
+                            <p className="text-base text-muted-foreground">
+                                {orgType === "manufacturer" ? "Panoramica del contesto costruttore attivo." : "Vista rapida del contesto organizzativo attivo."}
+                            </p>
                         </div>
 
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                             {kpis.map((item) => {
                                 const Icon = item.icon;
                                 return (
-                                    <CardShell key={item.title} className="p-7">
-                                        <div className={`mb-6 flex h-12 w-12 items-center justify-center rounded-2xl ${item.accent}`}>
+                                    <CardShell key={item.title} className="p-6">
+                                        <div className={`mb-5 flex h-11 w-11 items-center justify-center rounded-2xl ${item.accent}`}>
                                             <Icon className="h-5 w-5" />
                                         </div>
                                         <div className="text-5xl font-bold leading-none text-foreground">{item.value}</div>
-                                        <div className="mt-4 text-[22px] font-medium text-muted-foreground">{item.title}</div>
+                                        <div className="mt-2 text-[22px] font-medium text-muted-foreground">{item.title}</div>
                                     </CardShell>
                                 );
                             })}
                         </div>
 
-                        <div className="grid gap-5 xl:grid-cols-3">
+                        <div className="grid gap-4 lg:grid-cols-3">
                             {quickActions.map((action) => {
                                 const Icon = action.icon;
                                 return (
-                                    <Link key={action.title} href={action.href}>
-                                        <div className={`flex items-center justify-between rounded-[22px] bg-gradient-to-r ${action.color} px-7 py-7 text-white shadow-sm transition hover:translate-y-[-1px]`}>
-                                            <div className="flex items-center gap-5">
-                                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12">
-                                                    <Icon className="h-5 w-5" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-xl font-bold">{action.title}</div>
-                                                    <div className="text-base text-white/90">{action.subtitle}</div>
-                                                </div>
+                                    <Link key={action.href} href={action.href} className={`flex items-center justify-between gap-4 rounded-[22px] bg-gradient-to-r ${action.color} px-7 py-7 text-white shadow-[0_18px_35px_-20px_rgba(15,23,42,0.55)]`}>
+                                        <div className="flex min-w-0 items-center gap-4">
+                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/12">
+                                                <Icon className="h-5 w-5 text-white" />
                                             </div>
-                                            <ArrowRight className="h-6 w-6" />
+                                            <div className="min-w-0">
+                                                <div className="truncate text-[18px] font-bold text-white">{action.title}</div>
+                                                <div className="truncate text-sm text-white/85">{action.subtitle}</div>
+                                            </div>
                                         </div>
+                                        <ArrowRight className="h-6 w-6 shrink-0 text-white" />
                                     </Link>
                                 );
                             })}
                         </div>
 
-                        <section className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-[32px] font-bold text-foreground">{orgType === "manufacturer" ? "Clienti recenti" : "Ultime Macchine"}</h2>
-                                <Link href={orgType === "manufacturer" ? "/customers" : "/equipment"} className="text-sm font-semibold text-orange-500 hover:text-orange-600">
-                                    Vedi tutte
-                                </Link>
-                            </div>
+                        {orgType === "manufacturer" && (
+                            <section className="space-y-4">
+                                <div className="flex items-center justify-between gap-4">
+                                    <h2 className="text-[32px] font-bold text-foreground">Clienti Recenti</h2>
+                                    <Link href="/customers" className="text-sm font-semibold text-orange-500 hover:text-orange-600">Vedi tutti</Link>
+                                </div>
 
-                            <CardShell className="p-3">
-                                {orgType === "manufacturer" ? (
-                                    recentCustomers.length === 0 ? (
-                                        <div className="p-6 text-muted-foreground">Nessun cliente trovato.</div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {recentCustomers.map((customer) => (
-                                                <Link key={customer.id} href="/customers" className="flex items-center justify-between rounded-2xl px-4 py-4 transition hover:bg-muted/70">
-                                                    <div>
-                                                        <div className="font-semibold text-foreground">{customer.name ?? "Cliente"}</div>
-                                                        <div className="text-sm text-muted-foreground">Organizzazione cliente</div>
-                                                    </div>
-                                                    <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    )
-                                ) : recentMachines.length === 0 ? (
-                                    <div className="p-6 text-muted-foreground">Nessuna macchina trovata.</div>
+                                {recentCustomers.length === 0 ? (
+                                    <CardShell className="p-6 text-muted-foreground">Nessun cliente recente.</CardShell>
                                 ) : (
-                                    <div className="space-y-2">
-                                        {recentMachines.map((machine) => (
-                                            <Link key={machine.id} href={`/equipment/${machine.id}`} className="flex items-center justify-between rounded-2xl px-4 py-4 transition hover:bg-muted/70">
-                                                <div>
-                                                    <div className="font-semibold text-foreground">{machine.name ?? "Macchina"}</div>
-                                                    <div className="text-sm text-muted-foreground">{machine.serial_number ?? machine.lifecycle_state ?? "—"}</div>
-                                                </div>
-                                                <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                        {recentCustomers.map((customer) => (
+                                            <Link key={customer.id} href="/customers" className="block">
+                                                <CardShell className="p-5 transition hover:-translate-y-0.5">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-300">
+                                                            <Building2 className="h-5 w-5" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="truncate text-xl font-semibold text-foreground">{customer.name ?? "Cliente"}</div>
+                                                            <div className="text-sm text-muted-foreground">Cliente</div>
+                                                        </div>
+                                                    </div>
+                                                </CardShell>
                                             </Link>
                                         ))}
                                     </div>
                                 )}
-                            </CardShell>
+                            </section>
+                        )}
+
+                        <section className="space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <h2 className="text-[32px] font-bold text-foreground">Ultime Macchine</h2>
+                                <Link href="/equipment" className="text-sm font-semibold text-orange-500 hover:text-orange-600">Vedi tutte</Link>
+                            </div>
+
+                            {recentMachines.length === 0 ? (
+                                <CardShell className="p-6 text-muted-foreground">Nessuna macchina recente.</CardShell>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                    {recentMachines.map((machine) => (
+                                        <Link key={machine.id} href={`/equipment/${machine.id}`} className="block">
+                                            <CardShell className="p-5 transition hover:-translate-y-0.5">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-xl font-semibold text-foreground">{machine.name ?? "Macchina"}</div>
+                                                        <div className="truncate text-sm text-muted-foreground">{machine.serial_number ?? "—"}</div>
+                                                    </div>
+                                                    <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                                                </div>
+                                                {machine.lifecycle_state && (
+                                                    <div className="mt-4 inline-flex rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-foreground/80">
+                                                        {machine.lifecycle_state}
+                                                    </div>
+                                                )}
+                                            </CardShell>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
                         </section>
                     </div>
                 </div>
