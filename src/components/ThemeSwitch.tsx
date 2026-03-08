@@ -13,20 +13,18 @@ export function ThemeSwitch() {
 
     return (
         <Button
-            type="button"
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={mounted ? toggleTheme : undefined}
-            className="h-10 w-10 rounded-xl border-border bg-card text-foreground hover:bg-muted"
+            className="rounded-2xl border border-border bg-card text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] hover:bg-muted"
             aria-label="Cambia tema"
-            title={mounted ? (theme === "dark" ? "Passa a modalità chiara" : "Passa a modalità scura") : "Tema"}
         >
             {!mounted ? (
-                <div className="h-4 w-4 rounded-full bg-muted" />
+                <div className="h-5 w-5 rounded-full bg-muted" />
             ) : theme === "dark" ? (
-                <Sun className="h-4 w-4" />
+                <Sun className="h-5 w-5 text-amber-500" />
             ) : (
-                <Moon className="h-4 w-4" />
+                <Moon className="h-5 w-5 text-slate-700" />
             )}
         </Button>
     );
