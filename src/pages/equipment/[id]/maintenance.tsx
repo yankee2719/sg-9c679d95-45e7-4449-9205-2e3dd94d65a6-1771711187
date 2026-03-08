@@ -119,7 +119,7 @@ export default function EquipmentMaintenancePage() {
                 setWorkOrders((workRows ?? []) as WorkOrderRow[]);
 
                 const templateIds = Array.from(new Set((assignmentRows ?? []).map((r: any) => r.template_id).filter(Boolean)));
-                let templatesMap = new Map < string, ChecklistTemplateRow> ();
+                const templatesMap = new Map < string, ChecklistTemplateRow> ();
 
                 if (templateIds.length > 0) {
                     const { data: templateRows, error: templateErr } = await supabase
