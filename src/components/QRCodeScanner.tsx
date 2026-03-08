@@ -1,125 +1,198 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, X } from "lucide-react";
+import { Camera, ScanLine, X } from "lucide-react";
+
+type BarcodeDetectorCtor = {
+    new(options?: { formats?: string[] }): {
+        detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+    };
+    getSupportedFormats?: () => Promise<string[]>;
+};
 
 interface QRCodeScannerProps {
-  onScan: (data: string) => void;
-  onClose: () => void;
+    onScan: (data: string) => void;
+    onClose: () => void;
 }
 
 export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [error, setError] = useState<string>("");
-  const [scanning, setScanning] = useState(false);
+    const videoRef = useRef < HTMLVideoElement > (null);
+    const streamRef = useRef < MediaStream | null > (null);
+    const frameRef = useRef < number | null > (null);
+    const lastScanRef = useRef < string | null > (null);
 
-  useEffect(() => {
-    startCamera();
-    return () => {
-      stopCamera();
-    };
-  }, []);
+    const [error, setError] = useState("");
+    const [status, setStatus] = useState < "idle" | "starting" | "scanning" > ("idle");
+    const [cameraReady, setCameraReady] = useState(false);
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setScanning(true);
-        scanQRCode();
-      }
-    } catch (err) {
-      setError("Impossibile accedere alla fotocamera. Verifica i permessi.");
-      console.error("Camera error:", err);
-    }
-  };
+    const stopCamera = useCallback(() => {
+        if (frameRef.current) {
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = null;
+        }
 
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-    }
-  };
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+        }
 
-  const scanQRCode = () => {
-    // In production, use a QR code scanning library like 'jsqr' or 'html5-qrcode'
-    // This is a placeholder that simulates scanning
-    const interval = setInterval(() => {
-      // Simulate QR code detection
-      if (Math.random() > 0.95) {
-        const mockQRData = "EQUIP:MAC-001";
-        onScan(mockQRData);
-        clearInterval(interval);
-      }
-    }, 500);
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
 
-    return () => clearInterval(interval);
-  };
+        setCameraReady(false);
+        setStatus("idle");
+    }, []);
 
-  return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
-      <div className="relative w-full max-w-md mx-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-4 right-4 z-10 bg-white/10 hover:bg-white/20"
-          onClick={onClose}
-        >
-          <X className="h-6 w-6 text-white" />
-        </Button>
+    const startDetection = useCallback(async () => {
+        const BarcodeDetectorClass = (window as Window & { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
+        const videoEl = videoRef.current;
 
-        <div className="bg-white rounded-lg overflow-hidden">
-          <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Camera className="h-5 w-5" />
-              Scansiona Codice QR
-            </h3>
-            <p className="text-sm opacity-90 mt-1">
-              Inquadra il codice QR della macchina
-            </p>
-          </div>
+        if (!BarcodeDetectorClass) {
+            setError("Questo browser non supporta la lettura QR dalla fotocamera. Usa Chrome/Edge recente oppure inserisci il codice manualmente.");
+            return;
+        }
 
-          <div className="relative aspect-square bg-gray-900">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            
-            {/* Scanning overlay */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-64 h-64 border-4 border-white rounded-lg">
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500"></div>
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500"></div>
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500"></div>
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500"></div>
-              </div>
-            </div>
+        try {
+            const supportedFormats = BarcodeDetectorClass.getSupportedFormats
+                ? await BarcodeDetectorClass.getSupportedFormats()
+                : ["qr_code"];
 
-            {scanning && (
-              <div className="absolute bottom-4 left-0 right-0 text-center">
-                <div className="inline-block bg-blue-600 text-white px-4 py-2 rounded-full text-sm">
-                  Ricerca in corso...
+            if (!supportedFormats.includes("qr_code")) {
+                setError("La fotocamera è attiva, ma questo browser non supporta i QR code. Usa l'inserimento manuale.");
+                return;
+            }
+
+            const detector = new BarcodeDetectorClass({ formats: ["qr_code"] });
+
+            const tick = async () => {
+                const currentVideo = videoRef.current;
+
+                if (!currentVideo || currentVideo.readyState < 2) {
+                    frameRef.current = requestAnimationFrame(tick);
+                    return;
+                }
+
+                try {
+                    const barcodes = await detector.detect(currentVideo);
+                    const value = barcodes?.[0]?.rawValue?.trim();
+
+                    if (value && value !== lastScanRef.current) {
+                        lastScanRef.current = value;
+                        stopCamera();
+                        onScan(value);
+                        return;
+                    }
+                } catch (detectError) {
+                    console.error("QR detect error:", detectError);
+                }
+
+                frameRef.current = requestAnimationFrame(tick);
+            };
+
+            setStatus("scanning");
+            frameRef.current = requestAnimationFrame(tick);
+        } catch (detectorError) {
+            console.error("BarcodeDetector init error:", detectorError);
+            setError("Impossibile inizializzare la scansione QR. Usa l'inserimento manuale.");
+        }
+    }, [onScan, stopCamera]);
+
+    const startCamera = useCallback(async () => {
+        setError("");
+        setStatus("starting");
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: "environment" },
+                },
+                audio: false,
+            });
+
+            streamRef.current = stream;
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+
+            setCameraReady(true);
+            await startDetection();
+        } catch (err) {
+            console.error("Camera error:", err);
+            setStatus("idle");
+            setError("Impossibile accedere alla fotocamera. Verifica i permessi del browser oppure usa l'inserimento manuale.");
+        }
+    }, [startDetection]);
+
+    useEffect(() => {
+        startCamera();
+        return () => stopCamera();
+    }, [startCamera, stopCamera]);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-3 top-3 z-10 rounded-xl bg-background/70 hover:bg-background"
+                    onClick={() => {
+                        stopCamera();
+                        onClose();
+                    }}
+                >
+                    <X className="h-5 w-5" />
+                </Button>
+
+                <div className="border-b border-border bg-gradient-to-r from-primary/90 to-primary p-5 text-primary-foreground">
+                    <h3 className="flex items-center gap-2 text-lg font-bold">
+                        <Camera className="h-5 w-5" />
+                        Scansiona codice QR
+                    </h3>
+                    <p className="mt-1 text-sm text-primary-foreground/85">
+                        Inquadra il QR della macchina o del passaporto digitale.
+                    </p>
                 </div>
-              </div>
-            )}
-          </div>
 
-          {error && (
-            <div className="p-4 bg-red-50 text-red-600 text-sm">
-              {error}
+                <div className="relative aspect-square bg-black">
+                    <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="h-full w-full object-cover"
+                    />
+
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="relative h-64 w-64 rounded-3xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.32)]">
+                            <div className="absolute left-0 top-0 h-10 w-10 rounded-tl-3xl border-l-4 border-t-4 border-primary" />
+                            <div className="absolute right-0 top-0 h-10 w-10 rounded-tr-3xl border-r-4 border-t-4 border-primary" />
+                            <div className="absolute bottom-0 left-0 h-10 w-10 rounded-bl-3xl border-b-4 border-l-4 border-primary" />
+                            <div className="absolute bottom-0 right-0 h-10 w-10 rounded-br-3xl border-b-4 border-r-4 border-primary" />
+                        </div>
+                    </div>
+
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-background/85 px-4 py-2 text-sm font-medium text-foreground shadow-lg">
+                            <ScanLine className="h-4 w-4 text-primary" />
+                            {status === "starting" ? "Avvio fotocamera..." : cameraReady ? "Ricerca QR in corso..." : "In attesa della fotocamera"}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-3 p-5">
+                    {error ? (
+                        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                            {error}
+                        </div>
+                    ) : (
+                        <div className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                            Posiziona il codice QR all'interno del riquadro e tieni il dispositivo fermo per un istante.
+                        </div>
+                    )}
+                </div>
             </div>
-          )}
-
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            Posiziona il codice QR all'interno del riquadro
-          </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
