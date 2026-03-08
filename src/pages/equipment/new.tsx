@@ -2,509 +2,380 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
-import { ArrowLeft, Save, Factory, Building2, Cpu } from "lucide-react";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    ArrowLeft,
+    Save,
+    Factory,
+    Building2,
+    Wrench,
+    Layers3,
+} from "lucide-react";
 
 type OrgType = "manufacturer" | "customer";
 
-type CustomerOrg = {
+interface PlantRow {
     id: string;
-    name: string;
-};
-
-type Plant = {
-    id: string;
-    name?: string | null;
-    code?: string | null;
-};
-
-type ProductionLine = {
-    id: string;
-    name?: string | null;
-    code?: string | null;
-    plant_id: string;
-};
-
-async function getOrgTypeById(orgId: string): Promise<OrgType | null> {
-    const { data, error } = await supabase
-        .from("organizations")
-        .select("type")
-        .eq("id", orgId)
-        .single();
-
-    if (error) throw error;
-
-    const t = String((data as any)?.type ?? "").toLowerCase();
-    if (t === "manufacturer") return "manufacturer";
-    if (t === "customer") return "customer";
-    return null;
+    name: string | null;
+    code: string | null;
 }
 
-export default function NewMachinePage() {
+interface ProductionLineRow {
+    id: string;
+    name: string | null;
+    code: string | null;
+    plant_id: string | null;
+}
+
+function CardShell({
+    children,
+    className = "",
+}: {
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div
+            className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+        >
+            {children}
+        </div>
+    );
+}
+
+export default function NewEquipmentPage() {
     const router = useRouter();
-    const { toast } = useToast();
 
-    const [mounted, setMounted] = useState(false);
-    const [pageLoading, setPageLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-
-    const [userRole, setUserRole] = useState < string > ("technician");
+    const [userRole, setUserRole] = useState("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
     const [orgType, setOrgType] = useState < OrgType | null > (null);
 
-    const canCreate = useMemo(() => {
-        return userRole === "admin" || userRole === "supervisor";
-    }, [userRole]);
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
+    const [lines, setLines] = useState < ProductionLineRow[] > ([]);
 
-    // Common machine fields
+    const [saving, setSaving] = useState(false);
+
     const [name, setName] = useState("");
     const [internalCode, setInternalCode] = useState("");
     const [serialNumber, setSerialNumber] = useState("");
+    const [model, setModel] = useState("");
+    const [brand, setBrand] = useState("");
     const [notes, setNotes] = useState("");
-
-    // Manufacturer flow
-    const [customers, setCustomers] = useState < CustomerOrg[] > ([]);
-    const [selectedCustomerId, setSelectedCustomerId] = useState < string > ("none");
-
-    // Customer flow
-    const [plants, setPlants] = useState < Plant[] > ([]);
-    const [selectedPlantId, setSelectedPlantId] = useState < string > ("");
-    const [lines, setLines] = useState < ProductionLine[] > ([]);
-    const [selectedLineId, setSelectedLineId] = useState < string > ("none");
-    const [loadingLines, setLoadingLines] = useState(false);
+    const [plantId, setPlantId] = useState("");
+    const [productionLineId, setProductionLineId] = useState("");
+    const [lifecycleState, setLifecycleState] = useState("active");
 
     useEffect(() => {
-        setMounted(true);
-
-        const init = async () => {
-            setPageLoading(true);
-
+        const load = async () => {
             try {
                 const ctx = await getUserContext();
-
-                if (!ctx) {
-                    router.push("/login");
-                    return;
-                }
+                if (!ctx?.orgId || !ctx?.orgType) return;
 
                 setUserRole(ctx.role ?? "technician");
+                setOrgId(ctx.orgId);
+                setOrgType(ctx.orgType as OrgType);
 
-                const effectiveOrgId = ctx.orgId ?? null;
-                if (!effectiveOrgId) {
-                    throw new Error("Organizzazione attiva non trovata nel contesto utente.");
+                if (ctx.orgType === "customer") {
+                    const [plantsRes, linesRes] = await Promise.all([
+                        supabase
+                            .from("plants")
+                            .select("id, name, code")
+                            .eq("organization_id", ctx.orgId)
+                            .eq("is_archived", false)
+                            .order("name", { ascending: true }),
+                        supabase
+                            .from("production_lines")
+                            .select("id, name, code, plant_id")
+                            .eq("organization_id", ctx.orgId)
+                            .eq("is_archived", false)
+                            .order("name", { ascending: true }),
+                    ]);
+
+                    if (plantsRes.error) throw plantsRes.error;
+                    if (linesRes.error) throw linesRes.error;
+
+                    setPlants((plantsRes.data ?? []) as PlantRow[]);
+                    setLines((linesRes.data ?? []) as ProductionLineRow[]);
                 }
-
-                setOrgId(effectiveOrgId);
-
-                const resolvedType = await getOrgTypeById(effectiveOrgId);
-                if (!resolvedType) {
-                    throw new Error("orgType non risolto da organizations.type.");
-                }
-
-                setOrgType(resolvedType);
-
-                // reset state
-                setSelectedCustomerId("none");
-                setSelectedPlantId("");
-                setSelectedLineId("none");
-                setLines([]);
-                setCustomers([]);
-                setPlants([]);
-
-                if (resolvedType === "manufacturer") {
-                    const { data, error } = await supabase
-                        .from("organizations")
-                        .select("id, name")
-                        .eq("manufacturer_org_id", effectiveOrgId)
-                        .eq("type", "customer")
-                        .order("name", { ascending: true });
-
-                    if (error) throw error;
-                    setCustomers((data ?? []) as CustomerOrg[]);
-                }
-
-                if (resolvedType === "customer") {
-                    const { data, error } = await supabase
-                        .from("plants")
-                        .select("id, name, code")
-                        .eq("organization_id", effectiveOrgId)
-                        .eq("is_archived", false)
-                        .order("name", { ascending: true });
-
-                    if (error) throw error;
-                    setPlants((data ?? []) as Plant[]);
-                }
-            } catch (e: any) {
-                console.error(e);
-                toast({
-                    title: "Errore",
-                    description: e?.message ?? "Errore caricamento pagina",
-                    variant: "destructive",
-                });
-                router.push("/equipment");
-            } finally {
-                setPageLoading(false);
+            } catch (error) {
+                console.error("Equipment new load error:", error);
             }
         };
 
-        init();
-    }, [router, toast]);
+        load();
+    }, []);
 
-    useEffect(() => {
-        if (!mounted) return;
-        if (orgType !== "customer") return;
+    const filteredLines = useMemo(() => {
+        if (!plantId) return lines;
+        return lines.filter((line) => line.plant_id === plantId);
+    }, [lines, plantId]);
 
-        const loadLines = async () => {
-            if (!selectedPlantId) {
-                setLines([]);
-                setSelectedLineId("none");
-                return;
-            }
+    const pageTitle =
+        orgType === "manufacturer" ? "Nuova Macchina Costruttore" : "Nuova Macchina";
 
-            setLoadingLines(true);
+    const pageSubtitle =
+        orgType === "manufacturer"
+            ? "Crea una nuova macchina nel catalogo del costruttore attivo."
+            : "Crea una nuova macchina e collegala a stabilimento e linea del cliente finale.";
 
-            try {
-                const { data, error } = await supabase
-                    .from("production_lines")
-                    .select("id, name, code, plant_id")
-                    .eq("plant_id", selectedPlantId)
-                    .eq("is_archived", false)
-                    .order("name", { ascending: true });
-
-                if (error) throw error;
-
-                setLines((data ?? []) as ProductionLine[]);
-                setSelectedLineId("none");
-            } catch (e: any) {
-                console.error(e);
-                toast({
-                    title: "Errore",
-                    description: e?.message ?? "Errore caricamento linee",
-                    variant: "destructive",
-                });
-                setLines([]);
-                setSelectedLineId("none");
-            } finally {
-                setLoadingLines(false);
-            }
-        };
-
-        loadLines();
-    }, [mounted, orgType, selectedPlantId, toast]);
+    const canSave = !!orgId && !!name.trim();
 
     const handleSave = async () => {
-        if (!canCreate) {
-            toast({
-                title: "Permesso negato",
-                description: "Solo Admin e Supervisor possono creare macchine.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        if (!name.trim()) {
-            toast({
-                title: "Errore",
-                description: "Inserisci il nome della macchina.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        if (!orgId || !orgType) {
-            toast({
-                title: "Errore",
-                description: "Contesto organizzativo non valido.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        if (orgType === "customer" && !selectedPlantId) {
-            toast({
-                title: "Errore",
-                description: "Per il cliente finale lo stabilimento è obbligatorio.",
-                variant: "destructive",
-            });
-            return;
-        }
+        if (!orgId || !name.trim()) return;
 
         setSaving(true);
-
         try {
-            const isManufacturerFlow = orgType === "manufacturer";
-            const hasSelectedCustomer =
-                isManufacturerFlow &&
-                selectedCustomerId !== "none" &&
-                !!selectedCustomerId;
-
-            // Regola dominio:
-            // - manufacturer + customer selezionato => owner = customer
-            // - manufacturer senza customer => owner = manufacturer
-            // - customer => owner = customer stesso
-            const machineOwnerOrgId =
-                isManufacturerFlow
-                    ? hasSelectedCustomer
-                        ? selectedCustomerId
-                        : orgId
-                    : orgId;
-
-            const payload: any = {
-                organization_id: machineOwnerOrgId,
+            const payload: Record<string, any> = {
+                organization_id: orgId,
                 name: name.trim(),
                 internal_code: internalCode.trim() || null,
                 serial_number: serialNumber.trim() || null,
+                model: model.trim() || null,
+                brand: brand.trim() || null,
                 notes: notes.trim() || null,
+                lifecycle_state: lifecycleState || "active",
                 is_archived: false,
-
-                // solo il customer setta stabilimento/linea in creazione
-                plant_id: orgType === "customer" ? selectedPlantId : null,
-                production_line_id:
-                    orgType === "customer"
-                        ? selectedLineId === "none"
-                            ? null
-                            : selectedLineId
-                        : null,
             };
 
-            const { data: machine, error: machineError } = await supabase
+            if (orgType === "customer") {
+                payload.plant_id = plantId || null;
+                payload.production_line_id = productionLineId || null;
+            } else {
+                payload.plant_id = null;
+                payload.production_line_id = null;
+            }
+
+            const { data, error } = await supabase
                 .from("machines")
                 .insert(payload)
                 .select("id")
                 .single();
 
-            if (machineError) throw machineError;
+            if (error) throw error;
 
-            // Se manufacturer crea per un customer:
-            // crea anche l'assegnazione manufacturer -> customer
-            if (isManufacturerFlow && hasSelectedCustomer && machine?.id) {
-                const {
-                    data: { user },
-                } = await supabase.auth.getUser();
-
-                const { error: assignmentError } = await supabase
-                    .from("machine_assignments")
-                    .insert({
-                        machine_id: machine.id,
-                        manufacturer_org_id: orgId,
-                        customer_org_id: selectedCustomerId,
-                        assigned_at: new Date().toISOString(),
-                        assigned_by: user?.id ?? null,
-                        is_active: true,
-                    });
-
-                if (assignmentError) throw assignmentError;
-            }
-
-            toast({
-                title: "OK",
-                description:
-                    isManufacturerFlow && hasSelectedCustomer
-                        ? "Macchina creata e assegnata al cliente."
-                        : isManufacturerFlow
-                            ? "Macchina creata come non assegnata."
-                            : "Macchina creata correttamente.",
-            });
-
-            router.push("/equipment");
-        } catch (e: any) {
-            console.error(e);
-            toast({
-                title: "Errore salvataggio",
-                description: e?.message ?? "Errore durante la creazione della macchina.",
-                variant: "destructive",
-            });
+            router.push(`/equipment/${(data as any).id}`);
+        } catch (error) {
+            console.error("Equipment save error:", error);
         } finally {
             setSaving(false);
         }
     };
 
-    if (!mounted || pageLoading || !orgType) return null;
-
     return (
-        <MainLayout userRole={userRole as any}>
-            <SEO title="Nuova macchina - MACHINA" />
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title={`${pageTitle} - MACHINA`} />
 
-            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-                <Button variant="ghost" onClick={() => router.back()}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Indietro
-                </Button>
-
-                <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-foreground flex items-center gap-2">
-                            <Cpu className="w-5 h-5" />
-                            Nuova macchina
-                        </CardTitle>
-
-                        <CardDescription className="text-muted-foreground">
-                            {orgType === "manufacturer"
-                                ? "Il costruttore può creare una macchina non assegnata oppure collegarla subito a un cliente finale."
-                                : "Il cliente finale crea la macchina nel proprio contesto operativo, associandola a uno stabilimento e opzionalmente a una linea."}
-                        </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-6">
-                        {orgType === "manufacturer" ? (
+                <div className="px-5 py-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-[1100px] space-y-8">
+                        <div className="flex items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <Label className="flex items-center gap-2">
-                                    <Factory className="w-4 h-4 text-purple-400" />
-                                    Cliente finale (opzionale)
-                                </Label>
-
-                                <Select
-                                    value={selectedCustomerId}
-                                    onValueChange={setSelectedCustomerId}
+                                <button
+                                    onClick={() => router.push("/equipment")}
+                                    className="inline-flex items-center gap-2 text-sm font-semibold text-slate-300 transition hover:text-white"
                                 >
-                                    <SelectTrigger className="bg-muted border-border text-foreground">
-                                        <SelectValue placeholder="Seleziona cliente oppure lascia non assegnata" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">
-                                            Non assegnare ora
-                                        </SelectItem>
-                                        {customers.map((customer) => (
-                                            <SelectItem key={customer.id} value={customer.id}>
-                                                {customer.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Torna a Macchine
+                                </button>
 
-                                <p className="text-xs text-muted-foreground">
-                                    Se selezioni un cliente, la macchina nascerà già sotto il suo
-                                    ownership operativo e verrà creata anche la relazione di
-                                    assignment con il costruttore.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="flex items-center gap-2">
-                                        <Building2 className="w-4 h-4 text-blue-400" />
-                                        Stabilimento *
-                                    </Label>
-
-                                    <Select
-                                        value={selectedPlantId}
-                                        onValueChange={setSelectedPlantId}
-                                    >
-                                        <SelectTrigger className="bg-muted border-border text-foreground">
-                                            <SelectValue placeholder="Seleziona stabilimento..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {plants.map((plant) => (
-                                                <SelectItem key={plant.id} value={plant.id}>
-                                                    {plant.name ?? plant.code ?? plant.id}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Linea (opzionale)</Label>
-                                    <Select
-                                        value={selectedLineId}
-                                        onValueChange={setSelectedLineId}
-                                        disabled={!selectedPlantId || loadingLines}
-                                    >
-                                        <SelectTrigger className="bg-muted border-border text-foreground disabled:opacity-60">
-                                            <SelectValue
-                                                placeholder={
-                                                    !selectedPlantId
-                                                        ? "Seleziona prima lo stabilimento"
-                                                        : "Seleziona linea..."
-                                                }
-                                            />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Nessuna</SelectItem>
-                                            {lines.map((line) => (
-                                                <SelectItem key={line.id} value={line.id}>
-                                                    {line.name ?? line.code ?? line.id}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Nome macchina *</Label>
-                                <Input
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="es. Pressa B1"
-                                />
+                                <h1 className="text-4xl font-bold tracking-tight text-white">{pageTitle}</h1>
+                                <p className="text-base text-slate-300">{pageSubtitle}</p>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Codice interno</Label>
-                                <Input
-                                    value={internalCode}
-                                    onChange={(e) => setInternalCode(e.target.value)}
-                                    placeholder="es. PRS-B1"
-                                />
-                            </div>
-
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Matricola</Label>
-                                <Input
-                                    value={serialNumber}
-                                    onChange={(e) => setSerialNumber(e.target.value)}
-                                    placeholder="es. SN-12345"
-                                />
-                            </div>
-
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Note</Label>
-                                <Textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    rows={3}
-                                    placeholder="Note tecniche o operative..."
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end">
-                            <Button
+                            <button
                                 onClick={handleSave}
-                                disabled={saving}
-                                className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
+                                disabled={!canSave || saving}
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                <Save className="w-4 h-4 mr-2" />
-                                {saving ? "Salvataggio..." : "Salva macchina"}
-                            </Button>
+                                <Save className="h-4 w-4" />
+                                {saving ? "Salvataggio..." : "Salva Macchina"}
+                            </button>
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </MainLayout>
+
+                        <div className="grid gap-6 xl:grid-cols-3">
+                            <CardShell className="p-6 xl:col-span-2">
+                                <div className="mb-6 flex items-center gap-3">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-300">
+                                        <Wrench className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-2xl font-bold text-white">Dati macchina</div>
+                                        <div className="text-sm text-slate-300">
+                                            Compila i dati principali della macchina.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-sm font-semibold text-slate-200">Nome macchina *</label>
+                                        <input
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            placeholder="Es. Trituratore TSS 180"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-200">Codice interno</label>
+                                        <input
+                                            value={internalCode}
+                                            onChange={(e) => setInternalCode(e.target.value)}
+                                            placeholder="Es. MCH-001"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-200">Matricola</label>
+                                        <input
+                                            value={serialNumber}
+                                            onChange={(e) => setSerialNumber(e.target.value)}
+                                            placeholder="Es. SN-2026-001"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-200">Marca</label>
+                                        <input
+                                            value={brand}
+                                            onChange={(e) => setBrand(e.target.value)}
+                                            placeholder="Es. ITR / OMAR"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-slate-200">Modello</label>
+                                        <input
+                                            value={model}
+                                            onChange={(e) => setModel(e.target.value)}
+                                            placeholder="Es. TSS 180"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-sm font-semibold text-slate-200">Stato lifecycle</label>
+                                        <select
+                                            value={lifecycleState}
+                                            onChange={(e) => setLifecycleState(e.target.value)}
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none"
+                                        >
+                                            <option value="active">Attiva</option>
+                                            <option value="commissioning">Commissioning</option>
+                                            <option value="maintenance">In manutenzione</option>
+                                            <option value="inactive">Inattiva</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-sm font-semibold text-slate-200">Note</label>
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            rows={4}
+                                            placeholder="Note tecniche, configurazione, dettagli aggiuntivi..."
+                                            className="w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 py-3 text-white outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+                                </div>
+                            </CardShell>
+
+                            <div className="space-y-6">
+                                <CardShell className="p-6">
+                                    <div className="mb-4 flex items-center gap-3">
+                                        <div
+                                            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${orgType === "manufacturer"
+                                                    ? "bg-orange-500/20 text-orange-300"
+                                                    : "bg-blue-500/20 text-blue-300"
+                                                }`}
+                                        >
+                                            {orgType === "manufacturer" ? (
+                                                <Factory className="h-5 w-5" />
+                                            ) : (
+                                                <Building2 className="h-5 w-5" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-xl font-bold text-white">Contesto</div>
+                                            <div className="text-sm text-slate-300">
+                                                {orgType === "manufacturer"
+                                                    ? "Creazione macchina lato costruttore"
+                                                    : "Creazione macchina lato cliente finale"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-2xl bg-slate-900/35 p-4 text-sm text-slate-300">
+                                        {orgType === "manufacturer"
+                                            ? "La macchina sarà creata nel catalogo del costruttore. Potrà essere assegnata successivamente a un cliente finale."
+                                            : "La macchina sarà creata come macchina propria del cliente finale e potrà essere collegata a stabilimento e linea."}
+                                    </div>
+                                </CardShell>
+
+                                {orgType === "customer" && (
+                                    <CardShell className="p-6">
+                                        <div className="mb-4 flex items-center gap-3">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
+                                                <Layers3 className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <div className="text-xl font-bold text-white">Collocazione</div>
+                                                <div className="text-sm text-slate-300">
+                                                    Collega la macchina al contesto produttivo.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-semibold text-slate-200">Stabilimento</label>
+                                                <select
+                                                    value={plantId}
+                                                    onChange={(e) => {
+                                                        setPlantId(e.target.value);
+                                                        setProductionLineId("");
+                                                    }}
+                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none"
+                                                >
+                                                    <option value="">Nessuno</option>
+                                                    {plants.map((plant) => (
+                                                        <option key={plant.id} value={plant.id}>
+                                                            {plant.name ?? plant.code ?? "Stabilimento"}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-semibold text-slate-200">Linea</label>
+                                                <select
+                                                    value={productionLineId}
+                                                    onChange={(e) => setProductionLineId(e.target.value)}
+                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] px-4 text-white outline-none"
+                                                >
+                                                    <option value="">Nessuna</option>
+                                                    {filteredLines.map((line) => (
+                                                        <option key={line.id} value={line.id}>
+                                                            {line.name ?? line.code ?? "Linea"}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </CardShell>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
