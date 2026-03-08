@@ -6,26 +6,25 @@
 
 @layer base {
     :root {
-        /* Light Mode - Soft Blue/Gray Theme (matching reference design) */
         --background: 216 25% 95%;
         --foreground: 222 47% 11%;
         --card: 0 0% 100%;
         --card-foreground: 222 47% 11%;
         --popover: 0 0% 100%;
         --popover-foreground: 222 47% 11%;
-        --primary: 217 91% 60%;
+        --primary: 25 95% 53%;
         --primary-foreground: 0 0% 100%;
         --secondary: 214 32% 96%;
         --secondary-foreground: 222 47% 11%;
         --muted: 216 20% 95%;
-        --muted-foreground: 215 16% 47%;
+        --muted-foreground: 215 16% 43%;
         --accent: 214 32% 96%;
         --accent-foreground: 222 47% 11%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 214 20% 90%;
+        --border: 214 20% 84%;
         --input: 0 0% 100%;
-        --ring: 217 91% 60%;
+        --ring: 25 95% 53%;
         --radius: 0.75rem;
         --chart-1: 217 91% 60%;
         --chart-2: 160 84% 39%;
@@ -35,7 +34,6 @@
     }
 
     .dark {
-        /* Dark Mode - Slate Professional Theme */
         --background: 222 47% 11%;
         --foreground: 210 20% 98%;
         --card: 217 33% 17%;
@@ -47,13 +45,13 @@
         --secondary: 217 33% 25%;
         --secondary-foreground: 210 20% 98%;
         --muted: 217 33% 25%;
-        --muted-foreground: 215 20% 65%;
+        --muted-foreground: 215 20% 70%;
         --accent: 217 33% 25%;
         --accent-foreground: 210 20% 98%;
         --destructive: 0 62% 50%;
         --destructive-foreground: 210 20% 98%;
-        --border: 217 33% 25%;
-        --input: 217 33% 25%;
+        --border: 217 24% 28%;
+        --input: 217 33% 20%;
         --ring: 25 95% 53%;
         --chart-1: 220 70% 50%;
         --chart-2: 160 60% 45%;
@@ -68,11 +66,18 @@
         @apply border-border;
     }
 
+    html {
+        color-scheme: light;
+    }
+
+    html.dark {
+        color-scheme: dark;
+    }
+
     body {
         @apply bg-background text-foreground font-sans antialiased;
     }
 
-    /* Professional Form Styling - Using CSS Variables */
     input[type="text"],
     input[type="email"],
     input[type="password"],
@@ -86,27 +91,27 @@
         @apply placeholder:text-muted-foreground;
     }
 
-    /* Card Styling */
-    .card-professional {
-        @apply bg-card rounded-lg;
-        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+    .card-professional,
+    .surface-panel,
+    [data-slot="card"] {
+        @apply rounded-[20px] border bg-card text-card-foreground;
+        box-shadow: 0 16px 30px -22px rgba(15, 23, 42, 0.28);
     }
 
-    :root .card-professional,
-    :root [data-slot="card"] {
-        border-color: hsl(var(--border));
+    .dark .card-professional,
+    .dark .surface-panel,
+    .dark [data-slot="card"] {
+        box-shadow: 0 20px 40px -28px rgba(0, 0, 0, 0.6);
     }
 
-    /* Button Variants */
-    .btn-primary {
-        @apply bg-primary hover:bg-primary/90 text-primary-foreground;
+    .surface-input {
+        @apply rounded-2xl border border-border bg-background text-foreground;
     }
 
-    .btn-secondary {
-        @apply bg-secondary hover:bg-secondary/80 text-secondary-foreground;
+    .surface-muted {
+        @apply rounded-2xl border border-border bg-muted/55 text-foreground;
     }
 
-    /* Table Styling */
     table {
         @apply w-full border-collapse;
     }
@@ -119,15 +124,11 @@
         @apply border-b border-border hover:bg-muted/50;
     }
 
-    th {
-        @apply text-foreground;
-    }
-
+    th,
     td {
         @apply text-foreground;
     }
 
-    /* Custom Scrollbar */
     .custom-scrollbar::-webkit-scrollbar {
         @apply w-2 h-2;
     }
