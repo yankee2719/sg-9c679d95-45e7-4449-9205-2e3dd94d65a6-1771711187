@@ -23,7 +23,7 @@ function CardShell({
     className?: string;
 }) {
     return (
-        <div className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
+        <div className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
             {children}
         </div>
     );
@@ -91,8 +91,8 @@ export default function AssignmentsPage() {
                 <div className="px-5 py-6 lg:px-8 lg:py-8">
                     <div className="mx-auto max-w-[1220px] space-y-8">
                         <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-white">Assegnazioni</h1>
-                            <p className="text-base text-slate-300">
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">Assegnazioni</h1>
+                            <p className="text-base text-muted-foreground">
                                 Collegamenti attivi tra macchine prodotte e clienti finali.
                             </p>
                         </div>
@@ -102,18 +102,18 @@ export default function AssignmentsPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <Package className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{rows.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Assegnazioni Attive</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{rows.length}</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Assegnazioni Attive</div>
                             </CardShell>
                         </div>
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-white">Elenco Assegnazioni</h2>
+                            <h2 className="text-[32px] font-bold text-foreground">Elenco Assegnazioni</h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-slate-300">Caricamento assegnazioni...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Caricamento assegnazioni...</CardShell>
                             ) : rows.length === 0 ? (
-                                <CardShell className="p-6 text-slate-300">Nessuna assegnazione attiva.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Nessuna assegnazione attiva.</CardShell>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {rows.map((row) => (
@@ -126,13 +126,13 @@ export default function AssignmentsPage() {
                                                                 <Factory className="h-5 w-5" />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className="truncate text-lg font-semibold text-white">
+                                                                <div className="truncate text-lg font-semibold text-foreground">
                                                                     {row.machine_name ?? "Macchina"}
                                                                 </div>
-                                                                <div className="text-sm text-slate-300">Macchina assegnata</div>
+                                                                <div className="text-sm text-muted-foreground">Macchina assegnata</div>
                                                             </div>
                                                         </div>
-                                                        <ArrowRight className="h-5 w-5 shrink-0 text-slate-400" />
+                                                        <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                     </div>
 
                                                     <div className="flex items-center gap-3 rounded-2xl bg-slate-900/40 p-3">
@@ -140,10 +140,10 @@ export default function AssignmentsPage() {
                                                             <Building2 className="h-5 w-5" />
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <div className="truncate text-sm font-semibold text-white">
+                                                            <div className="truncate text-sm font-semibold text-foreground">
                                                                 {row.customer_name ?? "Cliente"}
                                                             </div>
-                                                            <div className="text-xs text-slate-300">Cliente destinatario</div>
+                                                            <div className="text-xs text-muted-foreground">Cliente destinatario</div>
                                                         </div>
                                                     </div>
                                                 </div>
