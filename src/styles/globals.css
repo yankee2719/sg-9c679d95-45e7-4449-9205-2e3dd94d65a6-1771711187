@@ -6,7 +6,7 @@
 
 @layer base {
     :root {
-        --background: 216 25% 95%;
+        --background: 210 20% 94%;
         --foreground: 222 47% 11%;
         --card: 0 0% 100%;
         --card-foreground: 222 47% 11%;
@@ -16,13 +16,13 @@
         --primary-foreground: 0 0% 100%;
         --secondary: 214 32% 96%;
         --secondary-foreground: 222 47% 11%;
-        --muted: 216 20% 95%;
-        --muted-foreground: 215 16% 43%;
+        --muted: 210 22% 91%;
+        --muted-foreground: 215 18% 38%;
         --accent: 214 32% 96%;
         --accent-foreground: 222 47% 11%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 214 20% 84%;
+        --border: 214 16% 80%;
         --input: 0 0% 100%;
         --ring: 25 95% 53%;
         --radius: 0.75rem;
@@ -95,7 +95,7 @@
     .surface-panel,
     [data-slot="card"] {
         @apply rounded-[20px] border bg-card text-card-foreground;
-        box-shadow: 0 16px 30px -22px rgba(15, 23, 42, 0.28);
+        box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.24), 0 1px 0 rgba(15, 23, 42, 0.08);
     }
 
     .dark .card-professional,
@@ -111,6 +111,27 @@
     .surface-muted {
         @apply rounded-2xl border border-border bg-muted/55 text-foreground;
     }
+
+    html:not(.dark) .surface-panel,
+    html:not(.dark) [data-slot="card"] {
+        background-color: hsl(var(--card)) !important;
+        color: hsl(var(--card-foreground)) !important;
+        border-color: hsl(var(--border)) !important;
+    }
+
+    html:not(.dark) .surface-input {
+        background-color: hsl(var(--card)) !important;
+        color: hsl(var(--foreground)) !important;
+        border-color: hsl(var(--border)) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    html:not(.dark) .surface-muted {
+        background-color: hsl(var(--muted) / 0.72) !important;
+        color: hsl(var(--foreground)) !important;
+        border-color: hsl(var(--border)) !important;
+    }
+
 
     table {
         @apply w-full border-collapse;
