@@ -33,13 +33,7 @@ function CardShell({
     children: React.ReactNode;
     className?: string;
 }) {
-    return (
-        <div
-            className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
-        >
-            {children}
-        </div>
-    );
+    return <div className={`surface-panel ${className}`}>{children}</div>;
 }
 
 function categoryStyle(category: string | null | undefined) {
@@ -166,7 +160,7 @@ export default function ChecklistTemplatesPage() {
 
                             <Link
                                 href="/checklists/templates/new"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
                             >
                                 <Plus className="h-4 w-4" />
                                 Nuovo Template
@@ -179,7 +173,7 @@ export default function ChecklistTemplatesPage() {
                                     <CheckSquare className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Template</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Template</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -187,7 +181,7 @@ export default function ChecklistTemplatesPage() {
                                     <ClipboardList className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.items}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Voci Totali</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Voci Totali</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -195,7 +189,7 @@ export default function ChecklistTemplatesPage() {
                                     <ShieldCheck className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{stats.safety}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Checklist Safety</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Checklist Safety</div>
                             </CardShell>
                         </div>
 
@@ -207,11 +201,11 @@ export default function ChecklistTemplatesPage() {
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         placeholder="Cerca template checklist"
-                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+                                        className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
                                     />
                                 </div>
 
-                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-foreground xl:w-[220px]">
+                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-blue-500/20 bg-background px-4 text-foreground xl:w-[220px]">
                                     <Filter className="h-5 w-5 text-muted-foreground" />
                                     <select
                                         value={categoryFilter}
