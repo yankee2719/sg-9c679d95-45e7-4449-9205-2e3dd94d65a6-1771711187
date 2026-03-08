@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import {
     LayoutDashboard,
     Wrench,
@@ -156,10 +157,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             href={href}
             onClick={() => setSidebarOpen(false)}
             className={cn(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
+                "flex items-center gap-3 rounded-2xl border px-4 py-3 text-[15px] font-medium transition-all",
                 isActive(href)
-                    ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
-                    : "text-slate-300 hover:bg-slate-700/60 hover:text-white"
+                    ? "border-orange-500 bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
+                    : "border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
@@ -168,15 +169,15 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     );
 
     const SideContent = () => (
-        <div className="flex h-full flex-col bg-[#18273d] text-white">
-            <div className="border-b border-white/10 px-6 py-6">
+        <div className="flex h-full flex-col bg-card text-card-foreground">
+            <div className="border-b border-border px-6 py-6">
                 <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
                     <div className="min-w-0">
                         <div className="truncate text-[30px] leading-none font-bold tracking-tight">MACHINA</div>
-                        <div className="truncate text-sm text-slate-300">
+                        <div className="truncate text-sm text-muted-foreground">
                             {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Utilizzatore finale" : "Piattaforma"}
                         </div>
                     </div>
@@ -184,12 +185,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             </div>
 
             <div className="px-4 py-4">
-                <div className="rounded-2xl bg-slate-800/70 p-3">
+                <div className="rounded-2xl border border-border bg-muted/60 p-3">
                     <OrganizationSwitcher />
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-6">
+            <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
                 <div className="space-y-2">
                     {mainItems.map((item) => (
                         <NavLink key={item.href} {...item} />
@@ -198,7 +199,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {managementItems.length > 0 && (
                     <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             Gestione
                         </div>
                         {managementItems.map((item) => (
@@ -209,7 +210,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {settingsItems.length > 0 && (
                     <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             Sistema
                         </div>
                         {settingsItems.map((item) => (
@@ -219,20 +220,20 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 )}
             </div>
 
-            <div className="border-t border-white/10 p-4">
-                <div className="flex items-center gap-3 rounded-2xl bg-slate-800/80 p-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-950 text-white">
+            <div className="border-t border-border p-4">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/50 p-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background text-foreground">
                         {initials}
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold">{profileName}</div>
-                        <div className="truncate text-sm text-slate-300">
+                        <div className="truncate text-sm text-muted-foreground">
                             {orgName} · <span className="capitalize">{profileRole}</span>
                         </div>
                     </div>
                     <button
                         onClick={handleLogout}
-                        className="rounded-xl p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white"
+                        className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                         title="Esci"
                     >
                         <LogOut className="h-4 w-4" />
@@ -243,32 +244,40 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     );
 
     return (
-        <div className="min-h-screen bg-[#091733] text-white">
+        <div className="min-h-screen bg-background text-foreground">
             <div className="flex min-h-screen">
-                <aside className="hidden w-[250px] shrink-0 border-r border-white/10 lg:block">
+                <aside className="hidden w-[250px] shrink-0 border-r border-border lg:block">
                     <SideContent />
                 </aside>
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                    <header className="sticky top-0 z-30 border-b border-white/10 bg-[#132542]/90 backdrop-blur">
+                    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
                         <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-8">
                             <div className="flex items-center gap-3">
                                 <button
-                                    className="rounded-xl p-2 text-slate-200 transition hover:bg-white/10 lg:hidden"
+                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
                                     onClick={() => setSidebarOpen(true)}
                                 >
                                     <Menu className="h-5 w-5" />
                                 </button>
                                 <div>
                                     <div className="text-lg font-semibold">Dashboard</div>
-                                    <div className="text-xs text-slate-300">
+                                    <div className="text-xs text-muted-foreground">
                                         {orgName} · {orgType === "manufacturer" ? "Costruttore" : orgType === "customer" ? "Customer" : "Contesto"}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                <button className="relative rounded-xl p-2 text-slate-200 transition hover:bg-white/10">
+                            <div className="flex items-center gap-2 md:gap-3">
+                                <ThemeSwitch />
+
+                                <button
+                                    type="button"
+                                    onClick={() => router.push("/notifications")}
+                                    className="relative rounded-xl border border-border bg-card p-2 text-foreground transition hover:bg-muted"
+                                    title="Notifiche"
+                                    aria-label="Apri notifiche"
+                                >
                                     <Bell className="h-5 w-5" />
                                     {notificationCount > 0 && (
                                         <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full bg-orange-500 px-1 text-[10px] text-white hover:bg-orange-500">
@@ -277,29 +286,29 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     )}
                                 </button>
 
-                                <div className="hidden items-center gap-3 rounded-2xl bg-white/5 px-3 py-2 md:flex">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold">
+                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 md:flex">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
                                         {initials}
                                     </div>
                                     <div className="min-w-0">
                                         <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
-                                        <div className="text-xs text-slate-300 capitalize">{profileRole}</div>
+                                        <div className="text-xs text-muted-foreground capitalize">{profileRole}</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <main className="min-h-0 flex-1 bg-[#07152f]">{children}</main>
+                    <main className="min-h-0 flex-1 bg-background">{children}</main>
                 </div>
             </div>
 
             {sidebarOpen && (
                 <div className="fixed inset-0 z-50 lg:hidden">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-                    <div className="absolute inset-y-0 left-0 w-[280px] shadow-2xl">
+                    <div className="absolute inset-y-0 left-0 w-[280px] border-r border-border shadow-2xl">
                         <button
-                            className="absolute right-3 top-3 z-10 rounded-xl bg-white/10 p-2 text-white"
+                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-background/80 p-2 text-foreground"
                             onClick={() => setSidebarOpen(false)}
                         >
                             <X className="h-4 w-4" />
