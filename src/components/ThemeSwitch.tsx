@@ -11,21 +11,21 @@ export function ThemeSwitch() {
         setMounted(true);
     }, []);
 
-    const label = mounted && theme === "dark" ? "Attiva modalità chiara" : "Attiva modalità scura";
-
     return (
         <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={mounted ? toggleTheme : undefined}
-            className="relative rounded-xl border border-border bg-card text-foreground hover:bg-muted"
-            aria-label={label}
-            title={label}
+            className="relative border border-border bg-background/80 hover:bg-muted"
+            aria-label="Toggle theme"
         >
-            {mounted ? (
-                theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />
-            ) : (
+            {!mounted ? (
                 <div className="h-5 w-5 rounded-full bg-muted" />
+            ) : theme === "dark" ? (
+                <Sun className="h-5 w-5 text-amber-500" />
+            ) : (
+                <Moon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
             )}
         </Button>
     );
