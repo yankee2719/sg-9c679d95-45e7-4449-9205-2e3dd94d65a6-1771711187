@@ -22,7 +22,7 @@ function CardShell({
     className?: string;
 }) {
     return (
-        <div className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
+        <div className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
             {children}
         </div>
     );
@@ -69,8 +69,8 @@ export default function CustomersPage() {
                     <div className="mx-auto max-w-[1220px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-white">Clienti</h1>
-                                <p className="text-base text-slate-300">
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">Clienti</h1>
+                                <p className="text-base text-muted-foreground">
                                     Elenco organizzazioni cliente collegate al costruttore attivo.
                                 </p>
                             </div>
@@ -89,28 +89,28 @@ export default function CustomersPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
                                     <Building2 className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{customers.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Clienti Totali</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{customers.length}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Clienti Totali</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300">
                                     <Users className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{customers.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Organizzazioni Attive</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{customers.length}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Organizzazioni Attive</div>
                             </CardShell>
                         </div>
 
                         <section className="space-y-4">
                             <div className="flex items-center justify-between gap-4">
-                                <h2 className="text-[32px] font-bold text-white">Elenco Clienti</h2>
+                                <h2 className="text-[32px] font-bold text-foreground">Elenco Clienti</h2>
                             </div>
 
                             {loading ? (
-                                <CardShell className="p-6 text-slate-300">Caricamento clienti...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Caricamento clienti...</CardShell>
                             ) : customers.length === 0 ? (
-                                <CardShell className="p-6 text-slate-300">Nessun cliente collegato.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Nessun cliente collegato.</CardShell>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {customers.map((customer) => (
@@ -122,13 +122,13 @@ export default function CustomersPage() {
                                                             <Building2 className="h-5 w-5" />
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <div className="truncate text-xl font-semibold text-white">
+                                                            <div className="truncate text-xl font-semibold text-foreground">
                                                                 {customer.name ?? "Cliente"}
                                                             </div>
-                                                            <div className="text-sm text-slate-300">Organizzazione cliente</div>
+                                                            <div className="text-sm text-muted-foreground">Organizzazione cliente</div>
                                                         </div>
                                                     </div>
-                                                    <ArrowRight className="h-5 w-5 shrink-0 text-slate-400" />
+                                                    <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                 </div>
                                             </CardShell>
                                         </Link>
