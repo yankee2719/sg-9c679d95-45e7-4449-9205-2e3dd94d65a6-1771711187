@@ -35,7 +35,7 @@ function CardShell({
 }) {
     return (
         <div
-            className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+            className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
         >
             {children}
         </div>
@@ -158,8 +158,8 @@ export default function ChecklistTemplatesPage() {
                     <div className="mx-auto max-w-[1440px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-white">Checklist</h1>
-                                <p className="text-base text-slate-300">
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">Checklist</h1>
+                                <p className="text-base text-muted-foreground">
                                     Gestisci template checklist per controlli, verifiche e procedure operative.
                                 </p>
                             </div>
@@ -178,41 +178,41 @@ export default function ChecklistTemplatesPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <CheckSquare className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.total}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Template</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.total}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Template</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
                                     <ClipboardList className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.items}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Voci Totali</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.items}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Voci Totali</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-red-300">
                                     <ShieldCheck className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-white">{stats.safety}</div>
-                                <div className="mt-2 text-[22px] font-medium text-slate-200">Checklist Safety</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">{stats.safety}</div>
+                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Checklist Safety</div>
                             </CardShell>
                         </div>
 
                         <CardShell className="p-5">
                             <div className="flex flex-col gap-4 xl:flex-row">
                                 <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                                     <input
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         placeholder="Cerca template checklist"
-                                        className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] pl-12 pr-4 text-white outline-none placeholder:text-slate-400"
+                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
                                     />
                                 </div>
 
-                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-blue-500/20 bg-[#07152f] px-4 text-white xl:w-[220px]">
-                                    <Filter className="h-5 w-5 text-slate-400" />
+                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-foreground xl:w-[220px]">
+                                    <Filter className="h-5 w-5 text-muted-foreground" />
                                     <select
                                         value={categoryFilter}
                                         onChange={(e) => setCategoryFilter(e.target.value)}
@@ -228,12 +228,12 @@ export default function ChecklistTemplatesPage() {
                         </CardShell>
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-white">Elenco Template</h2>
+                            <h2 className="text-[32px] font-bold text-foreground">Elenco Template</h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-slate-300">Caricamento template checklist...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Caricamento template checklist...</CardShell>
                             ) : filteredRows.length === 0 ? (
-                                <CardShell className="p-6 text-slate-300">Nessun template checklist trovato.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">Nessun template checklist trovato.</CardShell>
                             ) : (
                                 <div className="space-y-4">
                                     {filteredRows.map((row) => {
@@ -249,11 +249,11 @@ export default function ChecklistTemplatesPage() {
                                                             </div>
 
                                                             <div className="min-w-0">
-                                                                <div className="truncate text-2xl font-bold text-white">
+                                                                <div className="truncate text-2xl font-bold text-foreground">
                                                                     {row.name ?? "Template checklist"}
                                                                 </div>
 
-                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-slate-300">
+                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-muted-foreground">
                                                                     <span>{row.item_count ?? 0} voci</span>
                                                                     <span>{row.frequency ?? "—"}</span>
                                                                     {row.description && <span className="truncate max-w-[500px]">{row.description}</span>}
@@ -265,7 +265,7 @@ export default function ChecklistTemplatesPage() {
                                                             <div className={`rounded-full px-4 py-1.5 text-lg font-semibold ${style.badge}`}>
                                                                 {style.label}
                                                             </div>
-                                                            <ArrowRight className="h-6 w-6 text-slate-400" />
+                                                            <ArrowRight className="h-6 w-6 text-muted-foreground" />
                                                         </div>
                                                     </div>
                                                 </CardShell>
