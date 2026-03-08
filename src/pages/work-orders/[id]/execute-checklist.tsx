@@ -118,7 +118,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
             const assignmentList = (asgRows ?? []) as AssignmentRow[];
 
             const templateIds = Array.from(new Set(assignmentList.map((a) => a.template_id).filter(Boolean)));
-            let templateMap = new Map < string, TemplateRow> ();
+            const templateMap = new Map < string, TemplateRow> ();
 
             if (templateIds.length > 0) {
                 const { data: tplRows, error: tplErr } = await supabase
