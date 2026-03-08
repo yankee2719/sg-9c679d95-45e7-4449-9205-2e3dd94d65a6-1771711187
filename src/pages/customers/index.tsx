@@ -77,7 +77,7 @@ export default function CustomersPage() {
 
                             <Link
                                 href="/customers/new"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
                             >
                                 <Plus className="h-4 w-4" />
                                 Nuovo Cliente
@@ -90,7 +90,7 @@ export default function CustomersPage() {
                                     <Building2 className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{customers.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Clienti Totali</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Clienti Totali</div>
                             </CardShell>
 
                             <CardShell className="p-6">
@@ -98,7 +98,7 @@ export default function CustomersPage() {
                                     <Users className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">{customers.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-foreground/90">Organizzazioni Attive</div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Organizzazioni Attive</div>
                             </CardShell>
                         </div>
 
