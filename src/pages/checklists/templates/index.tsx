@@ -1,297 +1,283 @@
+// src/pages/checklists/templates/index.tsx
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/router";
+import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
+import { SEO } from "@/components/SEO";
 import { getUserContext } from "@/lib/supabaseHelpers";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, ClipboardList, Plus, RefreshCcw } from "lucide-react";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    CheckSquare,
+    ArrowRight,
+    Plus,
+    Search,
+    ClipboardList,
+    Filter,
+    ShieldCheck,
+} from "lucide-react";
 
-type TargetType = "machine" | "production_line";
-
-type ChecklistTemplate = {
+interface ChecklistTemplateRow {
     id: string;
-    organization_id: string;
-    name: string;
+    name: string | null;
     description: string | null;
-    target_type: TargetType;
-    version: number;
-    is_active: boolean;
-    created_at: string;
-};
+    category: string | null;
+    frequency: string | null;
+    created_at?: string | null;
+    item_count?: number;
+}
 
-type ItemCountRow = {
-    template_id: string;
-    count: number;
-};
+function CardShell({
+    children,
+    className = "",
+}: {
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div
+            className={`rounded-[20px] border border-white/10 bg-[#1b2b45] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+        >
+            {children}
+        </div>
+    );
+}
 
-function canManage(role?: string) {
-    return role === "admin" || role === "supervisor";
+function categoryStyle(category: string | null | undefined) {
+    const value = (category || "").toLowerCase();
+    if (value.includes("safety") || value.includes("sicur")) {
+        return {
+            iconWrap: "bg-red-500/15 text-red-400",
+            badge: "bg-red-500/15 text-red-300 border border-red-500/30",
+            label: category || "Safety",
+        };
+    }
+    if (value.includes("quality") || value.includes("qualit")) {
+        return {
+            iconWrap: "bg-blue-500/15 text-blue-300",
+            badge: "bg-blue-500/15 text-blue-300 border border-blue-500/30",
+            label: category || "Quality",
+        };
+    }
+    return {
+        iconWrap: "bg-emerald-500/15 text-emerald-400",
+        badge: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
+        label: category || "Operativa",
+    };
 }
 
 export default function ChecklistTemplatesPage() {
-    const router = useRouter();
-    const { toast } = useToast();
-
-    const [role, setRole] = useState < string > ("technician");
-    const [orgId, setOrgId] = useState < string | null > (null);
+    const [userRole, setUserRole] = useState("technician");
+    const [rows, setRows] = useState < ChecklistTemplateRow[] > ([]);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
 
-    const [templates, setTemplates] = useState < ChecklistTemplate[] > ([]);
-    const [itemCountMap, setItemCountMap] = useState < Record < string, number>> ({});
-
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
-    const [targetType, setTargetType] = useState < TargetType > ("machine");
-
-    const allow = useMemo(() => canManage(role), [role]);
-
-    const load = async () => {
-        setLoading(true);
-        try {
-            const ctx = await getUserContext();
-            if (!ctx) {
-                router.push("/login");
-                return;
-            }
-
-            const activeOrgId = ctx.orgId ?? null;
-            if (!activeOrgId) throw new Error("Organizzazione attiva non trovata nel contesto utente.");
-
-            setRole(ctx.role ?? "technician");
-            setOrgId(activeOrgId);
-
-            const { data: rows, error } = await supabase
-                .from("checklist_templates")
-                .select("id, organization_id, name, description, target_type, version, is_active, created_at")
-                .eq("organization_id", activeOrgId)
-                .order("created_at", { ascending: false });
-
-            if (error) throw error;
-
-            const templateRows = (rows ?? []) as ChecklistTemplate[];
-            setTemplates(templateRows);
-
-            if (templateRows.length === 0) {
-                setItemCountMap({});
-                return;
-            }
-
-            const templateIds = templateRows.map((t) => t.id);
-            const { data: items, error: itemsErr } = await supabase
-                .from("checklist_template_items")
-                .select("template_id")
-                .in("template_id", templateIds)
-                .limit(5000);
-
-            if (itemsErr) throw itemsErr;
-
-            const counts: Record<string, number> = {};
-            for (const row of (items ?? []) as any[]) {
-                counts[row.template_id] = (counts[row.template_id] ?? 0) + 1;
-            }
-            setItemCountMap(counts);
-        } catch (e: any) {
-            console.error(e);
-            toast({
-                title: "Errore",
-                description: e?.message ?? "Errore caricamento template checklist",
-                variant: "destructive",
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [search, setSearch] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("all");
 
     useEffect(() => {
+        const load = async () => {
+            try {
+                const ctx = await getUserContext();
+                if (!ctx?.orgId) return;
+
+                setUserRole(ctx.role ?? "technician");
+
+                const { data, error } = await supabase
+                    .from("checklist_templates")
+                    .select("id, name, description, category, frequency, created_at")
+                    .eq("organization_id", ctx.orgId)
+                    .order("created_at", { ascending: false });
+
+                if (error) throw error;
+
+                const templateIds = (data ?? []).map((x: any) => x.id);
+
+                const itemCounts = templateIds.length
+                    ? await supabase
+                        .from("checklist_template_items")
+                        .select("template_id")
+                        .in("template_id", templateIds)
+                    : ({ data: [] } as any);
+
+                const countMap = new Map < string, number> ();
+                (itemCounts.data ?? []).forEach((item: any) => {
+                    countMap.set(item.template_id, (countMap.get(item.template_id) ?? 0) + 1);
+                });
+
+                setRows(
+                    (data ?? []).map((row: any) => ({
+                        id: row.id,
+                        name: row.name,
+                        description: row.description,
+                        category: row.category ?? null,
+                        frequency: row.frequency ?? null,
+                        created_at: row.created_at ?? null,
+                        item_count: countMap.get(row.id) ?? 0,
+                    }))
+                );
+            } catch (error) {
+                console.error("Checklist templates load error:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
         load();
     }, []);
 
-    const createTemplate = async () => {
-        if (!allow) {
-            toast({
-                title: "Permesso negato",
-                description: "Solo Admin e Supervisor possono creare template.",
-                variant: "destructive",
-            });
-            return;
-        }
+    const filteredRows = useMemo(() => {
+        return rows.filter((row) => {
+            const matchesSearch =
+                !search ||
+                (row.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+                (row.description ?? "").toLowerCase().includes(search.toLowerCase());
 
-        if (!orgId) {
-            toast({
-                title: "Errore",
-                description: "Organizzazione attiva non disponibile.",
-                variant: "destructive",
-            });
-            return;
-        }
+            const normalized = (row.category ?? "").toLowerCase();
+            const matchesCategory =
+                categoryFilter === "all" ||
+                normalized === categoryFilter ||
+                normalized.includes(categoryFilter);
 
-        if (!name.trim()) {
-            toast({
-                title: "Errore",
-                description: "Inserisci il nome del template.",
-                variant: "destructive",
-            });
-            return;
-        }
+            return matchesSearch && matchesCategory;
+        });
+    }, [rows, search, categoryFilter]);
 
-        setSaving(true);
-        try {
-            const newId = crypto.randomUUID();
-
-            const { error } = await supabase.from("checklist_templates").insert({
-                id: newId,
-                organization_id: orgId,
-                name: name.trim(),
-                description: description.trim() || null,
-                target_type: targetType,
-                version: 1,
-                is_active: true,
-            });
-
-            if (error) throw error;
-
-            toast({ title: "OK", description: "Template creato correttamente." });
-            router.push(`/checklists/templates/${newId}`);
-        } catch (e: any) {
-            console.error(e);
-            toast({
-                title: "Errore",
-                description: e?.message ?? "Errore creazione template",
-                variant: "destructive",
-            });
-        } finally {
-            setSaving(false);
-        }
-    };
+    const stats = useMemo(() => {
+        return {
+            total: rows.length,
+            items: rows.reduce((sum, row) => sum + (row.item_count ?? 0), 0),
+            safety: rows.filter((r) => ((r.category ?? "").toLowerCase().includes("safety") || (r.category ?? "").toLowerCase().includes("sicur"))).length,
+        };
+    }, [rows]);
 
     return (
-        <MainLayout userRole={role as any}>
-            <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-2">
-                            <ClipboardList className="w-6 h-6" />
-                            Template checklist
-                        </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Modelli riutilizzabili per controlli macchina o linea. L&apos;owner operativo crea, assegna ed esegue.
-                        </p>
-                    </div>
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title="Checklist - MACHINA" />
 
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={load}>
-                            <RefreshCcw className="w-4 h-4 mr-2" />
-                            Aggiorna
-                        </Button>
-                        <Button onClick={createTemplate} disabled={!allow || saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nuovo template
-                        </Button>
-                    </div>
-                </div>
-
-                <Card className="rounded-2xl">
-                    <CardHeader>
-                        <CardTitle>Crea template</CardTitle>
-                        <CardDescription>
-                            Usa questa sezione per creare un template standard da assegnare poi a macchine o linee.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Nome *</Label>
-                                <Input
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="Es. Controlli giornalieri pressa"
-                                    disabled={!allow}
-                                />
-                            </div>
-
+                <div className="px-5 py-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-[1440px] space-y-8">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <Label>Target</Label>
-                                <Select value={targetType} onValueChange={(v) => setTargetType(v as TargetType)} disabled={!allow}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleziona target" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="machine">Macchina</SelectItem>
-                                        <SelectItem value="production_line">Linea</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <h1 className="text-4xl font-bold tracking-tight text-white">Checklist</h1>
+                                <p className="text-base text-slate-300">
+                                    Gestisci template checklist per controlli, verifiche e procedure operative.
+                                </p>
                             </div>
 
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Descrizione</Label>
-                                <Textarea
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    rows={3}
-                                    placeholder="Descrizione opzionale del template"
-                                    disabled={!allow}
-                                />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {loading && <div className="text-sm text-muted-foreground">Caricamento template...</div>}
-
-                    {!loading && templates.length === 0 && (
-                        <Card className="rounded-2xl border-dashed md:col-span-2 xl:col-span-3">
-                            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                                Nessun template presente in questa organizzazione.
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {!loading &&
-                        templates.map((template) => (
-                            <Card
-                                key={template.id}
-                                className="rounded-2xl cursor-pointer transition hover:shadow-md"
-                                onClick={() => router.push(`/checklists/templates/${template.id}`)}
+                            <Link
+                                href="/checklists/templates/new"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-400"
                             >
-                                <CardContent className="p-5 space-y-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div>
-                                            <div className="font-semibold text-base">{template.name}</div>
-                                            <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                                {template.description || "Nessuna descrizione"}
-                                            </div>
-                                        </div>
-                                        <ArrowRight className="w-4 h-4 shrink-0 mt-1 text-muted-foreground" />
-                                    </div>
+                                <Plus className="h-4 w-4" />
+                                Nuovo Template
+                            </Link>
+                        </div>
 
-                                    <div className="flex flex-wrap gap-2">
-                                        <Badge variant="secondary">{template.target_type === "machine" ? "Macchina" : "Linea"}</Badge>
-                                        <Badge variant="outline">v{template.version}</Badge>
-                                        <Badge variant={template.is_active ? "default" : "secondary"}>
-                                            {template.is_active ? "Attivo" : "Inattivo"}
-                                        </Badge>
-                                        <Badge variant="outline">{itemCountMap[template.id] ?? 0} items</Badge>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                            <CardShell className="p-6">
+                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
+                                    <CheckSquare className="h-5 w-5" />
+                                </div>
+                                <div className="text-5xl font-bold leading-none text-white">{stats.total}</div>
+                                <div className="mt-2 text-[22px] font-medium text-slate-200">Template</div>
+                            </CardShell>
+
+                            <CardShell className="p-6">
+                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
+                                    <ClipboardList className="h-5 w-5" />
+                                </div>
+                                <div className="text-5xl font-bold leading-none text-white">{stats.items}</div>
+                                <div className="mt-2 text-[22px] font-medium text-slate-200">Voci Totali</div>
+                            </CardShell>
+
+                            <CardShell className="p-6">
+                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-red-300">
+                                    <ShieldCheck className="h-5 w-5" />
+                                </div>
+                                <div className="text-5xl font-bold leading-none text-white">{stats.safety}</div>
+                                <div className="mt-2 text-[22px] font-medium text-slate-200">Checklist Safety</div>
+                            </CardShell>
+                        </div>
+
+                        <CardShell className="p-5">
+                            <div className="flex flex-col gap-4 xl:flex-row">
+                                <div className="relative flex-1">
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        placeholder="Cerca template checklist"
+                                        className="h-12 w-full rounded-2xl border border-blue-500/30 bg-[#07152f] pl-12 pr-4 text-white outline-none placeholder:text-slate-400"
+                                    />
+                                </div>
+
+                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-blue-500/20 bg-[#07152f] px-4 text-white xl:w-[220px]">
+                                    <Filter className="h-5 w-5 text-slate-400" />
+                                    <select
+                                        value={categoryFilter}
+                                        onChange={(e) => setCategoryFilter(e.target.value)}
+                                        className="w-full bg-transparent outline-none"
+                                    >
+                                        <option value="all" className="text-black">Tutte</option>
+                                        <option value="safety" className="text-black">Safety</option>
+                                        <option value="quality" className="text-black">Quality</option>
+                                        <option value="operativa" className="text-black">Operativa</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </CardShell>
+
+                        <section className="space-y-4">
+                            <h2 className="text-[32px] font-bold text-white">Elenco Template</h2>
+
+                            {loading ? (
+                                <CardShell className="p-6 text-slate-300">Caricamento template checklist...</CardShell>
+                            ) : filteredRows.length === 0 ? (
+                                <CardShell className="p-6 text-slate-300">Nessun template checklist trovato.</CardShell>
+                            ) : (
+                                <div className="space-y-4">
+                                    {filteredRows.map((row) => {
+                                        const style = categoryStyle(row.category);
+
+                                        return (
+                                            <Link key={row.id} href={`/checklists/templates/${row.id}`} className="block">
+                                                <CardShell className="p-5 transition hover:translate-y-[-2px]">
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="flex min-w-0 items-center gap-4">
+                                                            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${style.iconWrap}`}>
+                                                                <CheckSquare className="h-5 w-5" />
+                                                            </div>
+
+                                                            <div className="min-w-0">
+                                                                <div className="truncate text-2xl font-bold text-white">
+                                                                    {row.name ?? "Template checklist"}
+                                                                </div>
+
+                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-slate-300">
+                                                                    <span>{row.item_count ?? 0} voci</span>
+                                                                    <span>{row.frequency ?? "—"}</span>
+                                                                    {row.description && <span className="truncate max-w-[500px]">{row.description}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex shrink-0 items-center gap-6">
+                                                            <div className={`rounded-full px-4 py-1.5 text-lg font-semibold ${style.badge}`}>
+                                                                {style.label}
+                                                            </div>
+                                                            <ArrowRight className="h-6 w-6 text-slate-400" />
+                                                        </div>
+                                                    </div>
+                                                </CardShell>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </section>
+                    </div>
                 </div>
-            </div>
-        </MainLayout>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
