@@ -54,6 +54,41 @@ const translations: Record<Language, Record<string, string>> = {
         "org.platform": "Piattaforma",
         "org.context": "Contesto",
 
+        "common.viewAll": "Vedi tutti",
+
+        "dashboard.subtitleManufacturer": "Panoramica del contesto costruttore attivo.",
+        "dashboard.subtitleCustomer": "Vista rapida del contesto organizzativo attivo.",
+
+        "dashboard.kpi.machinesProduced": "Macchine Prodotte",
+        "dashboard.kpi.customers": "Clienti",
+        "dashboard.kpi.assignedMachines": "Macchine Assegnate",
+        "dashboard.kpi.customerAccounts": "Account Clienti",
+        "dashboard.kpi.machines": "Macchine",
+        "dashboard.kpi.documents": "Documenti",
+        "dashboard.kpi.workOrders": "Work Orders",
+        "dashboard.kpi.checklists": "Checklist",
+
+        "dashboard.action.newMachine": "Nuova Macchina",
+        "dashboard.action.addToCatalog": "Aggiungi al catalogo",
+        "dashboard.action.newCustomer": "Nuovo Cliente",
+        "dashboard.action.createCustomerOrg": "Crea organizzazione cliente",
+        "dashboard.action.assignMachines": "Assegna Macchine",
+        "dashboard.action.linkMachinesToCustomers": "Collega macchine ai clienti",
+        "dashboard.action.addMachine": "Aggiungi una macchina",
+        "dashboard.action.documents": "Documenti",
+        "dashboard.action.openDocumentArchive": "Apri archivio documentale",
+        "dashboard.action.newWorkOrder": "Nuovo Work Order",
+        "dashboard.action.planOperationalActivities": "Pianifica attività operative",
+
+        "dashboard.recentCustomers": "Clienti Recenti",
+        "dashboard.noRecentCustomers": "Nessun cliente recente.",
+        "dashboard.customerFallback": "Cliente",
+        "dashboard.customerLabel": "Cliente",
+
+        "dashboard.recentMachines": "Ultime Macchine",
+        "dashboard.noRecentMachines": "Nessuna macchina recente.",
+        "dashboard.machineFallback": "Macchina",
+
         "dashboard.title": "Dashboard",
         "dashboard.subtitle": "Panoramica del sistema",
 
@@ -110,6 +145,40 @@ const translations: Record<Language, Record<string, string>> = {
 
         "dashboard.title": "Dashboard",
         "dashboard.subtitle": "System overview",
+        "common.viewAll": "View all",
+
+        "dashboard.subtitleManufacturer": "Overview of the active manufacturer context.",
+        "dashboard.subtitleCustomer": "Quick view of the active organizational context.",
+
+        "dashboard.kpi.machinesProduced": "Produced Machines",
+        "dashboard.kpi.customers": "Customers",
+        "dashboard.kpi.assignedMachines": "Assigned Machines",
+        "dashboard.kpi.customerAccounts": "Customer Accounts",
+        "dashboard.kpi.machines": "Machines",
+        "dashboard.kpi.documents": "Documents",
+        "dashboard.kpi.workOrders": "Work Orders",
+        "dashboard.kpi.checklists": "Checklists",
+
+        "dashboard.action.newMachine": "New Machine",
+        "dashboard.action.addToCatalog": "Add to catalog",
+        "dashboard.action.newCustomer": "New Customer",
+        "dashboard.action.createCustomerOrg": "Create customer organization",
+        "dashboard.action.assignMachines": "Assign Machines",
+        "dashboard.action.linkMachinesToCustomers": "Link machines to customers",
+        "dashboard.action.addMachine": "Add a machine",
+        "dashboard.action.documents": "Documents",
+        "dashboard.action.openDocumentArchive": "Open document archive",
+        "dashboard.action.newWorkOrder": "New Work Order",
+        "dashboard.action.planOperationalActivities": "Plan operational activities",
+
+        "dashboard.recentCustomers": "Recent Customers",
+        "dashboard.noRecentCustomers": "No recent customers.",
+        "dashboard.customerFallback": "Customer",
+        "dashboard.customerLabel": "Customer",
+
+        "dashboard.recentMachines": "Recent Machines",
+        "dashboard.noRecentMachines": "No recent machines.",
+        "dashboard.machineFallback": "Machine",
 
         "equipment.title": "Machines",
         "equipment.subtitle": "Machines & equipment management",
@@ -164,6 +233,40 @@ const translations: Record<Language, Record<string, string>> = {
 
         "dashboard.title": "Tableau de bord",
         "dashboard.subtitle": "Aperçu du système",
+        "common.viewAll": "Voir tout",
+
+        "dashboard.subtitleManufacturer": "Vue d’ensemble du contexte constructeur actif.",
+        "dashboard.subtitleCustomer": "Vue rapide du contexte organisationnel actif.",
+
+        "dashboard.kpi.machinesProduced": "Machines produites",
+        "dashboard.kpi.customers": "Clients",
+        "dashboard.kpi.assignedMachines": "Machines attribuées",
+        "dashboard.kpi.customerAccounts": "Comptes clients",
+        "dashboard.kpi.machines": "Machines",
+        "dashboard.kpi.documents": "Documents",
+        "dashboard.kpi.workOrders": "Ordres de travail",
+        "dashboard.kpi.checklists": "Check-lists",
+
+        "dashboard.action.newMachine": "Nouvelle machine",
+        "dashboard.action.addToCatalog": "Ajouter au catalogue",
+        "dashboard.action.newCustomer": "Nouveau client",
+        "dashboard.action.createCustomerOrg": "Créer une organisation client",
+        "dashboard.action.assignMachines": "Attribuer des machines",
+        "dashboard.action.linkMachinesToCustomers": "Associer les machines aux clients",
+        "dashboard.action.addMachine": "Ajouter une machine",
+        "dashboard.action.documents": "Documents",
+        "dashboard.action.openDocumentArchive": "Ouvrir l’archive documentaire",
+        "dashboard.action.newWorkOrder": "Nouvel ordre de travail",
+        "dashboard.action.planOperationalActivities": "Planifier les activités opérationnelles",
+
+        "dashboard.recentCustomers": "Clients récents",
+        "dashboard.noRecentCustomers": "Aucun client récent.",
+        "dashboard.customerFallback": "Client",
+        "dashboard.customerLabel": "Client",
+
+        "dashboard.recentMachines": "Machines récentes",
+        "dashboard.noRecentMachines": "Aucune machine récente.",
+        "dashboard.machineFallback": "Machine",
 
         "equipment.title": "Machines",
         "equipment.subtitle": "Gestion des machines",
@@ -218,6 +321,40 @@ const translations: Record<Language, Record<string, string>> = {
 
         "dashboard.title": "Panel",
         "dashboard.subtitle": "Resumen del sistema",
+        "common.viewAll": "Ver todos",
+
+        "dashboard.subtitleManufacturer": "Resumen del contexto activo del fabricante.",
+        "dashboard.subtitleCustomer": "Vista rápida del contexto organizativo activo.",
+
+        "dashboard.kpi.machinesProduced": "Máquinas producidas",
+        "dashboard.kpi.customers": "Clientes",
+        "dashboard.kpi.assignedMachines": "Máquinas asignadas",
+        "dashboard.kpi.customerAccounts": "Cuentas de clientes",
+        "dashboard.kpi.machines": "Máquinas",
+        "dashboard.kpi.documents": "Documentos",
+        "dashboard.kpi.workOrders": "Órdenes de trabajo",
+        "dashboard.kpi.checklists": "Checklists",
+
+        "dashboard.action.newMachine": "Nueva máquina",
+        "dashboard.action.addToCatalog": "Agregar al catálogo",
+        "dashboard.action.newCustomer": "Nuevo cliente",
+        "dashboard.action.createCustomerOrg": "Crear organización cliente",
+        "dashboard.action.assignMachines": "Asignar máquinas",
+        "dashboard.action.linkMachinesToCustomers": "Vincular máquinas a clientes",
+        "dashboard.action.addMachine": "Agregar una máquina",
+        "dashboard.action.documents": "Documentos",
+        "dashboard.action.openDocumentArchive": "Abrir archivo documental",
+        "dashboard.action.newWorkOrder": "Nueva orden de trabajo",
+        "dashboard.action.planOperationalActivities": "Planificar actividades operativas",
+
+        "dashboard.recentCustomers": "Clientes recientes",
+        "dashboard.noRecentCustomers": "No hay clientes recientes.",
+        "dashboard.customerFallback": "Cliente",
+        "dashboard.customerLabel": "Cliente",
+
+        "dashboard.recentMachines": "Máquinas recientes",
+        "dashboard.noRecentMachines": "No hay máquinas recientes.",
+        "dashboard.machineFallback": "Máquina",
 
         "equipment.title": "Máquinas",
         "equipment.subtitle": "Gestión de máquinas",
