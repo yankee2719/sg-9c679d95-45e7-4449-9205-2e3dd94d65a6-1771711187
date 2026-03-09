@@ -272,6 +272,18 @@ const translations: Record<Language, Record<string, string>> = {
 
         "analytics.item.workOrders.title": "Work orders",
         "analytics.item.workOrders.description": "Controlla andamento e tracciabilità operativa degli ordini di lavoro.",
+
+        "compliance.title": "Compliance",
+        "compliance.subtitle": "Hub di accesso rapido ai moduli utili per conformità, audit e tracciabilità.",
+
+        "compliance.item.documents.title": "Documentazione di conformità",
+        "compliance.item.documents.description": "Manuali, dichiarazioni, schemi e documenti rilevanti per la conformità.",
+
+        "compliance.item.analytics.title": "Analytics e storico",
+        "compliance.item.analytics.description": "Storico esecuzioni checklist e dati utili per audit interni.",
+
+        "compliance.item.executions.title": "Esecuzioni checklist",
+        "compliance.item.executions.description": "Verifica esecuzioni e prove operative collegate al contesto attivo.",
     },
 
     en: {
@@ -537,6 +549,19 @@ const translations: Record<Language, Record<string, string>> = {
 
         "analytics.item.workOrders.title": "Work orders",
         "analytics.item.workOrders.description": "Check progress and operational traceability of work orders.",
+
+        "compliance.title": "Compliance",
+        "compliance.subtitle": "Quick access hub for modules useful for compliance, audits and traceability.",
+
+        "compliance.item.documents.title": "Compliance documentation",
+        "compliance.item.documents.description": "Manuals, declarations, diagrams and relevant compliance documents.",
+
+        "compliance.item.analytics.title": "Analytics and history",
+        "compliance.item.analytics.description": "Checklist execution history and useful data for internal audits.",
+
+        "compliance.item.executions.title": "Checklist executions",
+        "compliance.item.executions.description": "Review executions and operational evidence linked to the active context.",
+
     },
 
     fr: {
@@ -802,6 +827,18 @@ const translations: Record<Language, Record<string, string>> = {
 
         "analytics.item.workOrders.title": "Ordres de travail",
         "analytics.item.workOrders.description": "Contrôlez l’avancement et la traçabilité opérationnelle des ordres de travail.",
+
+        "compliance.title": "Conformité",
+        "compliance.subtitle": "Hub d’accès rapide aux modules utiles pour la conformité, les audits et la traçabilité.",
+
+        "compliance.item.documents.title": "Documentation de conformité",
+        "compliance.item.documents.description": "Manuels, déclarations, schémas et documents pertinents pour la conformité.",
+
+        "compliance.item.analytics.title": "Analyses et historique",
+        "compliance.item.analytics.description": "Historique des exécutions de check-lists et données utiles pour les audits internes.",
+
+        "compliance.item.executions.title": "Exécutions de check-lists",
+        "compliance.item.executions.description": "Vérifiez les exécutions et les preuves opérationnelles liées au contexte actif.",
     },
 
     es: {
@@ -1067,6 +1104,18 @@ const translations: Record<Language, Record<string, string>> = {
 
         "analytics.item.workOrders.title": "Órdenes de trabajo",
         "analytics.item.workOrders.description": "Controla el avance y la trazabilidad operativa de las órdenes de trabajo.",
+
+        "compliance.title": "Cumplimiento",
+        "compliance.subtitle": "Hub de acceso rápido a los módulos útiles para cumplimiento, auditorías y trazabilidad.",
+
+        "compliance.item.documents.title": "Documentación de cumplimiento",
+        "compliance.item.documents.description": "Manuales, declaraciones, esquemas y documentos relevantes para el cumplimiento.",
+
+        "compliance.item.analytics.title": "Análisis e histórico",
+        "compliance.item.analytics.description": "Histórico de ejecuciones de checklist y datos útiles para auditorías internas.",
+
+        "compliance.item.executions.title": "Ejecuciones de checklist",
+        "compliance.item.executions.description": "Verifica ejecuciones y evidencias operativas vinculadas al contexto activo.",
     },
 };
 
