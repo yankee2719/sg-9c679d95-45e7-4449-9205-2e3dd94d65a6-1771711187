@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-type UserRole = "admin" | "supervisor" | "technician" | string;
+type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
 type OrgType = "manufacturer" | "customer" | null;
 
 interface MainLayoutProps {
@@ -40,7 +40,7 @@ interface MainLayoutProps {
 interface NavItem {
     href: string;
     labelKey: string;
-    icon: any;
+    icon: React.ComponentType<{ className?: string }>;
     roles?: string[];
     orgTypes?: Array<"manufacturer" | "customer">;
 }
@@ -76,7 +76,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         .eq("id", ctx.orgId)
                         .maybeSingle();
 
-                    setOrgName((org as any)?.name ?? "Organizzazione");
+                    setOrgName((org as { name?: string } | null)?.name ?? "Organizzazione");
                 }
 
                 const {
@@ -116,10 +116,28 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
         { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
         { href: "/documents", labelKey: "nav.documents", icon: FileText },
-        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
+        {
+            href: "/plants",
+            labelKey: "nav.plants",
+            icon: Building2,
+            roles: ["admin", "supervisor"],
+            orgTypes: ["customer"],
+        },
         { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
-        { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        {
+            href: "/customers",
+            labelKey: "nav.customers",
+            icon: Building2,
+            roles: ["admin", "supervisor"],
+            orgTypes: ["manufacturer"],
+        },
+        {
+            href: "/assignments",
+            labelKey: "nav.assignments",
+            icon: Layers3,
+            roles: ["admin", "supervisor"],
+            orgTypes: ["manufacturer"],
+        },
         { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
         { href: "/settings", labelKey: "nav.settings", icon: Settings },
     ];
@@ -131,10 +149,19 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     });
 
     const mainItems = filteredNavItems.filter(
-        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
+        (item) =>
+            !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(
+                item.href
+            )
     );
-    const managementItems = filteredNavItems.filter((item) => ["/customers", "/assignments", "/users"].includes(item.href));
-    const settingsItems = filteredNavItems.filter((item) => ["/settings/organization", "/settings"].includes(item.href));
+
+    const managementItems = filteredNavItems.filter((item) =>
+        ["/customers", "/assignments", "/users"].includes(item.href)
+    );
+
+    const settingsItems = filteredNavItems.filter((item) =>
+        ["/settings/organization", "/settings"].includes(item.href)
+    );
 
     const handleLogout = async () => {
         try {
@@ -145,7 +172,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         }
     };
 
-    const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
+    const isActive = (href: string) =>
+        router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
 
     const getOrgTypeLabel = () => {
         if (orgType === "manufacturer") return t("org.manufacturer");
@@ -166,6 +194,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         const startsWithMatch = filteredNavItems.find(
             (item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href)
         );
+
         return startsWithMatch?.labelKey ?? "nav.dashboard";
     };
 
@@ -193,7 +222,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                        <div className="text-[1.6rem] leading-none font-bold tracking-tight text-foreground">
+                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">
                             MACHINA
                         </div>
                         <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
@@ -265,9 +294,11 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 <button
                                     className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
                                     onClick={() => setSidebarOpen(true)}
+                                    type="button"
                                 >
                                     <Menu className="h-5 w-5" />
                                 </button>
+
                                 <div>
                                     <div className="text-lg font-semibold">{t(getCurrentPageKey())}</div>
                                     <div className="text-xs text-muted-foreground">
@@ -312,7 +343,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                         {initials}
                                     </div>
                                     <div className="min-w-0">
-                                        <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
+                                        <div className="max-w-[180px] truncate text-sm font-semibold">
+                                            {profileName}
+                                        </div>
                                         <div className="text-xs capitalize text-muted-foreground">{profileRole}</div>
                                     </div>
                                 </div>
@@ -331,6 +364,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         <button
                             className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
                             onClick={() => setSidebarOpen(false)}
+                            type="button"
                         >
                             <X className="h-4 w-4" />
                         </button>
