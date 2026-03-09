@@ -7,13 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Factory, Building2 } from "lucide-react";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { useActiveOrganization } from "@/hooks/useActiveOrganization";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function OrgIcon({ type }: { type: "manufacturer" | "customer" | null }) {
     const Icon = type === "manufacturer" ? Factory : Building2;
-    return <Icon className="w-4 h-4" />;
+    return <Icon className="h-4 w-4" />;
 }
 
 export default function OrganizationSettingsPage() {
+    const { t } = useLanguage();
     const { memberships, activeOrgId, activeOrgType, activeRole, loading } = useActiveOrganization();
 
     const currentMembership = useMemo(
@@ -23,33 +25,31 @@ export default function OrganizationSettingsPage() {
 
     return (
         <MainLayout userRole={(activeRole as any) ?? "technician"}>
-            <SEO title="Organizzazione attiva - MACHINA" />
+            <SEO title={`${t("activeOrg.title")} - MACHINA`} />
 
-            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+            <div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Organizzazione attiva</CardTitle>
-                        <CardDescription>
-                            Qui scegli il contesto reale della webapp. Tutte le viste MACHINA devono leggere
-                            questa organizzazione da <code>profiles.default_organization_id</code>.
-                        </CardDescription>
+                        <CardTitle>{t("activeOrg.title")}</CardTitle>
+                        <CardDescription>{t("activeOrg.description")}</CardDescription>
                     </CardHeader>
+
                     <CardContent className="space-y-4">
                         <OrganizationSwitcher />
 
                         {currentMembership && (
-                            <div className="rounded-xl border border-border p-4 bg-muted/30">
-                                <div className="flex items-center gap-2 mb-2">
+                            <div className="rounded-xl border border-border bg-muted/30 p-4">
+                                <div className="mb-2 flex items-center gap-2">
                                     <OrgIcon type={activeOrgType} />
                                     <div className="font-medium">{currentMembership.organization?.name}</div>
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
                                     <Badge variant="secondary" className="capitalize">
-                                        {activeOrgType ?? "organization"}
+                                        {activeOrgType ?? t("activeOrg.fallbackOrganization")}
                                     </Badge>
                                     <Badge variant="outline" className="capitalize">
-                                        {activeRole ?? "technician"}
+                                        {activeRole ?? t("users.role.technician")}
                                     </Badge>
                                 </div>
                             </div>
@@ -57,8 +57,7 @@ export default function OrganizationSettingsPage() {
 
                         {!loading && memberships.length === 0 && (
                             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
-                                Non risultano membership attive. Senza almeno una membership attiva la webapp non
-                                può determinare il contesto organizzativo.
+                                {t("activeOrg.noMemberships")}
                             </div>
                         )}
                     </CardContent>
@@ -66,31 +65,31 @@ export default function OrganizationSettingsPage() {
 
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Membership attive</CardTitle>
-                        <CardDescription>
-                            Verifica rapidamente in quali organizzazioni sei attivo e con quale ruolo.
-                        </CardDescription>
+                        <CardTitle>{t("activeOrg.membershipsTitle")}</CardTitle>
+                        <CardDescription>{t("activeOrg.membershipsDescription")}</CardDescription>
                     </CardHeader>
+
                     <CardContent className="space-y-3">
                         {memberships.map((membership) => (
                             <div
                                 key={membership.organization_id}
-                                className="rounded-xl border border-border p-4 flex items-center justify-between gap-4"
+                                className="flex items-center justify-between gap-4 rounded-xl border border-border p-4"
                             >
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
                                         <OrgIcon type={membership.organization?.type ?? null} />
-                                        <div className="font-medium truncate">
+                                        <div className="truncate font-medium">
                                             {membership.organization?.name ?? membership.organization_id}
                                         </div>
                                     </div>
-                                    <div className="text-sm text-muted-foreground capitalize">
-                                        {membership.organization?.type ?? "organization"} · {membership.role}
+
+                                    <div className="text-sm capitalize text-muted-foreground">
+                                        {membership.organization?.type ?? t("activeOrg.fallbackOrganization")} · {membership.role}
                                     </div>
                                 </div>
 
                                 {membership.organization_id === activeOrgId && (
-                                    <Badge className="capitalize">Attiva</Badge>
+                                    <Badge className="capitalize">{t("activeOrg.activeBadge")}</Badge>
                                 )}
                             </div>
                         ))}
