@@ -146,6 +146,9 @@ export async function createDocumentAndUploadV1(params: {
         tags,
     } = params;
 
+    const { data: auth } = await supabase.auth.getUser();
+    const currentUserId = auth.user?.id ?? null;
+
     const { data: doc, error: docErr } = await supabase
         .from("documents")
         .insert({
@@ -160,6 +163,7 @@ export async function createDocumentAndUploadV1(params: {
             tags: tags ?? [],
             version_count: 0,
             current_version_id: null,
+            created_by: currentUserId,
             is_archived: false,
         })
         .select("*")
@@ -170,7 +174,13 @@ export async function createDocumentAndUploadV1(params: {
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${doc.id}/v1_${Date.now()}.${ext}`;
 
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(objectName, file);
+    const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(objectName, file, {
+            upsert: false,
+            contentType: file.type || "application/octet-stream",
+        });
+
     if (upErr) throw upErr;
 
     const checksum = await sha256(file);
@@ -188,6 +198,7 @@ export async function createDocumentAndUploadV1(params: {
             checksum_sha256: checksum,
             change_summary: changeSummary?.trim() || null,
             signature_data: null,
+            created_by: currentUserId,
         })
         .select("*")
         .single();
@@ -199,6 +210,7 @@ export async function createDocumentAndUploadV1(params: {
         .update({
             current_version_id: ver.id,
             version_count: 1,
+            updated_at: new Date().toISOString(),
         })
         .eq("id", doc.id);
 
@@ -215,6 +227,9 @@ export async function uploadNewVersion(params: {
 }) {
     const { documentId, organizationId, file, changeSummary } = params;
 
+    const { data: auth } = await supabase.auth.getUser();
+    const currentUserId = auth.user?.id ?? null;
+
     const { data: doc, error: docErr } = await supabase
         .from("documents")
         .select("id,current_version_id,version_count")
@@ -227,7 +242,13 @@ export async function uploadNewVersion(params: {
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${documentId}/v${nextVersion}_${Date.now()}.${ext}`;
 
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(objectName, file);
+    const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(objectName, file, {
+            upsert: false,
+            contentType: file.type || "application/octet-stream",
+        });
+
     if (upErr) throw upErr;
 
     const checksum = await sha256(file);
@@ -245,6 +266,7 @@ export async function uploadNewVersion(params: {
             checksum_sha256: checksum,
             change_summary: changeSummary?.trim() || null,
             signature_data: null,
+            created_by: currentUserId,
         })
         .select("*")
         .single();
