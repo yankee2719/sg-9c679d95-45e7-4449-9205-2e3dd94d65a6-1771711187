@@ -161,6 +161,26 @@ const translations: Record<Language, Record<string, string>> = {
         "workOrders.fallbackTitle": "Work Order",
         "workOrders.machineFallback": "Macchina",
 
+        "checklists.title": "Checklist",
+        "checklists.subtitle": "Gestisci template checklist per controlli, verifiche e procedure operative.",
+        "checklists.newTemplate": "Nuovo Template",
+
+        "checklists.kpi.templates": "Template",
+        "checklists.kpi.totalItems": "Voci Totali",
+        "checklists.kpi.safetyChecklists": "Checklist Safety",
+
+        "checklists.searchPlaceholder": "Cerca template checklist",
+        "checklists.listTitle": "Elenco Template",
+        "checklists.loading": "Caricamento template checklist...",
+        "checklists.noResults": "Nessun template checklist trovato.",
+
+        "checklists.category.safety": "Safety",
+        "checklists.category.quality": "Quality",
+        "checklists.category.operational": "Operativa",
+
+        "checklists.fallbackTitle": "Template checklist",
+        "checklists.itemsLabel": "voci",
+
     },
 
     en: {
@@ -313,6 +333,26 @@ const translations: Record<Language, Record<string, string>> = {
 
         "workOrders.fallbackTitle": "Work Order",
         "workOrders.machineFallback": "Machine",
+
+        "checklists.title": "Checklists",
+        "checklists.subtitle": "Manage checklist templates for inspections, checks and operational procedures.",
+        "checklists.newTemplate": "New Template",
+
+        "checklists.kpi.templates": "Templates",
+        "checklists.kpi.totalItems": "Total Items",
+        "checklists.kpi.safetyChecklists": "Safety Checklists",
+
+        "checklists.searchPlaceholder": "Search checklist template",
+        "checklists.listTitle": "Template List",
+        "checklists.loading": "Loading checklist templates...",
+        "checklists.noResults": "No checklist template found.",
+
+        "checklists.category.safety": "Safety",
+        "checklists.category.quality": "Quality",
+        "checklists.category.operational": "Operational",
+
+        "checklists.fallbackTitle": "Checklist template",
+        "checklists.itemsLabel": "items",
     },
 
     fr: {
@@ -466,6 +506,26 @@ const translations: Record<Language, Record<string, string>> = {
         "workOrders.fallbackTitle": "Ordre de travail",
         "workOrders.machineFallback": "Machine",
 
+        "checklists.title": "Check-lists",
+        "checklists.subtitle": "Gérez les modèles de check-lists pour contrôles, vérifications et procédures opérationnelles.",
+        "checklists.newTemplate": "Nouveau modèle",
+
+        "checklists.kpi.templates": "Modèles",
+        "checklists.kpi.totalItems": "Éléments totaux",
+        "checklists.kpi.safetyChecklists": "Check-lists sécurité",
+
+        "checklists.searchPlaceholder": "Rechercher un modèle de check-list",
+        "checklists.listTitle": "Liste des modèles",
+        "checklists.loading": "Chargement des modèles de check-list...",
+        "checklists.noResults": "Aucun modèle de check-list trouvé.",
+
+        "checklists.category.safety": "Sécurité",
+        "checklists.category.quality": "Qualité",
+        "checklists.category.operational": "Opérationnelle",
+
+        "checklists.fallbackTitle": "Modèle de check-list",
+        "checklists.itemsLabel": "éléments",
+
     },
 
     es: {
@@ -618,6 +678,26 @@ const translations: Record<Language, Record<string, string>> = {
 
         "workOrders.fallbackTitle": "Orden de trabajo",
         "workOrders.machineFallback": "Máquina",
+
+        "checklists.title": "Checklists",
+        "checklists.subtitle": "Gestiona plantillas de checklist para controles, verificaciones y procedimientos operativos.",
+        "checklists.newTemplate": "Nueva plantilla",
+
+        "checklists.kpi.templates": "Plantillas",
+        "checklists.kpi.totalItems": "Elementos totales",
+        "checklists.kpi.safetyChecklists": "Checklists de seguridad",
+
+        "checklists.searchPlaceholder": "Buscar plantilla de checklist",
+        "checklists.listTitle": "Lista de plantillas",
+        "checklists.loading": "Cargando plantillas de checklist...",
+        "checklists.noResults": "No se encontró ninguna plantilla de checklist.",
+
+        "checklists.category.safety": "Seguridad",
+        "checklists.category.quality": "Calidad",
+        "checklists.category.operational": "Operativa",
+
+        "checklists.fallbackTitle": "Plantilla de checklist",
+        "checklists.itemsLabel": "elementos",
     },
 };
 
