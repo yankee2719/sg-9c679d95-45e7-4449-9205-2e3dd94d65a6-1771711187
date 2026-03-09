@@ -32,6 +32,7 @@ const translations: Record<Language, Record<string, string>> = {
         "common.notifications": "Notifiche",
         "common.system": "Sistema",
         "common.management": "Gestione",
+        "common.viewAll": "Vedi tutti",
 
         "nav.dashboard": "Dashboard",
         "nav.equipment": "Macchine",
@@ -54,8 +55,8 @@ const translations: Record<Language, Record<string, string>> = {
         "org.platform": "Piattaforma",
         "org.context": "Contesto",
 
-        "common.viewAll": "Vedi tutti",
-
+        "dashboard.title": "Dashboard",
+        "dashboard.subtitle": "Panoramica del sistema",
         "dashboard.subtitleManufacturer": "Panoramica del contesto costruttore attivo.",
         "dashboard.subtitleCustomer": "Vista rapida del contesto organizzativo attivo.",
 
@@ -88,9 +89,6 @@ const translations: Record<Language, Record<string, string>> = {
         "dashboard.recentMachines": "Ultime Macchine",
         "dashboard.noRecentMachines": "Nessuna macchina recente.",
         "dashboard.machineFallback": "Macchina",
-
-        "dashboard.title": "Dashboard",
-        "dashboard.subtitle": "Panoramica del sistema",
 
         "equipment.title": "Macchine",
         "equipment.subtitle": "Gestione macchine e attrezzature",
@@ -180,7 +178,6 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Template checklist",
         "checklists.itemsLabel": "voci",
-
     },
 
     en: {
@@ -206,6 +203,7 @@ const translations: Record<Language, Record<string, string>> = {
         "common.notifications": "Notifications",
         "common.system": "System",
         "common.management": "Management",
+        "common.viewAll": "View all",
 
         "nav.dashboard": "Dashboard",
         "nav.equipment": "Machines",
@@ -230,8 +228,6 @@ const translations: Record<Language, Record<string, string>> = {
 
         "dashboard.title": "Dashboard",
         "dashboard.subtitle": "System overview",
-        "common.viewAll": "View all",
-
         "dashboard.subtitleManufacturer": "Overview of the active manufacturer context.",
         "dashboard.subtitleCustomer": "Quick view of the active organizational context.",
 
@@ -378,6 +374,7 @@ const translations: Record<Language, Record<string, string>> = {
         "common.notifications": "Notifications",
         "common.system": "Système",
         "common.management": "Gestion",
+        "common.viewAll": "Voir tout",
 
         "nav.dashboard": "Tableau de bord",
         "nav.equipment": "Machines",
@@ -402,8 +399,6 @@ const translations: Record<Language, Record<string, string>> = {
 
         "dashboard.title": "Tableau de bord",
         "dashboard.subtitle": "Aperçu du système",
-        "common.viewAll": "Voir tout",
-
         "dashboard.subtitleManufacturer": "Vue d’ensemble du contexte constructeur actif.",
         "dashboard.subtitleCustomer": "Vue rapide du contexte organisationnel actif.",
 
@@ -525,7 +520,6 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Modèle de check-list",
         "checklists.itemsLabel": "éléments",
-
     },
 
     es: {
@@ -551,6 +545,7 @@ const translations: Record<Language, Record<string, string>> = {
         "common.notifications": "Notificaciones",
         "common.system": "Sistema",
         "common.management": "Gestión",
+        "common.viewAll": "Ver todos",
 
         "nav.dashboard": "Panel",
         "nav.equipment": "Máquinas",
@@ -575,8 +570,6 @@ const translations: Record<Language, Record<string, string>> = {
 
         "dashboard.title": "Panel",
         "dashboard.subtitle": "Resumen del sistema",
-        "common.viewAll": "Ver todos",
-
         "dashboard.subtitleManufacturer": "Resumen del contexto activo del fabricante.",
         "dashboard.subtitleCustomer": "Vista rápida del contexto organizativo activo.",
 
