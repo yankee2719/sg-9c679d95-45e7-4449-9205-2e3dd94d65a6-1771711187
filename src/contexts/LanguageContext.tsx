@@ -235,6 +235,20 @@ const translations: Record<Language, Record<string, string>> = {
         "plants.fallbackPlant": "Stabilimento",
         "plants.fallbackLine": "Linea",
 
+        "customers.title": "Clienti",
+        "customers.subtitle": "Elenco organizzazioni cliente collegate al costruttore attivo.",
+        "customers.new": "Nuovo Cliente",
+
+        "customers.kpi.total": "Clienti Totali",
+        "customers.kpi.activeOrganizations": "Organizzazioni Attive",
+
+        "customers.listTitle": "Elenco Clienti",
+        "customers.loading": "Caricamento clienti...",
+        "customers.noResults": "Nessun cliente collegato.",
+
+        "customers.fallbackTitle": "Cliente",
+        "customers.customerOrganization": "Organizzazione cliente",
+
     },
 
     en: {
@@ -463,6 +477,35 @@ const translations: Record<Language, Record<string, string>> = {
 
         "plants.fallbackPlant": "Plant",
         "plants.fallbackLine": "Line",
+
+        "customers.title": "Customers",
+        "customers.subtitle": "List of customer organizations linked to the active manufacturer.",
+        "customers.new": "New Customer",
+
+        "customers.kpi.total": "Total Customers",
+        "customers.kpi.activeOrganizations": "Active Organizations",
+
+        "customers.listTitle": "Customer List",
+        "customers.loading": "Loading customers...",
+        "customers.noResults": "No linked customer.",
+
+        "customers.fallbackTitle": "Customer",
+        "customers.customerOrganization": "Customer organization",
+
+        "customers.title": "Clients",
+        "customers.subtitle": "Liste des organisations clientes liées au constructeur actif.",
+        "customers.new": "Nouveau Client",
+
+        "customers.kpi.total": "Clients Totaux",
+        "customers.kpi.activeOrganizations": "Organisations Actives",
+
+        "customers.listTitle": "Liste des Clients",
+        "customers.loading": "Chargement des clients...",
+        "customers.noResults": "Aucun client lié.",
+
+        "customers.fallbackTitle": "Client",
+        "customers.customerOrganization": "Organisation cliente",
+
     },
 
     fr: {
@@ -691,6 +734,21 @@ const translations: Record<Language, Record<string, string>> = {
 
         "plants.fallbackPlant": "Site",
         "plants.fallbackLine": "Ligne",
+
+        "customers.title": "Clientes",
+        "customers.subtitle": "Lista de organizaciones cliente vinculadas al fabricante activo.",
+        "customers.new": "Nuevo Cliente",
+
+        "customers.kpi.total": "Clientes Totales",
+        "customers.kpi.activeOrganizations": "Organizaciones Activas",
+
+        "customers.listTitle": "Lista de Clientes",
+        "customers.loading": "Cargando clientes...",
+        "customers.noResults": "No hay clientes vinculados.",
+
+        "customers.fallbackTitle": "Cliente",
+        "customers.customerOrganization": "Organización cliente",
+
     },
 
     es: {
@@ -919,6 +977,20 @@ const translations: Record<Language, Record<string, string>> = {
 
         "plants.fallbackPlant": "Planta",
         "plants.fallbackLine": "Línea",
+
+        "customers.title": "Clients",
+        "customers.subtitle": "Liste des organisations clientes liées au constructeur actif.",
+        "customers.new": "Nouveau Client",
+
+        "customers.kpi.total": "Clients Totaux",
+        "customers.kpi.activeOrganizations": "Organisations Actives",
+
+        "customers.listTitle": "Liste des Clients",
+        "customers.loading": "Chargement des clients...",
+        "customers.noResults": "Aucun client lié.",
+
+        "customers.fallbackTitle": "Client",
+        "customers.customerOrganization": "Organisation cliente",
     },
 };
 
