@@ -6,6 +6,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Building2, ArrowRight, Users, Plus } from "lucide-react";
 
 interface CustomerRow {
@@ -22,13 +23,17 @@ function CardShell({
     className?: string;
 }) {
     return (
-        <div className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
+        <div
+            className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+        >
             {children}
         </div>
     );
 }
 
 export default function CustomersPage() {
+    const { t } = useLanguage();
+
     const [userRole, setUserRole] = useState("technician");
     const [customers, setCustomers] = useState < CustomerRow[] > ([]);
     const [loading, setLoading] = useState(true);
@@ -63,24 +68,26 @@ export default function CustomersPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Clienti - MACHINA" />
+                <SEO title={`${t("customers.title")} - MACHINA`} />
 
                 <div className="px-5 py-6 lg:px-8 lg:py-8">
                     <div className="mx-auto max-w-[1220px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground">Clienti</h1>
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                    {t("customers.title")}
+                                </h1>
                                 <p className="text-base text-muted-foreground">
-                                    Elenco organizzazioni cliente collegate al costruttore attivo.
+                                    {t("customers.subtitle")}
                                 </p>
                             </div>
 
                             <Link
                                 href="/customers/new"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
                             >
                                 <Plus className="h-4 w-4" />
-                                Nuovo Cliente
+                                {t("customers.new")}
                             </Link>
                         </div>
 
@@ -89,28 +96,42 @@ export default function CustomersPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
                                     <Building2 className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">{customers.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Clienti Totali</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">
+                                    {customers.length}
+                                </div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    {t("customers.kpi.total")}
+                                </div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-300">
                                     <Users className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">{customers.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Organizzazioni Attive</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">
+                                    {customers.length}
+                                </div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    {t("customers.kpi.activeOrganizations")}
+                                </div>
                             </CardShell>
                         </div>
 
                         <section className="space-y-4">
                             <div className="flex items-center justify-between gap-4">
-                                <h2 className="text-[32px] font-bold text-foreground">Elenco Clienti</h2>
+                                <h2 className="text-[32px] font-bold text-foreground">
+                                    {t("customers.listTitle")}
+                                </h2>
                             </div>
 
                             {loading ? (
-                                <CardShell className="p-6 text-muted-foreground">Caricamento clienti...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">
+                                    {t("customers.loading")}
+                                </CardShell>
                             ) : customers.length === 0 ? (
-                                <CardShell className="p-6 text-muted-foreground">Nessun cliente collegato.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">
+                                    {t("customers.noResults")}
+                                </CardShell>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {customers.map((customer) => (
@@ -123,9 +144,11 @@ export default function CustomersPage() {
                                                         </div>
                                                         <div className="min-w-0">
                                                             <div className="truncate text-xl font-semibold text-foreground">
-                                                                {customer.name ?? "Cliente"}
+                                                                {customer.name ?? t("customers.fallbackTitle")}
                                                             </div>
-                                                            <div className="text-sm text-muted-foreground">Organizzazione cliente</div>
+                                                            <div className="text-sm text-muted-foreground">
+                                                                {t("customers.customerOrganization")}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
