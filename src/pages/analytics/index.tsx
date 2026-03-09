@@ -1,37 +1,51 @@
 // src/pages/analytics/index.tsx
 import Link from "next/link";
+import { useLanguage } from "@/contexts/LanguageContext";
 import ProtectedPage from "@/components/app/ProtectedPage";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, CheckSquare, ClipboardList, ChevronRight } from "lucide-react";
-
-const items = [
-    {
-        href: "/checklists/executions",
-        title: "Storico checklist",
-        description: "Analizza le esecuzioni checklist nel contesto organizzativo attivo.",
-        icon: CheckSquare,
-    },
-    {
-        href: "/work-orders",
-        title: "Work orders",
-        description: "Controlla andamento e tracciabilità operativa degli ordini di lavoro.",
-        icon: ClipboardList,
-    },
-];
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    BarChart3,
+    CheckSquare,
+    ClipboardList,
+    ChevronRight,
+} from "lucide-react";
 
 export default function AnalyticsHomePage() {
+    const { t } = useLanguage();
+
+    const items = [
+        {
+            href: "/checklists/executions",
+            title: t("analytics.item.checklists.title"),
+            description: t("analytics.item.checklists.description"),
+            icon: CheckSquare,
+        },
+        {
+            href: "/work-orders",
+            title: t("analytics.item.workOrders.title"),
+            description: t("analytics.item.workOrders.description"),
+            icon: ClipboardList,
+        },
+    ];
+
     return (
-        <ProtectedPage title="Analytics - MACHINA">
-            <div className="container mx-auto max-w-5xl px-4 py-8 space-y-6">
+        <ProtectedPage title={`${t("analytics.title")} - MACHINA`}>
+            <div className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
                 <div>
                     <div className="flex items-center gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
                             <BarChart3 className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-semibold">Analytics</h1>
+                            <h1 className="text-2xl font-semibold">{t("analytics.title")}</h1>
                             <p className="text-sm text-muted-foreground">
-                                Punto unico per consultare i dati operativi del contesto attivo.
+                                {t("analytics.subtitle")}
                             </p>
                         </div>
                     </div>
