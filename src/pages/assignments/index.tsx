@@ -6,6 +6,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Package, ArrowRight, Factory, Building2 } from "lucide-react";
 
 interface AssignmentRow {
@@ -23,13 +24,17 @@ function CardShell({
     className?: string;
 }) {
     return (
-        <div className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}>
+        <div
+            className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
+        >
             {children}
         </div>
     );
 }
 
 export default function AssignmentsPage() {
+    const { t } = useLanguage();
+
     const [userRole, setUserRole] = useState("technician");
     const [rows, setRows] = useState < AssignmentRow[] > ([]);
     const [loading, setLoading] = useState(true);
@@ -50,8 +55,13 @@ export default function AssignmentsPage() {
 
                 if (error) throw error;
 
-                const machineIds = (assignments ?? []).map((x: any) => x.machine_id).filter(Boolean);
-                const customerIds = (assignments ?? []).map((x: any) => x.customer_org_id).filter(Boolean);
+                const machineIds = (assignments ?? [])
+                    .map((x: any) => x.machine_id)
+                    .filter(Boolean);
+
+                const customerIds = (assignments ?? [])
+                    .map((x: any) => x.customer_org_id)
+                    .filter(Boolean);
 
                 const [machinesRes, customersRes] = await Promise.all([
                     machineIds.length
@@ -86,14 +96,16 @@ export default function AssignmentsPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Assegnazioni - MACHINA" />
+                <SEO title={`${t("assignments.title")} - MACHINA`} />
 
                 <div className="px-5 py-6 lg:px-8 lg:py-8">
                     <div className="mx-auto max-w-[1220px] space-y-8">
                         <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">Assegnazioni</h1>
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                {t("assignments.title")}
+                            </h1>
                             <p className="text-base text-muted-foreground">
-                                Collegamenti attivi tra macchine prodotte e clienti finali.
+                                {t("assignments.subtitle")}
                             </p>
                         </div>
 
@@ -102,22 +114,36 @@ export default function AssignmentsPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <Package className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">{rows.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Assegnazioni Attive</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">
+                                    {rows.length}
+                                </div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    {t("assignments.kpi.active")}
+                                </div>
                             </CardShell>
                         </div>
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-foreground">Elenco Assegnazioni</h2>
+                            <h2 className="text-[32px] font-bold text-foreground">
+                                {t("assignments.listTitle")}
+                            </h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-muted-foreground">Caricamento assegnazioni...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">
+                                    {t("assignments.loading")}
+                                </CardShell>
                             ) : rows.length === 0 ? (
-                                <CardShell className="p-6 text-muted-foreground">Nessuna assegnazione attiva.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">
+                                    {t("assignments.noResults")}
+                                </CardShell>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {rows.map((row) => (
-                                        <Link key={`${row.machine_id}-${row.customer_org_id}`} href={`/equipment/${row.machine_id}`} className="block">
+                                        <Link
+                                            key={`${row.machine_id}-${row.customer_org_id}`}
+                                            href={`/equipment/${row.machine_id}`}
+                                            className="block"
+                                        >
                                             <CardShell className="p-5 transition hover:translate-y-[-2px]">
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between gap-3">
@@ -127,23 +153,27 @@ export default function AssignmentsPage() {
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <div className="truncate text-lg font-semibold text-foreground">
-                                                                    {row.machine_name ?? "Macchina"}
+                                                                    {row.machine_name ?? t("assignments.machineFallback")}
                                                                 </div>
-                                                                <div className="text-sm text-muted-foreground">Macchina assegnata</div>
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    {t("assignments.assignedMachine")}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                     </div>
 
-                                                    <div className="flex items-center gap-3 rounded-2xl bg-slate-900/40 p-3">
+                                                    <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
                                                         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-300">
                                                             <Building2 className="h-5 w-5" />
                                                         </div>
                                                         <div className="min-w-0">
                                                             <div className="truncate text-sm font-semibold text-foreground">
-                                                                {row.customer_name ?? "Cliente"}
+                                                                {row.customer_name ?? t("assignments.customerFallback")}
                                                             </div>
-                                                            <div className="text-xs text-muted-foreground">Cliente destinatario</div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {t("assignments.destinationCustomer")}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
