@@ -196,6 +196,45 @@ const translations: Record<Language, Record<string, string>> = {
         "documents.link.compliance.title": "Vai alla compliance",
         "documents.link.compliance.description": "Controlli, conformità e documentazione collegata al contesto attivo.",
 
+        "plants.title": "Stabilimenti",
+        "plants.subtitle": "Gestisci stabilimenti e linee produttive del contesto attivo.",
+
+        "plants.newPlant": "Nuovo Stabilimento",
+        "plants.newLine": "Nuova Linea",
+
+        "plants.kpi.activePlants": "Stabilimenti Attivi",
+        "plants.kpi.activeLines": "Linee Attive",
+
+        "plants.form.code": "Codice",
+
+        "plants.form.plant.title": "Nuovo Stabilimento",
+        "plants.form.plant.subtitle": "Crea uno stabilimento nel contesto attivo.",
+        "plants.form.plant.name": "Nome stabilimento",
+        "plants.form.plant.namePlaceholder": "Es. Plant Test 01",
+        "plants.form.plant.codePlaceholder": "Es. PLT-01",
+
+        "plants.form.line.title": "Nuova Linea",
+        "plants.form.line.subtitle": "Crea una linea produttiva collegata a uno stabilimento.",
+        "plants.form.line.plant": "Stabilimento",
+        "plants.form.line.selectPlant": "Seleziona",
+        "plants.form.line.name": "Nome linea",
+        "plants.form.line.namePlaceholder": "Es. Linea Test 01",
+        "plants.form.line.codePlaceholder": "Es. LN-01",
+
+        "plants.saving": "Salvataggio...",
+        "plants.savePlant": "Salva Stabilimento",
+        "plants.saveLine": "Salva Linea",
+
+        "plants.listTitle": "Elenco Stabilimenti",
+        "plants.loading": "Caricamento stabilimenti...",
+        "plants.noResults": "Nessuno stabilimento presente.",
+
+        "plants.linkedLines": "Linee collegate",
+        "plants.noLinkedLines": "Nessuna linea collegata",
+
+        "plants.fallbackPlant": "Stabilimento",
+        "plants.fallbackLine": "Linea",
+
     },
 
     en: {
@@ -385,6 +424,45 @@ const translations: Record<Language, Record<string, string>> = {
 
         "documents.link.compliance.title": "Go to compliance",
         "documents.link.compliance.description": "Checks, compliance and documentation linked to the active context.",
+
+        "plants.title": "Plants",
+        "plants.subtitle": "Manage plants and production lines in the active context.",
+
+        "plants.newPlant": "New Plant",
+        "plants.newLine": "New Line",
+
+        "plants.kpi.activePlants": "Active Plants",
+        "plants.kpi.activeLines": "Active Lines",
+
+        "plants.form.code": "Code",
+
+        "plants.form.plant.title": "New Plant",
+        "plants.form.plant.subtitle": "Create a plant in the active context.",
+        "plants.form.plant.name": "Plant name",
+        "plants.form.plant.namePlaceholder": "E.g. Plant Test 01",
+        "plants.form.plant.codePlaceholder": "E.g. PLT-01",
+
+        "plants.form.line.title": "New Line",
+        "plants.form.line.subtitle": "Create a production line linked to a plant.",
+        "plants.form.line.plant": "Plant",
+        "plants.form.line.selectPlant": "Select",
+        "plants.form.line.name": "Line name",
+        "plants.form.line.namePlaceholder": "E.g. Test Line 01",
+        "plants.form.line.codePlaceholder": "E.g. LN-01",
+
+        "plants.saving": "Saving...",
+        "plants.savePlant": "Save Plant",
+        "plants.saveLine": "Save Line",
+
+        "plants.listTitle": "Plant List",
+        "plants.loading": "Loading plants...",
+        "plants.noResults": "No plants available.",
+
+        "plants.linkedLines": "Linked lines",
+        "plants.noLinkedLines": "No linked lines",
+
+        "plants.fallbackPlant": "Plant",
+        "plants.fallbackLine": "Line",
     },
 
     fr: {
@@ -574,6 +652,45 @@ const translations: Record<Language, Record<string, string>> = {
 
         "documents.link.compliance.title": "Aller à la conformité",
         "documents.link.compliance.description": "Contrôles, conformité et documentation liée au contexte actif.",
+
+        "plants.title": "Sites",
+        "plants.subtitle": "Gérez les sites et lignes de production du contexte actif.",
+
+        "plants.newPlant": "Nouveau site",
+        "plants.newLine": "Nouvelle ligne",
+
+        "plants.kpi.activePlants": "Sites actifs",
+        "plants.kpi.activeLines": "Lignes actives",
+
+        "plants.form.code": "Code",
+
+        "plants.form.plant.title": "Nouveau site",
+        "plants.form.plant.subtitle": "Créez un site dans le contexte actif.",
+        "plants.form.plant.name": "Nom du site",
+        "plants.form.plant.namePlaceholder": "Ex. Plant Test 01",
+        "plants.form.plant.codePlaceholder": "Ex. PLT-01",
+
+        "plants.form.line.title": "Nouvelle ligne",
+        "plants.form.line.subtitle": "Créez une ligne de production liée à un site.",
+        "plants.form.line.plant": "Site",
+        "plants.form.line.selectPlant": "Sélectionner",
+        "plants.form.line.name": "Nom de la ligne",
+        "plants.form.line.namePlaceholder": "Ex. Ligne Test 01",
+        "plants.form.line.codePlaceholder": "Ex. LN-01",
+
+        "plants.saving": "Enregistrement...",
+        "plants.savePlant": "Enregistrer le site",
+        "plants.saveLine": "Enregistrer la ligne",
+
+        "plants.listTitle": "Liste des sites",
+        "plants.loading": "Chargement des sites...",
+        "plants.noResults": "Aucun site disponible.",
+
+        "plants.linkedLines": "Lignes liées",
+        "plants.noLinkedLines": "Aucune ligne liée",
+
+        "plants.fallbackPlant": "Site",
+        "plants.fallbackLine": "Ligne",
     },
 
     es: {
@@ -763,6 +880,45 @@ const translations: Record<Language, Record<string, string>> = {
 
         "documents.link.compliance.title": "Ir a compliance",
         "documents.link.compliance.description": "Controles, cumplimiento y documentación vinculada al contexto activo.",
+
+        "plants.title": "Plantas",
+        "plants.subtitle": "Gestiona plantas y líneas de producción del contexto activo.",
+
+        "plants.newPlant": "Nueva planta",
+        "plants.newLine": "Nueva línea",
+
+        "plants.kpi.activePlants": "Plantas activas",
+        "plants.kpi.activeLines": "Líneas activas",
+
+        "plants.form.code": "Código",
+
+        "plants.form.plant.title": "Nueva planta",
+        "plants.form.plant.subtitle": "Crea una planta en el contexto activo.",
+        "plants.form.plant.name": "Nombre de la planta",
+        "plants.form.plant.namePlaceholder": "Ej. Plant Test 01",
+        "plants.form.plant.codePlaceholder": "Ej. PLT-01",
+
+        "plants.form.line.title": "Nueva línea",
+        "plants.form.line.subtitle": "Crea una línea de producción vinculada a una planta.",
+        "plants.form.line.plant": "Planta",
+        "plants.form.line.selectPlant": "Seleccionar",
+        "plants.form.line.name": "Nombre de la línea",
+        "plants.form.line.namePlaceholder": "Ej. Línea Test 01",
+        "plants.form.line.codePlaceholder": "Ej. LN-01",
+
+        "plants.saving": "Guardando...",
+        "plants.savePlant": "Guardar planta",
+        "plants.saveLine": "Guardar línea",
+
+        "plants.listTitle": "Lista de plantas",
+        "plants.loading": "Cargando plantas...",
+        "plants.noResults": "No hay plantas disponibles.",
+
+        "plants.linkedLines": "Líneas vinculadas",
+        "plants.noLinkedLines": "Ninguna línea vinculada",
+
+        "plants.fallbackPlant": "Planta",
+        "plants.fallbackLine": "Línea",
     },
 };
 
