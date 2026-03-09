@@ -1,7 +1,13 @@
-// src/components/documents/DocumentManager.tsx
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import {
+    createDocumentAndUploadV1,
+    getSignedUrl,
+    listMachineDocuments,
+    DocumentCategory,
+    DocumentRow,
+    DocumentVersionRow,
+} from "@/services/documentService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,44 +33,8 @@ import {
 
 type OrgType = "manufacturer" | "customer";
 
-type DocumentCategory =
-    | "technical_manual"
-    | "risk_assessment"
-    | "ce_declaration"
-    | "electrical_schema"
-    | "maintenance_manual"
-    | "spare_parts_catalog"
-    | "training_material"
-    | "inspection_report"
-    | "certificate"
-    | "photo"
-    | "video"
-    | "other";
-
-interface DocumentRow {
-    id: string;
-    organization_id: string | null;
-    plant_id: string | null;
-    machine_id: string | null;
-    title: string | null;
-    description: string | null;
-    category: DocumentCategory | null;
-    language: string | null;
-    is_mandatory: boolean | null;
-    regulatory_reference: string | null;
-    current_version_id: string | null;
-    version_count: number | null;
-    tags: string[] | null;
-    created_at: string | null;
-    updated_at: string | null;
-    created_by: string | null;
-    is_archived: boolean | null;
-    archived_at: string | null;
-    external_url: string | null;
-    storage_bucket: string | null;
-    storage_path: string | null;
-    mime_type: string | null;
-    file_size: number | null;
+interface DocumentWithVersions extends DocumentRow {
+    document_versions: DocumentVersionRow[];
 }
 
 interface DocumentManagerProps {
@@ -77,18 +47,11 @@ interface DocumentManagerProps {
 }
 
 const DOCUMENT_CATEGORY_OPTIONS: Array<{ label: string; value: DocumentCategory }> = [
-    { label: "Manuale tecnico", value: "technical_manual" },
-    { label: "Valutazione rischi", value: "risk_assessment" },
-    { label: "Dichiarazione CE", value: "ce_declaration" },
-    { label: "Schema elettrico", value: "electrical_schema" },
-    { label: "Manuale uso e manutenzione", value: "maintenance_manual" },
-    { label: "Catalogo ricambi", value: "spare_parts_catalog" },
-    { label: "Materiale formazione", value: "training_material" },
-    { label: "Rapporto ispezione", value: "inspection_report" },
-    { label: "Certificato", value: "certificate" },
-    { label: "Foto", value: "photo" },
-    { label: "Video", value: "video" },
-    { label: "Altro", value: "other" },
+    { label: "Manuale / Manual", value: "MANUAL" },
+    { label: "Disegno / Schema", value: "DRAWING" },
+    { label: "Certificato / Declaration", value: "CERTIFICATE" },
+    { label: "Report / Verbale", value: "REPORT" },
+    { label: "Altro", value: "OTHER" },
 ];
 
 function formatBytes(value: number | null | undefined) {
@@ -118,39 +81,17 @@ function categoryLabel(category: string | null | undefined) {
     return DOCUMENT_CATEGORY_OPTIONS.find((x) => x.value === category)?.label ?? category ?? "—";
 }
 
-function fileNameFromPath(path: string | null | undefined) {
-    if (!path) return "—";
-    const parts = path.split("/");
-    return parts[parts.length - 1] || path;
-}
+function currentVersion(doc: DocumentWithVersions) {
+    if (!doc.document_versions?.length) return null;
 
-function normalizeMimeType(file: File) {
-    if (file.type && file.type.trim()) return file.type;
-
-    const name = file.name.toLowerCase();
-
-    if (name.endsWith(".txt")) return "text/plain";
-    if (name.endsWith(".csv")) return "text/csv";
-    if (name.endsWith(".pdf")) return "application/pdf";
-    if (name.endsWith(".doc")) return "application/msword";
-    if (name.endsWith(".docx")) {
-        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (doc.current_version_id) {
+        const exact = doc.document_versions.find((v) => v.id === doc.current_version_id);
+        if (exact) return exact;
     }
-    if (name.endsWith(".xlsx")) {
-        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    }
-    if (name.endsWith(".pptx")) {
-        return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-    }
-    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
-    if (name.endsWith(".png")) return "image/png";
-    if (name.endsWith(".gif")) return "image/gif";
-    if (name.endsWith(".webp")) return "image/webp";
-    if (name.endsWith(".zip")) return "application/zip";
-    if (name.endsWith(".mp4")) return "video/mp4";
-    if (name.endsWith(".mov")) return "video/quicktime";
 
-    return "application/octet-stream";
+    return [...doc.document_versions].sort(
+        (a, b) => (b.version_number ?? 0) - (a.version_number ?? 0)
+    )[0] ?? null;
 }
 
 export default function DocumentManager(props: DocumentManagerProps) {
@@ -158,7 +99,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [documents, setDocuments] = useState < DocumentRow[] > ([]);
+    const [documents, setDocuments] = useState < DocumentWithVersions[] > ([]);
 
     const [ctxOrgId, setCtxOrgId] = useState < string | null > (props.currentOrgId ?? null);
     const [ctxOrgType, setCtxOrgType] = useState < OrgType | null > (props.currentOrgType ?? null);
@@ -169,9 +110,9 @@ export default function DocumentManager(props: DocumentManagerProps) {
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [category, setCategory] = useState < DocumentCategory > ("technical_manual");
+    const [category, setCategory] = useState < DocumentCategory > ("MANUAL");
     const [language, setLanguage] = useState("it");
-    const [regulatoryReference, setRegulatoryReference] = useState("");
+    const [changeSummary, setChangeSummary] = useState("");
     const [selectedFile, setSelectedFile] = useState < File | null > (null);
 
     const canWrite = useMemo(() => {
@@ -194,6 +135,11 @@ export default function DocumentManager(props: DocumentManagerProps) {
 
     const visibleDocuments = useMemo(() => documents, [documents]);
 
+    const reloadDocuments = async () => {
+        const rows = await listMachineDocuments(props.machineId);
+        setDocuments(rows as DocumentWithVersions[]);
+    };
+
     useEffect(() => {
         const init = async () => {
             setLoading(true);
@@ -205,6 +151,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
                 if (ctx?.role) setCtxRole(ctx.role);
 
                 if (!props.machineOwnerOrgId) {
+                    const { supabase } = await import("@/integrations/supabase/client");
                     const { data: machineRow, error: machineError } = await supabase
                         .from("machines")
                         .select("organization_id")
@@ -215,18 +162,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
                     setResolvedMachineOwnerOrgId((machineRow as any)?.organization_id ?? null);
                 }
 
-                const { data, error } = await supabase
-                    .from("documents")
-                    .select(
-                        "id, organization_id, plant_id, machine_id, title, description, category, language, is_mandatory, regulatory_reference, current_version_id, version_count, tags, created_at, updated_at, created_by, is_archived, archived_at, external_url, storage_bucket, storage_path, mime_type, file_size"
-                    )
-                    .eq("machine_id", props.machineId)
-                    .eq("is_archived", false)
-                    .order("created_at", { ascending: false });
-
-                if (error) throw error;
-
-                setDocuments((data ?? []) as DocumentRow[]);
+                await reloadDocuments();
             } catch (e: any) {
                 console.error(e);
                 toast({
@@ -240,14 +176,14 @@ export default function DocumentManager(props: DocumentManagerProps) {
         };
 
         init();
-    }, [props.machineId, props.machineOwnerOrgId, toast]);
+    }, [props.machineId, props.machineOwnerOrgId]);
 
     const resetForm = () => {
         setTitle("");
         setDescription("");
-        setCategory("technical_manual");
+        setCategory("MANUAL");
         setLanguage("it");
-        setRegulatoryReference("");
+        setChangeSummary("");
         setSelectedFile(null);
     };
 
@@ -288,68 +224,21 @@ export default function DocumentManager(props: DocumentManagerProps) {
             return;
         }
 
-        const resolvedMimeType = normalizeMimeType(selectedFile);
-
-        if (resolvedMimeType === "application/octet-stream") {
-            toast({
-                title: "Tipo file non supportato",
-                description:
-                    "Questo file non è supportato dal bucket documents. Prova con PDF, immagini, DOC/DOCX, XLSX, PPTX, TXT, CSV, ZIP, MP4 o MOV.",
-                variant: "destructive",
-            });
-            return;
-        }
-
         setSaving(true);
 
         try {
-            const safeFileName = selectedFile.name.replace(/\\s+/g, "_");
-            const storagePath = `${ctxOrgId}/${props.machineId}/${Date.now()}_${safeFileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from("documents")
-                .upload(storagePath, selectedFile, {
-                    upsert: false,
-                    contentType: resolvedMimeType,
-                });
-
-            if (uploadError) throw uploadError;
-
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
-            const payload = {
-                organization_id: ctxOrgId,
-                machine_id: props.machineId,
+            await createDocumentAndUploadV1({
+                organizationId: ctxOrgId,
+                machineId: props.machineId,
                 title: title.trim(),
                 description: description.trim() || null,
                 category,
+                file: selectedFile,
+                changeSummary: changeSummary.trim() || null,
                 language: language.trim() || "it",
-                is_mandatory: false,
-                regulatory_reference: regulatoryReference.trim() || null,
-                version_count: 1,
-                tags: [] as string[],
-                created_by: user?.id ?? null,
-                is_archived: false,
-                external_url: null,
-                storage_bucket: "documents",
-                storage_path: storagePath,
-                mime_type: resolvedMimeType,
-                file_size: selectedFile.size,
-            };
-
-            const { data, error } = await supabase
-                .from("documents")
-                .insert(payload)
-                .select(
-                    "id, organization_id, plant_id, machine_id, title, description, category, language, is_mandatory, regulatory_reference, current_version_id, version_count, tags, created_at, updated_at, created_by, is_archived, archived_at, external_url, storage_bucket, storage_path, mime_type, file_size"
-                )
-                .single();
-
-            if (error) throw error;
-
-            setDocuments((prev) => [data as DocumentRow, ...prev]);
+                isMandatory: false,
+                tags: [],
+            });
 
             toast({
                 title: "OK",
@@ -357,6 +246,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
             });
 
             resetForm();
+            await reloadDocuments();
         } catch (e: any) {
             console.error(e);
             toast({
@@ -369,24 +259,21 @@ export default function DocumentManager(props: DocumentManagerProps) {
         }
     };
 
-    const handleDownload = async (doc: DocumentRow) => {
+    const handleDownload = async (doc: DocumentWithVersions) => {
         try {
-            if (!doc.storage_bucket || !doc.storage_path) {
-                throw new Error("Percorso storage non disponibile.");
+            const version = currentVersion(doc);
+            if (!version?.file_path) {
+                throw new Error("Versione corrente del documento non disponibile.");
             }
 
-            const { data, error } = await supabase.storage
-                .from(doc.storage_bucket)
-                .download(doc.storage_path);
+            const signedUrl = await getSignedUrl(version.file_path, 600);
 
-            if (error) throw error;
-
-            const url = URL.createObjectURL(data);
             const a = window.document.createElement("a");
-            a.href = url;
-            a.download = fileNameFromPath(doc.storage_path);
+            a.href = signedUrl;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.download = version.file_name || "document";
             a.click();
-            URL.revokeObjectURL(url);
         } catch (e: any) {
             console.error(e);
             toast({
@@ -402,20 +289,19 @@ export default function DocumentManager(props: DocumentManagerProps) {
             <Card className="rounded-2xl">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <FileText className="w-5 h-5" />
+                        <FileText className="h-5 w-5" />
                         Documenti macchina
                     </CardTitle>
                     <CardDescription>
-                        Archivio documentale collegato alla macchina. I file vengono salvati nel bucket documents
-                        con path organizzazione/macchina/file.
+                        Archivio documentale collegato alla macchina con versioning documentale.
                     </CardDescription>
                 </CardHeader>
             </Card>
 
             <Card className="rounded-2xl">
                 <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Plus className="w-4 h-4" />
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <Plus className="h-4 w-4" />
                         Nuovo documento
                     </CardTitle>
                     <CardDescription>
@@ -458,11 +344,11 @@ export default function DocumentManager(props: DocumentManagerProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Riferimento normativo</Label>
+                            <Label>Version note</Label>
                             <Input
-                                value={regulatoryReference}
-                                onChange={(e) => setRegulatoryReference(e.target.value)}
-                                placeholder="Es. Direttiva Macchine / EN ISO ..."
+                                value={changeSummary}
+                                onChange={(e) => setChangeSummary(e.target.value)}
+                                placeholder="Es. Prima emissione"
                             />
                         </div>
 
@@ -480,8 +366,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
                             <Label>File</Label>
                             <Input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
                             <div className="text-xs text-muted-foreground">
-                                Formati supportati: PDF, JPG, PNG, GIF, WEBP, DOC, DOCX, XLSX, PPTX, TXT, CSV, ZIP, MP4, MOV.
-                                Per il test usa un PDF.
+                                Per il test usa preferibilmente un PDF o un file Office standard.
                             </div>
                         </div>
                     </div>
@@ -494,7 +379,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
                     </div>
 
                     {!canWrite && (
-                        <div className="text-sm text-muted-foreground rounded-xl border border-border p-3 bg-muted/30">
+                        <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                             Non hai permessi di scrittura nel contesto attuale per questa macchina.
                         </div>
                     )}
@@ -514,51 +399,57 @@ export default function DocumentManager(props: DocumentManagerProps) {
                         <div className="text-sm text-muted-foreground">Nessun documento presente.</div>
                     ) : (
                         <div className="space-y-3">
-                            {visibleDocuments.map((doc) => (
-                                <div
-                                    key={doc.id}
-                                    className="rounded-xl border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
-                                >
-                                    <div className="min-w-0 space-y-2">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <div className="font-medium">{doc.title || fileNameFromPath(doc.storage_path)}</div>
+                            {visibleDocuments.map((doc) => {
+                                const version = currentVersion(doc);
 
-                                            <Badge variant="outline" className="capitalize">
-                                                {categoryLabel(doc.category)}
-                                            </Badge>
+                                return (
+                                    <div
+                                        key={doc.id}
+                                        className="flex flex-col gap-3 rounded-xl border border-border p-4 md:flex-row md:items-center md:justify-between"
+                                    >
+                                        <div className="min-w-0 space-y-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="font-medium">{doc.title || "Documento"}</div>
 
-                                            {doc.organization_id === resolvedMachineOwnerOrgId ? (
-                                                <Badge variant="outline" className="gap-1">
-                                                    <Building2 className="w-3 h-3" />
-                                                    Owner
+                                                <Badge variant="outline" className="capitalize">
+                                                    {categoryLabel(doc.category)}
                                                 </Badge>
-                                            ) : (
-                                                <Badge className="gap-1">
-                                                    <Factory className="w-3 h-3" />
-                                                    Organizzazione documento
-                                                </Badge>
+
+                                                {doc.organization_id === resolvedMachineOwnerOrgId ? (
+                                                    <Badge variant="outline" className="gap-1">
+                                                        <Building2 className="h-3 w-3" />
+                                                        Owner
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge className="gap-1">
+                                                        <Factory className="h-3 w-3" />
+                                                        Organizzazione documento
+                                                    </Badge>
+                                                )}
+                                            </div>
+
+                                            {doc.description && (
+                                                <div className="text-sm text-muted-foreground">{doc.description}</div>
                                             )}
+
+                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                <span>File: {version?.file_name ?? "—"}</span>
+                                                <span>Mime: {version?.mime_type || "—"}</span>
+                                                <span>Dimensione: {formatBytes(version?.file_size)}</span>
+                                                <span>Versioni: {doc.version_count ?? "—"}</span>
+                                                <span>Creato: {formatDate(doc.created_at)}</span>
+                                            </div>
                                         </div>
 
-                                        {doc.description && <div className="text-sm text-muted-foreground">{doc.description}</div>}
-
-                                        <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
-                                            <span>File: {fileNameFromPath(doc.storage_path)}</span>
-                                            <span>Mime: {doc.mime_type || "—"}</span>
-                                            <span>Dimensione: {formatBytes(doc.file_size)}</span>
-                                            <span>Versioni: {doc.version_count ?? "—"}</span>
-                                            <span>Creato: {formatDate(doc.created_at)}</span>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" onClick={() => handleDownload(doc)}>
+                                                <Download className="mr-2 h-4 w-4" />
+                                                Scarica
+                                            </Button>
                                         </div>
                                     </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="outline" onClick={() => handleDownload(doc)}>
-                                            <Download className="mr-2 h-4 w-4" />
-                                            Scarica
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </CardContent>
