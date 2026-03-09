@@ -3,9 +3,22 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { useLanguage } from "@/contexts/LanguageContext";
 import ProtectedPage from "@/components/app/ProtectedPage";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, ShieldCheck, Factory, Building2, ChevronRight } from "lucide-react";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    FileText,
+    ShieldCheck,
+    Factory,
+    Building2,
+    ChevronRight,
+} from "lucide-react";
 
 interface DocumentStats {
     total: number;
@@ -14,6 +27,8 @@ interface DocumentStats {
 }
 
 export default function DocumentsHomePage() {
+    const { t } = useLanguage();
+
     const [stats, setStats] = useState < DocumentStats > ({
         total: 0,
         manufacturerScope: 0,
@@ -49,32 +64,32 @@ export default function DocumentsHomePage() {
 
     const cards = [
         {
-            title: "Documenti totali",
-            description: "Archivio documentale visibile nel contesto organizzativo attivo.",
+            title: t("documents.card.total.title"),
+            description: t("documents.card.total.description"),
             value: stats.total,
             icon: FileText,
         },
         {
-            title: "Documenti costruttore",
-            description: "Manuali, CE, schemi e documentazione originaria.",
+            title: t("documents.card.manufacturer.title"),
+            description: t("documents.card.manufacturer.description"),
             value: stats.manufacturerScope,
             icon: Factory,
         },
         {
-            title: "Documenti operativi cliente",
-            description: "Procedure interne, report e documenti locali di stabilimento.",
+            title: t("documents.card.customer.title"),
+            description: t("documents.card.customer.description"),
             value: stats.customerScope,
             icon: Building2,
         },
     ];
 
     return (
-        <ProtectedPage title="Documenti - MACHINA">
-            <div className="container mx-auto max-w-6xl px-4 py-8 space-y-6">
+        <ProtectedPage title={`${t("documents.title")} - MACHINA`}>
+            <div className="container mx-auto max-w-6xl space-y-6 px-4 py-8">
                 <div>
-                    <h1 className="text-2xl font-semibold">Documenti</h1>
+                    <h1 className="text-2xl font-semibold">{t("documents.title")}</h1>
                     <p className="text-sm text-muted-foreground">
-                        Hub documentale coerente con il nuovo modello owner / assignment.
+                        {t("documents.subtitle")}
                     </p>
                 </div>
 
@@ -110,9 +125,11 @@ export default function DocumentsHomePage() {
                                     </div>
                                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 </div>
-                                <CardTitle className="text-base">Apri documenti macchina</CardTitle>
+                                <CardTitle className="text-base">
+                                    {t("documents.link.machineDocs.title")}
+                                </CardTitle>
                                 <CardDescription>
-                                    Accedi ai documenti direttamente dal dettaglio macchina.
+                                    {t("documents.link.machineDocs.description")}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent />
@@ -128,9 +145,11 @@ export default function DocumentsHomePage() {
                                     </div>
                                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 </div>
-                                <CardTitle className="text-base">Vai alla compliance</CardTitle>
+                                <CardTitle className="text-base">
+                                    {t("documents.link.compliance.title")}
+                                </CardTitle>
                                 <CardDescription>
-                                    Controlli, conformità e documentazione collegata al contesto attivo.
+                                    {t("documents.link.compliance.description")}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent />
