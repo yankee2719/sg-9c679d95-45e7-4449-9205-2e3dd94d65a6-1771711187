@@ -284,6 +284,73 @@ const translations: Record<Language, Record<string, string>> = {
 
         "compliance.item.executions.title": "Esecuzioni checklist",
         "compliance.item.executions.description": "Verifica esecuzioni e prove operative collegate al contesto attivo.",
+
+        "users.title": "Utenti",
+        "users.subtitle": "Gestisci utenti e ruoli per",
+        "users.activeOrganizationFallback": "l'organizzazione attiva",
+        "users.new": "Nuovo utente",
+        "users.supervisorMode": "Modalità supervisore: puoi vedere gli utenti, ma creazione, modifica e disattivazione restano disponibili solo agli admin.",
+
+        "users.kpi.total": "Utenti totali",
+        "users.kpi.active": "Utenti attivi",
+        "users.kpi.inactive": "Utenti disattivi",
+
+        "users.organizationMembers": "Membri organizzazione",
+        "users.searchPlaceholder": "Cerca per nome, email o ruolo",
+        "users.noResults": "Nessun utente trovato.",
+        "users.fallbackUnnamed": "Utente senza nome",
+
+        "users.table.user": "Utente",
+        "users.table.role": "Ruolo",
+        "users.table.status": "Stato",
+        "users.table.acceptance": "Accettazione",
+        "users.table.actions": "Azioni",
+
+        "users.role.admin": "Admin",
+        "users.role.supervisor": "Supervisor",
+        "users.role.technician": "Tecnico",
+
+        "users.status.active": "Attivo",
+        "users.status.inactive": "Disattivo",
+        "users.status.pending": "In attesa",
+
+        "users.field.fullName": "Nome completo",
+        "users.field.displayName": "Nome visualizzato",
+        "users.field.email": "Email",
+        "users.field.password": "Password",
+        "users.field.role": "Ruolo",
+        "users.field.status": "Stato",
+
+        "users.dialog.create.title": "Nuovo utente",
+        "users.dialog.create.description": "Crea un nuovo utente nell'organizzazione attiva.",
+        "users.dialog.create.confirm": "Crea utente",
+
+        "users.dialog.edit.title": "Modifica utente",
+        "users.dialog.edit.description": "Aggiorna nome, ruolo e stato dell'utente selezionato.",
+        "users.dialog.edit.confirm": "Salva modifiche",
+
+        "users.dialog.deactivate.title": "Disattiva utente",
+        "users.dialog.deactivate.description": "Vuoi davvero disattivare",
+        "users.dialog.deactivate.confirm": "Disattiva",
+
+        "users.toast.error": "Errore",
+        "users.toast.loadError": "Impossibile caricare gli utenti dell'organizzazione.",
+        "users.toast.permissionDenied": "Permesso negato",
+        "users.toast.adminOnlyCreate": "Solo gli admin possono creare utenti.",
+        "users.toast.adminOnlyEdit": "Solo gli admin possono modificare utenti.",
+        "users.toast.adminOnlyDeactivate": "Solo gli admin possono disattivare utenti.",
+        "users.toast.missingData": "Dati mancanti",
+        "users.toast.emailPasswordRequired": "Email e password sono obbligatorie.",
+        "users.toast.sessionExpired": "Sessione scaduta, effettua di nuovo il login",
+        "users.toast.createFailed": "Creazione utente fallita",
+        "users.toast.userCreated": "Utente creato",
+        "users.toast.createError": "Errore creazione utente",
+        "users.toast.userUpdated": "Utente aggiornato",
+        "users.toast.updateError": "Errore aggiornamento utente",
+        "users.toast.operationNotAllowed": "Operazione non consentita",
+        "users.toast.cannotDeactivateSelf": "Non puoi disattivare te stesso.",
+        "users.toast.userDeactivated": "Utente disattivato",
+        "users.toast.deactivateError": "Errore disattivazione utente",
     },
 
     en: {
@@ -562,6 +629,73 @@ const translations: Record<Language, Record<string, string>> = {
         "compliance.item.executions.title": "Checklist executions",
         "compliance.item.executions.description": "Review executions and operational evidence linked to the active context.",
 
+        "users.title": "Utenti",
+        "users.subtitle": "Gestisci utenti e ruoli per",
+        "users.activeOrganizationFallback": "l'organizzazione attiva",
+        "users.new": "Nuovo utente",
+        "users.supervisorMode": "Modalità supervisore: puoi vedere gli utenti, ma creazione, modifica e disattivazione restano disponibili solo agli admin.",
+
+        "users.kpi.total": "Utenti totali",
+        "users.kpi.active": "Utenti attivi",
+        "users.kpi.inactive": "Utenti disattivi",
+
+        "users.organizationMembers": "Membri organizzazione",
+        "users.searchPlaceholder": "Cerca per nome, email o ruolo",
+        "users.noResults": "Nessun utente trovato.",
+        "users.fallbackUnnamed": "Utente senza nome",
+
+        "users.table.user": "Utente",
+        "users.table.role": "Ruolo",
+        "users.table.status": "Stato",
+        "users.table.acceptance": "Accettazione",
+        "users.table.actions": "Azioni",
+
+        "users.role.admin": "Admin",
+        "users.role.supervisor": "Supervisor",
+        "users.role.technician": "Tecnico",
+
+        "users.status.active": "Attivo",
+        "users.status.inactive": "Disattivo",
+        "users.status.pending": "In attesa",
+
+        "users.field.fullName": "Nome completo",
+        "users.field.displayName": "Nome visualizzato",
+        "users.field.email": "Email",
+        "users.field.password": "Password",
+        "users.field.role": "Ruolo",
+        "users.field.status": "Stato",
+
+        "users.dialog.create.title": "Nuovo utente",
+        "users.dialog.create.description": "Crea un nuovo utente nell'organizzazione attiva.",
+        "users.dialog.create.confirm": "Crea utente",
+
+        "users.dialog.edit.title": "Modifica utente",
+        "users.dialog.edit.description": "Aggiorna nome, ruolo e stato dell'utente selezionato.",
+        "users.dialog.edit.confirm": "Salva modifiche",
+
+        "users.dialog.deactivate.title": "Disattiva utente",
+        "users.dialog.deactivate.description": "Vuoi davvero disattivare",
+        "users.dialog.deactivate.confirm": "Disattiva",
+
+        "users.toast.error": "Errore",
+        "users.toast.loadError": "Impossibile caricare gli utenti dell'organizzazione.",
+        "users.toast.permissionDenied": "Permesso negato",
+        "users.toast.adminOnlyCreate": "Solo gli admin possono creare utenti.",
+        "users.toast.adminOnlyEdit": "Solo gli admin possono modificare utenti.",
+        "users.toast.adminOnlyDeactivate": "Solo gli admin possono disattivare utenti.",
+        "users.toast.missingData": "Dati mancanti",
+        "users.toast.emailPasswordRequired": "Email e password sono obbligatorie.",
+        "users.toast.sessionExpired": "Sessione scaduta, effettua di nuovo il login",
+        "users.toast.createFailed": "Creazione utente fallita",
+        "users.toast.userCreated": "Utente creato",
+        "users.toast.createError": "Errore creazione utente",
+        "users.toast.userUpdated": "Utente aggiornato",
+        "users.toast.updateError": "Errore aggiornamento utente",
+        "users.toast.operationNotAllowed": "Operazione non consentita",
+        "users.toast.cannotDeactivateSelf": "Non puoi disattivare te stesso.",
+        "users.toast.userDeactivated": "Utente disattivato",
+        "users.toast.deactivateError": "Errore disattivazione utente",
+
     },
 
     fr: {
@@ -839,6 +973,73 @@ const translations: Record<Language, Record<string, string>> = {
 
         "compliance.item.executions.title": "Exécutions de check-lists",
         "compliance.item.executions.description": "Vérifiez les exécutions et les preuves opérationnelles liées au contexte actif.",
+
+        "users.title": "Utilisateurs",
+        "users.subtitle": "Gérez les utilisateurs et rôles pour",
+        "users.activeOrganizationFallback": "l'organisation active",
+        "users.new": "Nouvel utilisateur",
+        "users.supervisorMode": "Mode superviseur : vous pouvez voir les utilisateurs, mais la création, la modification et la désactivation restent réservées aux admins.",
+
+        "users.kpi.total": "Utilisateurs totaux",
+        "users.kpi.active": "Utilisateurs actifs",
+        "users.kpi.inactive": "Utilisateurs inactifs",
+
+        "users.organizationMembers": "Membres de l'organisation",
+        "users.searchPlaceholder": "Rechercher par nom, email ou rôle",
+        "users.noResults": "Aucun utilisateur trouvé.",
+        "users.fallbackUnnamed": "Utilisateur sans nom",
+
+        "users.table.user": "Utilisateur",
+        "users.table.role": "Rôle",
+        "users.table.status": "Statut",
+        "users.table.acceptance": "Acceptation",
+        "users.table.actions": "Actions",
+
+        "users.role.admin": "Admin",
+        "users.role.supervisor": "Superviseur",
+        "users.role.technician": "Technicien",
+
+        "users.status.active": "Actif",
+        "users.status.inactive": "Inactif",
+        "users.status.pending": "En attente",
+
+        "users.field.fullName": "Nom complet",
+        "users.field.displayName": "Nom affiché",
+        "users.field.email": "Email",
+        "users.field.password": "Mot de passe",
+        "users.field.role": "Rôle",
+        "users.field.status": "Statut",
+
+        "users.dialog.create.title": "Nouvel utilisateur",
+        "users.dialog.create.description": "Créez un nouvel utilisateur dans l'organisation active.",
+        "users.dialog.create.confirm": "Créer l'utilisateur",
+
+        "users.dialog.edit.title": "Modifier l'utilisateur",
+        "users.dialog.edit.description": "Mettez à jour le nom, le rôle et le statut de l'utilisateur sélectionné.",
+        "users.dialog.edit.confirm": "Enregistrer les modifications",
+
+        "users.dialog.deactivate.title": "Désactiver l'utilisateur",
+        "users.dialog.deactivate.description": "Voulez-vous vraiment désactiver",
+        "users.dialog.deactivate.confirm": "Désactiver",
+
+        "users.toast.error": "Erreur",
+        "users.toast.loadError": "Impossible de charger les utilisateurs de l'organisation.",
+        "users.toast.permissionDenied": "Permission refusée",
+        "users.toast.adminOnlyCreate": "Seuls les admins peuvent créer des utilisateurs.",
+        "users.toast.adminOnlyEdit": "Seuls les admins peuvent modifier des utilisateurs.",
+        "users.toast.adminOnlyDeactivate": "Seuls les admins peuvent désactiver des utilisateurs.",
+        "users.toast.missingData": "Données manquantes",
+        "users.toast.emailPasswordRequired": "Email et mot de passe sont obligatoires.",
+        "users.toast.sessionExpired": "Session expirée, reconnectez-vous",
+        "users.toast.createFailed": "Échec de création de l'utilisateur",
+        "users.toast.userCreated": "Utilisateur créé",
+        "users.toast.createError": "Erreur de création utilisateur",
+        "users.toast.userUpdated": "Utilisateur mis à jour",
+        "users.toast.updateError": "Erreur de mise à jour utilisateur",
+        "users.toast.operationNotAllowed": "Opération non autorisée",
+        "users.toast.cannotDeactivateSelf": "Vous ne pouvez pas vous désactiver vous-même.",
+        "users.toast.userDeactivated": "Utilisateur désactivé",
+        "users.toast.deactivateError": "Erreur de désactivation utilisateur",
     },
 
     es: {
@@ -1116,6 +1317,73 @@ const translations: Record<Language, Record<string, string>> = {
 
         "compliance.item.executions.title": "Ejecuciones de checklist",
         "compliance.item.executions.description": "Verifica ejecuciones y evidencias operativas vinculadas al contexto activo.",
+
+        "users.title": "Usuarios",
+        "users.subtitle": "Gestiona usuarios y roles para",
+        "users.activeOrganizationFallback": "la organización activa",
+        "users.new": "Nuevo usuario",
+        "users.supervisorMode": "Modo supervisor: puedes ver los usuarios, pero la creación, edición y desactivación siguen disponibles solo para los administradores.",
+
+        "users.kpi.total": "Usuarios totales",
+        "users.kpi.active": "Usuarios activos",
+        "users.kpi.inactive": "Usuarios inactivos",
+
+        "users.organizationMembers": "Miembros de la organización",
+        "users.searchPlaceholder": "Buscar por nombre, email o rol",
+        "users.noResults": "No se encontraron usuarios.",
+        "users.fallbackUnnamed": "Usuario sin nombre",
+
+        "users.table.user": "Usuario",
+        "users.table.role": "Rol",
+        "users.table.status": "Estado",
+        "users.table.acceptance": "Aceptación",
+        "users.table.actions": "Acciones",
+
+        "users.role.admin": "Admin",
+        "users.role.supervisor": "Supervisor",
+        "users.role.technician": "Técnico",
+
+        "users.status.active": "Activo",
+        "users.status.inactive": "Inactivo",
+        "users.status.pending": "Pendiente",
+
+        "users.field.fullName": "Nombre completo",
+        "users.field.displayName": "Nombre visible",
+        "users.field.email": "Email",
+        "users.field.password": "Contraseña",
+        "users.field.role": "Rol",
+        "users.field.status": "Estado",
+
+        "users.dialog.create.title": "Nuevo usuario",
+        "users.dialog.create.description": "Crea un nuevo usuario en la organización activa.",
+        "users.dialog.create.confirm": "Crear usuario",
+
+        "users.dialog.edit.title": "Editar usuario",
+        "users.dialog.edit.description": "Actualiza el nombre, rol y estado del usuario seleccionado.",
+        "users.dialog.edit.confirm": "Guardar cambios",
+
+        "users.dialog.deactivate.title": "Desactivar usuario",
+        "users.dialog.deactivate.description": "¿De verdad quieres desactivar a",
+        "users.dialog.deactivate.confirm": "Desactivar",
+
+        "users.toast.error": "Error",
+        "users.toast.loadError": "No se pudieron cargar los usuarios de la organización.",
+        "users.toast.permissionDenied": "Permiso denegado",
+        "users.toast.adminOnlyCreate": "Solo los administradores pueden crear usuarios.",
+        "users.toast.adminOnlyEdit": "Solo los administradores pueden editar usuarios.",
+        "users.toast.adminOnlyDeactivate": "Solo los administradores pueden desactivar usuarios.",
+        "users.toast.missingData": "Datos faltantes",
+        "users.toast.emailPasswordRequired": "El email y la contraseña son obligatorios.",
+        "users.toast.sessionExpired": "Sesión expirada, inicia sesión de nuevo",
+        "users.toast.createFailed": "La creación del usuario falló",
+        "users.toast.userCreated": "Usuario creado",
+        "users.toast.createError": "Error al crear usuario",
+        "users.toast.userUpdated": "Usuario actualizado",
+        "users.toast.updateError": "Error al actualizar usuario",
+        "users.toast.operationNotAllowed": "Operación no permitida",
+        "users.toast.cannotDeactivateSelf": "No puedes desactivarte a ti mismo.",
+        "users.toast.userDeactivated": "Usuario desactivado",
+        "users.toast.deactivateError": "Error al desactivar usuario",
     },
 };
 
