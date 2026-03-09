@@ -118,6 +118,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "equipment.field.brand": "Marca",
         "equipment.field.model": "Modello",
+
+        "maintenance.title": "Manutenzione",
+        "maintenance.subtitle": "Gestisci e monitora tutte le manutenzioni",
+        "maintenance.newPlan": "Nuovo Piano",
+
+        "maintenance.tab.plans": "Piani",
+        "maintenance.tab.workOrders": "Ordini di Lavoro",
+
+        "maintenance.searchPlaceholder": "Cerca",
+        "maintenance.loading": "Caricamento manutenzioni...",
+        "maintenance.noPlans": "Nessun piano manutentivo trovato.",
+
+        "maintenance.priority.high": "Alta",
+        "maintenance.priority.medium": "Media",
+        "maintenance.priority.low": "Bassa",
+
+        "maintenance.planFallback": "Piano manutenzione",
+        "maintenance.machineFallback": "Macchina",
     },
 
     en: {
@@ -228,6 +246,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "equipment.field.brand": "Brand",
         "equipment.field.model": "Model",
+
+        "maintenance.title": "Maintenance",
+        "maintenance.subtitle": "Manage and monitor all maintenance activities",
+        "maintenance.newPlan": "New Plan",
+
+        "maintenance.tab.plans": "Plans",
+        "maintenance.tab.workOrders": "Work Orders",
+
+        "maintenance.searchPlaceholder": "Search",
+        "maintenance.loading": "Loading maintenance plans...",
+        "maintenance.noPlans": "No maintenance plan found.",
+
+        "maintenance.priority.high": "High",
+        "maintenance.priority.medium": "Medium",
+        "maintenance.priority.low": "Low",
+
+        "maintenance.planFallback": "Maintenance plan",
+        "maintenance.machineFallback": "Machine",
     },
 
     fr: {
@@ -338,6 +374,25 @@ const translations: Record<Language, Record<string, string>> = {
 
         "equipment.field.brand": "Marque",
         "equipment.field.model": "Modèle",
+
+        "maintenance.title": "Maintenance",
+        "maintenance.subtitle": "Gérez et surveillez toutes les maintenances",
+        "maintenance.newPlan": "Nouveau plan",
+
+        "maintenance.tab.plans": "Plans",
+        "maintenance.tab.workOrders": "Ordres de travail",
+
+        "maintenance.searchPlaceholder": "Rechercher",
+        "maintenance.loading": "Chargement des plans de maintenance...",
+        "maintenance.noPlans": "Aucun plan de maintenance trouvé.",
+
+        "maintenance.priority.high": "Haute",
+        "maintenance.priority.medium": "Moyenne",
+        "maintenance.priority.low": "Basse",
+
+        "maintenance.planFallback": "Plan de maintenance",
+        "maintenance.machineFallback": "Machine",
+
     },
 
     es: {
@@ -448,6 +503,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "equipment.field.brand": "Marca",
         "equipment.field.model": "Modelo",
+
+        "maintenance.title": "Mantenimiento",
+        "maintenance.subtitle": "Gestiona y supervisa todos los mantenimientos",
+        "maintenance.newPlan": "Nuevo plan",
+
+        "maintenance.tab.plans": "Planes",
+        "maintenance.tab.workOrders": "Órdenes de trabajo",
+
+        "maintenance.searchPlaceholder": "Buscar",
+        "maintenance.loading": "Cargando planes de mantenimiento...",
+        "maintenance.noPlans": "No se encontró ningún plan de mantenimiento.",
+
+        "maintenance.priority.high": "Alta",
+        "maintenance.priority.medium": "Media",
+        "maintenance.priority.low": "Baja",
+
+        "maintenance.planFallback": "Plan de mantenimiento",
+        "maintenance.machineFallback": "Máquina",
     },
 };
 
