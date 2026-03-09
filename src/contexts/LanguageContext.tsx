@@ -263,6 +263,15 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Cliente",
         "assignments.assignedMachine": "Macchina assegnata",
         "assignments.destinationCustomer": "Cliente destinatario",
+
+        "analytics.title": "Analytics",
+        "analytics.subtitle": "Punto unico per consultare i dati operativi del contesto attivo.",
+
+        "analytics.item.checklists.title": "Storico checklist",
+        "analytics.item.checklists.description": "Analizza le esecuzioni checklist nel contesto organizzativo attivo.",
+
+        "analytics.item.workOrders.title": "Work orders",
+        "analytics.item.workOrders.description": "Controlla andamento e tracciabilità operativa degli ordini di lavoro.",
     },
 
     en: {
@@ -519,6 +528,15 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Customer",
         "assignments.assignedMachine": "Assigned machine",
         "assignments.destinationCustomer": "Destination customer",
+
+        "analytics.title": "Analytics",
+        "analytics.subtitle": "Single place to review operational data for the active context.",
+
+        "analytics.item.checklists.title": "Checklist history",
+        "analytics.item.checklists.description": "Analyze checklist executions in the active organizational context.",
+
+        "analytics.item.workOrders.title": "Work orders",
+        "analytics.item.workOrders.description": "Check progress and operational traceability of work orders.",
     },
 
     fr: {
@@ -775,6 +793,15 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Client",
         "assignments.assignedMachine": "Machine attribuée",
         "assignments.destinationCustomer": "Client destinataire",
+
+        "analytics.title": "Analyses",
+        "analytics.subtitle": "Point unique pour consulter les données opérationnelles du contexte actif.",
+
+        "analytics.item.checklists.title": "Historique des check-lists",
+        "analytics.item.checklists.description": "Analysez les exécutions de check-lists dans le contexte organisationnel actif.",
+
+        "analytics.item.workOrders.title": "Ordres de travail",
+        "analytics.item.workOrders.description": "Contrôlez l’avancement et la traçabilité opérationnelle des ordres de travail.",
     },
 
     es: {
@@ -1031,6 +1058,15 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Cliente",
         "assignments.assignedMachine": "Máquina asignada",
         "assignments.destinationCustomer": "Cliente destinatario",
+
+        "analytics.title": "Análisis",
+        "analytics.subtitle": "Punto único para consultar los datos operativos del contexto activo.",
+
+        "analytics.item.checklists.title": "Historial de checklists",
+        "analytics.item.checklists.description": "Analiza las ejecuciones de checklist en el contexto organizativo activo.",
+
+        "analytics.item.workOrders.title": "Órdenes de trabajo",
+        "analytics.item.workOrders.description": "Controla el avance y la trazabilidad operativa de las órdenes de trabajo.",
     },
 };
 
