@@ -27,7 +27,6 @@ import {
     X,
     Globe,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
 type OrgType = "manufacturer" | "customer" | null;
@@ -312,9 +311,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 >
                                     <Bell className="h-5 w-5" />
                                     {notificationCount > 0 && (
-                                        <Badge className="absolute -right-1 -top-1 h-5 min-w-5 rounded-full bg-orange-500 px-1 text-[10px] text-white hover:bg-orange-500">
+                                        <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
                                             {notificationCount > 99 ? "99+" : notificationCount}
-                                        </Badge>
+                                        </span>
                                     )}
                                 </Link>
 
