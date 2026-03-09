@@ -1,519 +1,460 @@
-// src/pages/equipment/edit/[id].tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { SEO } from "@/components/SEO";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { ArrowLeft, Save, Building2, QrCode, Factory } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
+import { SEO } from "@/components/SEO";
 import { getUserContext } from "@/lib/supabaseHelpers";
-import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
+import {
+    ArrowLeft,
+    Save,
+    Factory,
+    Building2,
+    Wrench,
+    Layers3,
+} from "lucide-react";
 
 type OrgType = "manufacturer" | "customer";
-function normalizeOrgType(x: any): OrgType | null {
-    const t = String(x ?? "").toLowerCase();
-    if (t === "manufacturer") return "manufacturer";
-    if (t === "customer") return "customer";
-    return null;
+
+interface PlantRow {
+    id: string;
+    name: string | null;
+    code: string | null;
 }
 
-interface Plant {
+interface ProductionLineRow {
     id: string;
-    name: string;
-}
-
-interface CustomerOrg {
-    id: string;
-    name: string;
-}
-
-type MachineRow = {
-    id: string;
-    name: string;
-    internal_code: string | null;
-    category: string | null;
-    brand: string | null;
-    model: string | null;
-    serial_number: string | null;
-    position: string | null;
-    lifecycle_state: string | null;
-    specifications: any;
-    notes: string | null;
+    name: string | null;
+    code: string | null;
     plant_id: string | null;
-    qr_code_token: string | null;
-};
+}
 
-export default function EditEquipment() {
+interface MachineRow {
+    id: string;
+    name: string | null;
+    internal_code: string | null;
+    serial_number: string | null;
+    model: string | null;
+    brand: string | null;
+    notes: string | null;
+    lifecycle_state: string | null;
+    organization_id: string | null;
+    plant_id: string | null;
+    production_line_id: string | null;
+    is_archived: boolean | null;
+}
+
+function CardShell({
+    children,
+    className = "",
+}: {
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return <div className={`surface-panel ${className}`}>{children}</div>;
+}
+
+export default function EditEquipmentPage() {
     const router = useRouter();
     const { id } = router.query;
 
-    const { toast } = useToast();
-    const { t } = useLanguage();
-
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [pageLoading, setPageLoading] = useState(true);
 
     const [userRole, setUserRole] = useState("technician");
-    const [orgType, setOrgType] = useState < OrgType | null > (null);
     const [orgId, setOrgId] = useState < string | null > (null);
+    const [orgType, setOrgType] = useState < OrgType | null > (null);
 
-    // customer-mode
-    const [plants, setPlants] = useState < Plant[] > ([]);
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
+    const [lines, setLines] = useState < ProductionLineRow[] > ([]);
 
-    // manufacturer-mode
-    const [customers, setCustomers] = useState < CustomerOrg[] > ([]);
-    const [selectedCustomerId, setSelectedCustomerId] = useState < string > ("");
+    const [machineId, setMachineId] = useState < string | null > (null);
+    const [name, setName] = useState("");
+    const [internalCode, setInternalCode] = useState("");
+    const [serialNumber, setSerialNumber] = useState("");
+    const [model, setModel] = useState("");
+    const [brand, setBrand] = useState("");
+    const [notes, setNotes] = useState("");
+    const [plantId, setPlantId] = useState("");
+    const [productionLineId, setProductionLineId] = useState("");
+    const [lifecycleState, setLifecycleState] = useState("active");
 
-    const [formData, setFormData] = useState({
-        name: "",
-        internal_code: "",
-        category: "",
-        brand: "",
-        model: "",
-        serial_number: "",
-        position: "",
-        lifecycle_state: "active",
-        specifications: "",
-        notes: "",
-        plant_id: "",
-        qr_code_token: "",
-    });
-
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
-    const isManufacturer = useMemo(() => orgType === "manufacturer", [orgType]);
-
-    // -------------------------
-    // Load machine row
-    // -------------------------
-    const loadMachine = async (machineId: string) => {
-        const { data, error } = await supabase
-            .from("machines")
-            .select(
-                "id,name,internal_code,category,brand,model,serial_number,position,lifecycle_state,specifications,notes,plant_id,qr_code_token"
-            )
-            .eq("id", machineId)
-            .single();
-
-        if (error) throw error;
-
-        const m = data as any as MachineRow;
-        const specs = m.specifications
-            ? typeof m.specifications === "string"
-                ? m.specifications
-                : (m.specifications as any)?.text || JSON.stringify(m.specifications)
-            : "";
-
-        setFormData({
-            name: m.name || "",
-            internal_code: m.internal_code || "",
-            category: m.category || "",
-            brand: m.brand || "",
-            model: m.model || "",
-            serial_number: m.serial_number || "",
-            position: m.position || "",
-            lifecycle_state: m.lifecycle_state || "active",
-            specifications: specs,
-            notes: m.notes || "",
-            plant_id: m.plant_id || "",
-            qr_code_token: m.qr_code_token || "",
-        });
-    };
-
-    // -------------------------
-    // INIT (HARD GUARDED)
-    // -------------------------
     useEffect(() => {
-        const init = async () => {
-            if (!id || typeof id !== "string") return;
+        if (!router.isReady || !id || typeof id !== "string") return;
 
-            setPageLoading(true);
+        const load = async () => {
+            setLoading(true);
             try {
-                const ctx: any = await getUserContext();
-                if (!ctx) {
-                    router.push("/login");
+                const ctx = await getUserContext();
+                if (!ctx?.orgId || !ctx?.orgType) {
+                    router.replace("/settings/organization");
+                    return;
+                }
+
+                if (!["admin", "supervisor"].includes(ctx.role ?? "")) {
+                    router.replace("/equipment");
                     return;
                 }
 
                 setUserRole(ctx.role ?? "technician");
+                setOrgId(ctx.orgId);
+                setOrgType(ctx.orgType as OrgType);
 
-                const effectiveOrgId =
-                    ctx.orgId || ctx.organizationId || ctx.organization_id || ctx.tenant_id || null;
+                const { data: machineRow, error: machineError } = await supabase
+                    .from("machines")
+                    .select("*")
+                    .eq("id", id)
+                    .maybeSingle();
 
-                if (!effectiveOrgId) throw new Error("Organization non trovata nel contesto utente.");
-
-                const resolvedType = normalizeOrgType(ctx.orgType);
-
-                // HARD FAIL: stop random UI
-                if (!resolvedType) {
-                    throw new Error("orgType non risolto - controlla RPC get_my_context / organizations.type / RLS");
+                if (machineError) throw machineError;
+                if (!machineRow) {
+                    router.replace("/equipment");
+                    return;
                 }
 
-                setOrgId(effectiveOrgId);
-                setOrgType(resolvedType);
+                const machine = machineRow as MachineRow;
 
-                // Reset mode-specific state (avoid ghost UI)
-                setCustomers([]);
-                setPlants([]);
-                setSelectedCustomerId("");
+                setMachineId(machine.id);
+                setName(machine.name ?? "");
+                setInternalCode(machine.internal_code ?? "");
+                setSerialNumber(machine.serial_number ?? "");
+                setModel(machine.model ?? "");
+                setBrand(machine.brand ?? "");
+                setNotes(machine.notes ?? "");
+                setPlantId(machine.plant_id ?? "");
+                setProductionLineId(machine.production_line_id ?? "");
+                setLifecycleState(machine.lifecycle_state ?? "active");
 
-                // 1) load machine
-                await loadMachine(id);
+                if (ctx.orgType === "customer") {
+                    const [plantsRes, linesRes] = await Promise.all([
+                        supabase
+                            .from("plants")
+                            .select("id, name, code")
+                            .eq("organization_id", ctx.orgId)
+                            .eq("is_archived", false)
+                            .order("name", { ascending: true }),
+                        supabase
+                            .from("production_lines")
+                            .select("id, name, code, plant_id")
+                            .eq("organization_id", ctx.orgId)
+                            .eq("is_archived", false)
+                            .order("name", { ascending: true }),
+                    ]);
 
-                // 2) load UI per tipo
-                if (resolvedType === "manufacturer") {
-                    // customers of this manufacturer
-                    const { data: custData, error: custErr } = await supabase
-                        .from("organizations")
-                        .select("id,name")
-                        .eq("manufacturer_org_id", effectiveOrgId)
-                        .eq("type", "customer")
-                        .order("name", { ascending: true });
+                    if (plantsRes.error) throw plantsRes.error;
+                    if (linesRes.error) throw linesRes.error;
 
-                    if (custErr) throw custErr;
-                    setCustomers((custData ?? []) as any);
-
-                    // current assignment
-                    const { data: asg, error: asgErr } = await supabase
-                        .from("machine_assignments")
-                        .select("customer_org_id")
-                        .eq("machine_id", id)
-                        .eq("manufacturer_org_id", effectiveOrgId)
-                        .eq("is_active", true)
-                        .order("assigned_at", { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                    if (asgErr) {
-                        // non fatal
-                        console.error("assignment load:", asgErr);
-                    }
-                    setSelectedCustomerId((asg as any)?.customer_org_id ?? "");
-                } else {
-                    const { data: pData, error: pErr } = await supabase
-                        .from("plants")
-                        .select("id, name")
-                        .eq("is_archived", false)
-                        .order("name");
-
-                    if (pErr) throw pErr;
-                    setPlants((pData ?? []) as any);
+                    setPlants((plantsRes.data ?? []) as PlantRow[]);
+                    setLines((linesRes.data ?? []) as ProductionLineRow[]);
                 }
-            } catch (e: any) {
-                console.error(e);
-                toast({
-                    title: t("common.error"),
-                    description: e?.message ?? "Errore caricamento pagina",
-                    variant: "destructive",
-                });
-                router.push("/equipment");
+            } catch (error) {
+                console.error("Equipment edit load error:", error);
             } finally {
-                setPageLoading(false);
+                setLoading(false);
             }
         };
 
-        init();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id, router]);
+        load();
+    }, [router, router.isReady, id]);
 
-    // -------------------------
-    // SUBMIT
-    // -------------------------
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!id || typeof id !== "string") return;
+    const filteredLines = useMemo(() => {
+        if (!plantId) return lines;
+        return lines.filter((line) => line.plant_id === plantId);
+    }, [lines, plantId]);
 
-        if (!orgType) {
-            toast({ title: t("common.error"), description: "orgType non risolto", variant: "destructive" });
-            return;
-        }
+    const pageTitle =
+        orgType === "manufacturer" ? "Modifica Macchina Costruttore" : "Modifica Macchina";
+
+    const pageSubtitle =
+        orgType === "manufacturer"
+            ? "Aggiorna i dati della macchina nel catalogo del costruttore attivo."
+            : "Aggiorna i dati della macchina collegata al cliente finale.";
+
+    const canSave = !!machineId && !!orgId && !!name.trim();
+
+    const handleSave = async () => {
+        if (!machineId || !orgId || !name.trim()) return;
 
         setSaving(true);
         try {
-            const updatePayload: any = {
-                name: formData.name.trim(),
-                internal_code: formData.internal_code.trim(),
-                category: formData.category.trim() || null,
-                brand: formData.brand.trim() || null,
-                model: formData.model.trim() || null,
-                serial_number: formData.serial_number.trim() || null,
-                position: formData.position.trim() || null,
-                lifecycle_state: formData.lifecycle_state,
-                specifications: formData.specifications.trim()
-                    ? { text: formData.specifications.trim() }
-                    : null,
-                notes: formData.notes.trim() || null,
-                qr_code_token: formData.qr_code_token.trim() || null,
-                updated_at: new Date().toISOString(),
+            const payload: Record<string, any> = {
+                name: name.trim(),
+                internal_code: internalCode.trim() || null,
+                serial_number: serialNumber.trim() || null,
+                model: model.trim() || null,
+                brand: brand.trim() || null,
+                notes: notes.trim() || null,
+                lifecycle_state: lifecycleState || "active",
             };
 
-            // Customer può gestire plant_id; Manufacturer NO
             if (orgType === "customer") {
-                updatePayload.plant_id = formData.plant_id || null;
+                payload.plant_id = plantId || null;
+                payload.production_line_id = productionLineId || null;
+            } else {
+                payload.plant_id = null;
+                payload.production_line_id = null;
             }
 
-            const { error: upErr } = await supabase
+            const { error } = await supabase
                 .from("machines")
-                .update(updatePayload)
-                .eq("id", id);
+                .update(payload)
+                .eq("id", machineId);
 
-            if (upErr) throw upErr;
+            if (error) throw error;
 
-            // Manufacturer: aggiorna assegnazione cliente
-            if (orgType === "manufacturer") {
-                if (!orgId) throw new Error("Organization non trovata.");
-                if (!selectedCustomerId) throw new Error("Seleziona un cliente.");
-
-                const { error: deactErr } = await supabase
-                    .from("machine_assignments")
-                    .update({ is_active: false })
-                    .eq("machine_id", id)
-                    .eq("manufacturer_org_id", orgId)
-                    .eq("is_active", true);
-
-                if (deactErr) console.error("assignment deactivate (non-fatal):", deactErr);
-
-                const { error: insErr } = await supabase
-                    .from("machine_assignments")
-                    .insert({
-                        machine_id: id,
-                        customer_org_id: selectedCustomerId,
-                        manufacturer_org_id: orgId,
-                        assigned_at: new Date().toISOString(),
-                        is_active: true,
-                    });
-
-                if (insErr) throw insErr;
-            }
-
-            toast({ title: t("common.success"), description: "Attrezzatura aggiornata" });
-            router.push(`/equipment/${id}`);
-        } catch (error: any) {
-            toast({
-                title: t("common.error"),
-                description: error?.message || "Errore",
-                variant: "destructive",
-            });
+            router.push(`/equipment/${machineId}`);
+        } catch (error) {
+            console.error("Equipment update error:", error);
         } finally {
             setSaving(false);
         }
     };
 
-    // HARD GUARD RENDER (no flash wrong UI)
-    if (pageLoading || !orgType) return null;
+    if (loading) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title="Modifica Macchina - MACHINA" />
+                    <div className="px-5 py-6 lg:px-8 lg:py-8">
+                        <div className="mx-auto max-w-[1100px] text-sm text-muted-foreground">
+                            Caricamento macchina...
+                        </div>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
+    }
 
     return (
-        <MainLayout userRole={userRole as any}>
-            <SEO title="Modifica Attrezzatura - MACHINA" />
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title={`${pageTitle} - MACHINA`} />
 
-            <div className="container mx-auto p-6 max-w-4xl">
-                <div className="mb-6">
-                    <Button variant="ghost" onClick={() => router.back()} className="mb-4">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> {t("common.back")}
-                    </Button>
-                    <h1 className="text-3xl font-bold text-foreground">{t("equipment.edit")}</h1>
-                </div>
+                <div className="px-5 py-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-[1100px] space-y-8">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="space-y-2">
+                                <button
+                                    onClick={() => router.push(machineId ? `/equipment/${machineId}` : "/equipment")}
+                                    className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Torna al dettaglio macchina
+                                </button>
 
-                <Card className="bg-card border-border">
-                    <CardHeader>
-                        <CardTitle className="text-foreground">{t("equipment.information")}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.name")} *</Label>
-                                    <Input
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                        required
-                                    />
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                    {pageTitle}
+                                </h1>
+                                <p className="text-base text-muted-foreground">{pageSubtitle}</p>
+                            </div>
+
+                            <button
+                                onClick={handleSave}
+                                disabled={!canSave || saving}
+                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <Save className="h-4 w-4" />
+                                {saving ? "Salvataggio..." : "Salva modifiche"}
+                            </button>
+                        </div>
+
+                        <div className="grid gap-6 xl:grid-cols-3">
+                            <CardShell className="p-6 xl:col-span-2">
+                                <div className="mb-6 flex items-center gap-3">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-300">
+                                        <Wrench className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-2xl font-bold text-foreground">Dati macchina</div>
+                                        <div className="text-sm text-muted-foreground">
+                                            Aggiorna i dati principali della macchina.
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.code")} *</Label>
-                                    <Input
-                                        value={formData.internal_code}
-                                        onChange={(e) => setFormData({ ...formData, internal_code: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                        required
-                                    />
-                                </div>
-
-                                {/* Manufacturer -> Customer picker | Customer -> Plant picker */}
-                                {isManufacturer ? (
-                                    <div className="space-y-2">
-                                        <Label className="text-foreground flex items-center gap-2">
-                                            <Factory className="w-4 h-4 text-purple-400" /> Cliente *
-                                        </Label>
-
-                                        <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                                            <SelectTrigger className="bg-muted border-border text-foreground">
-                                                <SelectValue placeholder="Seleziona cliente..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {customers.map((c) => (
-                                                    <SelectItem key={c.id} value={c.id}>
-                                                        {c.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-
-                                        {customers.length === 0 && (
-                                            <p className="text-xs text-muted-foreground">
-                                                Nessun cliente trovato. Crea prima un cliente (organizations type=customer, manufacturer_org_id = la tua org).
-                                            </p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <Label className="text-foreground flex items-center gap-2">
-                                            <Building2 className="w-4 h-4 text-blue-400" /> Stabilimento
-                                        </Label>
-
-                                        <Select
-                                            value={formData.plant_id}
-                                            onValueChange={(v) => setFormData({ ...formData, plant_id: v })}
-                                        >
-                                            <SelectTrigger className="bg-muted border-border text-foreground">
-                                                <SelectValue placeholder="Seleziona stabilimento..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {plants.map((p) => (
-                                                    <SelectItem key={p.id} value={p.id}>
-                                                        {p.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-
-                                {isAdmin && (
-                                    <div className="space-y-2">
-                                        <Label className="text-foreground flex items-center gap-2">
-                                            <QrCode className="w-4 h-4 text-primary" /> URL QR Code
-                                        </Label>
-                                        <Input
-                                            value={formData.qr_code_token}
-                                            onChange={(e) => setFormData({ ...formData, qr_code_token: e.target.value })}
-                                            placeholder="https://esempio.com/manuale.pdf"
-                                            className="bg-muted border-border text-foreground"
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            Nome macchina *
+                                        </label>
+                                        <input
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            placeholder="Es. Trituratore TSS 180"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
-                                        <p className="text-xs text-muted-foreground">Lascia vuoto per usare il link alla scheda</p>
                                     </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            Codice interno
+                                        </label>
+                                        <input
+                                            value={internalCode}
+                                            onChange={(e) => setInternalCode(e.target.value)}
+                                            placeholder="Es. MCH-001"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            Matricola
+                                        </label>
+                                        <input
+                                            value={serialNumber}
+                                            onChange={(e) => setSerialNumber(e.target.value)}
+                                            placeholder="Es. SN-2026-001"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            Marca
+                                        </label>
+                                        <input
+                                            value={brand}
+                                            onChange={(e) => setBrand(e.target.value)}
+                                            placeholder="Es. ITR / OMAR"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            Modello
+                                        </label>
+                                        <input
+                                            value={model}
+                                            onChange={(e) => setModel(e.target.value)}
+                                            placeholder="Es. TSS 180"
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            Stato lifecycle
+                                        </label>
+                                        <select
+                                            value={lifecycleState}
+                                            onChange={(e) => setLifecycleState(e.target.value)}
+                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
+                                        >
+                                            <option value="active">Attiva</option>
+                                            <option value="commissioning">Commissioning</option>
+                                            <option value="maintenance">In manutenzione</option>
+                                            <option value="inactive">Inattiva</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-sm font-semibold text-muted-foreground">Note</label>
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            rows={4}
+                                            placeholder="Note tecniche, configurazione, dettagli aggiuntivi..."
+                                            className="w-full rounded-2xl border border-blue-500/30 bg-background px-4 py-3 text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                    </div>
+                                </div>
+                            </CardShell>
+
+                            <div className="space-y-6">
+                                <CardShell className="p-6">
+                                    <div className="mb-4 flex items-center gap-3">
+                                        <div
+                                            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${orgType === "manufacturer"
+                                                    ? "bg-orange-500/20 text-orange-300"
+                                                    : "bg-blue-500/20 text-blue-300"
+                                                }`}
+                                        >
+                                            {orgType === "manufacturer" ? (
+                                                <Factory className="h-5 w-5" />
+                                            ) : (
+                                                <Building2 className="h-5 w-5" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-xl font-bold text-foreground">Contesto</div>
+                                            <div className="text-sm text-muted-foreground">
+                                                {orgType === "manufacturer"
+                                                    ? "Modifica macchina lato costruttore"
+                                                    : "Modifica macchina lato cliente finale"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-2xl bg-muted/55 p-4 text-sm text-muted-foreground">
+                                        {orgType === "manufacturer"
+                                            ? "La macchina appartiene al catalogo del costruttore attivo."
+                                            : "La macchina appartiene al contesto del cliente finale attivo."}
+                                    </div>
+                                </CardShell>
+
+                                {orgType === "customer" && (
+                                    <CardShell className="p-6">
+                                        <div className="mb-4 flex items-center gap-3">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
+                                                <Layers3 className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <div className="text-xl font-bold text-foreground">Collocazione</div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Aggiorna stabilimento e linea della macchina.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-semibold text-muted-foreground">
+                                                    Stabilimento
+                                                </label>
+                                                <select
+                                                    value={plantId}
+                                                    onChange={(e) => {
+                                                        setPlantId(e.target.value);
+                                                        setProductionLineId("");
+                                                    }}
+                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
+                                                >
+                                                    <option value="">Nessuno</option>
+                                                    {plants.map((plant) => (
+                                                        <option key={plant.id} value={plant.id}>
+                                                            {plant.name ?? plant.code ?? "Stabilimento"}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-semibold text-muted-foreground">
+                                                    Linea
+                                                </label>
+                                                <select
+                                                    value={productionLineId}
+                                                    onChange={(e) => setProductionLineId(e.target.value)}
+                                                    className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
+                                                >
+                                                    <option value="">Nessuna</option>
+                                                    {filteredLines.map((line) => (
+                                                        <option key={line.id} value={line.id}>
+                                                            {line.name ?? line.code ?? "Linea"}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </CardShell>
                                 )}
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.category")}</Label>
-                                    <Input
-                                        value={formData.category}
-                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Marca</Label>
-                                    <Input
-                                        value={formData.brand}
-                                        onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.model")}</Label>
-                                    <Input
-                                        value={formData.model}
-                                        onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.serialNumber")}</Label>
-                                    <Input
-                                        value={formData.serial_number}
-                                        onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Posizione</Label>
-                                    <Input
-                                        value={formData.position}
-                                        onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">{t("equipment.status")}</Label>
-                                    <Select
-                                        value={formData.lifecycle_state}
-                                        onValueChange={(v) => setFormData({ ...formData, lifecycle_state: v })}
-                                    >
-                                        <SelectTrigger className="bg-muted border-border text-foreground">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="active">Attivo</SelectItem>
-                                            <SelectItem value="inactive">Inattivo</SelectItem>
-                                            <SelectItem value="under_maintenance">In Manutenzione</SelectItem>
-                                            <SelectItem value="decommissioned">Dismesso</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label className="text-foreground">{t("equipment.technicalSpecs")}</Label>
-                                <Textarea
-                                    value={formData.specifications}
-                                    onChange={(e) => setFormData({ ...formData, specifications: e.target.value })}
-                                    className="bg-muted border-border text-foreground"
-                                    rows={4}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label className="text-foreground">{t("common.notes")}</Label>
-                                <Textarea
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="bg-muted border-border text-foreground"
-                                    rows={3}
-                                />
-                            </div>
-
-                            <div className="flex gap-4">
-                                <Button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-                                    <Save className="mr-2 h-4 w-4" />
-                                    {saving ? t("equipment.saving") : t("common.save")}
-                                </Button>
-                                <Button type="button" variant="outline" onClick={() => router.back()}>
-                                    {t("common.cancel")}
-                                </Button>
-                            </div>
-                        </form>
-                    </CardContent>
-                </Card>
-            </div>
-        </MainLayout>
+                        </div>
+                    </div>
+                </div>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
