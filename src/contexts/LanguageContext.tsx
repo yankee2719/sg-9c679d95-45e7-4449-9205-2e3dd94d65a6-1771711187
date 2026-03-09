@@ -136,6 +136,31 @@ const translations: Record<Language, Record<string, string>> = {
 
         "maintenance.planFallback": "Piano manutenzione",
         "maintenance.machineFallback": "Macchina",
+
+        "workOrders.title": "Ordini di lavoro",
+        "workOrders.subtitle": "Pianifica, assegna e monitora le attività operative sulle macchine.",
+        "workOrders.new": "Nuovo Work Order",
+
+        "workOrders.kpi.total": "Totali",
+        "workOrders.kpi.open": "Aperti",
+        "workOrders.kpi.highPriority": "Alta Priorità",
+
+        "workOrders.searchPlaceholder": "Cerca work order",
+        "workOrders.listTitle": "Elenco Work Orders",
+        "workOrders.loading": "Caricamento work orders...",
+        "workOrders.noResults": "Nessun work order trovato.",
+
+        "workOrders.priority.high": "Alta",
+        "workOrders.priority.medium": "Media",
+        "workOrders.priority.low": "Bassa",
+
+        "workOrders.status.open": "Aperto",
+        "workOrders.status.inProgress": "In corso",
+        "workOrders.status.closed": "Chiuso",
+
+        "workOrders.fallbackTitle": "Work Order",
+        "workOrders.machineFallback": "Macchina",
+
     },
 
     en: {
@@ -264,6 +289,30 @@ const translations: Record<Language, Record<string, string>> = {
 
         "maintenance.planFallback": "Maintenance plan",
         "maintenance.machineFallback": "Machine",
+
+        "workOrders.title": "Work Orders",
+        "workOrders.subtitle": "Plan, assign and monitor operational activities on machines.",
+        "workOrders.new": "New Work Order",
+
+        "workOrders.kpi.total": "Total",
+        "workOrders.kpi.open": "Open",
+        "workOrders.kpi.highPriority": "High Priority",
+
+        "workOrders.searchPlaceholder": "Search work order",
+        "workOrders.listTitle": "Work Order List",
+        "workOrders.loading": "Loading work orders...",
+        "workOrders.noResults": "No work order found.",
+
+        "workOrders.priority.high": "High",
+        "workOrders.priority.medium": "Medium",
+        "workOrders.priority.low": "Low",
+
+        "workOrders.status.open": "Open",
+        "workOrders.status.inProgress": "In progress",
+        "workOrders.status.closed": "Closed",
+
+        "workOrders.fallbackTitle": "Work Order",
+        "workOrders.machineFallback": "Machine",
     },
 
     fr: {
@@ -393,6 +442,30 @@ const translations: Record<Language, Record<string, string>> = {
         "maintenance.planFallback": "Plan de maintenance",
         "maintenance.machineFallback": "Machine",
 
+        "workOrders.title": "Ordres de travail",
+        "workOrders.subtitle": "Planifiez, attribuez et surveillez les activités opérationnelles sur les machines.",
+        "workOrders.new": "Nouvel ordre de travail",
+
+        "workOrders.kpi.total": "Total",
+        "workOrders.kpi.open": "Ouverts",
+        "workOrders.kpi.highPriority": "Haute priorité",
+
+        "workOrders.searchPlaceholder": "Rechercher un ordre de travail",
+        "workOrders.listTitle": "Liste des ordres de travail",
+        "workOrders.loading": "Chargement des ordres de travail...",
+        "workOrders.noResults": "Aucun ordre de travail trouvé.",
+
+        "workOrders.priority.high": "Haute",
+        "workOrders.priority.medium": "Moyenne",
+        "workOrders.priority.low": "Basse",
+
+        "workOrders.status.open": "Ouvert",
+        "workOrders.status.inProgress": "En cours",
+        "workOrders.status.closed": "Fermé",
+
+        "workOrders.fallbackTitle": "Ordre de travail",
+        "workOrders.machineFallback": "Machine",
+
     },
 
     es: {
@@ -521,6 +594,30 @@ const translations: Record<Language, Record<string, string>> = {
 
         "maintenance.planFallback": "Plan de mantenimiento",
         "maintenance.machineFallback": "Máquina",
+
+        "workOrders.title": "Órdenes de trabajo",
+        "workOrders.subtitle": "Planifica, asigna y supervisa las actividades operativas en las máquinas.",
+        "workOrders.new": "Nueva orden de trabajo",
+
+        "workOrders.kpi.total": "Totales",
+        "workOrders.kpi.open": "Abiertas",
+        "workOrders.kpi.highPriority": "Alta prioridad",
+
+        "workOrders.searchPlaceholder": "Buscar orden de trabajo",
+        "workOrders.listTitle": "Lista de órdenes de trabajo",
+        "workOrders.loading": "Cargando órdenes de trabajo...",
+        "workOrders.noResults": "No se encontró ninguna orden de trabajo.",
+
+        "workOrders.priority.high": "Alta",
+        "workOrders.priority.medium": "Media",
+        "workOrders.priority.low": "Baja",
+
+        "workOrders.status.open": "Abierta",
+        "workOrders.status.inProgress": "En curso",
+        "workOrders.status.closed": "Cerrada",
+
+        "workOrders.fallbackTitle": "Orden de trabajo",
+        "workOrders.machineFallback": "Máquina",
     },
 };
 
