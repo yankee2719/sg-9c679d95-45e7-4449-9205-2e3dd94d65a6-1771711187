@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import DocumentManager from "@/components/documents/DocumentManager";
 import { MachinePhotoUpload } from "@/components/Equipment/MachinePhotoUpload";
 import { MachineEventTimeline } from "@/components/MachineEventTimeline";
+import { QRCodeGenerator } from "@/components/QRCodeGenerator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     exportMachinePassport,
     exportTechnicalSheet,
@@ -30,16 +30,16 @@ import {
     QrCode,
     FileText,
     ClipboardList,
-    Save,
-    X,
+    Pencil,
     Factory,
     Lock,
+    ChevronRight,
+    CheckCircle2,
+    AlertCircle,
     Loader2,
     History,
-    Camera,
-    Layers3,
-    Pencil,
     Download,
+    Camera,
 } from "lucide-react";
 
 type OrgType = "manufacturer" | "customer";
@@ -72,37 +72,35 @@ interface PlantRow {
     code: string | null;
 }
 
-interface ProductionLineRow {
+interface LineRow {
     id: string;
     name: string | null;
     code: string | null;
-    plant_id: string | null;
 }
 
-interface MaintenancePlanRow {
+interface MaintenancePlan {
     id: string;
     title: string | null;
     description: string | null;
+    frequency: string | null;
     next_due_date: string | null;
     priority: string | null;
-    frequency: string | null;
+    is_active?: boolean | null;
 }
 
-interface WorkOrderRow {
+interface WorkOrder {
     id: string;
     title: string | null;
+    wo_number?: string | null;
     status: string | null;
     priority: string | null;
-    due_date: string | null;
+    wo_type?: string | null;
+    work_type?: string | null;
+    scheduled_start?: string | null;
+    scheduled_date?: string | null;
+    due_date?: string | null;
     created_at: string | null;
 }
-
-const lifecycleOptions = [
-    { value: "active", label: "Attiva" },
-    { value: "commissioning", label: "Commissioning" },
-    { value: "maintenance", label: "In manutenzione" },
-    { value: "inactive", label: "Inattiva" },
-];
 
 const statusConfig: Record<string, { label: string; className: string }> = {
     active: {
@@ -124,6 +122,64 @@ const statusConfig: Record<string, { label: string; className: string }> = {
         label: "Inattivo",
         className:
             "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
+    },
+};
+
+const woStatusConfig: Record<string, { label: string; color: string }> = {
+    draft: {
+        label: "Bozza",
+        color: "bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-300",
+    },
+    scheduled: {
+        label: "Programmato",
+        color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-300",
+    },
+    assigned: {
+        label: "Assegnato",
+        color: "bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-300",
+    },
+    in_progress: {
+        label: "In Corso",
+        color: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-300",
+    },
+    paused: {
+        label: "In Pausa",
+        color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-300",
+    },
+    completed: {
+        label: "Completato",
+        color: "bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-300",
+    },
+    approved: {
+        label: "Approvato",
+        color: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-300",
+    },
+    cancelled: {
+        label: "Annullato",
+        color: "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border-red-300",
+    },
+};
+
+const priorityConfig: Record<string, { label: string; color: string; border: string }> = {
+    critical: {
+        label: "Critica",
+        color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300",
+        border: "border-l-red-600",
+    },
+    high: {
+        label: "Alta",
+        color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300",
+        border: "border-l-red-500",
+    },
+    medium: {
+        label: "Media",
+        color: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300",
+        border: "border-l-amber-500",
+    },
+    low: {
+        label: "Bassa",
+        color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300",
+        border: "border-l-green-500",
     },
 };
 
@@ -149,55 +205,60 @@ function InfoRow({
     );
 }
 
-export default function EditEquipmentPage() {
+function getFrequencyLabel(type: string | null | undefined) {
+    if (!type) return null;
+    const labels: Record<string, string> = {
+        daily: "Giornaliera",
+        weekly: "Settimanale",
+        biweekly: "Bisettimanale",
+        monthly: "Mensile",
+        quarterly: "Trimestrale",
+        semiannual: "Semestrale",
+        annual: "Annuale",
+        yearly: "Annuale",
+    };
+    return labels[type] || type;
+}
+
+export default function EquipmentDetailPage() {
     const router = useRouter();
     const { id, tab } = router.query;
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [savingQR, setSavingQR] = useState(false);
-    const [activeTab, setActiveTab] = useState("general");
+    const [machine, setMachine] = useState < Machine | null > (null);
+    const [plant, setPlant] = useState < PlantRow | null > (null);
+    const [line, setLine] = useState < LineRow | null > (null);
+    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
 
-    const [userRole, setUserRole] = useState("technician");
+    const [maintenancePlans, setMaintenancePlans] = useState < MaintenancePlan[] > ([]);
+    const [workOrders, setWorkOrders] = useState < WorkOrder[] > ([]);
+
+    const [loading, setLoading] = useState(true);
+    const [loadingMaint, setLoadingMaint] = useState(false);
+
+    const [userRole, setUserRole] = useState < string > ("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
     const [orgType, setOrgType] = useState < OrgType | null > (null);
 
-    const [machine, setMachine] = useState < Machine | null > (null);
-    const [plants, setPlants] = useState < PlantRow[] > ([]);
-    const [lines, setLines] = useState < ProductionLineRow[] > ([]);
-    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
-
-    const [maintenancePlans, setMaintenancePlans] = useState < MaintenancePlanRow[] > ([]);
-    const [workOrders, setWorkOrders] = useState < WorkOrderRow[] > ([]);
-
-    const [name, setName] = useState("");
-    const [internalCode, setInternalCode] = useState("");
-    const [serialNumber, setSerialNumber] = useState("");
-    const [brand, setBrand] = useState("");
-    const [model, setModel] = useState("");
-    const [category, setCategory] = useState("");
-    const [position, setPosition] = useState("");
-    const [commissionedAt, setCommissionedAt] = useState("");
-    const [yearOfManufacture, setYearOfManufacture] = useState("");
-    const [notes, setNotes] = useState("");
-    const [specificationsText, setSpecificationsText] = useState("");
-    const [plantId, setPlantId] = useState("");
-    const [productionLineId, setProductionLineId] = useState("");
-    const [lifecycleState, setLifecycleState] = useState("active");
     const [editingQR, setEditingQR] = useState(false);
     const [qrUrlDraft, setQrUrlDraft] = useState("");
+    const [savingQR, setSavingQR] = useState(false);
+    const [activeTab, setActiveTab] = useState("general");
 
     useEffect(() => {
         if (tab && typeof tab === "string") setActiveTab(tab);
     }, [tab]);
 
     useEffect(() => {
-        if (!id || typeof id !== "string") return;
+        if (!router.isReady || !id || typeof id !== "string") return;
 
         const load = async () => {
+            setLoading(true);
             try {
                 const ctx = await getUserContext();
-                if (!ctx?.orgId || !ctx?.orgType) return;
+                if (!ctx?.orgId || !ctx?.orgType) {
+                    router.replace("/settings/organization");
+                    return;
+                }
 
                 setUserRole(ctx.role ?? "technician");
                 setOrgId(ctx.orgId);
@@ -207,105 +268,105 @@ export default function EditEquipmentPage() {
                     .from("machines")
                     .select("*")
                     .eq("id", id)
-                    .single();
+                    .maybeSingle();
 
                 if (machineError) throw machineError;
-                setMachine(machineRow as Machine);
+                if (!machineRow) {
+                    router.replace("/equipment");
+                    return;
+                }
 
                 const currentMachine = machineRow as Machine;
-
-                setName(currentMachine.name ?? "");
-                setInternalCode(currentMachine.internal_code ?? "");
-                setSerialNumber(currentMachine.serial_number ?? "");
-                setBrand(currentMachine.brand ?? "");
-                setModel(currentMachine.model ?? "");
-                setCategory(currentMachine.category ?? "");
-                setPosition(currentMachine.position ?? "");
-                setCommissionedAt(
-                    currentMachine.commissioned_at ? String(currentMachine.commissioned_at).slice(0, 10) : ""
-                );
-                setYearOfManufacture(
-                    currentMachine.year_of_manufacture ? String(currentMachine.year_of_manufacture) : ""
-                );
-                setNotes(currentMachine.notes ?? "");
-                setPlantId(currentMachine.plant_id ?? "");
-                setProductionLineId(currentMachine.production_line_id ?? "");
-                setLifecycleState(currentMachine.lifecycle_state ?? "active");
+                setMachine(currentMachine);
                 setQrUrlDraft(currentMachine.qr_code_token ?? "");
-                setSpecificationsText(
-                    currentMachine.specifications
-                        ? typeof currentMachine.specifications === "string"
-                            ? currentMachine.specifications
-                            : currentMachine.specifications?.text || JSON.stringify(currentMachine.specifications, null, 2)
-                        : ""
-                );
 
-                const [plantsRes, linesRes, plansRes, workOrdersRes] = await Promise.all([
-                    supabase
-                        .from("plants")
-                        .select("id, name, code")
-                        .eq("organization_id", ctx.orgId)
-                        .eq("is_archived", false)
-                        .order("name", { ascending: true }),
-                    supabase
-                        .from("production_lines")
-                        .select("id, name, code, plant_id")
-                        .eq("organization_id", ctx.orgId)
-                        .eq("is_archived", false)
-                        .order("name", { ascending: true }),
-                    supabase
-                        .from("maintenance_plans")
-                        .select("id, title, description, next_due_date, priority, frequency")
-                        .eq("machine_id", id)
-                        .order("created_at", { ascending: false }),
-                    supabase
-                        .from("work_orders")
-                        .select("id, title, status, priority, due_date, created_at")
-                        .eq("machine_id", id)
-                        .order("created_at", { ascending: false }),
-                ]);
+                const requests: Promise<any>[] = [];
 
-                if (plantsRes.error) throw plantsRes.error;
-                if (linesRes.error) throw linesRes.error;
-                if (plansRes.error) throw plansRes.error;
-                if (workOrdersRes.error) throw workOrdersRes.error;
+                if (currentMachine.plant_id) {
+                    requests.push(
+                        supabase.from("plants").select("id, name, code").eq("id", currentMachine.plant_id).maybeSingle()
+                    );
+                } else {
+                    requests.push(Promise.resolve({ data: null }));
+                }
 
-                setPlants((plantsRes.data ?? []) as PlantRow[]);
-                setLines((linesRes.data ?? []) as ProductionLineRow[]);
-                setMaintenancePlans((plansRes.data ?? []) as MaintenancePlanRow[]);
-                setWorkOrders((workOrdersRes.data ?? []) as WorkOrderRow[]);
+                if (currentMachine.production_line_id) {
+                    requests.push(
+                        supabase
+                            .from("production_lines")
+                            .select("id, name, code, plant_id")
+                            .eq("id", currentMachine.production_line_id)
+                            .maybeSingle()
+                    );
+                } else {
+                    requests.push(Promise.resolve({ data: null }));
+                }
 
                 if (currentMachine.organization_id && currentMachine.organization_id !== ctx.orgId) {
-                    const { data: mfrOrg } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", currentMachine.organization_id)
-                        .single();
-
-                    if (mfrOrg) setManufacturerName(mfrOrg.name);
+                    requests.push(
+                        supabase.from("organizations").select("name").eq("id", currentMachine.organization_id).maybeSingle()
+                    );
+                } else {
+                    requests.push(Promise.resolve({ data: null }));
                 }
+
+                const [plantRes, lineRes, manufacturerRes] = await Promise.all(requests);
+
+                setPlant((plantRes?.data as PlantRow) ?? null);
+                setLine((lineRes?.data as LineRow) ?? null);
+                setManufacturerName((manufacturerRes?.data as any)?.name ?? null);
+
+                await loadMaintenanceData(id);
             } catch (error) {
-                console.error("Equipment edit load error:", error);
+                console.error("Equipment detail load error:", error);
             } finally {
                 setLoading(false);
             }
         };
 
         load();
-    }, [id]);
+    }, [router.isReady, id, router]);
 
-    const filteredLines = useMemo(() => {
-        if (!plantId) return lines;
-        return lines.filter((line) => line.plant_id === plantId);
-    }, [lines, plantId]);
+    async function loadMaintenanceData(machineId: string) {
+        setLoadingMaint(true);
+        try {
+            const [plansRes, woRes] = await Promise.all([
+                supabase
+                    .from("maintenance_plans")
+                    .select("id, title, description, frequency, next_due_date, priority, is_active")
+                    .eq("machine_id", machineId)
+                    .order("next_due_date", { ascending: true, nullsFirst: false }),
+                supabase
+                    .from("work_orders")
+                    .select("id, title, wo_number, status, priority, wo_type, work_type, scheduled_start, scheduled_date, due_date, created_at")
+                    .eq("machine_id", machineId)
+                    .order("created_at", { ascending: false }),
+            ]);
+
+            if (plansRes.error) throw plansRes.error;
+            if (woRes.error) throw woRes.error;
+
+            setMaintenancePlans((plansRes.data ?? []) as MaintenancePlan[]);
+            setWorkOrders((woRes.data ?? []) as WorkOrder[]);
+        } catch (error) {
+            console.error("Maintenance load error:", error);
+        } finally {
+            setLoadingMaint(false);
+        }
+    }
 
     const canEdit = useMemo(() => {
-        if (!machine || !orgId) return false;
+        if (!machine || !orgId || !orgType) return false;
         const elevated = userRole === "admin" || userRole === "supervisor";
-        if (orgType === "manufacturer") return elevated && machine.organization_id === orgId;
+
+        if (orgType === "manufacturer") {
+            return elevated && machine.organization_id === orgId;
+        }
+
         if (orgType === "customer") {
             return machine.organization_id === orgId && (elevated || userRole === "technician");
         }
+
         return false;
     }, [machine, orgId, orgType, userRole]);
 
@@ -314,88 +375,35 @@ export default function EditEquipmentPage() {
         return machine.organization_id !== orgId;
     }, [machine, orgId]);
 
-    const statusPreview = statusConfig[lifecycleState] ?? statusConfig.active;
-    const selectedPlant = plants.find((p) => p.id === plantId);
-    const selectedLine = lines.find((l) => l.id === productionLineId);
+    const status = statusConfig[machine?.lifecycle_state || "active"] || statusConfig.active;
 
     const qrValue =
-        qrUrlDraft ||
+        machine?.qr_code_token ||
         (typeof window !== "undefined" && machine ? `${window.location.origin}/equipment/${machine.id}` : "");
 
-    const exportMachineData = useMemo((): MachineData | null => {
+    const specsText = machine?.specifications
+        ? typeof machine.specifications === "string"
+            ? machine.specifications
+            : machine.specifications?.text || JSON.stringify(machine.specifications, null, 2)
+        : null;
+
+    const activePlans = maintenancePlans.filter((p) => p.is_active !== false);
+    const overdueCount = activePlans.filter(
+        (p) => p.next_due_date && new Date(p.next_due_date) < new Date()
+    ).length;
+    const activeWOs = workOrders.filter(
+        (wo) => !["completed", "approved", "cancelled"].includes((wo.status || "").toLowerCase())
+    );
+
+    const exportData = useMemo(() => {
         if (!machine) return null;
 
         return {
             ...(machine as any),
-            name,
-            internal_code: internalCode || null,
-            serial_number: serialNumber || null,
-            brand: brand || null,
-            model: model || null,
-            category: category || null,
-            position: position || null,
-            commissioned_at: commissionedAt || null,
-            year_of_manufacture: yearOfManufacture ? Number(yearOfManufacture) : null,
-            notes: notes || null,
-            lifecycle_state: lifecycleState || "active",
-            plant_name: selectedPlant?.name ?? selectedPlant?.code ?? null,
+            plant_name: plant?.name ?? plant?.code ?? null,
             organization_name: manufacturerName ?? null,
-            specifications: specificationsText ? { text: specificationsText } : null,
         } as MachineData;
-    }, [
-        machine,
-        name,
-        internalCode,
-        serialNumber,
-        brand,
-        model,
-        category,
-        position,
-        commissionedAt,
-        yearOfManufacture,
-        notes,
-        lifecycleState,
-        selectedPlant,
-        manufacturerName,
-        specificationsText,
-    ]);
-
-    const handleSave = async () => {
-        if (!machine || !canEdit || !name.trim()) return;
-
-        setSaving(true);
-        try {
-            const payload: Record<string, any> = {
-                name: name.trim(),
-                internal_code: internalCode.trim() || null,
-                serial_number: serialNumber.trim() || null,
-                brand: brand.trim() || null,
-                model: model.trim() || null,
-                category: category.trim() || null,
-                position: position.trim() || null,
-                commissioned_at: commissionedAt || null,
-                year_of_manufacture: yearOfManufacture ? Number(yearOfManufacture) : null,
-                notes: notes.trim() || null,
-                lifecycle_state: lifecycleState || "active",
-                specifications: specificationsText.trim() ? { text: specificationsText.trim() } : null,
-            };
-
-            if (orgType === "customer") {
-                payload.plant_id = plantId || null;
-                payload.production_line_id = productionLineId || null;
-            }
-
-            const { error } = await supabase.from("machines").update(payload).eq("id", machine.id);
-            if (error) throw error;
-
-            setMachine((prev) => (prev ? { ...prev, ...payload } : prev));
-            router.push(`/equipment/${machine.id}`);
-        } catch (error) {
-            console.error("Equipment save error:", error);
-        } finally {
-            setSaving(false);
-        }
-    };
+    }, [machine, plant, manufacturerName]);
 
     const handleSaveQR = async () => {
         if (!machine || !canEdit) return;
@@ -410,14 +418,8 @@ export default function EditEquipmentPage() {
             if (error) throw error;
 
             setMachine((prev) =>
-                prev
-                    ? {
-                        ...prev,
-                        qr_code_token: qrUrlDraft.trim() || null,
-                    }
-                    : prev
+                prev ? { ...prev, qr_code_token: qrUrlDraft.trim() || null } : prev
             );
-
             setEditingQR(false);
         } catch (error) {
             console.error("QR save error:", error);
@@ -429,6 +431,7 @@ export default function EditEquipmentPage() {
     if (loading) {
         return (
             <MainLayout userRole={userRole}>
+                <SEO title="Macchina - MACHINA" />
                 <div className="container mx-auto py-6">
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -441,6 +444,7 @@ export default function EditEquipmentPage() {
     if (!machine) {
         return (
             <MainLayout userRole={userRole}>
+                <SEO title="Macchina - MACHINA" />
                 <div className="container mx-auto py-6 text-center">
                     <p className="text-red-400 text-lg">Macchina non trovata</p>
                     <Button variant="outline" className="mt-4" onClick={() => router.push("/equipment")}>
@@ -454,40 +458,43 @@ export default function EditEquipmentPage() {
 
     return (
         <MainLayout userRole={userRole}>
-            <SEO title={`Modifica ${machine.name} - MACHINA`} />
+            <SEO title={`${machine.name ?? "Macchina"} - MACHINA`} />
 
             <div className="container mx-auto py-6 space-y-6 max-w-5xl">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex items-start gap-4">
-                        <Button variant="ghost" size="icon" onClick={() => router.push(`/equipment/${machine.id}`)}>
+                        <Button variant="ghost" size="icon" onClick={() => router.push("/equipment")}>
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
 
                         <div>
                             <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="text-2xl font-bold text-foreground">{name || machine.name}</h1>
-                                <Badge className={statusPreview.className}>{statusPreview.label}</Badge>
-
-                                {isAssigned && (
-                                    <Badge className="bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-500/30 flex items-center gap-1">
-                                        <Factory className="w-3 h-3" />
-                                        {manufacturerName || "Costruttore"}
-                                    </Badge>
-                                )}
+                                <h1 className="text-2xl font-bold text-foreground">{machine.name}</h1>
+                                <Badge className={status.className}>{status.label}</Badge>
                             </div>
 
                             <p className="text-sm text-muted-foreground mt-1">
-                                {internalCode || machine.internal_code || "—"}
+                                {machine.internal_code || machine.serial_number || "—"}
                             </p>
                         </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                        {canEdit && (
+                            <Button
+                                onClick={() => router.push(`/equipment/edit/${machine.id}`)}
+                                className="bg-blue-600 hover:bg-blue-700"
+                            >
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Modifica
+                            </Button>
+                        )}
+
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                if (exportMachineData) exportTechnicalSheet(exportMachineData);
+                                if (exportData) exportTechnicalSheet(exportData);
                             }}
                         >
                             <Download className="w-4 h-4 mr-1" />
@@ -498,7 +505,7 @@ export default function EditEquipmentPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                if (exportMachineData) exportMachinePassport(exportMachineData);
+                                if (exportData) exportMachinePassport(exportData);
                             }}
                         >
                             <Download className="w-4 h-4 mr-1" />
@@ -509,10 +516,10 @@ export default function EditEquipmentPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                if (!exportMachineData) return;
+                                if (!exportData) return;
 
                                 exportMaintenanceReport({
-                                    machine: exportMachineData,
+                                    machine: exportData,
                                     plans: maintenancePlans as any,
                                     workOrders: workOrders.map((wo) => ({ ...wo, assignee_name: null })) as any,
                                     checklistExecutions: [],
@@ -522,50 +529,38 @@ export default function EditEquipmentPage() {
                             <Download className="w-4 h-4 mr-1" />
                             Report
                         </Button>
-
-                        <Button variant="outline" onClick={() => router.push(`/equipment/${machine.id}`)}>
-                            <X className="mr-2 h-4 w-4" />
-                            Annulla
-                        </Button>
-
-                        <Button onClick={handleSave} disabled={!canEdit || saving} className="bg-blue-600 hover:bg-blue-700">
-                            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                            {saving ? "Salvataggio..." : "Salva"}
-                        </Button>
                     </div>
                 </div>
 
                 {isAssigned && (
                     <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-100 dark:bg-purple-500/10 border border-purple-500/30">
-                        <Lock className="w-5 h-5 shrink-0 text-purple-400" />
+                        <Lock className="w-5 h-5 text-purple-400 shrink-0" />
                         <div>
                             <p className="text-foreground font-medium">
                                 Macchina fornita da {manufacturerName || "costruttore"}
                             </p>
                             <p className="text-muted-foreground text-sm">
-                                Se la macchina non è di tua proprietà, alcune modifiche potrebbero non essere consentite.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                {!canEdit && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-100 dark:bg-amber-500/10 border border-amber-500/30">
-                        <Lock className="w-5 h-5 shrink-0 text-amber-500" />
-                        <div>
-                            <p className="text-foreground font-medium">Modifica non consentita</p>
-                            <p className="text-muted-foreground text-sm">
-                                Non hai permessi sufficienti per modificare questa macchina.
+                                Documentazione e specifiche tecniche gestite dal costruttore.
                             </p>
                         </div>
                     </div>
                 )}
 
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="grid w-full grid-cols-4 max-w-3xl">
+                    <TabsList className="grid w-full grid-cols-5 max-w-4xl">
                         <TabsTrigger value="general" className="gap-1.5">
                             <Wrench className="w-4 h-4" />
                             <span className="hidden sm:inline">Generale</span>
+                        </TabsTrigger>
+
+                        <TabsTrigger value="maintenance" className="gap-1.5">
+                            <Calendar className="w-4 h-4" />
+                            <span className="hidden sm:inline">Manutenzione</span>
+                            {(overdueCount > 0 || activeWOs.length > 0) && (
+                                <Badge className="ml-1 h-5 min-w-[20px] p-0 flex items-center justify-center rounded-full bg-blue-500 text-white text-xs">
+                                    {activeWOs.length + overdueCount}
+                                </Badge>
+                            )}
                         </TabsTrigger>
 
                         <TabsTrigger value="documents" className="gap-1.5">
@@ -605,181 +600,292 @@ export default function EditEquipmentPage() {
                         <Card className="rounded-2xl border-0 bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-foreground flex items-center gap-2">
-                                    <Pencil className="w-5 h-5 text-primary" />
-                                    Modifica Informazioni
+                                    <Wrench className="w-5 h-5 text-primary" />
+                                    Informazioni Generali
                                 </CardTitle>
                             </CardHeader>
-
-                            <CardContent className="space-y-5">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-medium text-foreground">Nome macchina *</label>
-                                        <Input value={name} onChange={(e) => setName(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Codice</label>
-                                        <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Categoria</label>
-                                        <Input value={category} onChange={(e) => setCategory(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Marca</label>
-                                        <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Modello</label>
-                                        <Input value={model} onChange={(e) => setModel(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">N. Serie</label>
-                                        <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Anno fabbricazione</label>
-                                        <Input
-                                            type="number"
-                                            value={yearOfManufacture}
-                                            onChange={(e) => setYearOfManufacture(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Data commissione</label>
-                                        <Input
-                                            type="date"
-                                            value={commissionedAt}
-                                            onChange={(e) => setCommissionedAt(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Stato lifecycle</label>
-                                        <select
-                                            value={lifecycleState}
-                                            onChange={(e) => setLifecycleState(e.target.value)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
-                                        >
-                                            {lifecycleOptions.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {orgType === "customer" && (
-                                        <>
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-foreground">Stabilimento</label>
-                                                <select
-                                                    value={plantId}
-                                                    onChange={(e) => {
-                                                        setPlantId(e.target.value);
-                                                        setProductionLineId("");
-                                                    }}
-                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
-                                                >
-                                                    <option value="">Non assegnato</option>
-                                                    {plants.map((plant) => (
-                                                        <option key={plant.id} value={plant.id}>
-                                                            {plant.name ?? plant.code ?? "Stabilimento"}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium text-foreground">Linea</label>
-                                                <select
-                                                    value={productionLineId}
-                                                    onChange={(e) => setProductionLineId(e.target.value)}
-                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
-                                                >
-                                                    <option value="">Non assegnata</option>
-                                                    {filteredLines.map((line) => (
-                                                        <option key={line.id} value={line.id}>
-                                                            {line.name ?? line.code ?? "Linea"}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </>
-                                    )}
-
-                                    <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-medium text-foreground">Posizione</label>
-                                        <Input value={position} onChange={(e) => setPosition(e.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-medium text-foreground">Specifiche tecniche</label>
-                                        <textarea
-                                            value={specificationsText}
-                                            onChange={(e) => setSpecificationsText(e.target.value)}
-                                            rows={4}
-                                            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-medium text-foreground">Note</label>
-                                        <textarea
-                                            value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
-                                            rows={4}
-                                            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
-                                        />
-                                    </div>
-                                </div>
+                            <CardContent className="space-y-4">
+                                <InfoRow icon={<Hash className="w-4 h-4" />} label="Codice" value={machine.internal_code} />
+                                <InfoRow icon={<Tag className="w-4 h-4" />} label="Categoria" value={machine.category} />
+                                <InfoRow icon={<Wrench className="w-4 h-4" />} label="Marca" value={machine.brand} />
+                                <InfoRow icon={<FileText className="w-4 h-4" />} label="Modello" value={machine.model} />
+                                <InfoRow icon={<Hash className="w-4 h-4" />} label="N. Serie" value={machine.serial_number} />
+                                <InfoRow
+                                    icon={<Calendar className="w-4 h-4" />}
+                                    label="Anno Fabbricazione"
+                                    value={machine.year_of_manufacture ? String(machine.year_of_manufacture) : null}
+                                />
+                                <InfoRow
+                                    icon={<Calendar className="w-4 h-4" />}
+                                    label="Data Commissione"
+                                    value={
+                                        machine.commissioned_at
+                                            ? new Date(machine.commissioned_at).toLocaleDateString("it-IT")
+                                            : null
+                                    }
+                                />
                             </CardContent>
                         </Card>
 
                         <Card className="rounded-2xl border-0 bg-card shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-foreground flex items-center gap-2">
-                                    <ClipboardList className="w-5 h-5 text-primary" />
-                                    Riepilogo
+                                    <MapPin className="w-5 h-5 text-primary" />
+                                    Ubicazione
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <InfoRow icon={<Hash className="w-4 h-4" />} label="Codice" value={internalCode} />
-                                <InfoRow icon={<Tag className="w-4 h-4" />} label="Categoria" value={category} />
-                                <InfoRow icon={<Wrench className="w-4 h-4" />} label="Marca" value={brand} />
-                                <InfoRow icon={<FileText className="w-4 h-4" />} label="Modello" value={model} />
-                                <InfoRow icon={<Hash className="w-4 h-4" />} label="N. Serie" value={serialNumber} />
-                                <InfoRow
-                                    icon={<Calendar className="w-4 h-4" />}
-                                    label="Data Commissione"
-                                    value={commissionedAt ? new Date(commissionedAt).toLocaleDateString("it-IT") : null}
-                                />
                                 <InfoRow
                                     icon={<Building2 className="w-4 h-4 text-blue-400" />}
                                     label="Stabilimento"
-                                    value={selectedPlant?.name ?? selectedPlant?.code ?? null}
+                                    value={plant?.name || plant?.code}
                                     fallback="Non assegnato"
-                                />
-                                <InfoRow
-                                    icon={<Layers3 className="w-4 h-4 text-emerald-400" />}
-                                    label="Linea"
-                                    value={selectedLine?.name ?? selectedLine?.code ?? null}
-                                    fallback="Non assegnata"
                                 />
                                 <InfoRow
                                     icon={<MapPin className="w-4 h-4" />}
                                     label="Posizione"
-                                    value={position}
+                                    value={machine.position}
                                     fallback="Non definita"
                                 />
+                                <InfoRow
+                                    icon={<ClipboardList className="w-4 h-4 text-emerald-400" />}
+                                    label="Linea"
+                                    value={line?.name || line?.code}
+                                    fallback="Non assegnata"
+                                />
+                                {isAssigned && manufacturerName && (
+                                    <InfoRow
+                                        icon={<Factory className="w-4 h-4 text-purple-400" />}
+                                        label="Costruttore"
+                                        value={manufacturerName}
+                                    />
+                                )}
                             </CardContent>
                         </Card>
+
+                        {specsText && (
+                            <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                                <CardHeader>
+                                    <CardTitle className="text-foreground flex items-center gap-2">
+                                        <ClipboardList className="w-5 h-5 text-primary" />
+                                        Specifiche Tecniche
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground whitespace-pre-wrap">{specsText}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {machine.notes && (
+                            <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                                <CardHeader>
+                                    <CardTitle className="text-foreground flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-primary" />
+                                        Note
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground whitespace-pre-wrap">{machine.notes}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="maintenance" className="space-y-6 mt-4">
+                        {loadingMaint ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {[
+                                        {
+                                            label: "Piani attivi",
+                                            value: activePlans.length,
+                                            color: "text-blue-600",
+                                            bg: "bg-blue-50 dark:bg-blue-500/10",
+                                        },
+                                        {
+                                            label: "Scaduti",
+                                            value: overdueCount,
+                                            color: overdueCount > 0 ? "text-red-600" : "text-gray-400",
+                                            bg: overdueCount > 0 ? "bg-red-50 dark:bg-red-500/10" : "bg-gray-50 dark:bg-gray-500/10",
+                                        },
+                                        {
+                                            label: "WO attivi",
+                                            value: activeWOs.length,
+                                            color: "text-yellow-600",
+                                            bg: "bg-yellow-50 dark:bg-yellow-500/10",
+                                        },
+                                        {
+                                            label: "WO totali",
+                                            value: workOrders.length,
+                                            color: "text-gray-600",
+                                            bg: "bg-gray-50 dark:bg-gray-500/10",
+                                        },
+                                    ].map((s) => (
+                                        <Card key={s.label} className="rounded-2xl border-0 bg-card shadow-sm">
+                                            <CardContent className="p-4 flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg}`}>
+                                                    <span className={`text-lg font-bold ${s.color}`}>{s.value}</span>
+                                                </div>
+                                                <span className="text-sm text-muted-foreground">{s.label}</span>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                                        Piani di Manutenzione ({activePlans.length})
+                                    </h3>
+
+                                    {activePlans.length === 0 ? (
+                                        <Card className="rounded-2xl border-0 bg-card shadow-sm p-8 text-center">
+                                            <Calendar className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+                                            <p className="text-muted-foreground">Nessun piano attivo per questa macchina</p>
+                                        </Card>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {activePlans.map((plan) => {
+                                                const prio = priorityConfig[(plan.priority || "medium").toLowerCase()] || priorityConfig.medium;
+                                                const isOverdue =
+                                                    !!plan.next_due_date && new Date(plan.next_due_date) < new Date();
+                                                const freq = getFrequencyLabel(plan.frequency);
+
+                                                return (
+                                                    <Card
+                                                        key={plan.id}
+                                                        className={`rounded-2xl border-0 border-l-4 ${prio.border} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group`}
+                                                        onClick={() => router.push(`/maintenance/${plan.id}`)}
+                                                    >
+                                                        <CardContent className="p-3 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <div
+                                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isOverdue
+                                                                            ? "bg-red-50 dark:bg-red-500/10"
+                                                                            : "bg-orange-50 dark:bg-orange-500/10"
+                                                                        }`}
+                                                                >
+                                                                    <Calendar
+                                                                        className={`w-4 h-4 ${isOverdue ? "text-red-500" : "text-orange-500"
+                                                                            }`}
+                                                                    />
+                                                                </div>
+
+                                                                <div className="min-w-0">
+                                                                    <p className="text-foreground font-medium truncate">{plan.title || "Piano"}</p>
+                                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                                                        {plan.next_due_date && (
+                                                                            <span className={isOverdue ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                                                                                {new Date(plan.next_due_date).toLocaleDateString("it-IT")}
+                                                                            </span>
+                                                                        )}
+                                                                        {freq && <span>• {freq}</span>}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <Badge className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${prio.color}`}>
+                                                                    {prio.label}
+                                                                </Badge>
+                                                                {isOverdue && (
+                                                                    <Badge className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300">
+                                                                        Scaduto
+                                                                    </Badge>
+                                                                )}
+                                                                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                                        Ordini di Lavoro ({workOrders.length})
+                                    </h3>
+
+                                    {workOrders.length === 0 ? (
+                                        <Card className="rounded-2xl border-0 bg-card shadow-sm p-8 text-center">
+                                            <Wrench className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+                                            <p className="text-muted-foreground">Nessun ordine di lavoro per questa macchina</p>
+                                        </Card>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {workOrders.slice(0, 20).map((wo) => {
+                                                const wSt =
+                                                    woStatusConfig[(wo.status || "draft").toLowerCase()] || woStatusConfig.draft;
+                                                const prio =
+                                                    priorityConfig[(wo.priority || "medium").toLowerCase()] || priorityConfig.medium;
+                                                const isClosed = ["completed", "approved", "cancelled"].includes(
+                                                    (wo.status || "").toLowerCase()
+                                                );
+                                                const sched = wo.scheduled_start || wo.scheduled_date || wo.due_date;
+
+                                                return (
+                                                    <Card
+                                                        key={wo.id}
+                                                        className={`rounded-2xl border-0 border-l-4 ${prio.border} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group ${isClosed ? "opacity-60" : ""
+                                                            }`}
+                                                        onClick={() => router.push(`/work-orders/${wo.id}`)}
+                                                    >
+                                                        <CardContent className="p-3 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-50 dark:bg-blue-500/10">
+                                                                    {isClosed ? (
+                                                                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                                    ) : (
+                                                                        <AlertCircle className="w-4 h-4 text-blue-500" />
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="min-w-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <p className="text-foreground font-medium truncate">
+                                                                            {wo.title || "Work order"}
+                                                                        </p>
+                                                                        {wo.wo_number && (
+                                                                            <span className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded shrink-0">
+                                                                                {wo.wo_number}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                                                        {sched && <span>{new Date(sched).toLocaleDateString("it-IT")}</span>}
+                                                                        <span>• {wo.wo_type || wo.work_type || "—"}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <Badge className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${wSt.color}`}>
+                                                                    {wSt.label}
+                                                                </Badge>
+                                                                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+
+                                            {workOrders.length > 20 && (
+                                                <p className="text-center text-sm text-muted-foreground py-2">
+                                                    +{workOrders.length - 20} altri
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="documents" className="mt-4">
@@ -832,7 +938,7 @@ export default function EditEquipmentPage() {
 
                                 <CardContent className="space-y-4">
                                     <div className="flex justify-center">
-                                        <QRCodeGenerator value={qrValue} size={220} />
+                                        <QRCodeGenerator value={editingQR ? qrUrlDraft || qrValue : qrValue} size={220} />
                                     </div>
 
                                     {!editingQR ? (
@@ -854,6 +960,21 @@ export default function EditEquipmentPage() {
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    const defaultUrl =
+                                                        typeof window !== "undefined"
+                                                            ? `${window.location.origin}/equipment/${machine.id}`
+                                                            : "";
+                                                    setQrUrlDraft(defaultUrl);
+                                                }}
+                                                className="w-full"
+                                            >
+                                                Usa link diretto alla scheda macchina
+                                            </Button>
+
                                             <Input
                                                 value={qrUrlDraft}
                                                 onChange={(e) => setQrUrlDraft(e.target.value)}
