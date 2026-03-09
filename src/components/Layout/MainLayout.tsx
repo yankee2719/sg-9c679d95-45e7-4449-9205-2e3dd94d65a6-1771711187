@@ -116,28 +116,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
         { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
         { href: "/documents", labelKey: "nav.documents", icon: FileText },
-        {
-            href: "/plants",
-            labelKey: "nav.plants",
-            icon: Building2,
-            roles: ["admin", "supervisor"],
-            orgTypes: ["customer"],
-        },
+        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
         { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
-        {
-            href: "/customers",
-            labelKey: "nav.customers",
-            icon: Building2,
-            roles: ["admin", "supervisor"],
-            orgTypes: ["manufacturer"],
-        },
-        {
-            href: "/assignments",
-            labelKey: "nav.assignments",
-            icon: Layers3,
-            roles: ["admin", "supervisor"],
-            orgTypes: ["manufacturer"],
-        },
+        { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
         { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
         { href: "/settings", labelKey: "nav.settings", icon: Settings },
     ];
@@ -149,10 +131,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     });
 
     const mainItems = filteredNavItems.filter(
-        (item) =>
-            !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(
-                item.href
-            )
+        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
     );
 
     const managementItems = filteredNavItems.filter((item) =>
@@ -270,6 +249,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 <button
                     onClick={handleLogout}
                     className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+                    type="button"
                 >
                     <LogOut className="h-5 w-5 shrink-0" />
                     <span>{t("common.logout")}</span>
