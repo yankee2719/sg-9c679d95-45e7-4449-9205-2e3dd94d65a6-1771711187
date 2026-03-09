@@ -96,6 +96,28 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.subtitle": "Gestione macchine e attrezzature",
         "equipment.new": "Nuova macchina",
         "equipment.noEquipment": "Nessuna macchina trovata",
+        "equipment.subtitleManufacturer": "Gestisci il catalogo macchine del costruttore attivo.",
+        "equipment.subtitleCustomer": "Gestisci macchine proprie e macchine assegnate nel contesto cliente attivo.",
+
+        "equipment.kpi.visibleMachines": "Macchine Visibili",
+        "equipment.kpi.activeAssignments": "Assegnazioni Attive",
+        "equipment.kpi.hiddenMachines": "Macchine Nascoste",
+
+        "equipment.searchPlaceholder": "Cerca macchina",
+        "equipment.hideLocalArchived": "Nascondi archiviate locali",
+        "equipment.showHidden": "Mostra nascoste",
+        "equipment.listTitle": "Elenco Macchine",
+        "equipment.loading": "Caricamento macchine...",
+
+        "equipment.machineFallback": "Macchina",
+        "equipment.linkedToPlant": "Collegata a stabilimento",
+
+        "equipment.badge.owned": "Propria",
+        "equipment.badge.assigned": "Assegnata",
+        "equipment.badge.archived": "Archiviata",
+
+        "equipment.field.brand": "Marca",
+        "equipment.field.model": "Modello",
     },
 
     en: {
@@ -184,6 +206,28 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.subtitle": "Machines & equipment management",
         "equipment.new": "New machine",
         "equipment.noEquipment": "No machines found",
+        "equipment.subtitleManufacturer": "Manage the machine catalog of the active manufacturer.",
+        "equipment.subtitleCustomer": "Manage owned and assigned machines in the active customer context.",
+
+        "equipment.kpi.visibleMachines": "Visible Machines",
+        "equipment.kpi.activeAssignments": "Active Assignments",
+        "equipment.kpi.hiddenMachines": "Hidden Machines",
+
+        "equipment.searchPlaceholder": "Search machine",
+        "equipment.hideLocalArchived": "Hide locally archived",
+        "equipment.showHidden": "Show hidden",
+        "equipment.listTitle": "Machine List",
+        "equipment.loading": "Loading machines...",
+
+        "equipment.machineFallback": "Machine",
+        "equipment.linkedToPlant": "Linked to plant",
+
+        "equipment.badge.owned": "Owned",
+        "equipment.badge.assigned": "Assigned",
+        "equipment.badge.archived": "Archived",
+
+        "equipment.field.brand": "Brand",
+        "equipment.field.model": "Model",
     },
 
     fr: {
@@ -272,6 +316,28 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.subtitle": "Gestion des machines",
         "equipment.new": "Nouvelle machine",
         "equipment.noEquipment": "Aucune machine trouvée",
+        "equipment.subtitleManufacturer": "Gérez le catalogue des machines du constructeur actif.",
+        "equipment.subtitleCustomer": "Gérez les machines propres et attribuées dans le contexte client actif.",
+
+        "equipment.kpi.visibleMachines": "Machines visibles",
+        "equipment.kpi.activeAssignments": "Affectations actives",
+        "equipment.kpi.hiddenMachines": "Machines masquées",
+
+        "equipment.searchPlaceholder": "Rechercher une machine",
+        "equipment.hideLocalArchived": "Masquer les archivées locales",
+        "equipment.showHidden": "Afficher les masquées",
+        "equipment.listTitle": "Liste des machines",
+        "equipment.loading": "Chargement des machines...",
+
+        "equipment.machineFallback": "Machine",
+        "equipment.linkedToPlant": "Liée à un site",
+
+        "equipment.badge.owned": "Propre",
+        "equipment.badge.assigned": "Attribuée",
+        "equipment.badge.archived": "Archivée",
+
+        "equipment.field.brand": "Marque",
+        "equipment.field.model": "Modèle",
     },
 
     es: {
@@ -360,6 +426,28 @@ const translations: Record<Language, Record<string, string>> = {
         "equipment.subtitle": "Gestión de máquinas",
         "equipment.new": "Nueva máquina",
         "equipment.noEquipment": "No se encontraron máquinas",
+        "equipment.subtitleManufacturer": "Gestiona el catálogo de máquinas del fabricante activo.",
+        "equipment.subtitleCustomer": "Gestiona máquinas propias y asignadas en el contexto de cliente activo.",
+
+        "equipment.kpi.visibleMachines": "Máquinas visibles",
+        "equipment.kpi.activeAssignments": "Asignaciones activas",
+        "equipment.kpi.hiddenMachines": "Máquinas ocultas",
+
+        "equipment.searchPlaceholder": "Buscar máquina",
+        "equipment.hideLocalArchived": "Ocultar archivadas locales",
+        "equipment.showHidden": "Mostrar ocultas",
+        "equipment.listTitle": "Lista de máquinas",
+        "equipment.loading": "Cargando máquinas...",
+
+        "equipment.machineFallback": "Máquina",
+        "equipment.linkedToPlant": "Vinculada a planta",
+
+        "equipment.badge.owned": "Propia",
+        "equipment.badge.assigned": "Asignada",
+        "equipment.badge.archived": "Archivada",
+
+        "equipment.field.brand": "Marca",
+        "equipment.field.model": "Modelo",
     },
 };
 
