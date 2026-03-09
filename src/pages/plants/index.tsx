@@ -6,6 +6,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Building2, ArrowRight, Plus, GitBranch, Save, X } from "lucide-react";
 
 interface PlantRow {
@@ -32,6 +33,8 @@ function CardShell({
 }
 
 export default function PlantsPage() {
+    const { t } = useLanguage();
+
     const [userRole, setUserRole] = useState("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
 
@@ -156,15 +159,17 @@ export default function PlantsPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Stabilimenti - MACHINA" />
+                <SEO title={`${t("plants.title")} - MACHINA`} />
 
                 <div className="px-5 py-6 lg:px-8 lg:py-8">
                     <div className="mx-auto max-w-[1440px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground">Stabilimenti</h1>
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                    {t("plants.title")}
+                                </h1>
                                 <p className="text-base text-muted-foreground">
-                                    Gestisci stabilimenti e linee produttive del contesto attivo.
+                                    {t("plants.subtitle")}
                                 </p>
                             </div>
 
@@ -175,10 +180,11 @@ export default function PlantsPage() {
                                             setShowPlantForm((v) => !v);
                                             setShowLineForm(false);
                                         }}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
+                                        type="button"
                                     >
                                         <Plus className="h-4 w-4" />
-                                        Nuovo Stabilimento
+                                        {t("plants.newPlant")}
                                     </button>
 
                                     <button
@@ -186,10 +192,11 @@ export default function PlantsPage() {
                                             setShowLineForm((v) => !v);
                                             setShowPlantForm(false);
                                         }}
-                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-[#223451]"
+                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-muted"
+                                        type="button"
                                     >
                                         <GitBranch className="h-4 w-4" />
-                                        Nuova Linea
+                                        {t("plants.newLine")}
                                     </button>
                                 </div>
                             )}
@@ -200,16 +207,24 @@ export default function PlantsPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
                                     <Building2 className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">{plants.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Stabilimenti Attivi</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">
+                                    {plants.length}
+                                </div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    {t("plants.kpi.activePlants")}
+                                </div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <GitBranch className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">{lines.length}</div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">Linee Attive</div>
+                                <div className="text-5xl font-bold leading-none text-foreground">
+                                    {lines.length}
+                                </div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    {t("plants.kpi.activeLines")}
+                                </div>
                             </CardShell>
                         </div>
 
@@ -217,12 +232,17 @@ export default function PlantsPage() {
                             <CardShell className="p-6">
                                 <div className="mb-5 flex items-center justify-between gap-4">
                                     <div>
-                                        <div className="text-2xl font-bold text-foreground">Nuovo Stabilimento</div>
-                                        <div className="text-sm text-muted-foreground">Crea uno stabilimento nel contesto attivo.</div>
+                                        <div className="text-2xl font-bold text-foreground">
+                                            {t("plants.form.plant.title")}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {t("plants.form.plant.subtitle")}
+                                        </div>
                                     </div>
                                     <button
                                         onClick={() => setShowPlantForm(false)}
-                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                        type="button"
                                     >
                                         <X className="h-5 w-5" />
                                     </button>
@@ -230,22 +250,26 @@ export default function PlantsPage() {
 
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">Nome stabilimento *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            {t("plants.form.plant.name")} *
+                                        </label>
                                         <input
                                             value={plantName}
                                             onChange={(e) => setPlantName(e.target.value)}
-                                            placeholder="Es. Plant Test 01"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.form.plant.namePlaceholder")}
+                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">Codice</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            {t("plants.form.code")}
+                                        </label>
                                         <input
                                             value={plantCode}
                                             onChange={(e) => setPlantCode(e.target.value)}
-                                            placeholder="Es. PLT-01"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.form.plant.codePlaceholder")}
+                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>
@@ -254,10 +278,11 @@ export default function PlantsPage() {
                                     <button
                                         onClick={handleCreatePlant}
                                         disabled={!plantName.trim() || savingPlant}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                        type="button"
                                     >
                                         <Save className="h-4 w-4" />
-                                        {savingPlant ? "Salvataggio..." : "Salva Stabilimento"}
+                                        {savingPlant ? t("plants.saving") : t("plants.savePlant")}
                                     </button>
                                 </div>
                             </CardShell>
@@ -267,12 +292,17 @@ export default function PlantsPage() {
                             <CardShell className="p-6">
                                 <div className="mb-5 flex items-center justify-between gap-4">
                                     <div>
-                                        <div className="text-2xl font-bold text-foreground">Nuova Linea</div>
-                                        <div className="text-sm text-muted-foreground">Crea una linea produttiva collegata a uno stabilimento.</div>
+                                        <div className="text-2xl font-bold text-foreground">
+                                            {t("plants.form.line.title")}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {t("plants.form.line.subtitle")}
+                                        </div>
                                     </div>
                                     <button
                                         onClick={() => setShowLineForm(false)}
-                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                        type="button"
                                     >
                                         <X className="h-5 w-5" />
                                     </button>
@@ -280,38 +310,44 @@ export default function PlantsPage() {
 
                                 <div className="grid gap-4 md:grid-cols-3">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">Stabilimento *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            {t("plants.form.line.plant")} *
+                                        </label>
                                         <select
                                             value={linePlantId}
                                             onChange={(e) => setLinePlantId(e.target.value)}
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none"
+                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none"
                                         >
-                                            <option value="">Seleziona</option>
+                                            <option value="">{t("plants.form.line.selectPlant")}</option>
                                             {plants.map((plant) => (
                                                 <option key={plant.id} value={plant.id}>
-                                                    {plant.name ?? plant.code ?? "Stabilimento"}
+                                                    {plant.name ?? plant.code ?? t("plants.fallbackPlant")}
                                                 </option>
                                             ))}
                                         </select>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">Nome linea *</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            {t("plants.form.line.name")} *
+                                        </label>
                                         <input
                                             value={lineName}
                                             onChange={(e) => setLineName(e.target.value)}
-                                            placeholder="Es. Linea Test 01"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.form.line.namePlaceholder")}
+                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">Codice</label>
+                                        <label className="text-sm font-semibold text-muted-foreground">
+                                            {t("plants.form.code")}
+                                        </label>
                                         <input
                                             value={lineCode}
                                             onChange={(e) => setLineCode(e.target.value)}
-                                            placeholder="Es. LN-01"
-                                            className="h-12 w-full rounded-2xl border border-blue-500/30 bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.form.line.codePlaceholder")}
+                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
                                 </div>
@@ -320,22 +356,29 @@ export default function PlantsPage() {
                                     <button
                                         onClick={handleCreateLine}
                                         disabled={!lineName.trim() || !linePlantId || savingLine}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-foreground transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                        type="button"
                                     >
                                         <Save className="h-4 w-4" />
-                                        {savingLine ? "Salvataggio..." : "Salva Linea"}
+                                        {savingLine ? t("plants.saving") : t("plants.saveLine")}
                                     </button>
                                 </div>
                             </CardShell>
                         )}
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-foreground">Elenco Stabilimenti</h2>
+                            <h2 className="text-[32px] font-bold text-foreground">
+                                {t("plants.listTitle")}
+                            </h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-muted-foreground">Caricamento stabilimenti...</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">
+                                    {t("plants.loading")}
+                                </CardShell>
                             ) : plants.length === 0 ? (
-                                <CardShell className="p-6 text-muted-foreground">Nessuno stabilimento presente.</CardShell>
+                                <CardShell className="p-6 text-muted-foreground">
+                                    {t("plants.noResults")}
+                                </CardShell>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {plants.map((plant) => {
@@ -352,22 +395,26 @@ export default function PlantsPage() {
                                                                 </div>
                                                                 <div className="min-w-0">
                                                                     <div className="truncate text-xl font-semibold text-foreground">
-                                                                        {plant.name ?? "Stabilimento"}
+                                                                        {plant.name ?? t("plants.fallbackPlant")}
                                                                     </div>
-                                                                    <div className="text-sm text-muted-foreground">{plant.code ?? "—"}</div>
+                                                                    <div className="text-sm text-muted-foreground">
+                                                                        {plant.code ?? "—"}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                                                         </div>
 
-                                                        <div className="rounded-2xl bg-muted/55 p-3">
+                                                        <div className="rounded-2xl bg-muted p-3">
                                                             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                                                                 <GitBranch className="h-4 w-4 text-emerald-300" />
-                                                                Linee collegate
+                                                                {t("plants.linkedLines")}
                                                             </div>
 
                                                             {plantLines.length === 0 ? (
-                                                                <div className="text-sm text-muted-foreground">Nessuna linea collegata</div>
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    {t("plants.noLinkedLines")}
+                                                                </div>
                                                             ) : (
                                                                 <div className="flex flex-wrap gap-2">
                                                                     {plantLines.map((line) => (
@@ -375,7 +422,7 @@ export default function PlantsPage() {
                                                                             key={line.id}
                                                                             className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
                                                                         >
-                                                                            {line.name ?? line.code ?? "Linea"}
+                                                                            {line.name ?? line.code ?? t("plants.fallbackLine")}
                                                                         </span>
                                                                     ))}
                                                                 </div>
