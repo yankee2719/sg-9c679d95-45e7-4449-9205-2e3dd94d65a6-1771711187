@@ -1,9 +1,7 @@
-// src/services/documentService.ts
 import { supabase } from "@/integrations/supabase/client";
 
 const BUCKET = "documents";
 
-// ⚠️ ENUM DB: usa valori UPPERCASE (altrimenti 22P02)
 export type DocumentCategory = "MANUAL" | "DRAWING" | "CERTIFICATE" | "REPORT" | "OTHER";
 
 export type DocumentRow = {
@@ -13,7 +11,7 @@ export type DocumentRow = {
     machine_id: string | null;
     title: string;
     description: string | null;
-    category: DocumentCategory | string; // string per compat eventuali record vecchi
+    category: DocumentCategory | string;
     language: string | null;
     is_mandatory: boolean;
     regulatory_reference: string | null;
@@ -59,40 +57,64 @@ function safeExt(name: string) {
 }
 
 export async function listMachineDocuments(machineId: string) {
-    // ✅ FIX PGRST201: specifica la FK per l'embed
-    // FK name più comune: document_versions_document_id_fkey
-    // Se nel tuo DB il nome è diverso, cambialo qui.
     const { data, error } = await supabase
         .from("documents")
-        .select(
-            `
-      id, organization_id, plant_id, machine_id, title, description, category, language, is_mandatory,
-      regulatory_reference, current_version_id, version_count, tags, created_at, updated_at, created_by,
-      is_archived, archived_at,
+        .select(`
+      id,
+      organization_id,
+      plant_id,
+      machine_id,
+      title,
+      description,
+      category,
+      language,
+      is_mandatory,
+      regulatory_reference,
+      current_version_id,
+      version_count,
+      tags,
+      created_at,
+      updated_at,
+      created_by,
+      is_archived,
+      archived_at,
       document_versions:document_versions!document_versions_document_id_fkey (
-        id, document_id, version_number, previous_version_id, file_path, file_name, file_size, mime_type,
-        checksum_sha256, change_summary, signed_by, signed_at, signature_data, created_at, created_by
+        id,
+        document_id,
+        version_number,
+        previous_version_id,
+        file_path,
+        file_name,
+        file_size,
+        mime_type,
+        checksum_sha256,
+        change_summary,
+        signed_by,
+        signed_at,
+        signature_data,
+        created_at,
+        created_by
       )
-    `
-        )
+    `)
         .eq("machine_id", machineId)
         .eq("is_archived", false)
         .order("updated_at", { ascending: false });
 
     if (error) throw error;
 
-    const normalized = (data ?? []).map((d: any) => ({
+    return (data ?? []).map((d: any) => ({
         ...d,
         document_versions: (d.document_versions ?? []).sort(
             (a: any, b: any) => (b.version_number ?? 0) - (a.version_number ?? 0)
         ),
-    }));
-
-    return normalized as Array<DocumentRow & { document_versions: DocumentVersionRow[] }>;
+    })) as Array<DocumentRow & { document_versions: DocumentVersionRow[] }>;
 }
 
 export async function getSignedUrl(filePath: string, expiresInSec = 600) {
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, expiresInSec);
+    const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(filePath, expiresInSec);
+
     if (error) throw error;
     return data.signedUrl;
 }
@@ -103,7 +125,7 @@ export async function createDocumentAndUploadV1(params: {
     plantId?: string | null;
     title: string;
     description?: string | null;
-    category: DocumentCategory; // ✅ enum safe
+    category: DocumentCategory;
     file: File;
     changeSummary?: string | null;
     language?: string | null;
@@ -132,7 +154,7 @@ export async function createDocumentAndUploadV1(params: {
             plant_id: plantId ?? null,
             title: title.trim(),
             description: description?.trim() || null,
-            category, // ✅ UPPERCASE
+            category,
             language: language ?? "it",
             is_mandatory: Boolean(isMandatory),
             tags: tags ?? [],
@@ -147,6 +169,7 @@ export async function createDocumentAndUploadV1(params: {
 
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${doc.id}/v1_${Date.now()}.${ext}`;
+
     const { error: upErr } = await supabase.storage.from(BUCKET).upload(objectName, file);
     if (upErr) throw upErr;
 
@@ -201,7 +224,6 @@ export async function uploadNewVersion(params: {
     if (docErr) throw docErr;
 
     const nextVersion = (doc.version_count ?? 0) + 1;
-
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${documentId}/v${nextVersion}_${Date.now()}.${ext}`;
 
