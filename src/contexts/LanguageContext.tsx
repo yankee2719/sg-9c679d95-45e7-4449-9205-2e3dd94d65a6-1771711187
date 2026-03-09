@@ -178,6 +178,7 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Template checklist",
         "checklists.itemsLabel": "voci",
+
         "documents.title": "Documenti",
         "documents.subtitle": "Hub documentale coerente con il nuovo modello owner / assignment.",
 
@@ -262,7 +263,6 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Cliente",
         "assignments.assignedMachine": "Macchina assegnata",
         "assignments.destinationCustomer": "Cliente destinatario",
-
     },
 
     en: {
@@ -506,20 +506,6 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.fallbackTitle": "Customer",
         "customers.customerOrganization": "Customer organization",
 
-        "customers.title": "Clients",
-        "customers.subtitle": "Liste des organisations clientes liées au constructeur actif.",
-        "customers.new": "Nouveau Client",
-
-        "customers.kpi.total": "Clients Totaux",
-        "customers.kpi.activeOrganizations": "Organisations Actives",
-
-        "customers.listTitle": "Liste des Clients",
-        "customers.loading": "Chargement des clients...",
-        "customers.noResults": "Aucun client lié.",
-
-        "customers.fallbackTitle": "Client",
-        "customers.customerOrganization": "Organisation cliente",
-
         "assignments.title": "Assignments",
         "assignments.subtitle": "Active links between produced machines and end customers.",
 
@@ -533,7 +519,6 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Customer",
         "assignments.assignedMachine": "Assigned machine",
         "assignments.destinationCustomer": "Destination customer",
-
     },
 
     fr: {
@@ -763,19 +748,19 @@ const translations: Record<Language, Record<string, string>> = {
         "plants.fallbackPlant": "Site",
         "plants.fallbackLine": "Ligne",
 
-        "customers.title": "Clientes",
-        "customers.subtitle": "Lista de organizaciones cliente vinculadas al fabricante activo.",
-        "customers.new": "Nuevo Cliente",
+        "customers.title": "Clients",
+        "customers.subtitle": "Liste des organisations clientes liées au constructeur actif.",
+        "customers.new": "Nouveau Client",
 
-        "customers.kpi.total": "Clientes Totales",
-        "customers.kpi.activeOrganizations": "Organizaciones Activas",
+        "customers.kpi.total": "Clients Totaux",
+        "customers.kpi.activeOrganizations": "Organisations Actives",
 
-        "customers.listTitle": "Lista de Clientes",
-        "customers.loading": "Cargando clientes...",
-        "customers.noResults": "No hay clientes vinculados.",
+        "customers.listTitle": "Liste des Clients",
+        "customers.loading": "Chargement des clients...",
+        "customers.noResults": "Aucun client lié.",
 
-        "customers.fallbackTitle": "Cliente",
-        "customers.customerOrganization": "Organización cliente",
+        "customers.fallbackTitle": "Client",
+        "customers.customerOrganization": "Organisation cliente",
 
         "assignments.title": "Affectations",
         "assignments.subtitle": "Liens actifs entre les machines produites et les clients finaux.",
@@ -790,7 +775,6 @@ const translations: Record<Language, Record<string, string>> = {
         "assignments.customerFallback": "Client",
         "assignments.assignedMachine": "Machine attribuée",
         "assignments.destinationCustomer": "Client destinataire",
-
     },
 
     es: {
@@ -1020,19 +1004,19 @@ const translations: Record<Language, Record<string, string>> = {
         "plants.fallbackPlant": "Planta",
         "plants.fallbackLine": "Línea",
 
-        "customers.title": "Clients",
-        "customers.subtitle": "Liste des organisations clientes liées au constructeur actif.",
-        "customers.new": "Nouveau Client",
+        "customers.title": "Clientes",
+        "customers.subtitle": "Lista de organizaciones cliente vinculadas al fabricante activo.",
+        "customers.new": "Nuevo Cliente",
 
-        "customers.kpi.total": "Clients Totaux",
-        "customers.kpi.activeOrganizations": "Organisations Actives",
+        "customers.kpi.total": "Clientes Totales",
+        "customers.kpi.activeOrganizations": "Organizaciones Activas",
 
-        "customers.listTitle": "Liste des Clients",
-        "customers.loading": "Chargement des clients...",
-        "customers.noResults": "Aucun client lié.",
+        "customers.listTitle": "Lista de Clientes",
+        "customers.loading": "Cargando clientes...",
+        "customers.noResults": "No hay clientes vinculados.",
 
-        "customers.fallbackTitle": "Client",
-        "customers.customerOrganization": "Organisation cliente",
+        "customers.fallbackTitle": "Cliente",
+        "customers.customerOrganization": "Organización cliente",
 
         "assignments.title": "Asignaciones",
         "assignments.subtitle": "Vínculos activos entre máquinas producidas y clientes finales.",
