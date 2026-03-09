@@ -178,6 +178,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Template checklist",
         "checklists.itemsLabel": "voci",
+        "documents.title": "Documenti",
+        "documents.subtitle": "Hub documentale coerente con il nuovo modello owner / assignment.",
+
+        "documents.card.total.title": "Documenti totali",
+        "documents.card.total.description": "Archivio documentale visibile nel contesto organizzativo attivo.",
+
+        "documents.card.manufacturer.title": "Documenti costruttore",
+        "documents.card.manufacturer.description": "Manuali, CE, schemi e documentazione originaria.",
+
+        "documents.card.customer.title": "Documenti operativi cliente",
+        "documents.card.customer.description": "Procedure interne, report e documenti locali di stabilimento.",
+
+        "documents.link.machineDocs.title": "Apri documenti macchina",
+        "documents.link.machineDocs.description": "Accedi ai documenti direttamente dal dettaglio macchina.",
+
+        "documents.link.compliance.title": "Vai alla compliance",
+        "documents.link.compliance.description": "Controlli, conformità e documentazione collegata al contesto attivo.",
+
     },
 
     en: {
@@ -349,6 +367,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Checklist template",
         "checklists.itemsLabel": "items",
+
+        "documents.title": "Documents",
+        "documents.subtitle": "Document hub aligned with the new owner / assignment model.",
+
+        "documents.card.total.title": "Total documents",
+        "documents.card.total.description": "Document archive visible in the active organizational context.",
+
+        "documents.card.manufacturer.title": "Manufacturer documents",
+        "documents.card.manufacturer.description": "Manuals, CE files, diagrams and original documentation.",
+
+        "documents.card.customer.title": "Customer operational documents",
+        "documents.card.customer.description": "Internal procedures, reports and local plant documents.",
+
+        "documents.link.machineDocs.title": "Open machine documents",
+        "documents.link.machineDocs.description": "Access documents directly from the machine detail page.",
+
+        "documents.link.compliance.title": "Go to compliance",
+        "documents.link.compliance.description": "Checks, compliance and documentation linked to the active context.",
     },
 
     fr: {
@@ -520,6 +556,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Modèle de check-list",
         "checklists.itemsLabel": "éléments",
+
+        "documents.title": "Documents",
+        "documents.subtitle": "Hub documentaire cohérent avec le nouveau modèle owner / assignment.",
+
+        "documents.card.total.title": "Documents totaux",
+        "documents.card.total.description": "Archive documentaire visible dans le contexte organisationnel actif.",
+
+        "documents.card.manufacturer.title": "Documents constructeur",
+        "documents.card.manufacturer.description": "Manuels, CE, schémas et documentation d’origine.",
+
+        "documents.card.customer.title": "Documents opérationnels client",
+        "documents.card.customer.description": "Procédures internes, rapports et documents locaux du site.",
+
+        "documents.link.machineDocs.title": "Ouvrir les documents machine",
+        "documents.link.machineDocs.description": "Accédez aux documents directement depuis la fiche machine.",
+
+        "documents.link.compliance.title": "Aller à la conformité",
+        "documents.link.compliance.description": "Contrôles, conformité et documentation liée au contexte actif.",
     },
 
     es: {
@@ -691,6 +745,24 @@ const translations: Record<Language, Record<string, string>> = {
 
         "checklists.fallbackTitle": "Plantilla de checklist",
         "checklists.itemsLabel": "elementos",
+
+        "documents.title": "Documentos",
+        "documents.subtitle": "Hub documental coherente con el nuevo modelo owner / assignment.",
+
+        "documents.card.total.title": "Documentos totales",
+        "documents.card.total.description": "Archivo documental visible en el contexto organizativo activo.",
+
+        "documents.card.manufacturer.title": "Documentos del fabricante",
+        "documents.card.manufacturer.description": "Manuales, CE, esquemas y documentación original.",
+
+        "documents.card.customer.title": "Documentos operativos del cliente",
+        "documents.card.customer.description": "Procedimientos internos, informes y documentos locales de planta.",
+
+        "documents.link.machineDocs.title": "Abrir documentos de máquina",
+        "documents.link.machineDocs.description": "Accede a los documentos directamente desde el detalle de la máquina.",
+
+        "documents.link.compliance.title": "Ir a compliance",
+        "documents.link.compliance.description": "Controles, cumplimiento y documentación vinculada al contexto activo.",
     },
 };
 
