@@ -249,6 +249,20 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.fallbackTitle": "Cliente",
         "customers.customerOrganization": "Organizzazione cliente",
 
+        "assignments.title": "Assegnazioni",
+        "assignments.subtitle": "Collegamenti attivi tra macchine prodotte e clienti finali.",
+
+        "assignments.kpi.active": "Assegnazioni Attive",
+
+        "assignments.listTitle": "Elenco Assegnazioni",
+        "assignments.loading": "Caricamento assegnazioni...",
+        "assignments.noResults": "Nessuna assegnazione attiva.",
+
+        "assignments.machineFallback": "Macchina",
+        "assignments.customerFallback": "Cliente",
+        "assignments.assignedMachine": "Macchina assegnata",
+        "assignments.destinationCustomer": "Cliente destinatario",
+
     },
 
     en: {
@@ -506,6 +520,20 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.fallbackTitle": "Client",
         "customers.customerOrganization": "Organisation cliente",
 
+        "assignments.title": "Assignments",
+        "assignments.subtitle": "Active links between produced machines and end customers.",
+
+        "assignments.kpi.active": "Active Assignments",
+
+        "assignments.listTitle": "Assignment List",
+        "assignments.loading": "Loading assignments...",
+        "assignments.noResults": "No active assignment.",
+
+        "assignments.machineFallback": "Machine",
+        "assignments.customerFallback": "Customer",
+        "assignments.assignedMachine": "Assigned machine",
+        "assignments.destinationCustomer": "Destination customer",
+
     },
 
     fr: {
@@ -749,6 +777,20 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.fallbackTitle": "Cliente",
         "customers.customerOrganization": "Organización cliente",
 
+        "assignments.title": "Affectations",
+        "assignments.subtitle": "Liens actifs entre les machines produites et les clients finaux.",
+
+        "assignments.kpi.active": "Affectations Actives",
+
+        "assignments.listTitle": "Liste des Affectations",
+        "assignments.loading": "Chargement des affectations...",
+        "assignments.noResults": "Aucune affectation active.",
+
+        "assignments.machineFallback": "Machine",
+        "assignments.customerFallback": "Client",
+        "assignments.assignedMachine": "Machine attribuée",
+        "assignments.destinationCustomer": "Client destinataire",
+
     },
 
     es: {
@@ -991,6 +1033,20 @@ const translations: Record<Language, Record<string, string>> = {
 
         "customers.fallbackTitle": "Client",
         "customers.customerOrganization": "Organisation cliente",
+
+        "assignments.title": "Asignaciones",
+        "assignments.subtitle": "Vínculos activos entre máquinas producidas y clientes finales.",
+
+        "assignments.kpi.active": "Asignaciones Activas",
+
+        "assignments.listTitle": "Lista de Asignaciones",
+        "assignments.loading": "Cargando asignaciones...",
+        "assignments.noResults": "No hay asignaciones activas.",
+
+        "assignments.machineFallback": "Máquina",
+        "assignments.customerFallback": "Cliente",
+        "assignments.assignedMachine": "Máquina asignada",
+        "assignments.destinationCustomer": "Cliente destinatario",
     },
 };
 
