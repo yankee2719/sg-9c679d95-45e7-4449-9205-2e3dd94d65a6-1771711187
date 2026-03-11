@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import {
+    archiveDocument,
     createDocumentAndUploadV1,
     getSignedUrl,
     listMachineDocuments,
     uploadNewVersion,
     DocumentCategory,
-    DocumentRow,
     DocumentVersionRow,
+    DocumentWithVersions,
 } from "@/services/documentService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,15 +31,12 @@ import {
     Download,
     Factory,
     Building2,
-    RefreshCw,
-    ExternalLink,
+    Archive,
+    History,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 type OrgType = "manufacturer" | "customer";
-
-interface DocumentWithVersions extends DocumentRow {
-    document_versions: DocumentVersionRow[];
-}
 
 interface DocumentManagerProps {
     machineId: string;
@@ -50,11 +48,18 @@ interface DocumentManagerProps {
 }
 
 const DOCUMENT_CATEGORY_OPTIONS: Array<{ label: string; value: DocumentCategory }> = [
-    { label: "Manuale / Manual", value: "MANUAL" },
-    { label: "Disegno / Schema", value: "DRAWING" },
-    { label: "Certificato / Declaration", value: "CERTIFICATE" },
-    { label: "Report / Verbale", value: "REPORT" },
-    { label: "Altro", value: "OTHER" },
+    { label: "Manuale tecnico", value: "technical_manual" },
+    { label: "Valutazione rischi", value: "risk_assessment" },
+    { label: "Dichiarazione CE", value: "ce_declaration" },
+    { label: "Schema elettrico", value: "electrical_schema" },
+    { label: "Manuale manutenzione", value: "maintenance_manual" },
+    { label: "Catalogo ricambi", value: "spare_parts_catalog" },
+    { label: "Materiale formazione", value: "training_material" },
+    { label: "Rapporto ispezione", value: "inspection_report" },
+    { label: "Certificato", value: "certificate" },
+    { label: "Foto", value: "photo" },
+    { label: "Video", value: "video" },
+    { label: "Altro", value: "other" },
 ];
 
 function formatBytes(value: number | null | undefined) {
@@ -84,7 +89,7 @@ function categoryLabel(category: string | null | undefined) {
     return DOCUMENT_CATEGORY_OPTIONS.find((x) => x.value === category)?.label ?? category ?? "—";
 }
 
-function currentVersion(doc: DocumentWithVersions) {
+function currentVersion(doc: DocumentWithVersions): DocumentVersionRow | null {
     if (!doc.document_versions?.length) return null;
 
     if (doc.current_version_id) {
@@ -113,14 +118,16 @@ export default function DocumentManager(props: DocumentManagerProps) {
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [category, setCategory] = useState < DocumentCategory > ("MANUAL");
+    const [category, setCategory] = useState < DocumentCategory > ("technical_manual");
     const [language, setLanguage] = useState("it");
+    const [regulatoryReference, setRegulatoryReference] = useState("");
     const [changeSummary, setChangeSummary] = useState("");
     const [selectedFile, setSelectedFile] = useState < File | null > (null);
 
     const [versionFiles, setVersionFiles] = useState < Record < string, File | null >> ({});
     const [versionNotes, setVersionNotes] = useState < Record < string, string>> ({});
-    const [uploadingVersionFor, setUploadingVersionFor] = useState < string | null > (null);
+    const [uploadingVersionId, setUploadingVersionId] = useState < string | null > (null);
+    const [archivingId, setArchivingId] = useState < string | null > (null);
 
     const canWrite = useMemo(() => {
         if (props.readOnly) return false;
@@ -140,11 +147,9 @@ export default function DocumentManager(props: DocumentManagerProps) {
         return false;
     }, [props.readOnly, ctxOrgId, ctxOrgType, ctxRole, resolvedMachineOwnerOrgId]);
 
-    const visibleDocuments = useMemo(() => documents, [documents]);
-
     const reloadDocuments = async () => {
         const rows = await listMachineDocuments(props.machineId);
-        setDocuments(rows as DocumentWithVersions[]);
+        setDocuments(rows);
     };
 
     useEffect(() => {
@@ -158,7 +163,6 @@ export default function DocumentManager(props: DocumentManagerProps) {
                 if (ctx?.role) setCtxRole(ctx.role);
 
                 if (!props.machineOwnerOrgId) {
-                    const { supabase } = await import("@/integrations/supabase/client");
                     const { data: machineRow, error: machineError } = await supabase
                         .from("machines")
                         .select("organization_id")
@@ -183,13 +187,14 @@ export default function DocumentManager(props: DocumentManagerProps) {
         };
 
         init();
-    }, [props.machineId, props.machineOwnerOrgId, toast]);
+    }, [props.machineId, props.machineOwnerOrgId]);
 
     const resetForm = () => {
         setTitle("");
         setDescription("");
-        setCategory("MANUAL");
+        setCategory("technical_manual");
         setLanguage("it");
+        setRegulatoryReference("");
         setChangeSummary("");
         setSelectedFile(null);
     };
@@ -234,6 +239,10 @@ export default function DocumentManager(props: DocumentManagerProps) {
         setSaving(true);
 
         try {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+
             await createDocumentAndUploadV1({
                 organizationId: ctxOrgId,
                 machineId: props.machineId,
@@ -243,8 +252,10 @@ export default function DocumentManager(props: DocumentManagerProps) {
                 file: selectedFile,
                 changeSummary: changeSummary.trim() || null,
                 language: language.trim() || "it",
+                regulatoryReference: regulatoryReference.trim() || null,
                 isMandatory: false,
                 tags: [],
+                createdBy: user?.id ?? null,
             });
 
             toast({
@@ -291,50 +302,45 @@ export default function DocumentManager(props: DocumentManagerProps) {
         }
     };
 
-    const handleOpen = async (doc: DocumentWithVersions) => {
-        try {
-            const version = currentVersion(doc);
-            if (!version?.file_path) {
-                throw new Error("Versione corrente del documento non disponibile.");
-            }
+    const handleUploadNewVersion = async (doc: DocumentWithVersions) => {
+        const file = versionFiles[doc.id];
+        const note = versionNotes[doc.id] ?? "";
 
-            const signedUrl = await getSignedUrl(version.file_path, 600);
-            window.open(signedUrl, "_blank", "noopener,noreferrer");
-        } catch (e: any) {
-            console.error(e);
-            toast({
-                title: "Errore apertura",
-                description: e?.message ?? "Impossibile aprire il documento.",
-                variant: "destructive",
-            });
-        }
-    };
-
-    const handleUploadNewVersion = async (docId: string) => {
-        const file = versionFiles[docId];
-        const note = versionNotes[docId] ?? "";
-
-        if (!ctxOrgId || !file) {
+        if (!file) {
             toast({
                 title: "Errore",
-                description: "Seleziona un file per la nuova versione.",
+                description: "Seleziona il file della nuova versione.",
                 variant: "destructive",
             });
             return;
         }
 
+        if (!ctxOrgId) {
+            toast({
+                title: "Errore",
+                description: "Organizzazione attiva non trovata.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setUploadingVersionId(doc.id);
+
         try {
-            setUploadingVersionFor(docId);
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
 
             await uploadNewVersion({
-                documentId: docId,
+                documentId: doc.id,
                 organizationId: ctxOrgId,
                 file,
-                changeSummary: note || null,
+                changeSummary: note.trim() || null,
+                createdBy: user?.id ?? null,
             });
 
-            setVersionFiles((prev) => ({ ...prev, [docId]: null }));
-            setVersionNotes((prev) => ({ ...prev, [docId]: "" }));
+            setVersionFiles((prev) => ({ ...prev, [doc.id]: null }));
+            setVersionNotes((prev) => ({ ...prev, [doc.id]: "" }));
 
             toast({
                 title: "OK",
@@ -346,11 +352,33 @@ export default function DocumentManager(props: DocumentManagerProps) {
             console.error(e);
             toast({
                 title: "Errore versione",
-                description: e?.message ?? "Errore durante il caricamento della nuova versione.",
+                description: e?.message ?? "Impossibile caricare la nuova versione.",
                 variant: "destructive",
             });
         } finally {
-            setUploadingVersionFor(null);
+            setUploadingVersionId(null);
+        }
+    };
+
+    const handleArchiveDocument = async (doc: DocumentWithVersions) => {
+        setArchivingId(doc.id);
+
+        try {
+            await archiveDocument(doc.id);
+            toast({
+                title: "OK",
+                description: "Documento archiviato.",
+            });
+            await reloadDocuments();
+        } catch (e: any) {
+            console.error(e);
+            toast({
+                title: "Errore archivio",
+                description: e?.message ?? "Impossibile archiviare il documento.",
+                variant: "destructive",
+            });
+        } finally {
+            setArchivingId(null);
         }
     };
 
@@ -363,7 +391,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
                         Documenti macchina
                     </CardTitle>
                     <CardDescription>
-                        Archivio documentale collegato alla macchina con versioning documentale.
+                        Archivio documentale collegato alla macchina con versioning.
                     </CardDescription>
                 </CardHeader>
             </Card>
@@ -414,7 +442,16 @@ export default function DocumentManager(props: DocumentManagerProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Version note</Label>
+                            <Label>Riferimento normativo</Label>
+                            <Input
+                                value={regulatoryReference}
+                                onChange={(e) => setRegulatoryReference(e.target.value)}
+                                placeholder="Es. EN ISO 12100"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Note versione</Label>
                             <Input
                                 value={changeSummary}
                                 onChange={(e) => setChangeSummary(e.target.value)}
@@ -436,7 +473,7 @@ export default function DocumentManager(props: DocumentManagerProps) {
                             <Label>File</Label>
                             <Input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
                             <div className="text-xs text-muted-foreground">
-                                Per il test usa preferibilmente un PDF o un file Office standard.
+                                Formati consigliati: PDF, DOCX, XLSX, PPTX, JPG, PNG, MP4.
                             </div>
                         </div>
                     </div>
@@ -465,18 +502,17 @@ export default function DocumentManager(props: DocumentManagerProps) {
                 <CardContent>
                     {loading ? (
                         <div className="text-sm text-muted-foreground">Caricamento documenti...</div>
-                    ) : visibleDocuments.length === 0 ? (
+                    ) : documents.length === 0 ? (
                         <div className="text-sm text-muted-foreground">Nessun documento presente.</div>
                     ) : (
-                        <div className="space-y-3">
-                            {visibleDocuments.map((doc) => {
+                        <div className="space-y-4">
+                            {documents.map((doc) => {
                                 const version = currentVersion(doc);
-                                const isMachineOwnerDoc = doc.organization_id === resolvedMachineOwnerOrgId;
 
                                 return (
                                     <div
                                         key={doc.id}
-                                        className="rounded-xl border border-border p-4"
+                                        className="rounded-xl border border-border p-4 space-y-4"
                                     >
                                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                             <div className="min-w-0 space-y-2">
@@ -487,14 +523,14 @@ export default function DocumentManager(props: DocumentManagerProps) {
                                                         {categoryLabel(doc.category)}
                                                     </Badge>
 
-                                                    {isMachineOwnerDoc ? (
+                                                    {doc.organization_id === resolvedMachineOwnerOrgId ? (
                                                         <Badge variant="outline" className="gap-1">
-                                                            <Factory className="h-3 w-3" />
-                                                            Documento owner
+                                                            <Building2 className="h-3 w-3" />
+                                                            Owner
                                                         </Badge>
                                                     ) : (
                                                         <Badge className="gap-1">
-                                                            <Building2 className="h-3 w-3" />
+                                                            <Factory className="h-3 w-3" />
                                                             Documento locale
                                                         </Badge>
                                                     )}
@@ -510,52 +546,74 @@ export default function DocumentManager(props: DocumentManagerProps) {
                                                     <span>Dimensione: {formatBytes(version?.file_size)}</span>
                                                     <span>Versioni: {doc.version_count ?? "—"}</span>
                                                     <span>Creato: {formatDate(doc.created_at)}</span>
+                                                    <span>Aggiornato: {formatDate(doc.updated_at)}</span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-2">
-                                                <Button variant="outline" onClick={() => handleOpen(doc)}>
-                                                    <ExternalLink className="mr-2 h-4 w-4" />
-                                                    Apri
-                                                </Button>
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 <Button variant="outline" onClick={() => handleDownload(doc)}>
                                                     <Download className="mr-2 h-4 w-4" />
                                                     Scarica
                                                 </Button>
+
+                                                {canWrite && (
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={() => handleArchiveDocument(doc)}
+                                                        disabled={archivingId === doc.id}
+                                                    >
+                                                        <Archive className="mr-2 h-4 w-4" />
+                                                        {archivingId === doc.id ? "Archivio..." : "Archivia"}
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {canWrite && (
-                                            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-                                                <Input
-                                                    type="file"
-                                                    onChange={(e) =>
-                                                        setVersionFiles((prev) => ({
-                                                            ...prev,
-                                                            [doc.id]: e.target.files?.[0] ?? null,
-                                                        }))
-                                                    }
-                                                />
-                                                <Input
-                                                    placeholder="Nota nuova versione"
-                                                    value={versionNotes[doc.id] ?? ""}
-                                                    onChange={(e) =>
-                                                        setVersionNotes((prev) => ({
-                                                            ...prev,
-                                                            [doc.id]: e.target.value,
-                                                        }))
-                                                    }
-                                                />
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => handleUploadNewVersion(doc.id)}
-                                                    disabled={uploadingVersionFor === doc.id}
-                                                >
-                                                    <RefreshCw className="mr-2 h-4 w-4" />
-                                                    {uploadingVersionFor === doc.id ? "Upload..." : "Nuova versione"}
-                                                </Button>
+                                        <div className="rounded-xl bg-muted/30 p-4 space-y-3">
+                                            <div className="flex items-center gap-2 text-sm font-medium">
+                                                <History className="h-4 w-4" />
+                                                Versione corrente: {version?.version_number ?? "—"}
                                             </div>
-                                        )}
+
+                                            {version?.change_summary && (
+                                                <div className="text-sm text-muted-foreground">
+                                                    Note versione: {version.change_summary}
+                                                </div>
+                                            )}
+
+                                            {canWrite && (
+                                                <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                                                    <Input
+                                                        type="file"
+                                                        onChange={(e) =>
+                                                            setVersionFiles((prev) => ({
+                                                                ...prev,
+                                                                [doc.id]: e.target.files?.[0] ?? null,
+                                                            }))
+                                                        }
+                                                    />
+
+                                                    <Input
+                                                        value={versionNotes[doc.id] ?? ""}
+                                                        onChange={(e) =>
+                                                            setVersionNotes((prev) => ({
+                                                                ...prev,
+                                                                [doc.id]: e.target.value,
+                                                            }))
+                                                        }
+                                                        placeholder="Nota nuova versione"
+                                                    />
+
+                                                    <Button
+                                                        onClick={() => handleUploadNewVersion(doc)}
+                                                        disabled={uploadingVersionId === doc.id}
+                                                    >
+                                                        <Upload className="mr-2 h-4 w-4" />
+                                                        {uploadingVersionId === doc.id ? "Carico..." : "Nuova versione"}
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}
