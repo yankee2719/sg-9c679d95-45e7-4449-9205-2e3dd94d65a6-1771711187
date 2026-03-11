@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createAuditLog } from "@/services/auditService";
 import {
     ArrowLeft,
     Wrench,
@@ -254,6 +255,24 @@ export default function NewEquipmentPage() {
                 .single();
 
             if (error) throw error;
+
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+
+            await createAuditLog({
+                organizationId: orgId,
+                actorUserId: user?.id ?? null,
+                entityType: "machine",
+                entityId: (data as any).id,
+                action: "create",
+                machineId: (data as any).id,
+                newData: payload,
+                metadata: {
+                    source: "equipment/new",
+                    orgType,
+                },
+            });
 
             router.push(`/equipment/${(data as any).id}`);
         } catch (error) {
