@@ -5,42 +5,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
-import DocumentManager from "@/components/documents/DocumentManager";
-import { MachinePhotoUpload } from "@/components/Equipment/MachinePhotoUpload";
-import { MachineEventTimeline } from "@/components/MachineEventTimeline";
-import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-    exportMachinePassport,
-    exportTechnicalSheet,
-    exportMaintenanceReport,
-    type MachineData,
-} from "@/services/pdfExportService";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
     ArrowLeft,
+    Save,
+    Loader2,
     Wrench,
     Building2,
     MapPin,
     Calendar,
     Hash,
     Tag,
-    QrCode,
-    FileText,
-    ClipboardList,
-    Pencil,
     Factory,
-    Lock,
-    ChevronRight,
-    CheckCircle2,
-    AlertCircle,
-    Loader2,
-    History,
-    Download,
-    Camera,
+    AlertTriangle,
 } from "lucide-react";
+import { createAuditLog, diffObjects } from "@/services/auditService";
 
 type OrgType = "manufacturer" | "customer";
 
@@ -76,30 +60,24 @@ interface LineRow {
     id: string;
     name: string | null;
     code: string | null;
+    plant_id?: string | null;
 }
 
-interface MaintenancePlan {
-    id: string;
-    title: string | null;
-    description: string | null;
-    frequency: string | null;
-    next_due_date: string | null;
-    priority: string | null;
-    is_active?: boolean | null;
-}
-
-interface WorkOrder {
-    id: string;
-    title: string | null;
-    wo_number?: string | null;
-    status: string | null;
-    priority: string | null;
-    wo_type?: string | null;
-    work_type?: string | null;
-    scheduled_start?: string | null;
-    scheduled_date?: string | null;
-    due_date?: string | null;
-    created_at: string | null;
+interface MachineFormData {
+    name: string;
+    internal_code: string;
+    serial_number: string;
+    brand: string;
+    model: string;
+    category: string;
+    lifecycle_state: string;
+    position: string;
+    commissioned_at: string;
+    specifications: string;
+    notes: string;
+    plant_id: string;
+    production_line_id: string;
+    year_of_manufacture: string;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -125,136 +103,78 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     },
 };
 
-const woStatusConfig: Record<string, { label: string; color: string }> = {
-    draft: {
-        label: "Bozza",
-        color: "bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-300",
-    },
-    scheduled: {
-        label: "Programmato",
-        color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-300",
-    },
-    assigned: {
-        label: "Assegnato",
-        color: "bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-300",
-    },
-    in_progress: {
-        label: "In Corso",
-        color: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-300",
-    },
-    paused: {
-        label: "In Pausa",
-        color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-300",
-    },
-    completed: {
-        label: "Completato",
-        color: "bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-300",
-    },
-    approved: {
-        label: "Approvato",
-        color: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-300",
-    },
-    cancelled: {
-        label: "Annullato",
-        color: "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border-red-300",
-    },
-};
+function parseSpecificationsToText(value: any): string {
+    if (!value) return "";
+    if (typeof value === "string") return value;
 
-const priorityConfig: Record<string, { label: string; color: string; border: string }> = {
-    critical: {
-        label: "Critica",
-        color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300",
-        border: "border-l-red-600",
-    },
-    high: {
-        label: "Alta",
-        color: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300",
-        border: "border-l-red-500",
-    },
-    medium: {
-        label: "Media",
-        color: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300",
-        border: "border-l-amber-500",
-    },
-    low: {
-        label: "Bassa",
-        color: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300",
-        border: "border-l-green-500",
-    },
-};
+    if (typeof value === "object") {
+        if (typeof value.text === "string") return value.text;
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return "";
+        }
+    }
 
-function InfoRow({
-    icon,
-    label,
-    value,
-    fallback = "—",
-}: {
-    icon: React.ReactNode;
-    label: string;
-    value: string | null | undefined;
-    fallback?: string;
-}) {
-    return (
-        <div className="flex items-center gap-3">
-            <span className="text-muted-foreground">{icon}</span>
-            <span className="text-muted-foreground w-36 shrink-0">{label}</span>
-            <span className={value ? "text-foreground font-medium" : "text-muted-foreground"}>
-                {value || fallback}
-            </span>
-        </div>
-    );
+    return "";
 }
 
-function getFrequencyLabel(type: string | null | undefined) {
-    if (!type) return null;
-    const labels: Record<string, string> = {
-        daily: "Giornaliera",
-        weekly: "Settimanale",
-        biweekly: "Bisettimanale",
-        monthly: "Mensile",
-        quarterly: "Trimestrale",
-        semiannual: "Semestrale",
-        annual: "Annuale",
-        yearly: "Annuale",
-    };
-    return labels[type] || type;
+function buildSpecificationsValue(rawText: string) {
+    const trimmed = rawText.trim();
+    if (!trimmed) return null;
+
+    try {
+        return JSON.parse(trimmed);
+    } catch {
+        return { text: trimmed };
+    }
 }
 
-export default function EquipmentDetailPage() {
+export default function EquipmentEditPage() {
     const router = useRouter();
-    const { id, tab } = router.query;
-
-    const [machine, setMachine] = useState < Machine | null > (null);
-    const [plant, setPlant] = useState < PlantRow | null > (null);
-    const [line, setLine] = useState < LineRow | null > (null);
-    const [manufacturerName, setManufacturerName] = useState < string | null > (null);
-
-    const [maintenancePlans, setMaintenancePlans] = useState < MaintenancePlan[] > ([]);
-    const [workOrders, setWorkOrders] = useState < WorkOrder[] > ([]);
+    const { id } = router.query;
 
     const [loading, setLoading] = useState(true);
-    const [loadingMaint, setLoadingMaint] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [machine, setMachine] = useState < Machine | null > (null);
 
     const [userRole, setUserRole] = useState < string > ("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
     const [orgType, setOrgType] = useState < OrgType | null > (null);
 
-    const [editingQR, setEditingQR] = useState(false);
-    const [qrUrlDraft, setQrUrlDraft] = useState("");
-    const [savingQR, setSavingQR] = useState(false);
-    const [activeTab, setActiveTab] = useState("general");
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
+    const [lines, setLines] = useState < LineRow[] > ([]);
+    const [availableLines, setAvailableLines] = useState < LineRow[] > ([]);
 
-    useEffect(() => {
-        if (tab && typeof tab === "string") setActiveTab(tab);
-    }, [tab]);
+    const [errorMessage, setErrorMessage] = useState < string | null > (null);
+
+    const [formData, setFormData] = useState < MachineFormData > ({
+        name: "",
+        internal_code: "",
+        serial_number: "",
+        brand: "",
+        model: "",
+        category: "",
+        lifecycle_state: "active",
+        position: "",
+        commissioned_at: "",
+        specifications: "",
+        notes: "",
+        plant_id: "",
+        production_line_id: "",
+        year_of_manufacture: "",
+    });
 
     useEffect(() => {
         if (!router.isReady || !id || typeof id !== "string") return;
 
         const load = async () => {
             setLoading(true);
+            setErrorMessage(null);
+
             try {
                 const ctx = await getUserContext();
+
                 if (!ctx?.orgId || !ctx?.orgType) {
                     router.replace("/settings/organization");
                     return;
@@ -278,47 +198,57 @@ export default function EquipmentDetailPage() {
 
                 const currentMachine = machineRow as Machine;
                 setMachine(currentMachine);
-                setQrUrlDraft(currentMachine.qr_code_token ?? "");
 
-                const requests: Promise<any>[] = [];
+                const [plantsRes, linesRes] = await Promise.all([
+                    supabase
+                        .from("plants")
+                        .select("id, name, code")
+                        .order("name", { ascending: true }),
+                    supabase
+                        .from("production_lines")
+                        .select("id, name, code, plant_id")
+                        .order("name", { ascending: true }),
+                ]);
 
-                if (currentMachine.plant_id) {
-                    requests.push(
-                        supabase.from("plants").select("id, name, code").eq("id", currentMachine.plant_id).maybeSingle()
-                    );
-                } else {
-                    requests.push(Promise.resolve({ data: null }));
-                }
+                if (plantsRes.error) throw plantsRes.error;
+                if (linesRes.error) throw linesRes.error;
 
-                if (currentMachine.production_line_id) {
-                    requests.push(
-                        supabase
-                            .from("production_lines")
-                            .select("id, name, code, plant_id")
-                            .eq("id", currentMachine.production_line_id)
-                            .maybeSingle()
-                    );
-                } else {
-                    requests.push(Promise.resolve({ data: null }));
-                }
+                const plantsData = (plantsRes.data ?? []) as PlantRow[];
+                const linesData = (linesRes.data ?? []) as LineRow[];
 
-                if (currentMachine.organization_id && currentMachine.organization_id !== ctx.orgId) {
-                    requests.push(
-                        supabase.from("organizations").select("name").eq("id", currentMachine.organization_id).maybeSingle()
-                    );
-                } else {
-                    requests.push(Promise.resolve({ data: null }));
-                }
+                setPlants(plantsData);
+                setLines(linesData);
 
-                const [plantRes, lineRes, manufacturerRes] = await Promise.all(requests);
+                const currentPlantId = currentMachine.plant_id ?? "";
+                const filteredLines = currentPlantId
+                    ? linesData.filter((line) => line.plant_id === currentPlantId)
+                    : linesData;
 
-                setPlant((plantRes?.data as PlantRow) ?? null);
-                setLine((lineRes?.data as LineRow) ?? null);
-                setManufacturerName((manufacturerRes?.data as any)?.name ?? null);
+                setAvailableLines(filteredLines);
 
-                await loadMaintenanceData(id);
-            } catch (error) {
-                console.error("Equipment detail load error:", error);
+                setFormData({
+                    name: currentMachine.name ?? "",
+                    internal_code: currentMachine.internal_code ?? "",
+                    serial_number: currentMachine.serial_number ?? "",
+                    brand: currentMachine.brand ?? "",
+                    model: currentMachine.model ?? "",
+                    category: currentMachine.category ?? "",
+                    lifecycle_state: currentMachine.lifecycle_state ?? "active",
+                    position: currentMachine.position ?? "",
+                    commissioned_at: currentMachine.commissioned_at
+                        ? currentMachine.commissioned_at.slice(0, 10)
+                        : "",
+                    specifications: parseSpecificationsToText(currentMachine.specifications),
+                    notes: currentMachine.notes ?? "",
+                    plant_id: currentMachine.plant_id ?? "",
+                    production_line_id: currentMachine.production_line_id ?? "",
+                    year_of_manufacture: currentMachine.year_of_manufacture
+                        ? String(currentMachine.year_of_manufacture)
+                        : "",
+                });
+            } catch (error: any) {
+                console.error("Equipment edit load error:", error);
+                setErrorMessage(error?.message ?? "Errore nel caricamento della macchina");
             } finally {
                 setLoading(false);
             }
@@ -327,36 +257,29 @@ export default function EquipmentDetailPage() {
         load();
     }, [router.isReady, id, router]);
 
-    async function loadMaintenanceData(machineId: string) {
-        setLoadingMaint(true);
-        try {
-            const [plansRes, woRes] = await Promise.all([
-                supabase
-                    .from("maintenance_plans")
-                    .select("id, title, description, frequency, next_due_date, priority, is_active")
-                    .eq("machine_id", machineId)
-                    .order("next_due_date", { ascending: true, nullsFirst: false }),
-                supabase
-                    .from("work_orders")
-                    .select("id, title, wo_number, status, priority, wo_type, work_type, scheduled_start, scheduled_date, due_date, created_at")
-                    .eq("machine_id", machineId)
-                    .order("created_at", { ascending: false }),
-            ]);
-
-            if (plansRes.error) throw plansRes.error;
-            if (woRes.error) throw woRes.error;
-
-            setMaintenancePlans((plansRes.data ?? []) as MaintenancePlan[]);
-            setWorkOrders((woRes.data ?? []) as WorkOrder[]);
-        } catch (error) {
-            console.error("Maintenance load error:", error);
-        } finally {
-            setLoadingMaint(false);
+    useEffect(() => {
+        if (!formData.plant_id) {
+            setAvailableLines(lines);
+            return;
         }
-    }
+
+        const filtered = lines.filter((line) => line.plant_id === formData.plant_id);
+        setAvailableLines(filtered);
+
+        if (
+            formData.production_line_id &&
+            !filtered.some((line) => line.id === formData.production_line_id)
+        ) {
+            setFormData((prev) => ({
+                ...prev,
+                production_line_id: "",
+            }));
+        }
+    }, [formData.plant_id, formData.production_line_id, lines]);
 
     const canEdit = useMemo(() => {
         if (!machine || !orgId || !orgType) return false;
+
         const elevated = userRole === "admin" || userRole === "supervisor";
 
         if (orgType === "manufacturer") {
@@ -370,68 +293,93 @@ export default function EquipmentDetailPage() {
         return false;
     }, [machine, orgId, orgType, userRole]);
 
-    const isAssigned = useMemo(() => {
-        if (!machine || !orgId) return false;
-        return machine.organization_id !== orgId;
-    }, [machine, orgId]);
+    const status =
+        statusConfig[formData.lifecycle_state || "active"] ?? statusConfig.active;
 
-    const status = statusConfig[machine?.lifecycle_state || "active"] || statusConfig.active;
+    const handleChange = (
+        field: keyof MachineFormData,
+        value: string
+    ) => {
+        setFormData((prev) => ({
+            ...prev,
+            [field]: value,
+        }));
+    };
 
-    const qrValue =
-        machine?.qr_code_token ||
-        (typeof window !== "undefined" && machine ? `${window.location.origin}/equipment/${machine.id}` : "");
+    const handleSave = async () => {
+        if (!machine || !orgId || !canEdit) return;
 
-    const specsText = machine?.specifications
-        ? typeof machine.specifications === "string"
-            ? machine.specifications
-            : machine.specifications?.text || JSON.stringify(machine.specifications, null, 2)
-        : null;
+        setSaving(true);
+        setErrorMessage(null);
 
-    const activePlans = maintenancePlans.filter((p) => p.is_active !== false);
-    const overdueCount = activePlans.filter(
-        (p) => p.next_due_date && new Date(p.next_due_date) < new Date()
-    ).length;
-    const activeWOs = workOrders.filter(
-        (wo) => !["completed", "approved", "cancelled"].includes((wo.status || "").toLowerCase())
-    );
-
-    const exportData = useMemo(() => {
-        if (!machine) return null;
-
-        return {
-            ...(machine as any),
-            plant_name: plant?.name ?? plant?.code ?? null,
-            organization_name: manufacturerName ?? null,
-        } as MachineData;
-    }, [machine, plant, manufacturerName]);
-
-    const handleSaveQR = async () => {
-        if (!machine || !canEdit) return;
-
-        setSavingQR(true);
         try {
+            const oldMachine = structuredClone(machine);
+
+            const payload = {
+                name: formData.name.trim(),
+                internal_code: formData.internal_code.trim() || null,
+                serial_number: formData.serial_number.trim() || null,
+                brand: formData.brand.trim() || null,
+                model: formData.model.trim() || null,
+                category: formData.category.trim() || null,
+                lifecycle_state: formData.lifecycle_state || null,
+                position: formData.position.trim() || null,
+                commissioned_at: formData.commissioned_at || null,
+                specifications: buildSpecificationsValue(formData.specifications),
+                notes: formData.notes.trim() || null,
+                plant_id: formData.plant_id || null,
+                production_line_id: formData.production_line_id || null,
+                year_of_manufacture: formData.year_of_manufacture
+                    ? Number(formData.year_of_manufacture)
+                    : null,
+            };
+
             const { error } = await supabase
                 .from("machines")
-                .update({ qr_code_token: qrUrlDraft.trim() || null })
+                .update(payload)
                 .eq("id", machine.id);
 
             if (error) throw error;
 
-            setMachine((prev) =>
-                prev ? { ...prev, qr_code_token: qrUrlDraft.trim() || null } : prev
-            );
-            setEditingQR(false);
-        } catch (error) {
-            console.error("QR save error:", error);
+            const updatedMachine: Machine = {
+                ...oldMachine,
+                ...payload,
+            };
+
+            setMachine(updatedMachine);
+
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+
+            await createAuditLog({
+                organizationId: orgId,
+                actorUserId: user?.id ?? null,
+                entityType: "machine",
+                entityId: machine.id,
+                action: "update",
+                machineId: machine.id,
+                oldData: oldMachine,
+                newData: updatedMachine,
+                metadata: {
+                    source: "equipment/edit",
+                    changes: diffObjects(oldMachine as any, updatedMachine as any),
+                },
+            });
+
+            router.push(`/equipment/${machine.id}`);
+        } catch (error: any) {
+            console.error("Machine save error:", error);
+            setErrorMessage(error?.message ?? "Errore durante il salvataggio");
         } finally {
-            setSavingQR(false);
+            setSaving(false);
         }
     };
 
     if (loading) {
         return (
             <MainLayout userRole={userRole}>
-                <SEO title="Macchina - MACHINA" />
+                <SEO title="Modifica macchina - MACHINA" />
                 <div className="container mx-auto py-6">
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -444,10 +392,14 @@ export default function EquipmentDetailPage() {
     if (!machine) {
         return (
             <MainLayout userRole={userRole}>
-                <SEO title="Macchina - MACHINA" />
+                <SEO title="Modifica macchina - MACHINA" />
                 <div className="container mx-auto py-6 text-center">
-                    <p className="text-red-400 text-lg">Macchina non trovata</p>
-                    <Button variant="outline" className="mt-4" onClick={() => router.push("/equipment")}>
+                    <p className="text-red-500 text-lg">Macchina non trovata</p>
+                    <Button
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => router.push("/equipment")}
+                    >
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Torna alla lista
                     </Button>
@@ -456,572 +408,360 @@ export default function EquipmentDetailPage() {
         );
     }
 
+    if (!canEdit) {
+        return (
+            <MainLayout userRole={userRole}>
+                <SEO title="Modifica macchina - MACHINA" />
+                <div className="container mx-auto py-6 max-w-3xl">
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                        <CardContent className="p-8 text-center space-y-4">
+                            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+                            <div>
+                                <h2 className="text-xl font-semibold text-foreground">
+                                    Non hai i permessi per modificare questa macchina
+                                </h2>
+                                <p className="text-muted-foreground mt-2">
+                                    Puoi visualizzare la scheda, ma non modificare i dati.
+                                </p>
+                            </div>
+                            <div className="flex justify-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => router.push(`/equipment/${machine.id}`)}
+                                >
+                                    Torna al dettaglio
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </MainLayout>
+        );
+    }
+
     return (
         <MainLayout userRole={userRole}>
-            <SEO title={`${machine.name ?? "Macchina"} - MACHINA`} />
+            <SEO title={`Modifica ${machine.name} - MACHINA`} />
 
             <div className="container mx-auto py-6 space-y-6 max-w-5xl">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex items-start gap-4">
-                        <Button variant="ghost" size="icon" onClick={() => router.push("/equipment")}>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => router.push(`/equipment/${machine.id}`)}
+                        >
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
 
                         <div>
                             <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="text-2xl font-bold text-foreground">{machine.name}</h1>
+                                <h1 className="text-2xl font-bold text-foreground">
+                                    Modifica macchina
+                                </h1>
                                 <Badge className={status.className}>{status.label}</Badge>
                             </div>
 
                             <p className="text-sm text-muted-foreground mt-1">
-                                {machine.internal_code || machine.serial_number || "—"}
+                                {machine.name} • {machine.internal_code || machine.serial_number || "—"}
                             </p>
                         </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        {canEdit && (
-                            <Button
-                                onClick={() => router.push(`/equipment/edit/${machine.id}`)}
-                                className="bg-blue-600 hover:bg-blue-700"
-                            >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Modifica
-                            </Button>
-                        )}
-
                         <Button
                             variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (exportData) exportTechnicalSheet(exportData);
-                            }}
+                            onClick={() => router.push(`/equipment/${machine.id}`)}
                         >
-                            <Download className="w-4 h-4 mr-1" />
-                            Scheda
+                            Annulla
                         </Button>
-
                         <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (exportData) exportMachinePassport(exportData);
-                            }}
+                            onClick={handleSave}
+                            disabled={saving || !formData.name.trim()}
+                            className="bg-blue-600 hover:bg-blue-700"
                         >
-                            <Download className="w-4 h-4 mr-1" />
-                            Passaporto
-                        </Button>
-
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                if (!exportData) return;
-
-                                exportMaintenanceReport({
-                                    machine: exportData,
-                                    plans: maintenancePlans as any,
-                                    workOrders: workOrders.map((wo) => ({ ...wo, assignee_name: null })) as any,
-                                    checklistExecutions: [],
-                                });
-                            }}
-                        >
-                            <Download className="w-4 h-4 mr-1" />
-                            Report
+                            {saving ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                            )}
+                            Salva modifiche
                         </Button>
                     </div>
                 </div>
 
-                {isAssigned && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-100 dark:bg-purple-500/10 border border-purple-500/30">
-                        <Lock className="w-5 h-5 text-purple-400 shrink-0" />
-                        <div>
-                            <p className="text-foreground font-medium">
-                                Macchina fornita da {manufacturerName || "costruttore"}
-                            </p>
-                            <p className="text-muted-foreground text-sm">
-                                Documentazione e specifiche tecniche gestite dal costruttore.
-                            </p>
-                        </div>
-                    </div>
+                {errorMessage && (
+                    <Card className="rounded-2xl border border-red-300 bg-red-50 dark:bg-red-500/10 shadow-sm">
+                        <CardContent className="p-4 flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="font-medium text-red-700 dark:text-red-400">
+                                    Errore
+                                </p>
+                                <p className="text-sm text-red-600 dark:text-red-300">
+                                    {errorMessage}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
                 )}
 
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="grid w-full grid-cols-5 max-w-4xl">
-                        <TabsTrigger value="general" className="gap-1.5">
-                            <Wrench className="w-4 h-4" />
-                            <span className="hidden sm:inline">Generale</span>
-                        </TabsTrigger>
-
-                        <TabsTrigger value="maintenance" className="gap-1.5">
-                            <Calendar className="w-4 h-4" />
-                            <span className="hidden sm:inline">Manutenzione</span>
-                            {(overdueCount > 0 || activeWOs.length > 0) && (
-                                <Badge className="ml-1 h-5 min-w-[20px] p-0 flex items-center justify-center rounded-full bg-blue-500 text-white text-xs">
-                                    {activeWOs.length + overdueCount}
-                                </Badge>
-                            )}
-                        </TabsTrigger>
-
-                        <TabsTrigger value="documents" className="gap-1.5">
-                            <FileText className="w-4 h-4" />
-                            <span className="hidden sm:inline">Documenti</span>
-                        </TabsTrigger>
-
-                        <TabsTrigger value="timeline" className="gap-1.5">
-                            <History className="w-4 h-4" />
-                            <span className="hidden sm:inline">Timeline</span>
-                        </TabsTrigger>
-
-                        <TabsTrigger value="qr" className="gap-1.5">
-                            <QrCode className="w-4 h-4" />
-                            <span className="hidden sm:inline">QR</span>
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="general" className="space-y-6 mt-4">
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground flex items-center gap-2">
-                                    <Camera className="w-5 h-5 text-primary" />
-                                    Foto Macchina
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <MachinePhotoUpload
-                                    machineId={machine.id}
-                                    currentPhotoUrl={machine.photo_url}
-                                    onPhotoChange={(url) => setMachine((prev) => (prev ? { ...prev, photo_url: url } : null))}
-                                    readonly={!canEdit}
-                                />
-                            </CardContent>
-                        </Card>
-
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground flex items-center gap-2">
-                                    <Wrench className="w-5 h-5 text-primary" />
-                                    Informazioni Generali
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <InfoRow icon={<Hash className="w-4 h-4" />} label="Codice" value={machine.internal_code} />
-                                <InfoRow icon={<Tag className="w-4 h-4" />} label="Categoria" value={machine.category} />
-                                <InfoRow icon={<Wrench className="w-4 h-4" />} label="Marca" value={machine.brand} />
-                                <InfoRow icon={<FileText className="w-4 h-4" />} label="Modello" value={machine.model} />
-                                <InfoRow icon={<Hash className="w-4 h-4" />} label="N. Serie" value={machine.serial_number} />
-                                <InfoRow
-                                    icon={<Calendar className="w-4 h-4" />}
-                                    label="Anno Fabbricazione"
-                                    value={machine.year_of_manufacture ? String(machine.year_of_manufacture) : null}
-                                />
-                                <InfoRow
-                                    icon={<Calendar className="w-4 h-4" />}
-                                    label="Data Commissione"
-                                    value={
-                                        machine.commissioned_at
-                                            ? new Date(machine.commissioned_at).toLocaleDateString("it-IT")
-                                            : null
-                                    }
-                                />
-                            </CardContent>
-                        </Card>
-
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground flex items-center gap-2">
-                                    <MapPin className="w-5 h-5 text-primary" />
-                                    Ubicazione
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <InfoRow
-                                    icon={<Building2 className="w-4 h-4 text-blue-400" />}
-                                    label="Stabilimento"
-                                    value={plant?.name || plant?.code}
-                                    fallback="Non assegnato"
-                                />
-                                <InfoRow
-                                    icon={<MapPin className="w-4 h-4" />}
-                                    label="Posizione"
-                                    value={machine.position}
-                                    fallback="Non definita"
-                                />
-                                <InfoRow
-                                    icon={<ClipboardList className="w-4 h-4 text-emerald-400" />}
-                                    label="Linea"
-                                    value={line?.name || line?.code}
-                                    fallback="Non assegnata"
-                                />
-                                {isAssigned && manufacturerName && (
-                                    <InfoRow
-                                        icon={<Factory className="w-4 h-4 text-purple-400" />}
-                                        label="Costruttore"
-                                        value={manufacturerName}
-                                    />
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {specsText && (
-                            <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-foreground flex items-center gap-2">
-                                        <ClipboardList className="w-5 h-5 text-primary" />
-                                        Specifiche Tecniche
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-muted-foreground whitespace-pre-wrap">{specsText}</p>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {machine.notes && (
-                            <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-foreground flex items-center gap-2">
-                                        <FileText className="w-5 h-5 text-primary" />
-                                        Note
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-muted-foreground whitespace-pre-wrap">{machine.notes}</p>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </TabsContent>
-
-                    <TabsContent value="maintenance" className="space-y-6 mt-4">
-                        {loadingMaint ? (
-                            <div className="flex items-center justify-center py-12">
-                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            </div>
-                        ) : (
-                            <>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    {[
-                                        {
-                                            label: "Piani attivi",
-                                            value: activePlans.length,
-                                            color: "text-blue-600",
-                                            bg: "bg-blue-50 dark:bg-blue-500/10",
-                                        },
-                                        {
-                                            label: "Scaduti",
-                                            value: overdueCount,
-                                            color: overdueCount > 0 ? "text-red-600" : "text-gray-400",
-                                            bg: overdueCount > 0 ? "bg-red-50 dark:bg-red-500/10" : "bg-gray-50 dark:bg-gray-500/10",
-                                        },
-                                        {
-                                            label: "WO attivi",
-                                            value: activeWOs.length,
-                                            color: "text-yellow-600",
-                                            bg: "bg-yellow-50 dark:bg-yellow-500/10",
-                                        },
-                                        {
-                                            label: "WO totali",
-                                            value: workOrders.length,
-                                            color: "text-gray-600",
-                                            bg: "bg-gray-50 dark:bg-gray-500/10",
-                                        },
-                                    ].map((s) => (
-                                        <Card key={s.label} className="rounded-2xl border-0 bg-card shadow-sm">
-                                            <CardContent className="p-4 flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg}`}>
-                                                    <span className={`text-lg font-bold ${s.color}`}>{s.value}</span>
-                                                </div>
-                                                <span className="text-sm text-muted-foreground">{s.label}</span>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-                                </div>
-
-                                <div>
-                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                                        Piani di Manutenzione ({activePlans.length})
-                                    </h3>
-
-                                    {activePlans.length === 0 ? (
-                                        <Card className="rounded-2xl border-0 bg-card shadow-sm p-8 text-center">
-                                            <Calendar className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                                            <p className="text-muted-foreground">Nessun piano attivo per questa macchina</p>
-                                        </Card>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {activePlans.map((plan) => {
-                                                const prio = priorityConfig[(plan.priority || "medium").toLowerCase()] || priorityConfig.medium;
-                                                const isOverdue =
-                                                    !!plan.next_due_date && new Date(plan.next_due_date) < new Date();
-                                                const freq = getFrequencyLabel(plan.frequency);
-
-                                                return (
-                                                    <Card
-                                                        key={plan.id}
-                                                        className={`rounded-2xl border-0 border-l-4 ${prio.border} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group`}
-                                                        onClick={() => router.push(`/maintenance/${plan.id}`)}
-                                                    >
-                                                        <CardContent className="p-3 flex items-center justify-between">
-                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                                <div
-                                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isOverdue
-                                                                            ? "bg-red-50 dark:bg-red-500/10"
-                                                                            : "bg-orange-50 dark:bg-orange-500/10"
-                                                                        }`}
-                                                                >
-                                                                    <Calendar
-                                                                        className={`w-4 h-4 ${isOverdue ? "text-red-500" : "text-orange-500"
-                                                                            }`}
-                                                                    />
-                                                                </div>
-
-                                                                <div className="min-w-0">
-                                                                    <p className="text-foreground font-medium truncate">{plan.title || "Piano"}</p>
-                                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                                                        {plan.next_due_date && (
-                                                                            <span className={isOverdue ? "text-red-600 dark:text-red-400 font-medium" : ""}>
-                                                                                {new Date(plan.next_due_date).toLocaleDateString("it-IT")}
-                                                                            </span>
-                                                                        )}
-                                                                        {freq && <span>• {freq}</span>}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                <Badge className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${prio.color}`}>
-                                                                    {prio.label}
-                                                                </Badge>
-                                                                {isOverdue && (
-                                                                    <Badge className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300">
-                                                                        Scaduto
-                                                                    </Badge>
-                                                                )}
-                                                                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                                        Ordini di Lavoro ({workOrders.length})
-                                    </h3>
-
-                                    {workOrders.length === 0 ? (
-                                        <Card className="rounded-2xl border-0 bg-card shadow-sm p-8 text-center">
-                                            <Wrench className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                                            <p className="text-muted-foreground">Nessun ordine di lavoro per questa macchina</p>
-                                        </Card>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {workOrders.slice(0, 20).map((wo) => {
-                                                const wSt =
-                                                    woStatusConfig[(wo.status || "draft").toLowerCase()] || woStatusConfig.draft;
-                                                const prio =
-                                                    priorityConfig[(wo.priority || "medium").toLowerCase()] || priorityConfig.medium;
-                                                const isClosed = ["completed", "approved", "cancelled"].includes(
-                                                    (wo.status || "").toLowerCase()
-                                                );
-                                                const sched = wo.scheduled_start || wo.scheduled_date || wo.due_date;
-
-                                                return (
-                                                    <Card
-                                                        key={wo.id}
-                                                        className={`rounded-2xl border-0 border-l-4 ${prio.border} bg-card shadow-sm hover:shadow-md transition-all cursor-pointer group ${isClosed ? "opacity-60" : ""
-                                                            }`}
-                                                        onClick={() => router.push(`/work-orders/${wo.id}`)}
-                                                    >
-                                                        <CardContent className="p-3 flex items-center justify-between">
-                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-50 dark:bg-blue-500/10">
-                                                                    {isClosed ? (
-                                                                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                                                    ) : (
-                                                                        <AlertCircle className="w-4 h-4 text-blue-500" />
-                                                                    )}
-                                                                </div>
-
-                                                                <div className="min-w-0">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <p className="text-foreground font-medium truncate">
-                                                                            {wo.title || "Work order"}
-                                                                        </p>
-                                                                        {wo.wo_number && (
-                                                                            <span className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded shrink-0">
-                                                                                {wo.wo_number}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-
-                                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                                                        {sched && <span>{new Date(sched).toLocaleDateString("it-IT")}</span>}
-                                                                        <span>• {wo.wo_type || wo.work_type || "—"}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                <Badge className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${wSt.color}`}>
-                                                                    {wSt.label}
-                                                                </Badge>
-                                                                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                );
-                                            })}
-
-                                            {workOrders.length > 20 && (
-                                                <p className="text-center text-sm text-muted-foreground py-2">
-                                                    +{workOrders.length - 20} altri
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </TabsContent>
-
-                    <TabsContent value="documents" className="mt-4">
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground flex items-center gap-2">
-                                    <FileText className="w-5 h-5 text-primary" />
-                                    Documenti
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <DocumentManager
-                                    machineId={machine.id}
-                                    machineOwnerOrgId={machine.organization_id}
-                                    currentOrgId={orgId}
-                                    currentOrgType={orgType}
-                                    currentUserRole={userRole}
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="timeline" className="mt-4">
-                        <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-foreground flex items-center gap-2">
-                                    <History className="w-5 h-5 text-primary" />
-                                    Timeline
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <MachineEventTimeline
-                                    machineId={machine.id}
-                                    limit={50}
-                                    showIntegrityCheck={userRole === "admin"}
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="qr" className="mt-4">
-                        <div className="max-w-md mx-auto">
-                            <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-foreground flex items-center gap-2">
-                                        <QrCode className="w-5 h-5 text-primary" />
-                                        QR Code
-                                    </CardTitle>
-                                </CardHeader>
-
-                                <CardContent className="space-y-4">
-                                    <div className="flex justify-center">
-                                        <QRCodeGenerator value={editingQR ? qrUrlDraft || qrValue : qrValue} size={220} />
-                                    </div>
-
-                                    {!editingQR ? (
-                                        <div className="space-y-2">
-                                            <p className="text-xs text-muted-foreground">URL codificato</p>
-                                            <p className="text-sm text-foreground font-mono break-all bg-muted/50 rounded-lg p-2">
-                                                {machine.qr_code_token ||
-                                                    (typeof window !== "undefined"
-                                                        ? `${window.location.origin}/equipment/${machine.id}`
-                                                        : "")}
-                                            </p>
-
-                                            {canEdit && (
-                                                <Button variant="outline" size="sm" onClick={() => setEditingQR(true)} className="w-full">
-                                                    <Pencil className="w-3 h-3 mr-2" />
-                                                    Modifica URL QR
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    const defaultUrl =
-                                                        typeof window !== "undefined"
-                                                            ? `${window.location.origin}/equipment/${machine.id}`
-                                                            : "";
-                                                    setQrUrlDraft(defaultUrl);
-                                                }}
-                                                className="w-full"
-                                            >
-                                                Usa link diretto alla scheda macchina
-                                            </Button>
-
-                                            <Input
-                                                value={qrUrlDraft}
-                                                onChange={(e) => setQrUrlDraft(e.target.value)}
-                                                placeholder="https://esempio.com/manuale.pdf"
-                                            />
-
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    onClick={handleSaveQR}
-                                                    disabled={!canEdit || savingQR}
-                                                    className="flex-1 bg-green-600 hover:bg-green-700"
-                                                >
-                                                    {savingQR ? (
-                                                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                                    ) : (
-                                                        <Save className="w-3 h-3 mr-1" />
-                                                    )}
-                                                    Salva
-                                                </Button>
-
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => {
-                                                        setEditingQR(false);
-                                                        setQrUrlDraft(machine.qr_code_token ?? "");
-                                                    }}
-                                                >
-                                                    <X className="w-3 h-3 mr-1" />
-                                                    Annulla
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                                        <p className="text-xs text-blue-400 font-medium mb-1">💡 Suggerimento</p>
-                                        <p className="text-xs text-blue-300">
-                                            Puoi usare il link diretto alla scheda macchina oppure impostare un URL personalizzato.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-foreground flex items-center gap-2">
+                            <Wrench className="w-5 h-5 text-primary" />
+                            Informazioni Generali
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Nome macchina *</Label>
+                            <Input
+                                id="name"
+                                value={formData.name}
+                                onChange={(e) => handleChange("name", e.target.value)}
+                                placeholder="Es. Trituratore TSS 200"
+                            />
                         </div>
-                    </TabsContent>
-                </Tabs>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="internal_code">Codice interno</Label>
+                            <Input
+                                id="internal_code"
+                                value={formData.internal_code}
+                                onChange={(e) => handleChange("internal_code", e.target.value)}
+                                placeholder="Es. EQ-001"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="serial_number">Numero seriale</Label>
+                            <Input
+                                id="serial_number"
+                                value={formData.serial_number}
+                                onChange={(e) => handleChange("serial_number", e.target.value)}
+                                placeholder="Es. SN-2026-001"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="brand">Marca</Label>
+                            <Input
+                                id="brand"
+                                value={formData.brand}
+                                onChange={(e) => handleChange("brand", e.target.value)}
+                                placeholder="Es. ITR"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="model">Modello</Label>
+                            <Input
+                                id="model"
+                                value={formData.model}
+                                onChange={(e) => handleChange("model", e.target.value)}
+                                placeholder="Es. HMS 140"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="category">Categoria</Label>
+                            <Input
+                                id="category"
+                                value={formData.category}
+                                onChange={(e) => handleChange("category", e.target.value)}
+                                placeholder="Es. Shredder"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="lifecycle_state">Stato</Label>
+                            <select
+                                id="lifecycle_state"
+                                value={formData.lifecycle_state}
+                                onChange={(e) => handleChange("lifecycle_state", e.target.value)}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            >
+                                <option value="active">Attivo</option>
+                                <option value="commissioning">Commissioning</option>
+                                <option value="maintenance">In manutenzione</option>
+                                <option value="inactive">Inattivo</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="year_of_manufacture">Anno di fabbricazione</Label>
+                            <Input
+                                id="year_of_manufacture"
+                                type="number"
+                                value={formData.year_of_manufacture}
+                                onChange={(e) => handleChange("year_of_manufacture", e.target.value)}
+                                placeholder="Es. 2024"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-foreground flex items-center gap-2">
+                            <MapPin className="w-5 h-5 text-primary" />
+                            Ubicazione e impianto
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="plant_id">Stabilimento</Label>
+                            <select
+                                id="plant_id"
+                                value={formData.plant_id}
+                                onChange={(e) => handleChange("plant_id", e.target.value)}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            >
+                                <option value="">Non assegnato</option>
+                                {plants.map((plant) => (
+                                    <option key={plant.id} value={plant.id}>
+                                        {plant.name || plant.code || plant.id}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="production_line_id">Linea produttiva</Label>
+                            <select
+                                id="production_line_id"
+                                value={formData.production_line_id}
+                                onChange={(e) =>
+                                    handleChange("production_line_id", e.target.value)
+                                }
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            >
+                                <option value="">Non assegnata</option>
+                                {availableLines.map((line) => (
+                                    <option key={line.id} value={line.id}>
+                                        {line.name || line.code || line.id}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="position">Posizione</Label>
+                            <Input
+                                id="position"
+                                value={formData.position}
+                                onChange={(e) => handleChange("position", e.target.value)}
+                                placeholder="Es. Area triturazione lato nord"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-foreground flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-primary" />
+                            Date e riferimenti
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="commissioned_at">Data commissioning</Label>
+                            <Input
+                                id="commissioned_at"
+                                type="date"
+                                value={formData.commissioned_at}
+                                onChange={(e) => handleChange("commissioned_at", e.target.value)}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-foreground flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-primary" />
+                            Specifiche e note
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="specifications">Specifiche tecniche</Label>
+                            <Textarea
+                                id="specifications"
+                                value={formData.specifications}
+                                onChange={(e) => handleChange("specifications", e.target.value)}
+                                placeholder='Testo libero oppure JSON, ad esempio: {"power_kw": 315, "rotor": "heavy duty"}'
+                                className="min-h-[180px]"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="notes">Note</Label>
+                            <Textarea
+                                id="notes"
+                                value={formData.notes}
+                                onChange={(e) => handleChange("notes", e.target.value)}
+                                placeholder="Annotazioni operative, installazione, accessi, vincoli..."
+                                className="min-h-[140px]"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-foreground flex items-center gap-2">
+                            <Hash className="w-5 h-5 text-primary" />
+                            Riepilogo salvataggio
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Wrench className="w-4 h-4" />
+                            <span>Entità: macchina</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Building2 className="w-4 h-4" />
+                            <span>ID macchina: {machine.id}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Factory className="w-4 h-4" />
+                            <span>Organizzazione: {orgId ?? "—"}</span>
+                        </div>
+                        <div className="rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 p-4">
+                            <p className="text-blue-700 dark:text-blue-300 font-medium">
+                                Audit attivo
+                            </p>
+                            <p className="text-blue-600 dark:text-blue-400 mt-1">
+                                Al salvataggio verranno registrati stato precedente, stato nuovo e
+                                differenze campo per campo.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div className="flex justify-end gap-2 pb-8">
+                    <Button
+                        variant="outline"
+                        onClick={() => router.push(`/equipment/${machine.id}`)}
+                    >
+                        Annulla
+                    </Button>
+                    <Button
+                        onClick={handleSave}
+                        disabled={saving || !formData.name.trim()}
+                        className="bg-blue-600 hover:bg-blue-700"
+                    >
+                        {saving ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Salva modifiche
+                    </Button>
+                </div>
             </div>
         </MainLayout>
     );
