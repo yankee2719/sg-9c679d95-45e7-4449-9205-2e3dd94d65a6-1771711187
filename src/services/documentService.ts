@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { createAuditLog } from "@/services/auditService";
 
 const BUCKET = "documents";
 
@@ -286,6 +287,28 @@ export async function createDocumentAndUploadV1(params: {
       .eq("id", doc.id);
 
     if (updErr) throw updErr;
+
+      await createAuditLog({
+          organizationId,
+          actorUserId: createdBy ?? null,
+          entityType: "document",
+          entityId: doc.id,
+          action: "create",
+          machineId: machineId ?? null,
+          documentId: doc.id,
+          newData: {
+              title: doc.title,
+              category: doc.category,
+              language: doc.language,
+              version_count: 1,
+              file_name: file.name,
+              file_size: file.size,
+          },
+          metadata: {
+              source: "documentService.createDocumentAndUploadV1",
+              storage_path: objectName,
+          },
+      });
 
     return {
       document: {
