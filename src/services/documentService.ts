@@ -431,23 +431,33 @@ export async function archiveDocument(documentId: string) {
   if (error) throw error;
 }
 
-export async function signDocumentVersion(params: {
-  versionId: string;
-  signatureData: any;
-}) {
-  const { versionId, signatureData } = params;
-
-  const { data, error } = await supabase
-    .from("document_versions")
-    .update({
-      signed_at: new Date().toISOString(),
-      signature_data: signatureData,
-    })
-    .eq("id", versionId)
-    .select("*")
-    .single();
+export async function archiveDocument(
+    documentId: string,
+    organizationId: string,
+    actorUserId?: string | null,
+    machineId?: string | null
+) {
+    const { error } = await supabase
+        .from("documents")
+        .update({
+            is_archived: true,
+            archived_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", documentId);
 
     if (error) throw error;
-    import { createAuditLog } from "@/services/auditService";
-  return data as DocumentVersionRow;
+
+    await createAuditLog({
+        organizationId,
+        actorUserId: actorUserId ?? null,
+        entityType: "document",
+        entityId: documentId,
+        action: "archive",
+        documentId,
+        machineId: machineId ?? null,
+        metadata: {
+            source: "documentService.archiveDocument",
+        },
+    });
 }
