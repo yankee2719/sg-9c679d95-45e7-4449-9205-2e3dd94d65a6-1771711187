@@ -129,6 +129,12 @@ export default function DocumentManager(props: DocumentManagerProps) {
     const [uploadingVersionId, setUploadingVersionId] = useState < string | null > (null);
     const [archivingId, setArchivingId] = useState < string | null > (null);
 
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    await archiveDocument(doc.id, ctxOrgId!, user?.id ?? null, props.machineId);
+
     const canWrite = useMemo(() => {
         if (props.readOnly) return false;
         if (!ctxOrgId || !ctxOrgType) return false;
