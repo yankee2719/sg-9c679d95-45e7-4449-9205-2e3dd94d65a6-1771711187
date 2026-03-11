@@ -396,6 +396,25 @@ export async function uploadNewVersion(params: {
 
   if (updErr) throw updErr;
 
+    await createAuditLog({
+        organizationId,
+        actorUserId: createdBy ?? null,
+        entityType: "document",
+        entityId: documentId,
+        action: "new_version",
+        documentId: documentId,
+        newData: {
+            version_number: nextVersion,
+            file_name: file.name,
+            file_size: file.size,
+            change_summary: changeSummary?.trim() || null,
+        },
+        metadata: {
+            source: "documentService.uploadNewVersion",
+            storage_path: objectName,
+        },
+    });
+
   return version as DocumentVersionRow;
 }
 
