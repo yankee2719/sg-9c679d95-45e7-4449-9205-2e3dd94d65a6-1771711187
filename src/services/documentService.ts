@@ -447,6 +447,7 @@ export async function signDocumentVersion(params: {
     .select("*")
     .single();
 
-  if (error) throw error;
+    if (error) throw error;
+    import { createAuditLog } from "@/services/auditService";
   return data as DocumentVersionRow;
 }
