@@ -6,7 +6,6 @@ export function useMfaGuard() {
     const [loading, setLoading] = useState(true);
     const [aal, setAal] = useState < string | null > (null);
     const [nextLevel, setNextLevel] = useState < string | null > (null);
-    const [userId, setUserId] = useState < string | null > (null);
 
     useEffect(() => {
         const load = async () => {
@@ -14,8 +13,6 @@ export function useMfaGuard() {
                 const {
                     data: { user },
                 } = await supabase.auth.getUser();
-
-                setUserId(user?.id ?? null);
 
                 if (!user) {
                     setAal(null);
@@ -55,7 +52,6 @@ export function useMfaGuard() {
 
     return {
         loading,
-        userId,
         aal,
         nextLevel,
         isAal2,
