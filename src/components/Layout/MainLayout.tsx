@@ -6,6 +6,9 @@ import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
+import { useRouter } from "next/router";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
+import { ShieldCheck, ShieldAlert } from "lucide-react";
 import {
   LayoutDashboard,
   Wrench,
@@ -43,6 +46,24 @@ interface NavItem {
   roles?: string[];
   orgTypes?: Array<"manufacturer" | "customer">;
 }
+
+{!mfaLoading && (
+  isAal2 ? (
+    <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+      <ShieldCheck className="h-3.5 w-3.5" />
+      2FA
+    </div>
+  ) : mustEnforceMfa ? (
+    <button
+      onClick={() => router.push("/settings/security")}
+      className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
+      title="Completa la verifica 2FA"
+    >
+      <ShieldAlert className="h-3.5 w-3.5" />
+      2FA richiesta
+    </button>
+  ) : null
+)}
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -191,6 +212,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       <span className="truncate">{t(labelKey)}</span>
     </Link>
   );
+
+  const router = useRouter();
+const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
 
   const SideContent = () => (
     <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
@@ -361,6 +385,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
       )}
     </div>
   );
+  
 }
 
 export default MainLayout;
