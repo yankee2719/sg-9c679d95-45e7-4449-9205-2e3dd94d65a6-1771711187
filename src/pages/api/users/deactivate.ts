@@ -53,23 +53,73 @@ function getAalFromJwt(token: string): "aal1" | "aal2" | null {
     return null;
 }
 
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse<ApiSuccess | ApiError>
-) {
-    if (req.method !== "POST") {
-        return res.status(405).json({
-            ok: false,
-            error: "Method not allowed",
+const handleDeactivateMember = async () => {
+    if (!isAdmin || !memberToDelete || !currentOrgId) {
+        toast({
+            variant: "destructive",
+            title: "Permesso negato",
+            description: "Solo gli admin possono disattivare utenti.",
         });
+        return;
     }
 
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-        return res.status(500).json({
-            ok: false,
-            error: "Server configuration missing",
+    if (memberToDelete.user_id === currentUserId) {
+        toast({
+            variant: "destructive",
+            title: "Operazione non consentita",
+            description: "Non puoi disattivare te stesso.",
         });
+        return;
     }
+
+    setDeleting(true);
+    try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) {
+            throw new Error("Sessione scaduta, effettua di nuovo il login");
+        }
+
+        const res = await fetch("/api/users/deactivate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+                membership_id: memberToDelete.id,
+                organization_id: currentOrgId,
+            }),
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+            throw new Error(result.error || "Disattivazione utente fallita");
+        }
+
+        toast({
+            title: "Utente disattivato",
+            description: memberToDelete.email,
+        });
+
+        setDeleteDialogOpen(false);
+        setMemberToDelete(null);
+        await loadMembers(currentOrgId);
+    } catch (error: unknown) {
+        console.error("Error deactivating member:", error);
+        toast({
+            variant: "destructive",
+            title: "Errore",
+            description:
+                error instanceof Error ? error.message : "Errore disattivazione utente",
+        });
+    } finally {
+        setDeleting(false);
+    }
+};
 
     const token = getBearerToken(req);
     if (!token) {
