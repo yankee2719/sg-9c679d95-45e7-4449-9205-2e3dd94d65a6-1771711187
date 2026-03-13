@@ -9,6 +9,8 @@ import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { useRouter } from "next/router";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
+import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   Wrench,
@@ -78,7 +80,8 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
   const [profileRole, setProfileRole] = useState<string>(userRole);
   const [orgType, setOrgType] = useState<OrgType>(null);
   const [orgName, setOrgName] = useState("Organizzazione");
-  const [notificationCount, setNotificationCount] = useState(0);
+    const [notificationCount, setNotificationCount] = useState(0);
+    const { isAal2 } = useMfaGuard();
 
   useEffect(() => {
     const loadHeader = async () => {
@@ -280,6 +283,10 @@ const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
       </div>
     </div>
   );
+
+    <Badge variant={isAal2 ? "default" : "outline"}>
+        {isAal2 ? "2FA OK" : "2FA OFF"}
+    </Badge>
 
   return (
     <div className="min-h-screen bg-background text-foreground">
