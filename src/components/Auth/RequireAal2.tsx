@@ -1,92 +1,58 @@
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { getProfileData } from "@/lib/supabaseHelpers";
+import { ReactNode } from "react";
+import { useRouter } from "next/router";
+import { ShieldAlert, Loader2 } from "lucide-react";
+import { MainLayout } from "@/components/Layout/MainLayout";
+import { Button } from "@/components/ui/button";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
 
-type AAL = "aal1" | "aal2" | null;
+interface RequireAal2Props {
+    children: ReactNode;
+    userRole?: string | null;
+    title?: string;
+    description?: string;
+}
 
-export function useMfaGuard() {
-    const [loading, setLoading] = useState(true);
-    const [aal, setAal] = useState < AAL > (null);
-    const [userRole, setUserRole] = useState < string | null > (null);
-    const [hasAuthenticator, setHasAuthenticator] = useState < boolean > (false);
+export default function RequireAal2({
+    children,
+    userRole,
+    title = "Verifica 2FA richiesta",
+    description = "Per accedere a questa area devi completare l’autenticazione a due fattori.",
+}: RequireAal2Props) {
+    const router = useRouter();
+    const { loading, mustEnforceMfa, isAal2 } = useMfaGuard();
 
-    useEffect(() => {
-        let mounted = true;
+    if (loading) {
+        return (
+            <MainLayout userRole={userRole ?? "technician"}>
+                <div className="container mx-auto py-10">
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
 
-        const load = async () => {
-            try {
-                const [
-                    authUserRes,
-                    assuranceRes,
-                    factorsRes,
-                ] = await Promise.all([
-                    supabase.auth.getUser(),
-                    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-                    supabase.auth.mfa.listFactors(),
-                ]);
+    if (mustEnforceMfa && !isAal2) {
+        return (
+            <MainLayout userRole={userRole ?? "technician"}>
+                <div className="container mx-auto max-w-2xl py-10">
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+                        <div className="flex items-start gap-3">
+                            <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-500" />
+                            <div className="space-y-3">
+                                <div className="text-lg font-semibold">{title}</div>
+                                <div className="text-sm text-muted-foreground">{description}</div>
+                                <Button onClick={() => router.push("/settings/security")}>
+                                    Vai a Sicurezza
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
 
-                const user = authUserRes.data.user ?? null;
-                const currentAal = (assuranceRes.data?.currentLevel as AAL) ?? "aal1";
-
-                let role: string | null = null;
-                if (user) {
-                    const profile = await getProfileData(user.id);
-                    role = profile?.role ?? null;
-                }
-
-                const authenticatorFactors =
-                    factorsRes.data?.all?.filter((f) => f.factor_type === "totp") ?? [];
-
-                if (!mounted) return;
-
-                setAal(currentAal);
-                setUserRole(role);
-                setHasAuthenticator(authenticatorFactors.length > 0);
-            } catch (error) {
-                console.error("useMfaGuard error:", error);
-                if (!mounted) return;
-                setAal("aal1");
-                setUserRole(null);
-                setHasAuthenticator(false);
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        load();
-
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async () => {
-            load();
-        });
-
-        return () => {
-            mounted = false;
-            subscription.unsubscribe();
-        };
-    }, []);
-
-    const isPrivilegedRole = useMemo(() => {
-        return userRole === "admin" || userRole === "supervisor";
-    }, [userRole]);
-
-    const isAal2 = aal === "aal2";
-
-    // Admin/supervisor devono avere MFA obbligatoria
-    const mustEnforceMfa = isPrivilegedRole;
-
-    // Serve MFA ma non è ancora soddisfatta
-    const needsMfa = mustEnforceMfa && !isAal2;
-
-    return {
-        loading,
-        aal,
-        isAal2,
-        userRole,
-        isPrivilegedRole,
-        hasAuthenticator,
-        mustEnforceMfa,
-        needsMfa,
-    };
+    return <>{children}</>;
 }
