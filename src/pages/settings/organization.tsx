@@ -10,6 +10,7 @@ import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher
 import { useActiveOrganization } from "@/hooks/useActiveOrganization";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { useLanguage } from "@/contexts/LanguageContext";
+import RequireAal2 from "@/components/Auth/RequireAal2";
 
 function OrgIcon({ type }: { type: "manufacturer" | "customer" | null }) {
     const Icon = type === "manufacturer" ? Factory : Building2;
@@ -63,6 +64,18 @@ export default function OrganizationSettingsPage() {
             </MainLayout>
         );
     }
+
+    return (
+        <RequireAal2
+            userRole={activeRole as string}
+            title="Verifica 2FA richiesta"
+            description="Per modificare l’organizzazione attiva devi completare l’autenticazione a due fattori."
+        >
+            <MainLayout userRole={(activeRole as any) ?? "technician"}>
+                {/* contenuto pagina */}
+            </MainLayout>
+        </RequireAal2>
+    );
 
     return (
         <MainLayout userRole={(activeRole as any) ?? "technician"}>
