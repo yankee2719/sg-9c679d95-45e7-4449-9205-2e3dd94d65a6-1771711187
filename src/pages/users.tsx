@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { getProfileData } from "@/lib/supabaseHelpers";
-import { useLanguage } from "@/contexts/LanguageContext";
 import {
     Select,
     SelectContent,
@@ -34,6 +33,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
 import {
     UserPlus,
     Users,
@@ -43,6 +44,7 @@ import {
     Search,
     Building2,
     Shield,
+    ShieldAlert,
     CheckCircle,
     XCircle,
 } from "lucide-react";
@@ -60,7 +62,8 @@ interface MemberUser {
 export default function UsersPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { t, language } = useLanguage();
+    const { t } = useLanguage();
+    const { loading: mfaLoading, isAal2, needsMfa } = useMfaGuard();
 
     const [currentUserRole, setCurrentUserRole] = useState < string | null > (null);
     const [currentUserId, setCurrentUserId] = useState < string | null > (null);
@@ -93,15 +96,7 @@ export default function UsersPage() {
     const [memberToDelete, setMemberToDelete] = useState < MemberUser | null > (null);
 
     const isAdmin = currentUserRole === "admin";
-
-    const locale =
-        language === "it"
-            ? "it-IT"
-            : language === "fr"
-                ? "fr-FR"
-                : language === "es"
-                    ? "es-ES"
-                    : "en-GB";
+    const canManageUsers = currentUserRole === "admin" || currentUserRole === "supervisor";
 
     useEffect(() => {
         const checkAccess = async () => {
@@ -216,9 +211,7 @@ export default function UsersPage() {
                 data: { session },
             } = await supabase.auth.getSession();
 
-            if (!session?.access_token) {
-                throw new Error(t("users.toast.sessionExpired"));
-            }
+            if (!session?.access_token) throw new Error(t("users.toast.sessionExpired"));
 
             const res = await fetch("/api/users/create", {
                 method: "POST",
@@ -385,15 +378,40 @@ export default function UsersPage() {
                     "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30",
             },
         };
+
         const entry = config[role] || { label: role, className: "" };
         return <Badge className={entry.className}>{entry.label}</Badge>;
     };
 
-    if (loading) {
+    if (loading || mfaLoading) {
         return (
-            <MainLayout>
+            <MainLayout userRole={currentUserRole ?? "technician"}>
                 <div className="flex min-h-[60vh] items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </MainLayout>
+        );
+    }
+
+    if (needsMfa && !isAal2) {
+        return (
+            <MainLayout userRole={currentUserRole ?? "technician"}>
+                <SEO title={`${t("users.title")} - MACHINA`} />
+                <div className="container mx-auto max-w-2xl py-10">
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+                        <div className="flex items-start gap-3">
+                            <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-500" />
+                            <div className="space-y-3">
+                                <div className="text-lg font-semibold">Verifica 2FA richiesta</div>
+                                <div className="text-sm text-muted-foreground">
+                                    Per accedere alla gestione utenti devi completare l’autenticazione a due fattori.
+                                </div>
+                                <Button onClick={() => router.push("/settings/security")}>
+                                    Vai a Sicurezza
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </MainLayout>
         );
@@ -411,7 +429,7 @@ export default function UsersPage() {
                             {t("users.title")}
                         </h1>
                         <p className="mt-2 text-muted-foreground">
-                            {t("users.subtitle")} {currentOrgName || t("users.activeOrganizationFallback")}
+                            {t("users.subtitle")} {currentOrgName || t("users.activeOrganizationFallback")}.
                         </p>
                     </div>
 
@@ -540,7 +558,7 @@ export default function UsersPage() {
 
                                                 <TableCell className="text-muted-foreground">
                                                     {member.accepted_at
-                                                        ? new Date(member.accepted_at).toLocaleDateString(locale)
+                                                        ? new Date(member.accepted_at).toLocaleDateString("it-IT")
                                                         : t("users.status.pending")}
                                                 </TableCell>
 
@@ -599,9 +617,7 @@ export default function UsersPage() {
                             <Input
                                 id="new-user-name"
                                 value={newUserData.full_name}
-                                onChange={(e) =>
-                                    setNewUserData((p) => ({ ...p, full_name: e.target.value }))
-                                }
+                                onChange={(e) => setNewUserData((p) => ({ ...p, full_name: e.target.value }))}
                             />
                         </div>
 
@@ -611,9 +627,7 @@ export default function UsersPage() {
                                 id="new-user-email"
                                 type="email"
                                 value={newUserData.email}
-                                onChange={(e) =>
-                                    setNewUserData((p) => ({ ...p, email: e.target.value }))
-                                }
+                                onChange={(e) => setNewUserData((p) => ({ ...p, email: e.target.value }))}
                             />
                         </div>
 
@@ -623,9 +637,7 @@ export default function UsersPage() {
                                 id="new-user-password"
                                 type="password"
                                 value={newUserData.password}
-                                onChange={(e) =>
-                                    setNewUserData((p) => ({ ...p, password: e.target.value }))
-                                }
+                                onChange={(e) => setNewUserData((p) => ({ ...p, password: e.target.value }))}
                             />
                         </div>
 
@@ -674,9 +686,7 @@ export default function UsersPage() {
                             <Input
                                 id="edit-display-name"
                                 value={editData.display_name}
-                                onChange={(e) =>
-                                    setEditData((p) => ({ ...p, display_name: e.target.value }))
-                                }
+                                onChange={(e) => setEditData((p) => ({ ...p, display_name: e.target.value }))}
                             />
                         </div>
 
