@@ -77,6 +77,38 @@ export default function OrganizationSettingsPage() {
         </RequireAal2>
     );
 
+    if (mfaLoading) {
+        return (
+            <MainLayout userRole={currentUserRole ?? "technician"}>
+                <div className="container mx-auto py-8">
+                    <div className="text-sm text-muted-foreground">Verifica sicurezza in corso...</div>
+                </div>
+            </MainLayout>
+        );
+    }
+
+    if (needsMfa && !isAal2) {
+        return (
+            <MainLayout userRole={currentUserRole ?? "technician"}>
+                <div className="container mx-auto max-w-2xl py-10">
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+                        <div className="flex items-start gap-3">
+                            <ShieldAlert className="h-5 w-5 text-amber-500 mt-0.5" />
+                            <div className="space-y-3">
+                                <div className="text-lg font-semibold">Verifica 2FA richiesta</div>
+                                <div className="text-sm text-muted-foreground">
+                                    Per accedere a questa sezione devi completare l’autenticazione a due fattori.
+                                </div>
+                                <Button onClick={() => router.push("/settings/security")}>
+                                    Vai a Sicurezza
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
     return (
         <MainLayout userRole={(activeRole as any) ?? "technician"}>
             <SEO title={`${t("activeOrg.title")} - MACHINA`} />
