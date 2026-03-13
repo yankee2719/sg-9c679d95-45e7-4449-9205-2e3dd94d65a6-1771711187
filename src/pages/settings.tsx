@@ -1,394 +1,354 @@
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SEO } from "@/components/SEO";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import {
     Shield,
-    Key,
-    Clock,
-    Globe,
-    Languages,
-    Palette,
-    Moon,
-    Bell,
-    Mail,
+    Smartphone,
+    Trash2,
+    Loader2,
+    CheckCircle2,
     AlertTriangle,
-    CheckCircle,
-    Database,
-    Activity
+    KeyRound,
 } from "lucide-react";
-import { userService } from "@/services/userService";
-import { useToast } from "@/hooks/use-toast";
+import {
+    enrollTotpFactor,
+    challengeFactor,
+    verifyFactor,
+    listMfaFactors,
+    unenrollFactor,
+    getMfaStatus,
+} from "@/services/mfaService";
+import { getUserContext } from "@/lib/supabaseHelpers";
 
-export default function SettingsPage() {
-    const router = useRouter();
+interface FactorRow {
+    id: string;
+    friendly_name?: string | null;
+    factor_type?: string | null;
+    status?: string | null;
+    created_at?: string | null;
+}
+
+export default function SecuritySettingsPage() {
     const { toast } = useToast();
-    const { t } = useLanguage();
-    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("admin");
-    const [userName, setUserName] = useState < string > ("");
-    const [loading, setLoading] = useState(true);
-    const [formData, setFormData] = useState({
-        full_name: "",
-        email: "",
-    });
 
-    const [darkMode, setDarkMode] = useState(true);
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [taskReminders, setTaskReminders] = useState(true);
-    const [overdueAlerts, setOverdueAlerts] = useState(true);
-    const [weeklyReports, setWeeklyReports] = useState(false);
-    const [autoLogout, setAutoLogout] = useState("30");
-    const [language, setLanguage] = useState("en");
-    const [timezone, setTimezone] = useState("Europe/Rome");
+    const [userRole, setUserRole] = useState("technician");
+    const [loading, setLoading] = useState(true);
+    const [factors, setFactors] = useState < FactorRow[] > ([]);
+    const [aal, setAal] = useState < string | null > (null);
+    const [nextLevel, setNextLevel] = useState < string | null > (null);
+
+    const [friendlyName, setFriendlyName] = useState("Telefono lavoro");
+    const [code, setCode] = useState("");
+    const [enrolling, setEnrolling] = useState(false);
+    const [verifying, setVerifying] = useState(false);
+    const [removingFactorId, setRemovingFactorId] = useState < string | null > (null);
+
+    const [pendingFactorId, setPendingFactorId] = useState < string | null > (null);
+    const [pendingQrCode, setPendingQrCode] = useState < string | null > (null);
+    const [pendingSecret, setPendingSecret] = useState < string | null > (null);
+    const [pendingUri, setPendingUri] = useState < string | null > (null);
+
+    const loadAll = async () => {
+        const [ctx, factorRows, status] = await Promise.all([
+            getUserContext(),
+            listMfaFactors(),
+            getMfaStatus(),
+        ]);
+
+        setUserRole(ctx?.role ?? "technician");
+        setFactors(factorRows);
+        setAal(status.currentLevel ?? null);
+        setNextLevel(status.nextLevel ?? null);
+    };
 
     useEffect(() => {
-        const loadUserData = async () => {
+        const init = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                    router.push("/login");
-                    return;
-                }
-
-                const profile = await userService.getUserById(user.id);
-                if (!profile) {
-                    router.push("/login");
-                    return;
-                }
-                setUserRole(profile.role as "admin" | "supervisor" | "technician");
-                setUserName(profile.full_name || profile.email || "User");
-                setFormData({
-                    full_name: profile.full_name || "",
-                    email: profile.email || "",
+                await loadAll();
+            } catch (error: any) {
+                console.error(error);
+                toast({
+                    title: "Errore",
+                    description: error?.message ?? "Errore caricamento sicurezza.",
+                    variant: "destructive",
                 });
-            } catch (error) {
-                console.error("Error loading user data:", error);
             } finally {
                 setLoading(false);
             }
         };
 
-        loadUserData();
-    }, [router]);
+        init();
+    }, []);
 
-    const handleSaveSettings = () => {
-        toast({
-            title: `✅ ${t("settings.saved")}`,
-            description: t("settings.savedDesc"),
-        });
+    const verifiedFactors = useMemo(
+        () => factors.filter((f) => f.status === "verified"),
+        [factors]
+    );
+
+    const handleStartEnroll = async () => {
+        setEnrolling(true);
+        try {
+            const result = await enrollTotpFactor(friendlyName);
+
+            setPendingFactorId(result.factorId);
+            setPendingQrCode(result.qrCode);
+            setPendingSecret(result.secret);
+            setPendingUri(result.uri);
+
+            toast({
+                title: "2FA avviata",
+                description: "Scansiona il QR e inserisci il codice generato.",
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: "Errore attivazione 2FA",
+                description: error?.message ?? "Impossibile avviare enrolment MFA.",
+                variant: "destructive",
+            });
+        } finally {
+            setEnrolling(false);
+        }
     };
 
-    // Get translated texts
-    const pageTitle = t("settings.title");
-    const pageSubtitle = t("settings.subtitle");
-    const appearanceTitle = t("settings.appearance");
-    const darkModeLabel = t("settings.darkMode");
-    const darkModeDesc = t("settings.darkModeDesc");
-    const notificationsTitle = t("settings.notifications");
-    const emailNotifLabel = t("settings.emailNotifications");
-    const emailNotifDesc = t("settings.emailNotificationsDesc");
-    const taskRemindersLabel = t("settings.taskReminders");
-    const taskRemindersDesc = t("settings.taskRemindersDesc");
-    const overdueAlertsLabel = t("settings.overdueAlerts");
-    const overdueAlertsDesc = t("settings.overdueAlertsDesc");
-    const weeklyReportsLabel = t("settings.weeklyReports");
-    const weeklyReportsDesc = t("settings.weeklyReportsDesc");
-    const securityTitle = t("settings.security");
-    const twoFactorLabel = t("settings.twoFactor");
-    const twoFactorDesc = t("settings.twoFactorDesc");
-    const enable2FAText = t("settings.enable2FA");
-    const autoLogoutLabel = t("settings.autoLogout");
-    const autoLogoutDesc = t("settings.autoLogoutDesc");
-    const regionalTitle = t("settings.regional");
-    const languageLabel = t("settings.language");
-    const languageDesc = t("settings.languageDesc");
-    const timezoneLabel = t("settings.timezone");
-    const timezoneDesc = t("settings.timezoneDesc");
-    const systemInfoTitle = t("settings.systemInfo");
-    const versionLabel = t("settings.version");
-    const databaseLabel = t("settings.database");
-    const lastBackupLabel = t("settings.lastBackup");
-    const statusLabel = t("settings.status");
-    const healthyText = t("settings.healthy");
-    const saveSettingsText = t("settings.saveSettings");
+    const handleVerifyEnroll = async () => {
+        if (!pendingFactorId || !code.trim()) return;
 
-    if (!userRole || loading) {
-        return null;
-    }
+        setVerifying(true);
+        try {
+            const challenge = await challengeFactor(pendingFactorId);
+
+            await verifyFactor({
+                factorId: pendingFactorId,
+                challengeId: challenge.id,
+                code,
+            });
+
+            toast({
+                title: "2FA attivata",
+                description: "Il factor TOTP è stato verificato correttamente.",
+            });
+
+            setCode("");
+            setPendingFactorId(null);
+            setPendingQrCode(null);
+            setPendingSecret(null);
+            setPendingUri(null);
+
+            await loadAll();
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: "Errore verifica",
+                description: error?.message ?? "Codice non valido o challenge scaduta.",
+                variant: "destructive",
+            });
+        } finally {
+            setVerifying(false);
+        }
+    };
+
+    const handleRemoveFactor = async (factorId: string) => {
+        setRemovingFactorId(factorId);
+        try {
+            await unenrollFactor(factorId);
+
+            toast({
+                title: "Factor rimosso",
+                description: "Il dispositivo MFA è stato eliminato.",
+            });
+
+            await loadAll();
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: "Errore rimozione",
+                description: error?.message ?? "Impossibile rimuovere il factor.",
+                variant: "destructive",
+            });
+        } finally {
+            setRemovingFactorId(null);
+        }
+    };
 
     return (
         <MainLayout userRole={userRole}>
-            <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">{pageTitle}</h1>
-                    <p className="text-slate-400">{pageSubtitle}</p>
-                </div>
+            <SEO title="Sicurezza - MACHINA" />
 
-                {/* Appearance Section */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
-                                <Palette className="h-5 w-5 text-[#fb923c]" />
-                            </div>
-                            <h2 className="text-xl font-bold text-white">{appearanceTitle}</h2>
-                        </div>
+            <div className="container mx-auto max-w-5xl px-4 py-8 space-y-6">
+                <Card className="rounded-2xl">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Shield className="h-5 w-5" />
+                            Sicurezza account
+                        </CardTitle>
+                        <CardDescription>
+                            Attiva autenticazione a due fattori TOTP per account critici MACHINA.
+                        </CardDescription>
+                    </CardHeader>
 
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <Moon className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{darkModeLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{darkModeDesc}</p>
-                                    </div>
-                                </div>
-                                <Switch
-                                    checked={darkMode}
-                                    onCheckedChange={setDarkMode}
-                                    className="data-[state=checked]:bg-[#fb923c]"
-                                />
+                    <CardContent className="flex flex-wrap items-center gap-3">
+                        <Badge variant={aal === "aal2" ? "default" : "outline"}>
+                            Livello attuale: {aal ?? "—"}
+                        </Badge>
+
+                        <Badge variant="outline">
+                            Livello successivo richiesto: {nextLevel ?? "—"}
+                        </Badge>
+
+                        {aal === "aal2" ? (
+                            <div className="inline-flex items-center gap-2 text-sm text-green-600">
+                                <CheckCircle2 className="h-4 w-4" />
+                                2FA verificata
                             </div>
-                        </div>
+                        ) : (
+                            <div className="inline-flex items-center gap-2 text-sm text-amber-600">
+                                <AlertTriangle className="h-4 w-4" />
+                                2FA non completata
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
-                {/* Notifications Section */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
-                                <Bell className="h-5 w-5 text-[#fb923c]" />
-                            </div>
-                            <h2 className="text-xl font-bold text-white">{notificationsTitle}</h2>
-                        </div>
+                <Card className="rounded-2xl">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Smartphone className="h-5 w-5" />
+                            Nuovo authenticator
+                        </CardTitle>
+                        <CardDescription>
+                            Crea un factor TOTP e verifica il codice a 6 cifre.
+                        </CardDescription>
+                    </CardHeader>
 
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <Mail className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{emailNotifLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{emailNotifDesc}</p>
-                                    </div>
+                    <CardContent className="space-y-5">
+                        {!pendingFactorId ? (
+                            <>
+                                <div className="space-y-2 max-w-md">
+                                    <Label htmlFor="friendlyName">Nome dispositivo</Label>
+                                    <Input
+                                        id="friendlyName"
+                                        value={friendlyName}
+                                        onChange={(e) => setFriendlyName(e.target.value)}
+                                        placeholder="Es. Telefono lavoro"
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailNotifications}
-                                    onCheckedChange={setEmailNotifications}
-                                    className="data-[state=checked]:bg-[#fb923c]"
-                                />
-                            </div>
 
-                            <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <Clock className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{taskRemindersLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{taskRemindersDesc}</p>
-                                    </div>
-                                </div>
-                                <Switch
-                                    checked={taskReminders}
-                                    onCheckedChange={setTaskReminders}
-                                    className="data-[state=checked]:bg-[#fb923c]"
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <AlertTriangle className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{overdueAlertsLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{overdueAlertsDesc}</p>
-                                    </div>
-                                </div>
-                                <Switch
-                                    checked={overdueAlerts}
-                                    onCheckedChange={setOverdueAlerts}
-                                    className="data-[state=checked]:bg-[#fb923c]"
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-between py-3">
-                                <div className="flex items-center gap-3">
-                                    <Mail className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{weeklyReportsLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{weeklyReportsDesc}</p>
-                                    </div>
-                                </div>
-                                <Switch
-                                    checked={weeklyReports}
-                                    onCheckedChange={setWeeklyReports}
-                                    className="data-[state=checked]:bg-[#fb923c]"
-                                />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Security Section */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
-                                <Shield className="h-5 w-5 text-[#fb923c]" />
-                            </div>
-                            <h2 className="text-xl font-bold text-white">{securityTitle}</h2>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <Key className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{twoFactorLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{twoFactorDesc}</p>
-                                    </div>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-700 hover:text-white"
-                                >
-                                    {enable2FAText}
+                                <Button onClick={handleStartEnroll} disabled={enrolling}>
+                                    {enrolling ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <KeyRound className="mr-2 h-4 w-4" />
+                                    )}
+                                    Avvia configurazione 2FA
                                 </Button>
-                            </div>
+                            </>
+                        ) : (
+                            <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+                                <div className="rounded-2xl border border-border p-4 flex items-center justify-center">
+                                    {pendingUri ? (
+                                        <QRCodeGenerator value={pendingUri} size={220} />
+                                    ) : (
+                                        <div className="text-sm text-muted-foreground">QR non disponibile</div>
+                                    )}
+                                </div>
 
-                            <div className="flex items-center justify-between py-3">
-                                <div className="flex items-center gap-3">
-                                    <Clock className="h-5 w-5 text-slate-400" />
+                                <div className="space-y-4">
                                     <div>
-                                        <Label className="text-white font-medium">{autoLogoutLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{autoLogoutDesc}</p>
+                                        <div className="text-sm font-medium">Secret manuale</div>
+                                        <div className="mt-1 rounded-xl bg-muted p-3 font-mono text-sm break-all">
+                                            {pendingSecret ?? "—"}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 max-w-xs">
+                                        <Label htmlFor="totpCode">Codice a 6 cifre</Label>
+                                        <Input
+                                            id="totpCode"
+                                            value={code}
+                                            onChange={(e) => setCode(e.target.value)}
+                                            placeholder="123456"
+                                            inputMode="numeric"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <Button onClick={handleVerifyEnroll} disabled={verifying || !code.trim()}>
+                                            {verifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Verifica e attiva
+                                        </Button>
+
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                                setPendingFactorId(null);
+                                                setPendingQrCode(null);
+                                                setPendingSecret(null);
+                                                setPendingUri(null);
+                                                setCode("");
+                                            }}
+                                        >
+                                            Annulla
+                                        </Button>
                                     </div>
                                 </div>
-                                <Select value={autoLogout} onValueChange={setAutoLogout}>
-                                    <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="15" className="text-white">15 {t("common.minutes")}</SelectItem>
-                                        <SelectItem value="30" className="text-white">30 {t("common.minutes")}</SelectItem>
-                                        <SelectItem value="60" className="text-white">1 {t("common.hour")}</SelectItem>
-                                        <SelectItem value="120" className="text-white">2 {t("common.hours")}</SelectItem>
-                                    </SelectContent>
-                                </Select>
                             </div>
-                        </div>
+                        )}
                     </CardContent>
                 </Card>
 
-                {/* Regional Section */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-[#fb923c]/10 flex items-center justify-center">
-                                <Globe className="h-5 w-5 text-[#fb923c]" />
-                            </div>
-                            <h2 className="text-xl font-bold text-white">{regionalTitle}</h2>
-                        </div>
+                <Card className="rounded-2xl">
+                    <CardHeader>
+                        <CardTitle>Factor registrati</CardTitle>
+                        <CardDescription>
+                            Tieni almeno due authenticator per ridurre il rischio di lockout.
+                        </CardDescription>
+                    </CardHeader>
 
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                    <Languages className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{languageLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{languageDesc}</p>
-                                    </div>
-                                </div>
-                                <Select value={language} onValueChange={setLanguage}>
-                                    <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="en" className="text-white">English</SelectItem>
-                                        <SelectItem value="it" className="text-white">Italiano</SelectItem>
-                                        <SelectItem value="fr" className="text-white">Français</SelectItem>
-                                        <SelectItem value="es" className="text-white">Español</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                    <CardContent>
+                        {loading ? (
+                            <div className="text-sm text-muted-foreground">Caricamento factor...</div>
+                        ) : verifiedFactors.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">Nessun factor verificato.</div>
+                        ) : (
+                            <div className="space-y-3">
+                                {verifiedFactors.map((factor) => (
+                                    <div
+                                        key={factor.id}
+                                        className="rounded-xl border border-border p-4 flex items-center justify-between gap-4"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="font-medium">{factor.friendly_name || "Authenticator"}</div>
+                                            <div className="text-sm text-muted-foreground">
+                                                {factor.factor_type || "totp"} · {factor.status || "verified"}
+                                            </div>
+                                        </div>
 
-                            <div className="flex items-center justify-between py-3">
-                                <div className="flex items-center gap-3">
-                                    <Clock className="h-5 w-5 text-slate-400" />
-                                    <div>
-                                        <Label className="text-white font-medium">{timezoneLabel}</Label>
-                                        <p className="text-sm text-slate-400 mt-0.5">{timezoneDesc}</p>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => handleRemoveFactor(factor.id)}
+                                            disabled={removingFactorId === factor.id}
+                                        >
+                                            {removingFactorId === factor.id ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                            )}
+                                            Rimuovi
+                                        </Button>
                                     </div>
-                                </div>
-                                <Select value={timezone} onValueChange={setTimezone}>
-                                    <SelectTrigger className="w-[180px] bg-slate-700 border-slate-600 text-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        <SelectItem value="Europe/Rome" className="text-white">Europe/Rome (CET)</SelectItem>
-                                        <SelectItem value="Europe/London" className="text-white">Europe/London (GMT)</SelectItem>
-                                        <SelectItem value="America/New_York" className="text-white">America/New York (EST)</SelectItem>
-                                        <SelectItem value="Asia/Tokyo" className="text-white">Asia/Tokyo (JST)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                ))}
                             </div>
-                        </div>
+                        )}
                     </CardContent>
                 </Card>
-
-                {/* System Information Section */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                                <Database className="h-5 w-5 text-blue-400" />
-                            </div>
-                            <h2 className="text-xl font-bold text-white">{systemInfoTitle}</h2>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
-                                <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{versionLabel}</p>
-                                <p className="text-2xl font-bold text-white">2.1.0</p>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
-                                <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{databaseLabel}</p>
-                                <p className="text-2xl font-bold text-white">PostgreSQL</p>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
-                                <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{lastBackupLabel}</p>
-                                <p className="text-2xl font-bold text-white">Today 03:00</p>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700/50">
-                                <p className="text-xs text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1">
-                                    <Activity className="h-3 w-3" />
-                                    {statusLabel}
-                                </p>
-                                <p className="text-2xl font-bold text-green-400 flex items-center gap-2">
-                                    <CheckCircle className="h-5 w-5" />
-                                    {healthyText}
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <div className="flex justify-end">
-                    <Button
-                        onClick={handleSaveSettings}
-                        className="bg-[#fb923c] hover:bg-[#f97316] text-white px-6 py-2"
-                    >
-                        {saveSettingsText}
-                    </Button>
-                </div>
             </div>
         </MainLayout>
     );
