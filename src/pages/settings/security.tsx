@@ -26,6 +26,7 @@ import {
     getMfaStatus,
 } from "@/services/mfaService";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface FactorRow {
     id: string;
@@ -37,6 +38,7 @@ interface FactorRow {
 
 export default function SecuritySettingsPage() {
     const { toast } = useToast();
+    const { t } = useLanguage();
 
     const [userRole, setUserRole] = useState("technician");
     const [loading, setLoading] = useState(true);
@@ -44,14 +46,13 @@ export default function SecuritySettingsPage() {
     const [aal, setAal] = useState < string | null > (null);
     const [nextLevel, setNextLevel] = useState < string | null > (null);
 
-    const [friendlyName, setFriendlyName] = useState("Telefono lavoro");
+    const [friendlyName, setFriendlyName] = useState(t("security.defaultFactorName"));
     const [code, setCode] = useState("");
     const [enrolling, setEnrolling] = useState(false);
     const [verifying, setVerifying] = useState(false);
     const [removingFactorId, setRemovingFactorId] = useState < string | null > (null);
 
     const [pendingFactorId, setPendingFactorId] = useState < string | null > (null);
-    const [pendingQrCode, setPendingQrCode] = useState < string | null > (null);
     const [pendingSecret, setPendingSecret] = useState < string | null > (null);
     const [pendingUri, setPendingUri] = useState < string | null > (null);
 
@@ -75,8 +76,8 @@ export default function SecuritySettingsPage() {
             } catch (error: any) {
                 console.error(error);
                 toast({
-                    title: "Errore",
-                    description: error?.message ?? "Errore caricamento sicurezza.",
+                    title: t("security.toast.error"),
+                    description: error?.message ?? t("security.toast.loadError"),
                     variant: "destructive",
                 });
             } finally {
@@ -98,19 +99,18 @@ export default function SecuritySettingsPage() {
             const result = await enrollTotpFactor(friendlyName);
 
             setPendingFactorId(result.factorId);
-            setPendingQrCode(result.qrCode);
             setPendingSecret(result.secret);
             setPendingUri(result.uri);
 
             toast({
-                title: "2FA avviata",
-                description: "Scansiona il QR e inserisci il codice generato.",
+                title: t("security.toast.enrollStarted"),
+                description: t("security.toast.enrollStartedDescription"),
             });
         } catch (error: any) {
             console.error(error);
             toast({
-                title: "Errore attivazione 2FA",
-                description: error?.message ?? "Impossibile avviare enrolment MFA.",
+                title: t("security.toast.enrollError"),
+                description: error?.message ?? t("security.toast.enrollErrorDescription"),
                 variant: "destructive",
             });
         } finally {
@@ -132,13 +132,12 @@ export default function SecuritySettingsPage() {
             });
 
             toast({
-                title: "2FA attivata",
-                description: "Il factor TOTP è stato verificato correttamente.",
+                title: t("security.toast.verified"),
+                description: t("security.toast.verifiedDescription"),
             });
 
             setCode("");
             setPendingFactorId(null);
-            setPendingQrCode(null);
             setPendingSecret(null);
             setPendingUri(null);
 
@@ -146,8 +145,8 @@ export default function SecuritySettingsPage() {
         } catch (error: any) {
             console.error(error);
             toast({
-                title: "Errore verifica",
-                description: error?.message ?? "Codice non valido o challenge scaduta.",
+                title: t("security.toast.verifyError"),
+                description: error?.message ?? t("security.toast.verifyErrorDescription"),
                 variant: "destructive",
             });
         } finally {
@@ -161,16 +160,16 @@ export default function SecuritySettingsPage() {
             await unenrollFactor(factorId);
 
             toast({
-                title: "Factor rimosso",
-                description: "Il dispositivo MFA è stato eliminato.",
+                title: t("security.toast.removed"),
+                description: t("security.toast.removedDescription"),
             });
 
             await loadAll();
         } catch (error: any) {
             console.error(error);
             toast({
-                title: "Errore rimozione",
-                description: error?.message ?? "Impossibile rimuovere il factor.",
+                title: t("security.toast.removeError"),
+                description: error?.message ?? t("security.toast.removeErrorDescription"),
                 variant: "destructive",
             });
         } finally {
@@ -180,38 +179,38 @@ export default function SecuritySettingsPage() {
 
     return (
         <MainLayout userRole={userRole}>
-            <SEO title="Sicurezza - MACHINA" />
+            <SEO title={`Sicurezza - MACHINA`} />
 
             <div className="container mx-auto max-w-5xl px-4 py-8 space-y-6">
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Shield className="h-5 w-5" />
-                            Sicurezza account
+                            {t("security.title")}
                         </CardTitle>
                         <CardDescription>
-                            Attiva autenticazione a due fattori TOTP per account critici MACHINA.
+                            {t("security.subtitle")}
                         </CardDescription>
                     </CardHeader>
 
                     <CardContent className="flex flex-wrap items-center gap-3">
                         <Badge variant={aal === "aal2" ? "default" : "outline"}>
-                            Livello attuale: {aal ?? "—"}
+                            {t("security.currentLevel")}: {aal ?? "—"}
                         </Badge>
 
                         <Badge variant="outline">
-                            Livello successivo richiesto: {nextLevel ?? "—"}
+                            {t("security.nextLevel")}: {nextLevel ?? "—"}
                         </Badge>
 
                         {aal === "aal2" ? (
                             <div className="inline-flex items-center gap-2 text-sm text-green-600">
                                 <CheckCircle2 className="h-4 w-4" />
-                                2FA verificata
+                                {t("security.verified")}
                             </div>
                         ) : (
                             <div className="inline-flex items-center gap-2 text-sm text-amber-600">
                                 <AlertTriangle className="h-4 w-4" />
-                                2FA non completata
+                                {t("security.notVerified")}
                             </div>
                         )}
                     </CardContent>
@@ -221,10 +220,10 @@ export default function SecuritySettingsPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Smartphone className="h-5 w-5" />
-                            Nuovo authenticator
+                            {t("security.newAuthenticator")}
                         </CardTitle>
                         <CardDescription>
-                            Crea un factor TOTP e verifica il codice a 6 cifre.
+                            {t("security.newAuthenticatorDescription")}
                         </CardDescription>
                     </CardHeader>
 
@@ -232,12 +231,12 @@ export default function SecuritySettingsPage() {
                         {!pendingFactorId ? (
                             <>
                                 <div className="space-y-2 max-w-md">
-                                    <Label htmlFor="friendlyName">Nome dispositivo</Label>
+                                    <Label htmlFor="friendlyName">{t("security.factorName")}</Label>
                                     <Input
                                         id="friendlyName"
                                         value={friendlyName}
                                         onChange={(e) => setFriendlyName(e.target.value)}
-                                        placeholder="Es. Telefono lavoro"
+                                        placeholder={t("security.factorNamePlaceholder")}
                                     />
                                 </div>
 
@@ -247,7 +246,7 @@ export default function SecuritySettingsPage() {
                                     ) : (
                                         <KeyRound className="mr-2 h-4 w-4" />
                                     )}
-                                    Avvia configurazione 2FA
+                                    {t("security.startSetup")}
                                 </Button>
                             </>
                         ) : (
@@ -256,20 +255,20 @@ export default function SecuritySettingsPage() {
                                     {pendingUri ? (
                                         <QRCodeGenerator value={pendingUri} size={220} />
                                     ) : (
-                                        <div className="text-sm text-muted-foreground">QR non disponibile</div>
+                                        <div className="text-sm text-muted-foreground">{t("security.qrUnavailable")}</div>
                                     )}
                                 </div>
 
                                 <div className="space-y-4">
                                     <div>
-                                        <div className="text-sm font-medium">Secret manuale</div>
+                                        <div className="text-sm font-medium">{t("security.manualSecret")}</div>
                                         <div className="mt-1 rounded-xl bg-muted p-3 font-mono text-sm break-all">
                                             {pendingSecret ?? "—"}
                                         </div>
                                     </div>
 
                                     <div className="space-y-2 max-w-xs">
-                                        <Label htmlFor="totpCode">Codice a 6 cifre</Label>
+                                        <Label htmlFor="totpCode">{t("security.codeLabel")}</Label>
                                         <Input
                                             id="totpCode"
                                             value={code}
@@ -282,20 +281,19 @@ export default function SecuritySettingsPage() {
                                     <div className="flex gap-2">
                                         <Button onClick={handleVerifyEnroll} disabled={verifying || !code.trim()}>
                                             {verifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Verifica e attiva
+                                            {t("security.verifyAndEnable")}
                                         </Button>
 
                                         <Button
                                             variant="outline"
                                             onClick={() => {
                                                 setPendingFactorId(null);
-                                                setPendingQrCode(null);
                                                 setPendingSecret(null);
                                                 setPendingUri(null);
                                                 setCode("");
                                             }}
                                         >
-                                            Annulla
+                                            {t("common.cancel")}
                                         </Button>
                                     </div>
                                 </div>
@@ -306,17 +304,17 @@ export default function SecuritySettingsPage() {
 
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Factor registrati</CardTitle>
+                        <CardTitle>{t("security.registeredFactors")}</CardTitle>
                         <CardDescription>
-                            Tieni almeno due authenticator per ridurre il rischio di lockout.
+                            {t("security.registeredFactorsDescription")}
                         </CardDescription>
                     </CardHeader>
 
                     <CardContent>
                         {loading ? (
-                            <div className="text-sm text-muted-foreground">Caricamento factor...</div>
+                            <div className="text-sm text-muted-foreground">{t("security.loadingFactors")}</div>
                         ) : verifiedFactors.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Nessun factor verificato.</div>
+                            <div className="text-sm text-muted-foreground">{t("security.noFactors")}</div>
                         ) : (
                             <div className="space-y-3">
                                 {verifiedFactors.map((factor) => (
@@ -325,7 +323,9 @@ export default function SecuritySettingsPage() {
                                         className="rounded-xl border border-border p-4 flex items-center justify-between gap-4"
                                     >
                                         <div className="min-w-0">
-                                            <div className="font-medium">{factor.friendly_name || "Authenticator"}</div>
+                                            <div className="font-medium">
+                                                {factor.friendly_name || t("security.authenticatorFallback")}
+                                            </div>
                                             <div className="text-sm text-muted-foreground">
                                                 {factor.factor_type || "totp"} · {factor.status || "verified"}
                                             </div>
@@ -341,7 +341,7 @@ export default function SecuritySettingsPage() {
                                             ) : (
                                                 <Trash2 className="mr-2 h-4 w-4" />
                                             )}
-                                            Rimuovi
+                                            {t("security.remove")}
                                         </Button>
                                     </div>
                                 ))}
