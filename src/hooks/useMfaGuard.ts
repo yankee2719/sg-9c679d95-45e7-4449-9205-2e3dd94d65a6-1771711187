@@ -1,100 +1,64 @@
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getMfaStatus } from "@/services/mfaService";
 
-export interface MfaFactorLite {
-    id: string;
-    friendly_name?: string | null;
-    factor_type?: string | null;
-    status?: string | null;
-    created_at?: string | null;
-}
+export function useMfaGuard() {
+    const [loading, setLoading] = useState(true);
+    const [aal, setAal] = useState < string | null > (null);
+    const [nextLevel, setNextLevel] = useState < string | null > (null);
+    const [userId, setUserId] = useState < string | null > (null);
 
-export interface EnrollTotpResult {
-    factorId: string;
-    qrCode: string;
-    secret: string;
-    uri: string;
-    friendlyName: string | null;
-}
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
 
-export async function getMfaStatus() {
-    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (error) throw error;
-    return data;
-}
+                setUserId(user?.id ?? null);
 
-export async function listMfaFactors(): Promise<MfaFactorLite[]> {
-    const { data, error } = await supabase.auth.mfa.listFactors();
-    if (error) throw error;
+                if (!user) {
+                    setAal(null);
+                    setNextLevel(null);
+                    return;
+                }
 
-    return [
-        ...(data?.totp ?? []),
-        ...(data?.phone ?? []),
-    ].map((factor: any) => ({
-        id: factor.id,
-        friendly_name: factor.friendly_name ?? null,
-        factor_type: factor.factor_type ?? factor.factorType ?? null,
-        status: factor.status ?? null,
-        created_at: factor.created_at ?? null,
-    }));
-}
+                const status = await getMfaStatus();
+                setAal(status.currentLevel ?? null);
+                setNextLevel(status.nextLevel ?? null);
+            } catch (error) {
+                console.error("MFA guard load error:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-export async function enrollTotpFactor(friendlyName: string): Promise<EnrollTotpResult> {
-    const { data, error } = await supabase.auth.mfa.enroll({
-        factorType: "totp",
-        friendlyName: friendlyName.trim() || "Authenticator",
-    });
+        load();
 
-    if (error) throw error;
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange(async () => {
+            try {
+                const status = await getMfaStatus();
+                setAal(status.currentLevel ?? null);
+                setNextLevel(status.nextLevel ?? null);
+            } catch (error) {
+                console.error("MFA guard auth change error:", error);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const isAal2 = useMemo(() => aal === "aal2", [aal]);
+    const needsMfa = useMemo(() => aal !== "aal2" && nextLevel === "aal2", [aal, nextLevel]);
 
     return {
-        factorId: data.id,
-        qrCode: data.totp.qr_code,
-        secret: data.totp.secret,
-        uri: data.totp.uri,
-        friendlyName: data.friendly_name ?? null,
+        loading,
+        userId,
+        aal,
+        nextLevel,
+        isAal2,
+        needsMfa,
     };
-}
-
-export async function challengeFactor(factorId: string) {
-    const { data, error } = await supabase.auth.mfa.challenge({ factorId });
-    if (error) throw error;
-    return data;
-}
-
-export async function verifyFactor(params: {
-    factorId: string;
-    challengeId: string;
-    code: string;
-}) {
-    const { factorId, challengeId, code } = params;
-
-    const { data, error } = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId,
-        code: code.trim(),
-    });
-
-    if (error) throw error;
-    return data;
-}
-
-export async function challengeAndVerifyTotp(params: {
-    factorId: string;
-    code: string;
-}) {
-    const { factorId, code } = params;
-
-    const { data, error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId,
-        code: code.trim(),
-    });
-
-    if (error) throw error;
-    return data;
-}
-
-export async function unenrollFactor(factorId: string) {
-    const { data, error } = await supabase.auth.mfa.unenroll({ factorId });
-    if (error) throw error;
-    return data;
 }
