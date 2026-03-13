@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { getProfileData } from "@/lib/supabaseHelpers";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
+import { ShieldAlert } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -359,6 +361,8 @@ export default function UsersPage() {
             setDeleting(false);
         }
     };
+
+    const { loading: mfaLoading, isAal2, needsMfa } = useMfaGuard();
 
     const getRoleBadge = (role: string) => {
         const config: Record<string, { label: string; className: string }> = {
