@@ -6,393 +6,385 @@ import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
-import { useRouter } from "next/router";
-import { useMfaGuard } from "@/hooks/useMfaGuard";
-import { ShieldCheck, ShieldAlert } from "lucide-react";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { Badge } from "@/components/ui/badge";
 import {
-  LayoutDashboard,
-  Wrench,
-  ClipboardList,
-  Settings,
-  LogOut,
-  Menu,
-  Bell,
-  Users,
-  QrCode,
-  BarChart3,
-  Building2,
-  Factory,
-  FileText,
-  ShieldCheck,
-  CheckSquare,
-  Package,
-  Layers3,
-  X,
-  Globe,
+    LayoutDashboard,
+    Wrench,
+    ClipboardList,
+    Settings,
+    LogOut,
+    Menu,
+    Bell,
+    Users,
+    QrCode,
+    BarChart3,
+    Building2,
+    Factory,
+    FileText,
+    ShieldCheck,
+    ShieldAlert,
+    CheckSquare,
+    Package,
+    Layers3,
+    X,
+    Globe,
 } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
 type OrgType = "manufacturer" | "customer" | null;
 
 interface MainLayoutProps {
-  children: React.ReactNode;
-  userRole?: UserRole;
+    children: React.ReactNode;
+    userRole?: UserRole;
 }
 
 interface NavItem {
-  href: string;
-  labelKey: string;
-  icon: React.ComponentType<{ className?: string }>;
-  roles?: string[];
-  orgTypes?: Array<"manufacturer" | "customer">;
+    href: string;
+    labelKey: string;
+    icon: React.ComponentType<{ className?: string }>;
+    roles?: string[];
+    orgTypes?: Array<"manufacturer" | "customer">;
 }
 
-{!mfaLoading && (
-  isAal2 ? (
-    <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-      <ShieldCheck className="h-3.5 w-3.5" />
-      2FA
-    </div>
-  ) : mustEnforceMfa ? (
-    <button
-      onClick={() => router.push("/settings/security")}
-      className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
-      title="Completa la verifica 2FA"
-    >
-      <ShieldAlert className="h-3.5 w-3.5" />
-      2FA richiesta
-    </button>
-  ) : null
-)}
-
 function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
+    return classes.filter(Boolean).join(" ");
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
-  const router = useRouter();
-  const { t, language, setLanguage } = useLanguage();
+    const router = useRouter();
+    const { t, language, setLanguage } = useLanguage();
+    const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [profileName, setProfileName] = useState("Utente");
-  const [profileRole, setProfileRole] = useState<string>(userRole);
-  const [orgType, setOrgType] = useState<OrgType>(null);
-  const [orgName, setOrgName] = useState("Organizzazione");
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [profileName, setProfileName] = useState("Utente");
+    const [profileRole, setProfileRole] = useState < string > (userRole);
+    const [orgType, setOrgType] = useState < OrgType > (null);
+    const [orgName, setOrgName] = useState("Organizzazione");
     const [notificationCount, setNotificationCount] = useState(0);
-    const { isAal2 } = useMfaGuard();
 
-  useEffect(() => {
-    const loadHeader = async () => {
-      try {
-        const ctx = await getUserContext();
+    useEffect(() => {
+        const loadHeader = async () => {
+            try {
+                const ctx = await getUserContext();
 
-        if (ctx?.displayName) setProfileName(ctx.displayName);
-        if (ctx?.role) setProfileRole(ctx.role);
-        if (ctx?.orgType) setOrgType(ctx.orgType as OrgType);
+                if (ctx?.displayName) setProfileName(ctx.displayName);
+                if (ctx?.role) setProfileRole(ctx.role);
+                if (ctx?.orgType) setOrgType(ctx.orgType as OrgType);
 
-        if (ctx?.orgId) {
-          const { data: org } = await supabase
-            .from("organizations")
-            .select("name")
-            .eq("id", ctx.orgId)
-            .maybeSingle();
+                if (ctx?.orgId) {
+                    const { data: org } = await supabase
+                        .from("organizations")
+                        .select("name")
+                        .eq("id", ctx.orgId)
+                        .maybeSingle();
 
-          setOrgName((org as { name?: string } | null)?.name ?? "Organizzazione");
-        }
+                    setOrgName((org as { name?: string } | null)?.name ?? "Organizzazione");
+                }
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
 
-        if (user) {
-          const notif = await getNotificationCount(user.id);
-          setNotificationCount(notif || 0);
-        }
-      } catch (error) {
-        console.error("MainLayout loadHeader error:", error);
-      }
-    };
+                if (user) {
+                    const notif = await getNotificationCount(user.id);
+                    setNotificationCount(notif || 0);
+                }
+            } catch (error) {
+                console.error("MainLayout loadHeader error:", error);
+            }
+        };
 
-    loadHeader();
-  }, [userRole, router.asPath]);
+        loadHeader();
+    }, [userRole, router.asPath]);
 
-  const initials = useMemo(() => {
-    const parts = (profileName || "Utente")
-      .split(" ")
-      .map((p) => p.trim())
-      .filter(Boolean);
+    const initials = useMemo(() => {
+        const parts = (profileName || "Utente")
+            .split(" ")
+            .map((p) => p.trim())
+            .filter(Boolean);
 
-    if (parts.length === 0) return "U";
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }, [profileName]);
+        if (parts.length === 0) return "U";
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }, [profileName]);
 
-  const navItems: NavItem[] = [
-    { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-    { href: "/equipment", labelKey: "nav.equipment", icon: Factory },
-    { href: "/maintenance", labelKey: "nav.maintenance", icon: Wrench },
-    { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
-    { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
-    { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
-    { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
-    { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
-    { href: "/documents", labelKey: "nav.documents", icon: FileText },
-    { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
-    { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
-    { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-    { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-    { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
-    { href: "/settings", labelKey: "nav.settings", icon: Settings },
-  ];
+    const navItems: NavItem[] = [
+        { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+        { href: "/equipment", labelKey: "nav.equipment", icon: Factory },
+        { href: "/maintenance", labelKey: "nav.maintenance", icon: Wrench },
+        { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
+        { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
+        { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
+        { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
+        { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
+        { href: "/documents", labelKey: "nav.documents", icon: FileText },
+        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
+        { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
+        { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
+        { href: "/settings", labelKey: "nav.settings", icon: Settings },
+    ];
 
-  const filteredNavItems = navItems.filter((item) => {
-    const roleOk = !item.roles || item.roles.includes(profileRole);
-    const orgOk = !item.orgTypes || (orgType ? item.orgTypes.includes(orgType) : true);
-    return roleOk && orgOk;
-  });
+    const filteredNavItems = navItems.filter((item) => {
+        const roleOk = !item.roles || item.roles.includes(profileRole);
+        const orgOk = !item.orgTypes || (orgType ? item.orgTypes.includes(orgType) : true);
+        return roleOk && orgOk;
+    });
 
-  const mainItems = filteredNavItems.filter(
-    (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
-  );
-
-  const managementItems = filteredNavItems.filter((item) =>
-    ["/customers", "/assignments", "/users"].includes(item.href)
-  );
-
-  const settingsItems = filteredNavItems.filter((item) =>
-    ["/settings/organization", "/settings"].includes(item.href)
-  );
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.push("/login");
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  const isActive = (href: string) =>
-    router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
-
-  const getOrgTypeLabel = () => {
-    if (orgType === "manufacturer") return t("org.manufacturer");
-    if (orgType === "customer") return t("org.customer");
-    return t("org.platform");
-  };
-
-  const getHeaderContextLabel = () => {
-    if (orgType === "manufacturer") return t("org.manufacturer");
-    if (orgType === "customer") return t("org.customer");
-    return t("org.context");
-  };
-
-  const getCurrentPageKey = () => {
-    const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
-    if (exactMatch) return exactMatch.labelKey;
-
-    const startsWithMatch = filteredNavItems.find(
-      (item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href)
+    const mainItems = filteredNavItems.filter(
+        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
     );
 
-    return startsWithMatch?.labelKey ?? "nav.dashboard";
-  };
+    const managementItems = filteredNavItems.filter((item) =>
+        ["/customers", "/assignments", "/users"].includes(item.href)
+    );
 
-  const NavLink = ({ href, labelKey, icon: Icon }: NavItem) => (
-    <Link
-      href={href}
-      onClick={() => setSidebarOpen(false)}
-      className={cn(
-        "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
-        isActive(href)
-          ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
-          : "text-foreground/75 hover:bg-muted hover:text-foreground"
-      )}
-    >
-      <Icon className="h-5 w-5 shrink-0" />
-      <span className="truncate">{t(labelKey)}</span>
-    </Link>
-  );
+    const settingsItems = filteredNavItems.filter((item) =>
+        ["/settings/organization", "/settings"].includes(item.href)
+    );
 
-  const router = useRouter();
-const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
+    const handleLogout = async () => {
+        try {
+            await supabase.auth.signOut();
+            router.push("/login");
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
+    };
 
-  const SideContent = () => (
-    <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
-      <div className="border-b border-border px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
-            <Wrench className="h-5 w-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">
-              MACHINA
-            </div>
-            <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
-          </div>
-        </div>
-      </div>
+    const isActive = (href: string) =>
+        router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
 
-      <div className="px-4 py-4">
-        <div className="rounded-2xl border border-border bg-card p-3 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.2)]">
-          <OrganizationSwitcher />
-        </div>
-      </div>
+    const getOrgTypeLabel = () => {
+        if (orgType === "manufacturer") return t("org.manufacturer");
+        if (orgType === "customer") return t("org.customer");
+        return t("org.platform");
+    };
 
-      <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-4 pb-4">
-        <div className="space-y-2">
-          {mainItems.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-        </div>
+    const getHeaderContextLabel = () => {
+        if (orgType === "manufacturer") return t("org.manufacturer");
+        if (orgType === "customer") return t("org.customer");
+        return t("org.context");
+    };
 
-        {managementItems.length > 0 && (
-          <div className="space-y-2">
-            <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              {t("common.management")}
-            </div>
-            {managementItems.map((item) => (
-              <NavLink key={item.href} {...item} />
-            ))}
-          </div>
-        )}
+    const getCurrentPageKey = () => {
+        const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
+        if (exactMatch) return exactMatch.labelKey;
 
-        {settingsItems.length > 0 && (
-          <div className="space-y-2">
-            <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              {t("common.system")}
-            </div>
-            {settingsItems.map((item) => (
-              <NavLink key={item.href} {...item} />
-            ))}
-          </div>
-        )}
-      </div>
+        const startsWithMatch = filteredNavItems.find(
+            (item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href)
+        );
 
-      <div className="border-t border-border p-4">
-        <button
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
-          type="button"
+        return startsWithMatch?.labelKey ?? "nav.dashboard";
+    };
+
+    const NavLink = ({ href, labelKey, icon: Icon }: NavItem) => (
+        <Link
+            href={href}
+            onClick={() => setSidebarOpen(false)}
+            className={cn(
+                "flex items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium transition-all",
+                isActive(href)
+                    ? "bg-orange-500 text-white shadow-[0_12px_30px_-12px_rgba(249,115,22,0.9)]"
+                    : "text-foreground/75 hover:bg-muted hover:text-foreground"
+            )}
         >
-          <LogOut className="h-5 w-5 shrink-0" />
-          <span>{t("common.logout")}</span>
-        </button>
-      </div>
-    </div>
-  );
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="truncate">{t(labelKey)}</span>
+        </Link>
+    );
 
-    <Badge variant={isAal2 ? "default" : "outline"}>
-        {isAal2 ? "2FA OK" : "2FA OFF"}
-    </Badge>
-
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-[272px] shrink-0 lg:block">
-          <div className="sticky top-0 h-screen">
-            <SideContent />
-          </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-            <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
-              <div className="flex items-center gap-3">
-                <button
-                  className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
-                  onClick={() => setSidebarOpen(true)}
-                  type="button"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-
-                <div>
-                  <div className="text-lg font-semibold">{t(getCurrentPageKey())}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {orgName} · {getHeaderContextLabel()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value as Language)}
-                    aria-label={t("common.language")}
-                    className="rounded-md bg-card text-sm font-medium text-foreground outline-none"
-                  >
-                    <option value="it" className="bg-card text-foreground">
-                      IT
-                    </option>
-                    <option value="en" className="bg-card text-foreground">
-                      EN
-                    </option>
-                    <option value="fr" className="bg-card text-foreground">
-                      FR
-                    </option>
-                    <option value="es" className="bg-card text-foreground">
-                      ES
-                    </option>
-                  </select>
-                </div>
-
-                <ThemeSwitch />
-
-                <Link
-                  href="/notifications"
-                  className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted"
-                  aria-label={t("common.notifications")}
-                >
-                  <Bell className="h-5 w-5" />
-                  {notificationCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
-                      {notificationCount > 99 ? "99+" : notificationCount}
-                    </span>
-                  )}
-                </Link>
-
-                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] md:flex">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                    {initials}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="max-w-[180px] truncate text-sm font-semibold">
-                      {profileName}
+    const SideContent = () => (
+        <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
+            <div className="border-b border-border px-4 py-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
+                        <Wrench className="h-5 w-5 text-white" />
                     </div>
-                    <div className="text-xs capitalize text-muted-foreground">{profileRole}</div>
-                  </div>
+                    <div className="min-w-0">
+                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">
+                            MACHINA
+                        </div>
+                        <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
+                    </div>
                 </div>
-              </div>
             </div>
-          </header>
 
-          <main className="min-h-0 flex-1 bg-background">{children}</main>
-        </div>
-      </div>
+            <div className="px-4 py-4">
+                <div className="rounded-2xl border border-border bg-card p-3 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.2)]">
+                    <OrganizationSwitcher />
+                </div>
+            </div>
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[272px] shadow-2xl">
-            <button
-              className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
-              onClick={() => setSidebarOpen(false)}
-              type="button"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <SideContent />
-          </div>
+            <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-4 pb-4">
+                <div className="space-y-2">
+                    {mainItems.map((item) => (
+                        <NavLink key={item.href} {...item} />
+                    ))}
+                </div>
+
+                {managementItems.length > 0 && (
+                    <div className="space-y-2">
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            {t("common.management")}
+                        </div>
+                        {managementItems.map((item) => (
+                            <NavLink key={item.href} {...item} />
+                        ))}
+                    </div>
+                )}
+
+                {settingsItems.length > 0 && (
+                    <div className="space-y-2">
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            {t("common.system")}
+                        </div>
+                        {settingsItems.map((item) => (
+                            <NavLink key={item.href} {...item} />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="border-t border-border p-4">
+                <button
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-foreground/80 transition hover:bg-muted hover:text-foreground"
+                    type="button"
+                >
+                    <LogOut className="h-5 w-5 shrink-0" />
+                    <span>{t("common.logout")}</span>
+                </button>
+            </div>
         </div>
-      )}
-    </div>
-  );
-  
+    );
+
+    return (
+        <div className="min-h-screen bg-background text-foreground">
+            <div className="flex min-h-screen">
+                <aside className="hidden w-[272px] shrink-0 lg:block">
+                    <div className="sticky top-0 h-screen">
+                        <SideContent />
+                    </div>
+                </aside>
+
+                <div className="flex min-w-0 flex-1 flex-col">
+                    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+                        <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
+                                    onClick={() => setSidebarOpen(true)}
+                                    type="button"
+                                >
+                                    <Menu className="h-5 w-5" />
+                                </button>
+
+                                <div>
+                                    <div className="text-lg font-semibold">{t(getCurrentPageKey())}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {orgName} · {getHeaderContextLabel()}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                {!mfaLoading &&
+                                    (isAal2 ? (
+                                        <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                            <ShieldCheck className="h-3.5 w-3.5" />
+                                            2FA
+                                        </div>
+                                    ) : mustEnforceMfa ? (
+                                        <button
+                                            onClick={() => router.push("/settings/security")}
+                                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
+                                            title="Completa la verifica 2FA"
+                                            type="button"
+                                        >
+                                            <ShieldAlert className="h-3.5 w-3.5" />
+                                            2FA richiesta
+                                        </button>
+                                    ) : (
+                                        <Badge variant="outline">2FA OFF</Badge>
+                                    ))}
+
+                                <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
+                                    <Globe className="h-4 w-4 text-muted-foreground" />
+                                    <select
+                                        value={language}
+                                        onChange={(e) => setLanguage(e.target.value as Language)}
+                                        aria-label={t("common.language")}
+                                        className="rounded-md bg-card text-sm font-medium text-foreground outline-none"
+                                    >
+                                        <option value="it" className="bg-card text-foreground">
+                                            IT
+                                        </option>
+                                        <option value="en" className="bg-card text-foreground">
+                                            EN
+                                        </option>
+                                        <option value="fr" className="bg-card text-foreground">
+                                            FR
+                                        </option>
+                                        <option value="es" className="bg-card text-foreground">
+                                            ES
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <ThemeSwitch />
+
+                                <Link
+                                    href="/notifications"
+                                    className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted"
+                                    aria-label={t("common.notifications")}
+                                >
+                                    <Bell className="h-5 w-5" />
+                                    {notificationCount > 0 && (
+                                        <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                                            {notificationCount > 99 ? "99+" : notificationCount}
+                                        </span>
+                                    )}
+                                </Link>
+
+                                <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] md:flex">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+                                        {initials}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="max-w-[180px] truncate text-sm font-semibold">
+                                            {profileName}
+                                        </div>
+                                        <div className="text-xs capitalize text-muted-foreground">{profileRole}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="min-h-0 flex-1 bg-background">{children}</main>
+                </div>
+            </div>
+
+            {sidebarOpen && (
+                <div className="fixed inset-0 z-50 lg:hidden">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+                    <div className="absolute inset-y-0 left-0 w-[272px] shadow-2xl">
+                        <button
+                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
+                            onClick={() => setSidebarOpen(false)}
+                            type="button"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                        <SideContent />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default MainLayout;
