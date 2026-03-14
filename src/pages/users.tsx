@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { getProfileData } from "@/lib/supabaseHelpers";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
-import { ShieldAlert } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -36,7 +35,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useMfaGuard } from "@/hooks/useMfaGuard";
 import {
     UserPlus,
     Users,
@@ -98,7 +96,6 @@ export default function UsersPage() {
     const [memberToDelete, setMemberToDelete] = useState < MemberUser | null > (null);
 
     const isAdmin = currentUserRole === "admin";
-    const canManageUsers = currentUserRole === "admin" || currentUserRole === "supervisor";
 
     useEffect(() => {
         const checkAccess = async () => {
@@ -362,8 +359,6 @@ export default function UsersPage() {
         }
     };
 
-    const { loading: mfaLoading, isAal2, needsMfa } = useMfaGuard();
-
     const getRoleBadge = (role: string) => {
         const config: Record<string, { label: string; className: string }> = {
             admin: {
@@ -409,39 +404,6 @@ export default function UsersPage() {
                                 <div className="text-lg font-semibold">Verifica 2FA richiesta</div>
                                 <div className="text-sm text-muted-foreground">
                                     Per accedere alla gestione utenti devi completare l’autenticazione a due fattori.
-                                </div>
-                                <Button onClick={() => router.push("/settings/security")}>
-                                    Vai a Sicurezza
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </MainLayout>
-        );
-    }
-
-    if (mfaLoading) {
-        return (
-            <MainLayout userRole={currentUserRole ?? "technician"}>
-                <div className="container mx-auto py-8">
-                    <div className="text-sm text-muted-foreground">Verifica sicurezza in corso...</div>
-                </div>
-            </MainLayout>
-        );
-    }
-
-    if (needsMfa && !isAal2) {
-        return (
-            <MainLayout userRole={currentUserRole ?? "technician"}>
-                <div className="container mx-auto max-w-2xl py-10">
-                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
-                        <div className="flex items-start gap-3">
-                            <ShieldAlert className="h-5 w-5 text-amber-500 mt-0.5" />
-                            <div className="space-y-3">
-                                <div className="text-lg font-semibold">Verifica 2FA richiesta</div>
-                                <div className="text-sm text-muted-foreground">
-                                    Per accedere a questa sezione devi completare l’autenticazione a due fattori.
                                 </div>
                                 <Button onClick={() => router.push("/settings/security")}>
                                     Vai a Sicurezza
