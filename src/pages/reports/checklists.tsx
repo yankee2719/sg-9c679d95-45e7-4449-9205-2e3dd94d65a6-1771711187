@@ -4,15 +4,15 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRightLeft, ClipboardCheck } from "lucide-react";
+import { ArrowRightLeft, BarChart3 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 
-export default function ReportsChecklistRedirect() {
+export default function ReportsIndexRedirect() {
     const router = useRouter();
     const { language } = useLanguage();
-    const text = getChecklistFlowTexts(language).redirects.reportsChecklists;
-    const target = "/checklists/executions";
+    const text = getChecklistFlowTexts(language).redirects.reportsIndex;
+    const target = "/analytics";
 
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -28,7 +28,7 @@ export default function ReportsChecklistRedirect() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <ClipboardCheck className="h-5 w-5" />
+                            <BarChart3 className="h-5 w-5" />
                             {text.title}
                         </CardTitle>
                         <CardDescription>{text.description}</CardDescription>
