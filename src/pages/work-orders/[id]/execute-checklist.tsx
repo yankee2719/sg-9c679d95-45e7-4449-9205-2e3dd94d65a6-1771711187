@@ -17,6 +17,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 
 type WorkOrderRow = {
     id: string;
@@ -56,9 +58,18 @@ type ItemValue = {
     bool?: "yes" | "no" | "na";
 };
 
+function getRandomId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function ExecuteChecklistInWorkOrderPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const { language } = useLanguage();
+    const text = getChecklistFlowTexts(language).workOrderExecute;
 
     const workOrderId = typeof router.query.id === "string" ? router.query.id : null;
 
@@ -66,7 +77,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [wo, setWo] = useState < WorkOrderRow | null > (null);
+    const [workOrder, setWorkOrder] = useState < WorkOrderRow | null > (null);
     const [assignments, setAssignments] = useState < (AssignmentRow & { template?: TemplateRow | null })[] > ([]);
     const [selectedAssignmentId, setSelectedAssignmentId] = useState < string > ("none");
     const [templateItems, setTemplateItems] = useState < TemplateItemRow[] > ([]);
@@ -74,7 +85,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
     const [globalNotes, setGlobalNotes] = useState("");
 
     const selectedAssignment = useMemo(
-        () => assignments.find((a) => a.id === selectedAssignmentId) ?? null,
+        () => assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null,
         [assignments, selectedAssignmentId]
     );
 
@@ -90,59 +101,59 @@ export default function ExecuteChecklistInWorkOrderPage() {
             }
 
             const activeOrgId = ctx.orgId ?? null;
-            if (!activeOrgId) throw new Error("Organizzazione attiva non trovata nel contesto utente.");
+            if (!activeOrgId) throw new Error(text.activeOrgMissing);
 
             setRole(ctx.role ?? "technician");
 
-            const { data: woData, error: woErr } = await supabase
+            const { data: workOrderData, error: workOrderError } = await supabase
                 .from("work_orders")
                 .select("id, organization_id, machine_id, title")
                 .eq("id", workOrderId)
                 .eq("organization_id", activeOrgId)
                 .single();
 
-            if (woErr) throw woErr;
-            const woRow = woData as WorkOrderRow;
-            if (!woRow.machine_id) throw new Error("Il work order non ha una macchina associata.");
+            if (workOrderError) throw workOrderError;
+            const currentWorkOrder = workOrderData as WorkOrderRow;
+            if (!currentWorkOrder.machine_id) throw new Error(text.workOrderMachineMissing);
 
-            setWo(woRow);
+            setWorkOrder(currentWorkOrder);
 
-            const { data: asgRows, error: asgErr } = await supabase
+            const { data: assignmentRows, error: assignmentError } = await supabase
                 .from("checklist_assignments")
                 .select("id, template_id, machine_id, production_line_id, is_active")
                 .eq("organization_id", activeOrgId)
-                .eq("machine_id", woRow.machine_id)
+                .eq("machine_id", currentWorkOrder.machine_id)
                 .eq("is_active", true);
 
-            if (asgErr) throw asgErr;
-            const assignmentList = (asgRows ?? []) as AssignmentRow[];
+            if (assignmentError) throw assignmentError;
+            const assignmentList = (assignmentRows ?? []) as AssignmentRow[];
 
-            const templateIds = Array.from(new Set(assignmentList.map((a) => a.template_id).filter(Boolean)));
+            const templateIds = Array.from(new Set(assignmentList.map((assignment) => assignment.template_id).filter(Boolean)));
             const templateMap = new Map < string, TemplateRow> ();
 
             if (templateIds.length > 0) {
-                const { data: tplRows, error: tplErr } = await supabase
+                const { data: templateRows, error: templateError } = await supabase
                     .from("checklist_templates")
                     .select("id, name, version, is_active")
                     .in("id", templateIds);
 
-                if (tplErr) throw tplErr;
-                for (const row of (tplRows ?? []) as any[]) {
+                if (templateError) throw templateError;
+                for (const row of (templateRows ?? []) as any[]) {
                     templateMap.set(row.id, row as TemplateRow);
                 }
             }
 
-            const merged = assignmentList.map((assignment) => ({
+            const mergedAssignments = assignmentList.map((assignment) => ({
                 ...assignment,
                 template: templateMap.get(assignment.template_id) ?? null,
             }));
 
-            setAssignments(merged);
-            setSelectedAssignmentId(merged.length > 0 ? merged[0].id : "none");
-        } catch (e: any) {
-            console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore caricamento checklist", variant: "destructive" });
-            router.push(`/work-orders/${workOrderId}`);
+            setAssignments(mergedAssignments);
+            setSelectedAssignmentId(mergedAssignments.length > 0 ? mergedAssignments[0].id : "none");
+        } catch (error: any) {
+            console.error(error);
+            toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
+            router.push(workOrderId ? `/work-orders/${workOrderId}` : "/work-orders");
         } finally {
             setLoading(false);
         }
@@ -150,6 +161,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
 
     useEffect(() => {
         load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workOrderId]);
 
     useEffect(() => {
@@ -172,24 +184,27 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 const rows = (data ?? []) as TemplateItemRow[];
                 setTemplateItems(rows);
 
-                const init: Record<string, ItemValue> = {};
+                const initialValues: Record<string, ItemValue> = {};
                 for (const item of rows) {
-                    init[item.id] = item.input_type === "boolean"
+                    initialValues[item.id] = item.input_type === "boolean"
                         ? { value: null, notes: null, bool: "na" }
                         : { value: null, notes: null };
                 }
-                setValues(init);
-            } catch (e: any) {
-                console.error(e);
-                toast({ title: "Errore", description: e?.message ?? "Errore caricamento items checklist", variant: "destructive" });
+                setValues(initialValues);
+            } catch (error: any) {
+                console.error(error);
+                toast({ title: text.loadChecklistError, description: error?.message ?? text.loadItemsError, variant: "destructive" });
             }
         };
 
         loadItems();
-    }, [selectedAssignmentId]);
+    }, [selectedAssignment, text.loadChecklistError, text.loadItemsError, toast]);
 
     const setItemValue = (itemId: string, patch: Partial<ItemValue>) => {
-        setValues((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] ?? {}), ...patch } }));
+        setValues((current) => ({
+            ...current,
+            [itemId]: { ...(current[itemId] ?? {}), ...patch },
+        }));
     };
 
     const validate = () => {
@@ -198,22 +213,22 @@ export default function ExecuteChecklistInWorkOrderPage() {
             if (!item.is_required) continue;
 
             if (item.input_type === "boolean") {
-                if ((value?.bool ?? "na") === "na") return `Completa il controllo obbligatorio: ${item.title}`;
+                if ((value?.bool ?? "na") === "na") return `${text.requiredPrefix} ${item.title}`;
                 continue;
             }
 
-            const text = (value?.value ?? "").toString().trim();
-            if (!text) return `Completa il controllo obbligatorio: ${item.title}`;
+            const raw = (value?.value ?? "").toString().trim();
+            if (!raw) return `${text.requiredPrefix} ${item.title}`;
         }
         return null;
     };
 
     const handleSave = async () => {
-        if (!wo || !selectedAssignment) return;
+        if (!workOrder || !selectedAssignment) return;
 
-        const errorText = validate();
-        if (errorText) {
-            toast({ title: "Errore", description: errorText, variant: "destructive" });
+        const validationError = validate();
+        if (validationError) {
+            toast({ title: text.loadError, description: validationError, variant: "destructive" });
             return;
         }
 
@@ -221,9 +236,9 @@ export default function ExecuteChecklistInWorkOrderPage() {
         try {
             const { data: userData } = await supabase.auth.getUser();
             const executedBy = userData.user?.id;
-            if (!executedBy) throw new Error("Utente non autenticato.");
+            if (!executedBy) throw new Error(text.unauthenticated);
 
-            const summaryResults = templateItems.map((item) => {
+            const executionSummary = templateItems.map((item) => {
                 const value = values[item.id];
                 let finalValue: string | null = value?.value ?? null;
                 if (item.input_type === "boolean") {
@@ -237,26 +252,30 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 };
             });
 
+            const now = new Date().toISOString();
             const executionPayload: any = {
                 assignment_id: selectedAssignment.id,
-                organization_id: wo.organization_id,
-                work_order_id: wo.id,
-                machine_id: wo.machine_id,
+                organization_id: workOrder.organization_id,
+                work_order_id: workOrder.id,
+                machine_id: workOrder.machine_id,
                 executed_by: executedBy,
-                executed_at: new Date().toISOString(),
+                executed_at: now,
+                started_at: now,
+                completed_at: now,
                 template_version: selectedAssignment.template?.version ?? 1,
+                status: "completed",
                 overall_status: "completed",
                 notes: globalNotes.trim() || null,
-                results: summaryResults,
+                results: executionSummary,
             };
 
-            const { data: executionRow, error: execErr } = await supabase
+            const { data: executionRow, error: executionError } = await supabase
                 .from("checklist_executions")
                 .insert(executionPayload)
                 .select("id")
                 .single();
 
-            if (execErr) throw execErr;
+            if (executionError) throw executionError;
 
             const executionId = (executionRow as any).id as string;
             const itemRows = templateItems.map((item) => {
@@ -268,7 +287,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 }
 
                 return {
-                    id: crypto.randomUUID(),
+                    id: getRandomId(),
                     execution_id: executionId,
                     template_item_id: item.id,
                     value: finalValue,
@@ -277,15 +296,15 @@ export default function ExecuteChecklistInWorkOrderPage() {
             });
 
             if (itemRows.length > 0) {
-                const { error: itemsErr } = await supabase.from("checklist_execution_items").insert(itemRows);
-                if (itemsErr) throw itemsErr;
+                const { error: itemError } = await supabase.from("checklist_execution_items").insert(itemRows as any);
+                if (itemError) throw itemError;
             }
 
-            toast({ title: "OK", description: "Checklist salvata correttamente." });
-            router.push(`/work-orders/${wo.id}`);
-        } catch (e: any) {
-            console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore salvataggio checklist", variant: "destructive" });
+            toast({ title: text.savedTitle, description: text.savedDescription });
+            router.push(`/checklists/executions/${executionId}`);
+        } catch (error: any) {
+            console.error(error);
+            toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
         } finally {
             setSaving(false);
         }
@@ -294,43 +313,44 @@ export default function ExecuteChecklistInWorkOrderPage() {
     if (loading) {
         return (
             <MainLayout userRole={role as any}>
-                <div className="p-6">Loading...</div>
+                <div className="p-6">{text.loading}</div>
             </MainLayout>
         );
     }
 
-    if (!wo) {
+    if (!workOrder) {
         return (
             <MainLayout userRole={role as any}>
-                <div className="p-6">Work order non trovato.</div>
+                <div className="p-6">{text.notFound}</div>
             </MainLayout>
         );
     }
 
     return (
         <MainLayout userRole={role as any}>
-            <div className="container mx-auto px-4 py-8 max-w-5xl space-y-6">
-                <Button variant="ghost" onClick={() => router.push(`/work-orders/${wo.id}`)}>
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Torna al work order
+            <div className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
+                <Button variant="ghost" onClick={() => router.push(`/work-orders/${workOrder.id}`)}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    {text.backToWorkOrder}
                 </Button>
 
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Esegui checklist</CardTitle>
+                        <CardTitle>{text.title}</CardTitle>
                         <CardDescription>
-                            Compilazione checklist collegata al work order: <span className="font-medium text-foreground">{wo.title}</span>
+                            {text.descriptionPrefix}{" "}
+                            <span className="font-medium text-foreground">{workOrder.title}</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
-                            <Label>Checklist assegnata</Label>
+                            <Label>{text.assignedChecklist}</Label>
                             <Select value={selectedAssignmentId} onValueChange={setSelectedAssignmentId}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleziona checklist" />
+                                    <SelectValue placeholder={text.selectChecklist} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {assignments.length === 0 && <SelectItem value="none">Nessuna checklist assegnata</SelectItem>}
+                                    {assignments.length === 0 ? <SelectItem value="none">{text.noAssignedChecklist}</SelectItem> : null}
                                     {assignments.map((assignment) => (
                                         <SelectItem key={assignment.id} value={assignment.id}>
                                             {assignment.template?.name ?? "Template"} (v{assignment.template?.version ?? 1})
@@ -342,68 +362,68 @@ export default function ExecuteChecklistInWorkOrderPage() {
                     </CardContent>
                 </Card>
 
-                {selectedAssignmentId !== "none" && (
+                {selectedAssignmentId !== "none" ? (
                     <Card className="rounded-2xl">
                         <CardHeader>
-                            <CardTitle>Compilazione</CardTitle>
+                            <CardTitle>{text.formTitle}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            {templateItems.length === 0 && (
-                                <div className="text-sm text-muted-foreground">Questo template non contiene ancora items.</div>
-                            )}
+                            {templateItems.length === 0 ? (
+                                <div className="text-sm text-muted-foreground">{text.emptyTemplate}</div>
+                            ) : null}
 
                             {templateItems.map((item) => {
                                 const value = values[item.id];
 
                                 return (
-                                    <div key={item.id} className="rounded-xl border p-4 space-y-3">
+                                    <div key={item.id} className="space-y-3 rounded-xl border p-4">
                                         <div className="space-y-1">
                                             <div className="font-medium">
                                                 {item.title} {item.is_required ? <span className="text-destructive">*</span> : null}
                                             </div>
-                                            {item.description && <div className="text-sm text-muted-foreground">{item.description}</div>}
+                                            {item.description ? <div className="text-sm text-muted-foreground">{item.description}</div> : null}
                                         </div>
 
                                         {item.input_type === "boolean" ? (
-                                            <Select value={value?.bool ?? "na"} onValueChange={(v) => setItemValue(item.id, { bool: v as any })}>
+                                            <Select value={value?.bool ?? "na"} onValueChange={(next) => setItemValue(item.id, { bool: next as any })}>
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder="Seleziona risposta" />
+                                                    <SelectValue placeholder={text.selectResponse} />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="na">—</SelectItem>
-                                                    <SelectItem value="yes">Sì</SelectItem>
-                                                    <SelectItem value="no">No</SelectItem>
+                                                    <SelectItem value="na">{text.boolNa}</SelectItem>
+                                                    <SelectItem value="yes">{text.boolYes}</SelectItem>
+                                                    <SelectItem value="no">{text.boolNo}</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         ) : item.input_type === "number" ? (
                                             <Input
                                                 type="number"
                                                 value={value?.value ?? ""}
-                                                onChange={(e) => setItemValue(item.id, { value: e.target.value })}
-                                                placeholder="Inserisci valore numerico"
+                                                onChange={(event) => setItemValue(item.id, { value: event.target.value })}
+                                                placeholder={text.numberPlaceholder}
                                             />
                                         ) : item.input_type === "text" ? (
                                             <Textarea
                                                 value={value?.value ?? ""}
-                                                onChange={(e) => setItemValue(item.id, { value: e.target.value })}
+                                                onChange={(event) => setItemValue(item.id, { value: event.target.value })}
                                                 rows={2}
-                                                placeholder="Inserisci testo"
+                                                placeholder={text.textPlaceholder}
                                             />
                                         ) : (
                                             <Input
                                                 value={value?.value ?? ""}
-                                                onChange={(e) => setItemValue(item.id, { value: e.target.value })}
-                                                placeholder="Inserisci valore"
+                                                onChange={(event) => setItemValue(item.id, { value: event.target.value })}
+                                                placeholder={text.genericPlaceholder}
                                             />
                                         )}
 
                                         <div className="space-y-2">
-                                            <Label className="text-xs">Note item</Label>
+                                            <Label className="text-xs">{text.itemNotes}</Label>
                                             <Textarea
                                                 value={value?.notes ?? ""}
-                                                onChange={(e) => setItemValue(item.id, { notes: e.target.value })}
+                                                onChange={(event) => setItemValue(item.id, { notes: event.target.value })}
                                                 rows={2}
-                                                placeholder="Note opzionali"
+                                                placeholder={text.itemNotesPlaceholder}
                                             />
                                         </div>
                                     </div>
@@ -411,24 +431,24 @@ export default function ExecuteChecklistInWorkOrderPage() {
                             })}
 
                             <div className="space-y-2">
-                                <Label>Note finali</Label>
+                                <Label>{text.finalNotes}</Label>
                                 <Textarea
                                     value={globalNotes}
-                                    onChange={(e) => setGlobalNotes(e.target.value)}
+                                    onChange={(event) => setGlobalNotes(event.target.value)}
                                     rows={3}
-                                    placeholder="Note finali sulla checklist"
+                                    placeholder={text.finalNotesPlaceholder}
                                 />
                             </div>
 
                             <div className="flex justify-end">
-                                <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-                                    <Save className="w-4 h-4 mr-2" />
-                                    {saving ? "Salvataggio..." : "Salva checklist"}
+                                <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]">
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {saving ? text.saving : text.save}
                                 </Button>
                             </div>
                         </CardContent>
                     </Card>
-                )}
+                ) : null}
             </div>
         </MainLayout>
     );
