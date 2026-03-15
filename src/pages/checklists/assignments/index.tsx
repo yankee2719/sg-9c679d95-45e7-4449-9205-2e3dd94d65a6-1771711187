@@ -7,6 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import {
+    canManageChecklists,
+    getChecklistTexts,
+    translateChecklistTarget,
+} from "@/lib/checklistsPageText";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { ArrowRightLeft, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import {
     Select,
@@ -16,8 +22,20 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-type Template = { id: string; name: string; target_type: string; version: number };
-type Machine = { id: string; name: string; internal_code: string | null; organization_id: string | null };
+type Template = {
+    id: string;
+    name: string;
+    target_type: string;
+    version: number;
+};
+
+type Machine = {
+    id: string;
+    name: string;
+    internal_code: string | null;
+    organization_id: string | null;
+};
+
 type Assignment = {
     id: string;
     organization_id: string;
@@ -30,15 +48,13 @@ type Assignment = {
     machine?: Machine | null;
 };
 
-function canManage(role?: string) {
-    return role === "admin" || role === "supervisor";
-}
-
 export default function ChecklistAssignmentsPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const { language } = useLanguage();
+    const text = getChecklistTexts(language);
 
-    const [role, setRole] = useState < string > ("technician");
+    const [role, setRole] = useState("technician");
     const [orgId, setOrgId] = useState < string | null > (null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -47,10 +63,10 @@ export default function ChecklistAssignmentsPage() {
     const [machines, setMachines] = useState < Machine[] > ([]);
     const [assignments, setAssignments] = useState < Assignment[] > ([]);
 
-    const [templateId, setTemplateId] = useState < string > ("none");
-    const [machineId, setMachineId] = useState < string > ("none");
+    const [templateId, setTemplateId] = useState("none");
+    const [machineId, setMachineId] = useState("none");
 
-    const allow = useMemo(() => canManage(role), [role]);
+    const allow = useMemo(() => canManageChecklists(role), [role]);
 
     const load = async () => {
         setLoading(true);
@@ -62,12 +78,16 @@ export default function ChecklistAssignmentsPage() {
             }
 
             const activeOrgId = ctx.orgId ?? null;
-            if (!activeOrgId) throw new Error("Organizzazione attiva non trovata nel contesto utente.");
+            if (!activeOrgId) throw new Error(text.assignments.assignError);
 
             setRole(ctx.role ?? "technician");
             setOrgId(activeOrgId);
 
-            const [{ data: tplRows, error: tplErr }, { data: machineRows, error: machineErr }, { data: assignmentRows, error: asgErr }] = await Promise.all([
+            const [
+                { data: tplRows, error: tplError },
+                { data: machineRows, error: machineError },
+                { data: assignmentRows, error: assignmentError },
+            ] = await Promise.all([
                 supabase
                     .from("checklist_templates")
                     .select("id, name, target_type, version")
@@ -87,29 +107,33 @@ export default function ChecklistAssignmentsPage() {
                     .order("created_at", { ascending: false }),
             ]);
 
-            if (tplErr) throw tplErr;
-            if (machineErr) throw machineErr;
-            if (asgErr) throw asgErr;
+            if (tplError) throw tplError;
+            if (machineError) throw machineError;
+            if (assignmentError) throw assignmentError;
 
-            const tplList = (tplRows ?? []) as Template[];
+            const templateList = (tplRows ?? []) as Template[];
             const machineList = (machineRows ?? []) as Machine[];
-            const asgList = (assignmentRows ?? []) as Assignment[];
+            const assignmentList = (assignmentRows ?? []) as Assignment[];
 
-            const templateMap = new Map(tplList.map((t) => [t.id, t]));
-            const machineMap = new Map(machineList.map((m) => [m.id, m]));
+            const templateMap = new Map(templateList.map((row) => [row.id, row]));
+            const machineMap = new Map(machineList.map((row) => [row.id, row]));
 
-            setTemplates(tplList);
+            setTemplates(templateList);
             setMachines(machineList);
             setAssignments(
-                asgList.map((a) => ({
-                    ...a,
-                    template: templateMap.get(a.template_id) ?? null,
-                    machine: a.machine_id ? machineMap.get(a.machine_id) ?? null : null,
+                assignmentList.map((row) => ({
+                    ...row,
+                    template: templateMap.get(row.template_id) ?? null,
+                    machine: row.machine_id ? machineMap.get(row.machine_id) ?? null : null,
                 }))
             );
-        } catch (e: any) {
-            console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore caricamento assegnazioni", variant: "destructive" });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: text.common.error,
+                description: error?.message ?? text.assignments.assignError,
+                variant: "destructive",
+            });
         } finally {
             setLoading(false);
         }
@@ -121,19 +145,33 @@ export default function ChecklistAssignmentsPage() {
 
     const assign = async () => {
         if (!allow) {
-            toast({ title: "Permesso negato", description: "Solo Admin e Supervisor possono assegnare checklist.", variant: "destructive" });
+            toast({
+                title: text.assignments.permissionDenied,
+                description: text.assignments.onlyManagers,
+                variant: "destructive",
+            });
             return;
         }
 
         if (!orgId) return;
         if (templateId === "none" || machineId === "none") {
-            toast({ title: "Errore", description: "Seleziona template e macchina.", variant: "destructive" });
+            toast({
+                title: text.common.error,
+                description: text.assignments.missingSelection,
+                variant: "destructive",
+            });
             return;
         }
 
-        const duplicate = assignments.find((a) => a.template_id === templateId && a.machine_id === machineId && a.is_active);
+        const duplicate = assignments.find(
+            (entry) => entry.template_id === templateId && entry.machine_id === machineId && entry.is_active
+        );
         if (duplicate) {
-            toast({ title: "Errore", description: "Questa checklist è già assegnata alla macchina.", variant: "destructive" });
+            toast({
+                title: text.common.error,
+                description: text.assignments.duplicate,
+                variant: "destructive",
+            });
             return;
         }
 
@@ -146,17 +184,22 @@ export default function ChecklistAssignmentsPage() {
                 machine_id: machineId,
                 production_line_id: null,
                 is_active: true,
-            });
+            } as any);
 
             if (error) throw error;
 
             setTemplateId("none");
             setMachineId("none");
-            toast({ title: "OK", description: "Checklist assegnata correttamente." });
+
+            toast({ title: text.assignments.assigned });
             await load();
-        } catch (e: any) {
-            console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore assegnazione checklist", variant: "destructive" });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: text.common.error,
+                description: error?.message ?? text.assignments.assignError,
+                variant: "destructive",
+            });
         } finally {
             setSaving(false);
         }
@@ -164,57 +207,92 @@ export default function ChecklistAssignmentsPage() {
 
     const deactivate = async (assignmentId: string) => {
         if (!allow) return;
-        if (!confirm("Disattivare questa assegnazione checklist?")) return;
+        if (!window.confirm(text.assignments.deactivateConfirm)) return;
 
         try {
-            const { error } = await supabase.from("checklist_assignments").update({ is_active: false }).eq("id", assignmentId).eq("organization_id", orgId);
+            const { error } = await supabase
+                .from("checklist_assignments")
+                .update({ is_active: false } as any)
+                .eq("id", assignmentId)
+                .eq("organization_id", orgId);
+
             if (error) throw error;
-            toast({ title: "OK", description: "Assegnazione disattivata." });
+
+            toast({ title: text.assignments.deactivated });
             await load();
-        } catch (e: any) {
-            console.error(e);
-            toast({ title: "Errore", description: e?.message ?? "Errore disattivazione", variant: "destructive" });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: text.common.error,
+                description: error?.message ?? text.assignments.deactivateError,
+                variant: "destructive",
+            });
         }
     };
 
+    const stats = useMemo(() => {
+        const total = assignments.length;
+        const active = assignments.filter((entry) => entry.is_active).length;
+        return { total, active };
+    }, [assignments]);
+
     return (
-        <MainLayout userRole={role as any}>
-            <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+        <MainLayout userRole={role}>
+            <div className="container mx-auto max-w-7xl px-4 py-8 space-y-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-2">
-                            <ArrowRightLeft className="w-6 h-6" />
-                            Assegnazioni checklist
+                        <h1 className="flex items-center gap-2 text-2xl font-bold">
+                            <ArrowRightLeft className="h-6 w-6" />
+                            {text.assignments.title}
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            L&apos;owner operativo assegna template a macchine. Le esecuzioni partono poi da work order o manutenzione.
-                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">{text.assignments.subtitle}</p>
                     </div>
 
                     <Button variant="outline" onClick={load}>
-                        <RefreshCcw className="w-4 h-4 mr-2" />
-                        Aggiorna
+                        <RefreshCcw className="mr-2 h-4 w-4" />
+                        {text.common.refresh}
                     </Button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>{text.assignments.totalAssignments}</CardDescription>
+                            <CardTitle>{stats.total}</CardTitle>
+                        </CardHeader>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>{text.assignments.activeAssignments}</CardDescription>
+                            <CardTitle>{stats.active}</CardTitle>
+                        </CardHeader>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardDescription>{text.assignments.activeOnly}</CardDescription>
+                            <CardTitle>{stats.total === 0 ? 0 : Math.round((stats.active / stats.total) * 100)}%</CardTitle>
+                        </CardHeader>
+                    </Card>
                 </div>
 
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Nuova assegnazione</CardTitle>
-                        <CardDescription>Collega un template attivo a una macchina della tua organizzazione.</CardDescription>
+                        <CardTitle>{text.assignments.newTitle}</CardTitle>
+                        <CardDescription>{text.assignments.newDescription}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div className="space-y-2">
-                                <div className="text-sm font-medium">Template</div>
+                                <div className="text-sm font-medium">{text.assignments.template}</div>
                                 <Select value={templateId} onValueChange={setTemplateId}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleziona template" />
+                                        <SelectValue placeholder={text.assignments.selectTemplate} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none">Seleziona template...</SelectItem>
+                                        <SelectItem value="none">{text.assignments.selectTemplate}</SelectItem>
                                         {templates.map((template) => (
                                             <SelectItem key={template.id} value={template.id}>
-                                                {template.name} (v{template.version})
+                                                {template.name} · v{template.version}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -222,16 +300,17 @@ export default function ChecklistAssignmentsPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <div className="text-sm font-medium">Macchina</div>
+                                <div className="text-sm font-medium">{text.assignments.machine}</div>
                                 <Select value={machineId} onValueChange={setMachineId}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleziona macchina" />
+                                        <SelectValue placeholder={text.assignments.selectMachine} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="none">Seleziona macchina...</SelectItem>
+                                        <SelectItem value="none">{text.assignments.selectMachine}</SelectItem>
                                         {machines.map((machine) => (
                                             <SelectItem key={machine.id} value={machine.id}>
-                                                {machine.name}{machine.internal_code ? ` — ${machine.internal_code}` : ""}
+                                                {machine.name}
+                                                {machine.internal_code ? ` — ${machine.internal_code}` : ""}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -241,8 +320,8 @@ export default function ChecklistAssignmentsPage() {
 
                         <div className="flex justify-end">
                             <Button onClick={assign} disabled={!allow || saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-                                <Plus className="w-4 h-4 mr-2" />
-                                {saving ? "Assegnazione..." : "Assegna checklist"}
+                                <Plus className="mr-2 h-4 w-4" />
+                                {saving ? text.assignments.assigning : text.assignments.assign}
                             </Button>
                         </div>
                     </CardContent>
@@ -250,46 +329,65 @@ export default function ChecklistAssignmentsPage() {
 
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>Assegnazioni attive e storiche</CardTitle>
+                        <CardTitle>{text.assignments.historyTitle}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        {loading && <div className="text-sm text-muted-foreground">Caricamento assegnazioni...</div>}
+                        {loading && <div className="text-sm text-muted-foreground">{text.common.loading}</div>}
 
                         {!loading && assignments.length === 0 && (
-                            <div className="text-sm text-muted-foreground">Nessuna assegnazione checklist trovata.</div>
+                            <div className="text-sm text-muted-foreground">{text.assignments.noResults}</div>
                         )}
 
-                        {!loading && assignments.map((assignment) => (
-                            <div key={assignment.id} className="rounded-xl border p-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div className="space-y-2">
-                                    <div className="font-medium">{assignment.template?.name ?? "Template"}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                        Macchina: {assignment.machine?.name ?? "Non trovata"}
+                        {!loading &&
+                            assignments.map((assignment) => (
+                                <div
+                                    key={assignment.id}
+                                    className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-start md:justify-between"
+                                >
+                                    <div className="space-y-2">
+                                        <div className="font-medium">
+                                            {assignment.template?.name ?? text.templates.newTemplate}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {text.assignments.machine}: {assignment.machine?.name ?? text.executions.machineFallback}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline">
+                                                {translateChecklistTarget(assignment.template?.target_type, language)}
+                                            </Badge>
+                                            <Badge variant="outline">
+                                                v{assignment.template?.version ?? 1}
+                                            </Badge>
+                                            <Badge variant={assignment.is_active ? "default" : "secondary"}>
+                                                {assignment.is_active ? text.common.active : text.common.inactive}
+                                            </Badge>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Badge variant="outline">{assignment.template?.target_type === "production_line" ? "Linea" : "Macchina"}</Badge>
-                                        <Badge variant="outline">v{assignment.template?.version ?? 1}</Badge>
-                                        <Badge variant={assignment.is_active ? "default" : "secondary"}>
-                                            {assignment.is_active ? "Attiva" : "Disattivata"}
-                                        </Badge>
-                                    </div>
-                                </div>
 
-                                <div className="flex items-center gap-2">
-                                    {assignment.machine_id && (
-                                        <Button variant="outline" size="sm" onClick={() => router.push(`/equipment/${assignment.machine_id}`)}>
-                                            Apri macchina
-                                        </Button>
-                                    )}
-                                    {assignment.is_active && (
-                                        <Button variant="outline" size="sm" onClick={() => deactivate(assignment.id)} disabled={!allow}>
-                                            <Trash2 className="w-4 h-4 mr-2" />
-                                            Disattiva
-                                        </Button>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {assignment.machine_id && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => router.push(`/equipment/${assignment.machine_id}`)}
+                                            >
+                                                {text.assignments.openMachine}
+                                            </Button>
+                                        )}
+                                        {assignment.is_active && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => deactivate(assignment.id)}
+                                                disabled={!allow}
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                {text.assignments.deactivate}
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
                     </CardContent>
                 </Card>
             </div>
