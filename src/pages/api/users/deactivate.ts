@@ -53,73 +53,23 @@ function getAalFromJwt(token: string): "aal1" | "aal2" | null {
     return null;
 }
 
-const handleDeactivateMember = async () => {
-    if (!isAdmin || !memberToDelete || !currentOrgId) {
-        toast({
-            variant: "destructive",
-            title: "Permesso negato",
-            description: "Solo gli admin possono disattivare utenti.",
+export default async function handler(
+    req: NextApiRequest,
+    res: NextApiResponse<ApiSuccess | ApiError>
+) {
+    if (req.method !== "POST") {
+        return res.status(405).json({
+            ok: false,
+            error: "Method not allowed",
         });
-        return;
     }
 
-    if (memberToDelete.user_id === currentUserId) {
-        toast({
-            variant: "destructive",
-            title: "Operazione non consentita",
-            description: "Non puoi disattivare te stesso.",
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+        return res.status(500).json({
+            ok: false,
+            error: "Server configuration missing",
         });
-        return;
     }
-
-    setDeleting(true);
-    try {
-        const {
-            data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
-            throw new Error("Sessione scaduta, effettua di nuovo il login");
-        }
-
-        const res = await fetch("/api/users/deactivate", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-                membership_id: memberToDelete.id,
-                organization_id: currentOrgId,
-            }),
-        });
-
-        const result = await res.json();
-
-        if (!res.ok) {
-            throw new Error(result.error || "Disattivazione utente fallita");
-        }
-
-        toast({
-            title: "Utente disattivato",
-            description: memberToDelete.email,
-        });
-
-        setDeleteDialogOpen(false);
-        setMemberToDelete(null);
-        await loadMembers(currentOrgId);
-    } catch (error: unknown) {
-        console.error("Error deactivating member:", error);
-        toast({
-            variant: "destructive",
-            title: "Errore",
-            description:
-                error instanceof Error ? error.message : "Errore disattivazione utente",
-        });
-    } finally {
-        setDeleting(false);
-    }
-};
 
     const token = getBearerToken(req);
     if (!token) {
@@ -158,7 +108,6 @@ const handleDeactivateMember = async () => {
     });
 
     try {
-        // 1) utente autenticato
         const {
             data: { user },
             error: getUserError,
@@ -171,7 +120,6 @@ const handleDeactivateMember = async () => {
             });
         }
 
-        // 2) solo admin attivo dell'organizzazione
         const { data: actorMembership, error: actorMembershipError } = await supabaseAdmin
             .from("organization_memberships")
             .select("id, role, is_active, organization_id, user_id")
@@ -194,14 +142,13 @@ const handleDeactivateMember = async () => {
             });
         }
 
-        if (actorMembership.role !== "admin") {
+        if (actorMembership.role !== "admin" && actorMembership.role !== "owner") {
             return res.status(403).json({
                 ok: false,
                 error: "Only admins can deactivate users",
             });
         }
 
-        // 3) MFA richiesta
         const aal = getAalFromJwt(token);
         if (aal !== "aal2") {
             return res.status(403).json({
@@ -210,7 +157,6 @@ const handleDeactivateMember = async () => {
             });
         }
 
-        // 4) membership target
         const { data: targetMembership, error: targetMembershipError } = await supabaseAdmin
             .from("organization_memberships")
             .select("id, user_id, organization_id, role, is_active")
@@ -228,18 +174,17 @@ const handleDeactivateMember = async () => {
         if (!targetMembership) {
             return res.status(404).json({
                 ok: false,
-                error: "Target membership not found",
+                error: "Membership not found",
             });
         }
 
         if (!targetMembership.is_active) {
             return res.status(400).json({
                 ok: false,
-                error: "User is already inactive",
+                error: "Membership is already inactive",
             });
         }
 
-        // 5) no self-deactivate
         if (targetMembership.user_id === user.id) {
             return res.status(400).json({
                 ok: false,
@@ -247,7 +192,6 @@ const handleDeactivateMember = async () => {
             });
         }
 
-        // 6) update membership
         const { error: updateError } = await supabaseAdmin
             .from("organization_memberships")
             .update({
@@ -255,7 +199,8 @@ const handleDeactivateMember = async () => {
                 deactivated_at: new Date().toISOString(),
                 deactivated_by: user.id,
             })
-            .eq("id", targetMembership.id);
+            .eq("id", targetMembership.id)
+            .eq("organization_id", organization_id);
 
         if (updateError) {
             return res.status(500).json({
