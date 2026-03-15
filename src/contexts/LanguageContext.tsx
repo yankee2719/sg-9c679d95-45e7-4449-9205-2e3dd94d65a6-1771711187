@@ -31,8 +31,6 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Lingua",
         "common.notifications": "Notifiche",
         "common.system": "Sistema",
-        "common.ago": "fa",
-        "common.error": "Errore",
         "common.management": "Gestione",
         "common.viewAll": "Vedi tutti",
 
@@ -166,7 +164,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.newTemplate": "Nuovo Template",
         "checklists.addChecklist": "Aggiungi checklist",
         "checklists.noChecklists": "Nessuna checklist trovata",
-        "checklists.noChecklistsDesc": "Crea il primo template checklist per iniziare a gestire controlli e procedure.",
+        "checklists.noChecklistsDesc": "Crea il primo template checklist per controlli, verifiche e procedure operative.",
         "checklists.addFirst": "Crea la prima checklist",
 
         "checklists.kpi.templates": "Template",
@@ -389,8 +387,6 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Language",
         "common.notifications": "Notifications",
         "common.system": "System",
-        "common.ago": "ago",
-        "common.error": "Error",
         "common.management": "Management",
         "common.viewAll": "View all",
 
@@ -524,7 +520,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.newTemplate": "New Template",
         "checklists.addChecklist": "Add checklist",
         "checklists.noChecklists": "No checklists found",
-        "checklists.noChecklistsDesc": "Create your first checklist template to start managing inspections and procedures.",
+        "checklists.noChecklistsDesc": "Create your first checklist template for inspections, checks, and operating procedures.",
         "checklists.addFirst": "Create first checklist",
 
         "checklists.kpi.templates": "Templates",
@@ -748,8 +744,6 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Langue",
         "common.notifications": "Notifications",
         "common.system": "Système",
-        "common.ago": "il y a",
-        "common.error": "Erreur",
         "common.management": "Gestion",
         "common.viewAll": "Voir tout",
 
@@ -881,10 +875,10 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.title": "Check-lists",
         "checklists.subtitle": "Gérez les modèles de check-lists pour contrôles, vérifications et procédures opérationnelles.",
         "checklists.newTemplate": "Nouveau modèle",
-        "checklists.addChecklist": "Ajouter une check-list",
-        "checklists.noChecklists": "Aucune check-list trouvée",
-        "checklists.noChecklistsDesc": "Créez votre premier modèle de check-list pour commencer à gérer contrôles et procédures.",
-        "checklists.addFirst": "Créer la première check-list",
+        "checklists.addChecklist": "Ajouter une checklist",
+        "checklists.noChecklists": "Aucune checklist trouvée",
+        "checklists.noChecklistsDesc": "Créez votre premier modèle de checklist pour les contrôles, vérifications et procédures opérationnelles.",
+        "checklists.addFirst": "Créer la première checklist",
 
         "checklists.kpi.templates": "Modèles",
         "checklists.kpi.totalItems": "Éléments totaux",
@@ -1107,8 +1101,6 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Idioma",
         "common.notifications": "Notificaciones",
         "common.system": "Sistema",
-        "common.ago": "hace",
-        "common.error": "Error",
         "common.management": "Gestión",
         "common.viewAll": "Ver todos",
 
@@ -1242,7 +1234,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.newTemplate": "Nueva plantilla",
         "checklists.addChecklist": "Añadir checklist",
         "checklists.noChecklists": "No se encontraron checklists",
-        "checklists.noChecklistsDesc": "Crea tu primera plantilla de checklist para empezar a gestionar controles y procedimientos.",
+        "checklists.noChecklistsDesc": "Crea tu primera plantilla de checklist para controles, verificaciones y procedimientos operativos.",
         "checklists.addFirst": "Crear la primera checklist",
 
         "checklists.kpi.templates": "Plantillas",
