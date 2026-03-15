@@ -62,7 +62,7 @@ interface MemberUser {
 export default function UsersPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { loading: mfaLoading, isAal2, needsMfa } = useMfaGuard();
 
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
@@ -96,6 +96,33 @@ export default function UsersPage() {
   const [memberToDelete, setMemberToDelete] = useState<MemberUser | null>(null);
 
   const isAdmin = currentUserRole === "admin";
+
+const mfaCopy = {
+  it: {
+    title: "Verifica 2FA richiesta",
+    description:
+      "Per accedere alla gestione utenti devi completare l’autenticazione a due fattori.",
+    action: "Vai a Sicurezza",
+  },
+  en: {
+    title: "2FA verification required",
+    description:
+      "To access user management you must complete two-factor authentication.",
+    action: "Go to Security",
+  },
+  fr: {
+    title: "Vérification 2FA requise",
+    description:
+      "Pour accéder à la gestion des utilisateurs, vous devez terminer l’authentification à deux facteurs.",
+    action: "Aller à Sécurité",
+  },
+  es: {
+    title: "Verificación 2FA obligatoria",
+    description:
+      "Para acceder a la gestión de usuarios debes completar la autenticación en dos factores.",
+    action: "Ir a Seguridad",
+  },
+}[language];
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -407,12 +434,12 @@ export default function UsersPage() {
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-500" />
               <div className="space-y-3">
-                <div className="text-lg font-semibold">Verifica 2FA richiesta</div>
+                <div className="text-lg font-semibold">{mfaCopy.title}</div>
                 <div className="text-sm text-muted-foreground">
-                  Per accedere alla gestione utenti devi completare l’autenticazione a due fattori.
+                  {mfaCopy.description}
                 </div>
                 <Button onClick={() => router.push("/settings/security")}>
-                  Vai a Sicurezza
+                  {mfaCopy.action}
                 </Button>
               </div>
             </div>
