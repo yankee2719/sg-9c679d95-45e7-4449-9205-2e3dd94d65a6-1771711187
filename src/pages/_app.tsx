@@ -1,17 +1,31 @@
-// src/pages/_app.tsx
 import type { AppProps } from "next/app";
 import Head from "next/head";
 import { useEffect, useState } from "react";
-
+import { useRouter } from "next/router";
 import "@/styles/globals.css";
-
-import { ThemeProvider } from "@/contexts/ThemeProvider";
-import { LanguageProvider } from "@/contexts/LanguageContext";
-import { PWAProvider } from "@/contexts/PWAProvider";
 import { OfflineStatusBar } from "@/components/Offline/OfflineStatusBar";
 import { Toaster } from "@/components/ui/toaster";
+import { MfaGuard } from "@/components/mfa/MfaGuard";
+import { LanguageProvider } from "@/contexts/LanguageContext";
+import { PWAProvider } from "@/contexts/PWAProvider";
+import { ThemeProvider } from "@/contexts/ThemeProvider";
+import { AuthProvider } from "@/hooks/useAuth";
 
-export default function App({ Component, pageProps }: AppProps) {
+function AppShell({ Component, pageProps }: AppProps) {
+    const router = useRouter();
+
+    return (
+        <MfaGuard
+            currentPath={router.pathname}
+            excludePaths={["/login", "/register", "/forgot-password", "/reset-password", "/offline"]}
+        >
+            <OfflineStatusBar />
+            <Component {...pageProps} />
+        </MfaGuard>
+    );
+}
+
+export default function App(props: AppProps) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -26,15 +40,12 @@ export default function App({ Component, pageProps }: AppProps) {
 
             <ThemeProvider>
                 <LanguageProvider>
-                    <PWAProvider>
-                        {mounted ? (
-                            <>
-                                <OfflineStatusBar />
-                                <Component {...pageProps} />
-                            </>
-                        ) : null}
-                        <Toaster />
-                    </PWAProvider>
+                    <AuthProvider>
+                        <PWAProvider>
+                            {mounted ? <AppShell {...props} /> : null}
+                            <Toaster />
+                        </PWAProvider>
+                    </AuthProvider>
                 </LanguageProvider>
             </ThemeProvider>
         </>
