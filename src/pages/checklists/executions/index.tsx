@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
@@ -11,187 +10,205 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getUserContext } from "@/lib/supabaseHelpers";
+import { useLanguage } from "@/contexts/LanguageContext";
+import {
+    formatChecklistDate,
+    getChecklistTexts,
+    normalizeExecutionStatus,
+} from "@/lib/checklistsPageText";
 import { ClipboardCheck, Search, Filter, Eye, Wrench, Factory, Building2 } from "lucide-react";
-
-type OrgType = "manufacturer" | "customer";
 
 type ExecutionRow = {
     id: string;
-    template_id: string | null;
-    work_order_id: string | null;
-    machine_id: string | null;
-    status: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    created_at: string | null;
-    updated_at: string | null;
+    assignment_id?: string | null;
     organization_id?: string | null;
-    checklist_template?: {
-        id: string;
-        title: string | null;
-        category: string | null;
-    } | null;
-    machines?: {
-        id: string;
-        name: string | null;
-        internal_code: string | null;
-        organization_id: string | null;
-        plant_id: string | null;
-    } | null;
-    work_orders?: {
-        id: string;
-        title: string | null;
-        status: string | null;
-    } | null;
+    work_order_id?: string | null;
+    machine_id?: string | null;
+    executed_by?: string | null;
+    executed_at?: string | null;
+    template_version?: number | null;
+    overall_status?: string | null;
+    status?: string | null;
+    notes?: string | null;
+    created_at?: string | null;
 };
 
+type AssignmentRow = { id: string; template_id: string; machine_id: string | null };
+type TemplateRow = { id: string; name: string | null };
+type MachineRow = { id: string; name: string | null; internal_code: string | null; plant_id: string | null };
+type WorkOrderRow = { id: string; title: string | null; status: string | null };
 type Plant = { id: string; name: string | null };
 
-type UserCtx = {
-    userId: string;
-    orgId: string | null;
-    orgType: OrgType | null;
-    role: string;
-    displayName: string;
-    email: string;
-};
-
-function formatDate(value?: string | null) {
-    if (!value) return "—";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("it-IT");
-}
-
-function normalizeStatus(raw?: string | null) {
-    const v = String(raw ?? "").toLowerCase();
-    if (["completed", "done", "closed"].includes(v)) return "completed";
-    if (["in_progress", "started", "open"].includes(v)) return "in_progress";
-    if (["draft", "pending"].includes(v)) return "draft";
-    return v || "unknown";
-}
-
-function statusLabel(status: string) {
-    switch (status) {
-        case "completed":
-            return "Completata";
-        case "in_progress":
-            return "In corso";
-        case "draft":
-            return "Bozza";
-        default:
-            return "Sconosciuto";
-    }
-}
-
-function statusBadgeClass(status: string) {
-    switch (status) {
-        case "completed":
-            return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30";
-        case "in_progress":
-            return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30";
-        case "draft":
-            return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-500/30";
-        default:
-            return "bg-muted text-muted-foreground border-border";
-    }
-}
-
 export default function ChecklistExecutionsIndexPage() {
-    const router = useRouter();
     const { toast } = useToast();
+    const { language } = useLanguage();
+    const text = getChecklistTexts(language);
 
-    const [ctx, setCtx] = useState < UserCtx | null > (null);
+    const [role, setRole] = useState("technician");
+    const [orgType, setOrgType] = useState < "manufacturer" | "customer" | null > (null);
     const [loading, setLoading] = useState(true);
+
     const [executions, setExecutions] = useState < ExecutionRow[] > ([]);
     const [plants, setPlants] = useState < Plant[] > ([]);
+    const [assignmentMap, setAssignmentMap] = useState < Record < string, AssignmentRow>> ({});
+    const [templateMap, setTemplateMap] = useState < Record < string, TemplateRow>> ({});
+    const [machineMap, setMachineMap] = useState < Record < string, MachineRow>> ({});
+    const [workOrderMap, setWorkOrderMap] = useState < Record < string, WorkOrderRow>> ({});
 
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState < string > ("all");
-    const [plantFilter, setPlantFilter] = useState < string > ("all");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [plantFilter, setPlantFilter] = useState("all");
 
     useEffect(() => {
         const load = async () => {
             setLoading(true);
             try {
-                const userCtx = (await getUserContext()) as UserCtx | null;
-                if (!userCtx) {
-                    router.push("/login");
-                    return;
-                }
-                if (!userCtx.orgId || !userCtx.orgType) {
-                    throw new Error("Contesto organizzativo non valido.");
-                }
-                setCtx(userCtx);
+                const ctx = await getUserContext();
+                if (!ctx) return;
 
-                if (userCtx.orgType === "customer") {
-                    const { data: plantsData, error: plantsError } = await supabase
+                if (!ctx.orgId || !ctx.orgType) {
+                    throw new Error(text.executions.loadError);
+                }
+
+                setRole(ctx.role ?? "technician");
+                setOrgType(ctx.orgType);
+
+                if (ctx.orgType === "customer") {
+                    const { data: plantRows, error: plantError } = await supabase
                         .from("plants")
                         .select("id, name")
-                        .eq("organization_id", userCtx.orgId)
+                        .eq("organization_id", ctx.orgId)
                         .eq("is_archived", false)
                         .order("name", { ascending: true });
 
-                    if (plantsError) throw plantsError;
-                    setPlants((plantsData ?? []) as Plant[]);
+                    if (plantError) throw plantError;
+                    setPlants((plantRows ?? []) as Plant[]);
                 } else {
                     setPlants([]);
                 }
 
-                let machineIdsForManufacturer: string[] = [];
+                let executionRows: ExecutionRow[] = [];
 
-                if (userCtx.orgType === "manufacturer") {
-                    const { data: assignments, error: assignmentsError } = await supabase
+                if (ctx.orgType === "customer") {
+                    const { data, error } = await supabase
+                        .from("checklist_executions")
+                        .select("*")
+                        .eq("organization_id", ctx.orgId)
+                        .order("executed_at", { ascending: false });
+
+                    if (error) throw error;
+                    executionRows = (data ?? []) as any[];
+                } else {
+                    const { data: assignmentRows, error: manufacturerAssignmentError } = await supabase
                         .from("machine_assignments")
                         .select("machine_id")
-                        .eq("manufacturer_org_id", userCtx.orgId)
+                        .eq("manufacturer_org_id", ctx.orgId)
                         .eq("is_active", true);
 
-                    if (assignmentsError) throw assignmentsError;
-                    machineIdsForManufacturer = Array.from(
-                        new Set((assignments ?? []).map((r: any) => r.machine_id).filter(Boolean))
+                    if (manufacturerAssignmentError) throw manufacturerAssignmentError;
+
+                    const machineIds = Array.from(
+                        new Set(((assignmentRows ?? []) as any[]).map((row) => row.machine_id).filter(Boolean))
                     );
-                }
 
-                let query = supabase
-                    .from("checklist_executions")
-                    .select(`
-            id,
-            template_id,
-            work_order_id,
-            machine_id,
-            status,
-            started_at,
-            completed_at,
-            created_at,
-            updated_at,
-            organization_id,
-            checklist_template:template_id ( id, title, category ),
-            machines:machine_id ( id, name, internal_code, organization_id, plant_id ),
-            work_orders:work_order_id ( id, title, status )
-          `)
-                    .order("created_at", { ascending: false });
-
-                if (userCtx.orgType === "customer") {
-                    query = query.eq("organization_id", userCtx.orgId);
-                } else {
-                    if (machineIdsForManufacturer.length === 0) {
+                    if (machineIds.length === 0) {
                         setExecutions([]);
                         setLoading(false);
                         return;
                     }
-                    query = query.in("machine_id", machineIdsForManufacturer);
+
+                    const { data, error } = await supabase
+                        .from("checklist_executions")
+                        .select("*")
+                        .in("machine_id", machineIds)
+                        .order("executed_at", { ascending: false });
+
+                    if (error) throw error;
+                    executionRows = (data ?? []) as any[];
                 }
 
-                const { data, error } = await query;
-                if (error) throw error;
+                setExecutions(executionRows);
 
-                setExecutions((data ?? []) as ExecutionRow[]);
+                const assignmentIds = Array.from(
+                    new Set(executionRows.map((row) => row.assignment_id).filter(Boolean))
+                ) as string[];
+                const workOrderIds = Array.from(
+                    new Set(executionRows.map((row) => row.work_order_id).filter(Boolean))
+                ) as string[];
+                const machineIds = Array.from(
+                    new Set(executionRows.map((row) => row.machine_id).filter(Boolean))
+                ) as string[];
+
+                const nextAssignmentMap: Record<string, AssignmentRow> = {};
+                const nextTemplateMap: Record<string, TemplateRow> = {};
+                const nextMachineMap: Record<string, MachineRow> = {};
+                const nextWorkOrderMap: Record<string, WorkOrderRow> = {};
+
+                let templateIds: string[] = [];
+
+                if (assignmentIds.length > 0) {
+                    const { data: assignmentRows, error: assignmentError } = await supabase
+                        .from("checklist_assignments")
+                        .select("id, template_id, machine_id")
+                        .in("id", assignmentIds);
+
+                    if (assignmentError) throw assignmentError;
+
+                    for (const row of (assignmentRows ?? []) as any[]) {
+                        nextAssignmentMap[row.id] = row as AssignmentRow;
+                        if (row.template_id) templateIds.push(row.template_id);
+                    }
+                }
+
+                if (templateIds.length > 0) {
+                    templateIds = Array.from(new Set(templateIds));
+                    const { data: templateRows, error: templateError } = await supabase
+                        .from("checklist_templates")
+                        .select("id, name")
+                        .in("id", templateIds);
+
+                    if (templateError) throw templateError;
+
+                    for (const row of (templateRows ?? []) as any[]) {
+                        nextTemplateMap[row.id] = row as TemplateRow;
+                    }
+                }
+
+                if (machineIds.length > 0) {
+                    const { data: machineRows, error: machineError } = await supabase
+                        .from("machines")
+                        .select("id, name, internal_code, plant_id")
+                        .in("id", machineIds);
+
+                    if (machineError) throw machineError;
+
+                    for (const row of (machineRows ?? []) as any[]) {
+                        nextMachineMap[row.id] = row as MachineRow;
+                    }
+                }
+
+                if (workOrderIds.length > 0) {
+                    const { data: workOrderRows, error: workOrderError } = await supabase
+                        .from("work_orders")
+                        .select("id, title, status")
+                        .in("id", workOrderIds);
+
+                    if (workOrderError) throw workOrderError;
+
+                    for (const row of (workOrderRows ?? []) as any[]) {
+                        nextWorkOrderMap[row.id] = row as WorkOrderRow;
+                    }
+                }
+
+                setAssignmentMap(nextAssignmentMap);
+                setTemplateMap(nextTemplateMap);
+                setMachineMap(nextMachineMap);
+                setWorkOrderMap(nextWorkOrderMap);
             } catch (error: any) {
                 console.error(error);
                 toast({
-                    title: "Errore",
-                    description: error?.message ?? "Errore caricamento checklist eseguite.",
+                    title: text.common.error,
+                    description: error?.message ?? text.executions.loadError,
                     variant: "destructive",
                 });
             } finally {
@@ -200,23 +217,24 @@ export default function ChecklistExecutionsIndexPage() {
         };
 
         load();
-    }, [router, toast]);
+    }, [toast, text.executions.loadError]);
 
     const filteredExecutions = useMemo(() => {
         return executions.filter((row) => {
-            const normalized = normalizeStatus(row.status);
-            const matchesStatus = statusFilter === "all" ? true : normalized === statusFilter;
-            const matchesPlant =
-                plantFilter === "all"
-                    ? true
-                    : String(row.machines?.plant_id ?? "") === plantFilter;
+            const normalizedStatus = normalizeExecutionStatus(row.overall_status || row.status);
+            const machine = row.machine_id ? machineMap[row.machine_id] : null;
+            const workOrder = row.work_order_id ? workOrderMap[row.work_order_id] : null;
+            const assignment = row.assignment_id ? assignmentMap[row.assignment_id] : null;
+            const template = assignment?.template_id ? templateMap[assignment.template_id] : null;
+
+            const matchesStatus = statusFilter === "all" || normalizedStatus === statusFilter;
+            const matchesPlant = plantFilter === "all" || String(machine?.plant_id ?? "") === plantFilter;
 
             const haystack = [
-                row.checklist_template?.title,
-                row.checklist_template?.category,
-                row.machines?.name,
-                row.machines?.internal_code,
-                row.work_orders?.title,
+                template?.name,
+                machine?.name,
+                machine?.internal_code,
+                workOrder?.title,
             ]
                 .filter(Boolean)
                 .join(" ")
@@ -226,78 +244,118 @@ export default function ChecklistExecutionsIndexPage() {
 
             return matchesStatus && matchesPlant && matchesSearch;
         });
-    }, [executions, plantFilter, search, statusFilter]);
+    }, [executions, statusFilter, plantFilter, search, machineMap, workOrderMap, assignmentMap, templateMap]);
 
     const stats = useMemo(() => {
         const total = filteredExecutions.length;
-        const completed = filteredExecutions.filter((x) => normalizeStatus(x.status) === "completed").length;
-        const inProgress = filteredExecutions.filter((x) => normalizeStatus(x.status) === "in_progress").length;
-        const draft = filteredExecutions.filter((x) => normalizeStatus(x.status) === "draft").length;
-        return { total, completed, inProgress, draft };
+        const completed = filteredExecutions.filter(
+            (row) => normalizeExecutionStatus(row.overall_status || row.status) === "completed"
+        ).length;
+        const inProgress = filteredExecutions.filter(
+            (row) => normalizeExecutionStatus(row.overall_status || row.status) === "in_progress"
+        ).length;
+        const failed = filteredExecutions.filter(
+            (row) => normalizeExecutionStatus(row.overall_status || row.status) === "failed"
+        ).length;
+        return { total, completed, inProgress, failed };
     }, [filteredExecutions]);
 
+    const statusLabel = (status: string) => {
+        if (status === "completed") return text.executions.completed;
+        if (status === "failed") return text.executions.failed;
+        return text.executions.inProgress;
+    };
+
+    const statusClass = (status: string) => {
+        if (status === "completed") {
+            return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30";
+        }
+        if (status === "failed") {
+            return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30";
+        }
+        return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30";
+    };
+
     return (
-        <MainLayout userRole={(ctx?.role as any) || "technician"}>
-            <SEO title="Checklist eseguite - MACHINA" />
+        <MainLayout userRole={role}>
+            <SEO title={`${text.executions.title} - MACHINA`} />
 
             <div className="container mx-auto max-w-7xl px-4 py-8 space-y-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">Checklist eseguite</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            {ctx?.orgType === "customer"
-                                ? "Storico esecuzioni nel tuo contesto operativo."
-                                : "Storico esecuzioni sulle macchine collegate ai tuoi clienti."}
+                        <h1 className="text-2xl font-semibold tracking-tight">{text.executions.title}</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {orgType === "manufacturer"
+                                ? text.executions.subtitleManufacturer
+                                : text.executions.subtitleCustomer}
                         </p>
                     </div>
 
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {ctx?.orgType === "manufacturer" ? <Factory className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
-                        <span>{ctx?.orgType === "manufacturer" ? "Vista costruttore" : "Vista cliente"}</span>
+                        {orgType === "manufacturer" ? <Factory className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
+                        <span>
+                            {orgType === "manufacturer"
+                                ? text.executions.manufacturerView
+                                : text.executions.customerView}
+                        </span>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card><CardHeader className="pb-2"><CardDescription>Totali</CardDescription><CardTitle>{stats.total}</CardTitle></CardHeader></Card>
-                    <Card><CardHeader className="pb-2"><CardDescription>Completate</CardDescription><CardTitle>{stats.completed}</CardTitle></CardHeader></Card>
-                    <Card><CardHeader className="pb-2"><CardDescription>In corso</CardDescription><CardTitle>{stats.inProgress}</CardTitle></CardHeader></Card>
-                    <Card><CardHeader className="pb-2"><CardDescription>Bozze</CardDescription><CardTitle>{stats.draft}</CardTitle></CardHeader></Card>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.total}</CardDescription><CardTitle>{stats.total}</CardTitle></CardHeader></Card>
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.completed}</CardDescription><CardTitle>{stats.completed}</CardTitle></CardHeader></Card>
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.inProgress}</CardDescription><CardTitle>{stats.inProgress}</CardTitle></CardHeader></Card>
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.failed}</CardDescription><CardTitle>{stats.failed}</CardTitle></CardHeader></Card>
                 </div>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Filter className="h-4 w-4" /> Filtri</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <Filter className="h-4 w-4" />
+                            {text.executions.filters}
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Ricerca</label>
+                            <label className="text-sm font-medium">{text.common.search}</label>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Template, macchina, work order..." />
+                                <Input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-9"
+                                    placeholder={text.executions.searchPlaceholder}
+                                />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Stato</label>
+                            <label className="text-sm font-medium">{text.executions.status}</label>
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger><SelectValue placeholder="Tutti gli stati" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder={text.executions.allStatuses} /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Tutti</SelectItem>
-                                    <SelectItem value="draft">Bozza</SelectItem>
-                                    <SelectItem value="in_progress">In corso</SelectItem>
-                                    <SelectItem value="completed">Completata</SelectItem>
+                                    <SelectItem value="all">{text.executions.allStatuses}</SelectItem>
+                                    <SelectItem value="completed">{text.executions.completed}</SelectItem>
+                                    <SelectItem value="in_progress">{text.executions.inProgress}</SelectItem>
+                                    <SelectItem value="failed">{text.executions.failed}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Stabilimento</label>
-                            <Select value={plantFilter} onValueChange={setPlantFilter} disabled={ctx?.orgType !== "customer"}>
-                                <SelectTrigger><SelectValue placeholder="Tutti gli stabilimenti" /></SelectTrigger>
+                            <label className="text-sm font-medium">{text.executions.plant}</label>
+                            <Select
+                                value={plantFilter}
+                                onValueChange={setPlantFilter}
+                                disabled={orgType !== "customer"}
+                            >
+                                <SelectTrigger><SelectValue placeholder={text.executions.allPlants} /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Tutti</SelectItem>
+                                    <SelectItem value="all">{text.executions.allPlants}</SelectItem>
                                     {plants.map((plant) => (
-                                        <SelectItem key={plant.id} value={plant.id}>{plant.name ?? plant.id}</SelectItem>
+                                        <SelectItem key={plant.id} value={plant.id}>
+                                            {plant.name ?? plant.id}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -307,43 +365,59 @@ export default function ChecklistExecutionsIndexPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4" /> Elenco esecuzioni</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <ClipboardCheck className="h-4 w-4" />
+                            {text.executions.title}
+                        </CardTitle>
                         <CardDescription>
-                            {filteredExecutions.length} risultati
+                            {filteredExecutions.length} {text.executions.results}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         {loading ? (
-                            <div className="text-sm text-muted-foreground">Caricamento...</div>
+                            <div className="text-sm text-muted-foreground">{text.common.loading}</div>
                         ) : filteredExecutions.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Nessuna esecuzione trovata.</div>
+                            <div className="text-sm text-muted-foreground">{text.executions.noResults}</div>
                         ) : (
                             <div className="space-y-3">
                                 {filteredExecutions.map((row) => {
-                                    const normalized = normalizeStatus(row.status);
+                                    const status = normalizeExecutionStatus(row.overall_status || row.status);
+                                    const assignment = row.assignment_id ? assignmentMap[row.assignment_id] : null;
+                                    const template = assignment?.template_id ? templateMap[assignment.template_id] : null;
+                                    const machine = row.machine_id ? machineMap[row.machine_id] : null;
+                                    const workOrder = row.work_order_id ? workOrderMap[row.work_order_id] : null;
+
                                     return (
-                                        <div key={row.id} className="rounded-2xl border bg-card p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                            <div className="space-y-2 min-w-0">
+                                        <div
+                                            key={row.id}
+                                            className="flex flex-col gap-3 rounded-2xl border bg-card p-4 md:flex-row md:items-center md:justify-between"
+                                        >
+                                            <div className="min-w-0 space-y-2">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="font-medium truncate">{row.checklist_template?.title ?? "Checklist senza titolo"}</h3>
-                                                    <Badge variant="outline" className={statusBadgeClass(normalized)}>{statusLabel(normalized)}</Badge>
-                                                    {ctx?.orgType === "manufacturer" && (
-                                                        <Badge variant="outline">Solo lettura</Badge>
-                                                    )}
+                                                    <h3 className="truncate font-medium">
+                                                        {template?.name ?? text.executions.templateFallback}
+                                                    </h3>
+                                                    <Badge variant="outline" className={statusClass(status)}>
+                                                        {statusLabel(status)}
+                                                    </Badge>
+                                                    {orgType === "manufacturer" && <Badge variant="outline">{text.executions.manufacturerView}</Badge>}
                                                 </div>
 
-                                                <div className="text-sm text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
-                                                    <span className="inline-flex items-center gap-1"><Wrench className="h-3.5 w-3.5" /> {row.machines?.name ?? "Macchina non trovata"}</span>
-                                                    <span>WO: {row.work_orders?.title ?? "—"}</span>
-                                                    <span>Avvio: {formatDate(row.started_at || row.created_at)}</span>
-                                                    <span>Fine: {formatDate(row.completed_at)}</span>
+                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <Wrench className="h-3.5 w-3.5" />
+                                                        {machine?.name ?? text.executions.machineFallback}
+                                                    </span>
+                                                    <span>{text.executions.workOrder}: {workOrder?.title ?? text.executions.workOrderFallback}</span>
+                                                    <span>{text.executions.executedAt}: {formatChecklistDate(row.executed_at || row.created_at, language)}</span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-2 shrink-0">
+                                            <div className="flex shrink-0 items-center gap-2">
                                                 <Button asChild variant="outline" size="sm">
                                                     <Link href={`/checklists/executions/${row.id}`}>
-                                                        <Eye className="mr-2 h-4 w-4" /> Dettaglio
+                                                        <Eye className="mr-2 h-4 w-4" />
+                                                        {text.executions.detail}
                                                     </Link>
                                                 </Button>
                                             </div>
