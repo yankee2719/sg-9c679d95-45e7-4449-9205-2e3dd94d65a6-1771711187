@@ -1,512 +1,786 @@
+
 import type { Language } from "@/contexts/LanguageContext";
 
-type RedirectText = {
-    title: string;
-    description: string;
-    body: string;
-    action: string;
-    loading: string;
-};
-
-type ExecuteText = {
-    pageTitle: string;
-    emptyExecutionTitle: string;
-    backToChecklists: string;
-    back: string;
-    operator: string;
-    operatorPlaceholder: string;
-    signatureOptional: string;
-    signatureReady: string;
-    itemsTitle: string;
-    emptyItems: string;
-    boolOk: string;
-    boolKo: string;
-    boolNa: string;
-    numberPlaceholder: string;
-    numberPlaceholderWithUnit: string;
-    rangeLabel: string;
-    textPlaceholder: string;
-    selectPlaceholder: string;
-    uploadPhotos: string;
-    filesSelected: string;
-    itemNotesPlaceholder: string;
-    incompleteTitle: string;
-    incompleteDescription: string;
-    completedTitle: string;
-    completedDescription: string;
-    createError: string;
-    loadError: string;
-    completeError: string;
-    saving: string;
-    complete: string;
-    signatureTitle: string;
-    saveSignature: string;
-    clear: string;
-    close: string;
-    useSignature: string;
-};
-
-type WorkOrderExecuteText = {
-    loading: string;
-    notFound: string;
-    backToWorkOrder: string;
-    title: string;
-    descriptionPrefix: string;
-    assignedChecklist: string;
-    selectChecklist: string;
-    noAssignedChecklist: string;
-    formTitle: string;
-    emptyTemplate: string;
-    requiredPrefix: string;
-    selectResponse: string;
-    boolYes: string;
-    boolNo: string;
-    boolNa: string;
-    numberPlaceholder: string;
-    textPlaceholder: string;
-    genericPlaceholder: string;
-    itemNotes: string;
-    itemNotesPlaceholder: string;
-    finalNotes: string;
-    finalNotesPlaceholder: string;
-    savedTitle: string;
-    savedDescription: string;
-    save: string;
-    saving: string;
-    loadError: string;
-    loadChecklistError: string;
-    loadItemsError: string;
-    unauthenticated: string;
-    activeOrgMissing: string;
-    workOrderMachineMissing: string;
-};
-
-type ChecklistFlowTexts = {
-    redirects: {
-        legacyExecution: RedirectText;
-        legacyWorkOrder: RedirectText;
-        reportsIndex: RedirectText;
-        reportsChecklists: RedirectText;
+type ChecklistTexts = {
+    common: {
+        loading: string;
+        back: string;
+        refresh: string;
+        search: string;
+        save: string;
+        saving: string;
+        create: string;
+        edit: string;
+        delete: string;
+        cancel: string;
+        active: string;
+        inactive: string;
+        yes: string;
+        no: string;
+        all: string;
+        details: string;
+        noneFound: string;
+        loginRedirect: string;
+        error: string;
     };
-    execute: ExecuteText;
-    workOrderExecute: WorkOrderExecuteText;
+    legacy: {
+        title: string;
+        description: string;
+        body: string;
+        action: string;
+    };
+    templates: {
+        title: string;
+        subtitle: string;
+        new: string;
+        total: string;
+        active: string;
+        items: string;
+        listTitle: string;
+        noResults: string;
+        targetMachine: string;
+        targetLine: string;
+        version: string;
+        itemCount: string;
+        statusActive: string;
+        statusInactive: string;
+        editTemplate: string;
+        newTemplate: string;
+        editorSubtitle: string;
+        name: string;
+        description: string;
+        target: string;
+        enabled: string;
+        itemsTitle: string;
+        noItems: string;
+        addItem: string;
+        itemTitle: string;
+        itemDescription: string;
+        inputType: string;
+        required: string;
+        removeItem: string;
+        saveSuccessCreate: string;
+        saveSuccessUpdate: string;
+        saveError: string;
+        loadError: string;
+        validationName: string;
+        validationItem: string;
+        deleteConfirm: string;
+        targetHelp: string;
+    };
+    inputs: {
+        boolean: string;
+        text: string;
+        number: string;
+        value: string;
+    };
+    assignments: {
+        title: string;
+        subtitle: string;
+        newTitle: string;
+        newDescription: string;
+        template: string;
+        machine: string;
+        selectTemplate: string;
+        selectMachine: string;
+        assign: string;
+        assigning: string;
+        historyTitle: string;
+        noResults: string;
+        permissionDenied: string;
+        onlyManagers: string;
+        missingSelection: string;
+        duplicate: string;
+        assigned: string;
+        assignError: string;
+        deactivateConfirm: string;
+        deactivated: string;
+        deactivateError: string;
+        openMachine: string;
+        deactivate: string;
+        activeAssignments: string;
+        totalAssignments: string;
+        activeOnly: string;
+    };
+    executions: {
+        title: string;
+        subtitleCustomer: string;
+        subtitleManufacturer: string;
+        total: string;
+        completed: string;
+        inProgress: string;
+        failed: string;
+        filters: string;
+        searchPlaceholder: string;
+        status: string;
+        plant: string;
+        allStatuses: string;
+        allPlants: string;
+        results: string;
+        noResults: string;
+        detail: string;
+        customerView: string;
+        manufacturerView: string;
+        templateFallback: string;
+        machineFallback: string;
+        workOrderFallback: string;
+        startedAt: string;
+        executedAt: string;
+        completedAt: string;
+        template: string;
+        machine: string;
+        workOrder: string;
+        notes: string;
+        answers: string;
+        noAnswers: string;
+        ok: string;
+        ko: string;
+        value: string;
+        accessRules: string;
+        customerRule: string;
+        manufacturerRule: string;
+        readonlyRule: string;
+        detailTitle: string;
+        executionNotFound: string;
+        loadError: string;
+    };
 };
 
-const texts: Record<Language, ChecklistFlowTexts> = {
+const texts: Record<Language, ChecklistTexts> = {
     it: {
-        redirects: {
-            legacyExecution: {
-                title: "Redirect esecuzione checklist",
-                description: "Questo percorso legacy ora punta al dettaglio esecuzione nel nuovo dominio checklists/executions.",
-                body: "Stiamo reindirizzando automaticamente al dettaglio esecuzione checklist.",
-                action: "Vai ora",
-                loading: "Reindirizzamento in corso...",
-            },
-            legacyWorkOrder: {
-                title: "Redirect work order checklist",
-                description: "Questo percorso legacy è stato riallineato al dettaglio work order.",
-                body: "Stiamo reindirizzando automaticamente al work order, dove trovi il flusso checklist aggiornato.",
-                action: "Apri work order",
-                loading: "Reindirizzamento in corso...",
-            },
-            reportsIndex: {
-                title: "Redirect report",
-                description: "La sezione report legacy è stata riallineata alla dashboard analytics.",
-                body: "Stiamo reindirizzando automaticamente alla sezione analytics.",
-                action: "Vai ora",
-                loading: "Reindirizzamento in corso...",
-            },
-            reportsChecklists: {
-                title: "Redirect report checklist",
-                description: "Il report checklist legacy ora coincide con lo storico esecuzioni checklist.",
-                body: "Stiamo reindirizzando automaticamente alla lista delle checklist eseguite.",
-                action: "Apri esecuzioni",
-                loading: "Reindirizzamento in corso...",
-            },
-        },
-        execute: {
-            pageTitle: "Esegui checklist",
-            emptyExecutionTitle: "Esecuzione non trovata",
-            backToChecklists: "Torna alle checklist",
-            back: "Indietro",
-            operator: "Operatore",
-            operatorPlaceholder: "Nome tecnico",
-            signatureOptional: "Firma (opzionale)",
-            signatureReady: "Firma pronta",
-            itemsTitle: "Elementi",
-            emptyItems: "Nessun elemento nella checklist. Aggiungi elementi al template.",
-            boolOk: "OK / Conforme",
-            boolKo: "KO / Non conforme",
-            boolNa: "N/D",
-            numberPlaceholder: "Valore",
-            numberPlaceholderWithUnit: "Valore",
-            rangeLabel: "Range",
-            textPlaceholder: "Testo",
-            selectPlaceholder: "Seleziona…",
-            uploadPhotos: "Carica una o più foto",
-            filesSelected: "file selezionati",
-            itemNotesPlaceholder: "Note (opzionale)",
-            incompleteTitle: "Checklist incompleta",
-            incompleteDescription: "Compila i campi obbligatori prima di completare la checklist.",
-            completedTitle: "Completata",
-            completedDescription: "Checklist completata con successo.",
-            createError: "Errore creazione esecuzione checklist.",
-            loadError: "Errore caricamento checklist.",
-            completeError: "Errore completamento checklist.",
-            saving: "Salvataggio…",
-            complete: "Completa",
-            signatureTitle: "Firma",
-            saveSignature: "Salva firma nell’esecuzione",
-            clear: "Pulisci",
-            close: "Chiudi",
-            useSignature: "Usa firma",
-        },
-        workOrderExecute: {
+        common: {
             loading: "Caricamento...",
-            notFound: "Work order non trovato.",
-            backToWorkOrder: "Torna al work order",
-            title: "Esegui checklist",
-            descriptionPrefix: "Compilazione checklist collegata al work order:",
-            assignedChecklist: "Checklist assegnata",
-            selectChecklist: "Seleziona checklist",
-            noAssignedChecklist: "Nessuna checklist assegnata",
-            formTitle: "Compilazione",
-            emptyTemplate: "Questo template non contiene ancora elementi.",
-            requiredPrefix: "Completa il controllo obbligatorio:",
-            selectResponse: "Seleziona risposta",
-            boolYes: "Sì",
-            boolNo: "No",
-            boolNa: "—",
-            numberPlaceholder: "Inserisci valore numerico",
-            textPlaceholder: "Inserisci testo",
-            genericPlaceholder: "Inserisci valore",
-            itemNotes: "Note elemento",
-            itemNotesPlaceholder: "Note opzionali",
-            finalNotes: "Note finali",
-            finalNotesPlaceholder: "Note finali sulla checklist",
-            savedTitle: "OK",
-            savedDescription: "Checklist salvata correttamente.",
-            save: "Salva checklist",
+            back: "Indietro",
+            refresh: "Aggiorna",
+            search: "Cerca",
+            save: "Salva",
             saving: "Salvataggio...",
-            loadError: "Errore caricamento checklist",
-            loadChecklistError: "Errore caricamento checklist",
-            loadItemsError: "Errore caricamento elementi checklist",
-            unauthenticated: "Utente non autenticato.",
-            activeOrgMissing: "Organizzazione attiva non trovata nel contesto utente.",
-            workOrderMachineMissing: "Il work order non ha una macchina associata.",
+            create: "Crea",
+            edit: "Modifica",
+            delete: "Elimina",
+            cancel: "Annulla",
+            active: "Attivo",
+            inactive: "Disattivo",
+            yes: "Sì",
+            no: "No",
+            all: "Tutti",
+            details: "Dettaglio",
+            noneFound: "Nessun elemento trovato.",
+            loginRedirect: "Reindirizzamento in corso...",
+            error: "Errore",
+        },
+        legacy: {
+            title: "Redirect checklist legacy",
+            description: "Questo percorso legacy è stato riallineato al nuovo dominio checklist/templates.",
+            body: "Stiamo reindirizzando automaticamente alla nuova sezione template checklist.",
+            action: "Vai ora",
+        },
+        templates: {
+            title: "Template checklist",
+            subtitle: "Definisci i modelli operativi e le relative voci di controllo nel contesto attivo.",
+            new: "Nuovo template",
+            total: "Template totali",
+            active: "Template attivi",
+            items: "Voci totali",
+            listTitle: "Elenco template",
+            noResults: "Nessun template checklist trovato.",
+            targetMachine: "Macchina",
+            targetLine: "Linea produttiva",
+            version: "Versione",
+            itemCount: "voci",
+            statusActive: "Attivo",
+            statusInactive: "Disattivo",
+            editTemplate: "Modifica template",
+            newTemplate: "Nuovo template",
+            editorSubtitle: "Configura struttura, target e voci della checklist.",
+            name: "Nome template",
+            description: "Descrizione",
+            target: "Target",
+            enabled: "Template attivo",
+            itemsTitle: "Voci checklist",
+            noItems: "Nessuna voce presente. Aggiungi almeno una voce per rendere il template operativo.",
+            addItem: "Aggiungi voce",
+            itemTitle: "Titolo voce",
+            itemDescription: "Descrizione voce",
+            inputType: "Tipo input",
+            required: "Obbligatoria",
+            removeItem: "Rimuovi voce",
+            saveSuccessCreate: "Template creato correttamente.",
+            saveSuccessUpdate: "Template aggiornato correttamente.",
+            saveError: "Errore durante il salvataggio del template.",
+            loadError: "Errore caricamento template checklist.",
+            validationName: "Il nome del template è obbligatorio.",
+            validationItem: "Ogni voce checklist deve avere un titolo.",
+            deleteConfirm: "Vuoi davvero rimuovere questa voce?",
+            targetHelp: "Scegli se il template si applica a una macchina singola o a una linea produttiva.",
+        },
+        inputs: {
+            boolean: "Sì / No",
+            text: "Testo",
+            number: "Numero",
+            value: "Valore",
+        },
+        assignments: {
+            title: "Assegnazioni checklist",
+            subtitle: "Collega i template checklist alle macchine del contesto attivo.",
+            newTitle: "Nuova assegnazione",
+            newDescription: "Associa un template attivo a una macchina della tua organizzazione.",
+            template: "Template",
+            machine: "Macchina",
+            selectTemplate: "Seleziona template",
+            selectMachine: "Seleziona macchina",
+            assign: "Assegna checklist",
+            assigning: "Assegnazione...",
+            historyTitle: "Assegnazioni attive e storiche",
+            noResults: "Nessuna assegnazione checklist trovata.",
+            permissionDenied: "Permesso negato",
+            onlyManagers: "Solo admin e supervisor possono gestire le assegnazioni checklist.",
+            missingSelection: "Seleziona template e macchina.",
+            duplicate: "Questa checklist è già assegnata alla macchina selezionata.",
+            assigned: "Checklist assegnata correttamente.",
+            assignError: "Errore assegnazione checklist.",
+            deactivateConfirm: "Vuoi davvero disattivare questa assegnazione checklist?",
+            deactivated: "Assegnazione disattivata.",
+            deactivateError: "Errore disattivazione assegnazione.",
+            openMachine: "Apri macchina",
+            deactivate: "Disattiva",
+            activeAssignments: "Assegnazioni attive",
+            totalAssignments: "Assegnazioni totali",
+            activeOnly: "Solo attive",
+        },
+        executions: {
+            title: "Checklist eseguite",
+            subtitleCustomer: "Storico delle checklist completate nel tuo contesto operativo.",
+            subtitleManufacturer: "Storico delle checklist eseguite sulle macchine collegate ai tuoi clienti.",
+            total: "Totali",
+            completed: "Completate",
+            inProgress: "In corso",
+            failed: "KO / annullate",
+            filters: "Filtri",
+            searchPlaceholder: "Template, macchina, work order...",
+            status: "Stato",
+            plant: "Stabilimento",
+            allStatuses: "Tutti gli stati",
+            allPlants: "Tutti gli stabilimenti",
+            results: "risultati",
+            noResults: "Nessuna esecuzione trovata.",
+            detail: "Dettaglio",
+            customerView: "Vista cliente",
+            manufacturerView: "Vista costruttore",
+            templateFallback: "Checklist senza titolo",
+            machineFallback: "Macchina non trovata",
+            workOrderFallback: "—",
+            startedAt: "Avvio",
+            executedAt: "Eseguita il",
+            completedAt: "Completata il",
+            template: "Template",
+            machine: "Macchina",
+            workOrder: "Work order",
+            notes: "Note",
+            answers: "Dettaglio risposte",
+            noAnswers: "Nessuna risposta registrata.",
+            ok: "OK",
+            ko: "KO",
+            value: "Valore risposta",
+            accessRules: "Regole di accesso",
+            customerRule: "Il cliente finale gestisce l'esecuzione operativa nel proprio contesto.",
+            manufacturerRule: "Il costruttore può consultare lo storico solo per macchine collegate attivamente alla propria organizzazione.",
+            readonlyRule: "Questa pagina è in sola lettura: l'editing resta confinato ai flussi operativi del customer owner.",
+            detailTitle: "Dettaglio esecuzione",
+            executionNotFound: "Esecuzione checklist non trovata.",
+            loadError: "Errore caricamento esecuzione checklist.",
         },
     },
     en: {
-        redirects: {
-            legacyExecution: {
-                title: "Checklist execution redirect",
-                description: "This legacy route now points to the execution detail inside the new checklists/executions domain.",
-                body: "We are automatically redirecting you to the checklist execution detail.",
-                action: "Go now",
-                loading: "Redirecting...",
-            },
-            legacyWorkOrder: {
-                title: "Work order checklist redirect",
-                description: "This legacy route has been aligned with the work order detail page.",
-                body: "We are automatically redirecting you to the work order, where the updated checklist flow lives.",
-                action: "Open work order",
-                loading: "Redirecting...",
-            },
-            reportsIndex: {
-                title: "Reports redirect",
-                description: "The legacy reports section has been aligned with the analytics dashboard.",
-                body: "We are automatically redirecting you to analytics.",
-                action: "Go now",
-                loading: "Redirecting...",
-            },
-            reportsChecklists: {
-                title: "Checklist reports redirect",
-                description: "The legacy checklist report now maps to the checklist execution history.",
-                body: "We are automatically redirecting you to the checklist execution list.",
-                action: "Open executions",
-                loading: "Redirecting...",
-            },
-        },
-        execute: {
-            pageTitle: "Run checklist",
-            emptyExecutionTitle: "Execution not found",
-            backToChecklists: "Back to checklists",
-            back: "Back",
-            operator: "Operator",
-            operatorPlaceholder: "Technician name",
-            signatureOptional: "Signature (optional)",
-            signatureReady: "Signature ready",
-            itemsTitle: "Items",
-            emptyItems: "This checklist has no items yet. Add items to the template.",
-            boolOk: "OK / Compliant",
-            boolKo: "KO / Not compliant",
-            boolNa: "N/A",
-            numberPlaceholder: "Value",
-            numberPlaceholderWithUnit: "Value",
-            rangeLabel: "Range",
-            textPlaceholder: "Text",
-            selectPlaceholder: "Select…",
-            uploadPhotos: "Upload one or more photos",
-            filesSelected: "selected files",
-            itemNotesPlaceholder: "Notes (optional)",
-            incompleteTitle: "Checklist incomplete",
-            incompleteDescription: "Complete the required fields before finishing the checklist.",
-            completedTitle: "Completed",
-            completedDescription: "Checklist completed successfully.",
-            createError: "Error creating checklist execution.",
-            loadError: "Error loading checklist.",
-            completeError: "Error completing checklist.",
-            saving: "Saving…",
-            complete: "Complete",
-            signatureTitle: "Signature",
-            saveSignature: "Save signature with execution",
-            clear: "Clear",
-            close: "Close",
-            useSignature: "Use signature",
-        },
-        workOrderExecute: {
+        common: {
             loading: "Loading...",
-            notFound: "Work order not found.",
-            backToWorkOrder: "Back to work order",
-            title: "Run checklist",
-            descriptionPrefix: "Checklist execution linked to work order:",
-            assignedChecklist: "Assigned checklist",
-            selectChecklist: "Select checklist",
-            noAssignedChecklist: "No assigned checklist",
-            formTitle: "Execution",
-            emptyTemplate: "This template has no items yet.",
-            requiredPrefix: "Complete the required check:",
-            selectResponse: "Select response",
-            boolYes: "Yes",
-            boolNo: "No",
-            boolNa: "—",
-            numberPlaceholder: "Enter numeric value",
-            textPlaceholder: "Enter text",
-            genericPlaceholder: "Enter value",
-            itemNotes: "Item notes",
-            itemNotesPlaceholder: "Optional notes",
-            finalNotes: "Final notes",
-            finalNotesPlaceholder: "Final checklist notes",
-            savedTitle: "OK",
-            savedDescription: "Checklist saved successfully.",
-            save: "Save checklist",
+            back: "Back",
+            refresh: "Refresh",
+            search: "Search",
+            save: "Save",
             saving: "Saving...",
-            loadError: "Error loading checklist",
-            loadChecklistError: "Error loading checklist",
-            loadItemsError: "Error loading checklist items",
-            unauthenticated: "User is not authenticated.",
-            activeOrgMissing: "No active organization found in user context.",
-            workOrderMachineMissing: "The work order is not linked to a machine.",
+            create: "Create",
+            edit: "Edit",
+            delete: "Delete",
+            cancel: "Cancel",
+            active: "Active",
+            inactive: "Inactive",
+            yes: "Yes",
+            no: "No",
+            all: "All",
+            details: "Details",
+            noneFound: "No items found.",
+            loginRedirect: "Redirecting...",
+            error: "Error",
+        },
+        legacy: {
+            title: "Legacy checklist redirect",
+            description: "This legacy route has been aligned with the new checklist/templates domain.",
+            body: "We are automatically redirecting you to the new checklist template section.",
+            action: "Go now",
+        },
+        templates: {
+            title: "Checklist templates",
+            subtitle: "Define operational templates and their control items in the active context.",
+            new: "New template",
+            total: "Total templates",
+            active: "Active templates",
+            items: "Total items",
+            listTitle: "Template list",
+            noResults: "No checklist template found.",
+            targetMachine: "Machine",
+            targetLine: "Production line",
+            version: "Version",
+            itemCount: "items",
+            statusActive: "Active",
+            statusInactive: "Inactive",
+            editTemplate: "Edit template",
+            newTemplate: "New template",
+            editorSubtitle: "Configure structure, target and checklist items.",
+            name: "Template name",
+            description: "Description",
+            target: "Target",
+            enabled: "Template enabled",
+            itemsTitle: "Checklist items",
+            noItems: "No items yet. Add at least one item to make the template operational.",
+            addItem: "Add item",
+            itemTitle: "Item title",
+            itemDescription: "Item description",
+            inputType: "Input type",
+            required: "Required",
+            removeItem: "Remove item",
+            saveSuccessCreate: "Template created successfully.",
+            saveSuccessUpdate: "Template updated successfully.",
+            saveError: "Error while saving the checklist template.",
+            loadError: "Error loading checklist template.",
+            validationName: "Template name is required.",
+            validationItem: "Every checklist item must have a title.",
+            deleteConfirm: "Do you really want to remove this item?",
+            targetHelp: "Choose whether the template applies to a single machine or to a production line.",
+        },
+        inputs: {
+            boolean: "Yes / No",
+            text: "Text",
+            number: "Number",
+            value: "Value",
+        },
+        assignments: {
+            title: "Checklist assignments",
+            subtitle: "Link checklist templates to machines in the active context.",
+            newTitle: "New assignment",
+            newDescription: "Attach an active template to a machine in your organization.",
+            template: "Template",
+            machine: "Machine",
+            selectTemplate: "Select template",
+            selectMachine: "Select machine",
+            assign: "Assign checklist",
+            assigning: "Assigning...",
+            historyTitle: "Active and historical assignments",
+            noResults: "No checklist assignment found.",
+            permissionDenied: "Permission denied",
+            onlyManagers: "Only admins and supervisors can manage checklist assignments.",
+            missingSelection: "Select both template and machine.",
+            duplicate: "This checklist is already assigned to the selected machine.",
+            assigned: "Checklist assigned successfully.",
+            assignError: "Checklist assignment error.",
+            deactivateConfirm: "Do you really want to deactivate this checklist assignment?",
+            deactivated: "Assignment deactivated.",
+            deactivateError: "Error while deactivating assignment.",
+            openMachine: "Open machine",
+            deactivate: "Deactivate",
+            activeAssignments: "Active assignments",
+            totalAssignments: "Total assignments",
+            activeOnly: "Active only",
+        },
+        executions: {
+            title: "Completed checklists",
+            subtitleCustomer: "History of completed checklists in your operational context.",
+            subtitleManufacturer: "History of checklists executed on machines linked to your customers.",
+            total: "Total",
+            completed: "Completed",
+            inProgress: "In progress",
+            failed: "Failed / cancelled",
+            filters: "Filters",
+            searchPlaceholder: "Template, machine, work order...",
+            status: "Status",
+            plant: "Plant",
+            allStatuses: "All statuses",
+            allPlants: "All plants",
+            results: "results",
+            noResults: "No execution found.",
+            detail: "Details",
+            customerView: "Customer view",
+            manufacturerView: "Manufacturer view",
+            templateFallback: "Untitled checklist",
+            machineFallback: "Machine not found",
+            workOrderFallback: "—",
+            startedAt: "Started",
+            executedAt: "Executed on",
+            completedAt: "Completed on",
+            template: "Template",
+            machine: "Machine",
+            workOrder: "Work order",
+            notes: "Notes",
+            answers: "Answer details",
+            noAnswers: "No answer recorded.",
+            ok: "OK",
+            ko: "KO",
+            value: "Answer value",
+            accessRules: "Access rules",
+            customerRule: "The end customer manages operational execution in its own context.",
+            manufacturerRule: "The manufacturer can review history only for machines actively linked to its organization.",
+            readonlyRule: "This page is read-only: editing remains confined to customer operational flows.",
+            detailTitle: "Execution details",
+            executionNotFound: "Checklist execution not found.",
+            loadError: "Error loading checklist execution.",
         },
     },
     fr: {
-        redirects: {
-            legacyExecution: {
-                title: "Redirection exécution checklist",
-                description: "Cet ancien chemin pointe maintenant vers le détail d’exécution dans le nouveau domaine checklists/executions.",
-                body: "Nous vous redirigeons automatiquement vers le détail d’exécution de la checklist.",
-                action: "Aller maintenant",
-                loading: "Redirection en cours...",
-            },
-            legacyWorkOrder: {
-                title: "Redirection checklist ordre de travail",
-                description: "Cet ancien chemin a été réaligné sur la page détail de l’ordre de travail.",
-                body: "Nous vous redirigeons automatiquement vers l’ordre de travail, où se trouve le flux checklist mis à jour.",
-                action: "Ouvrir l’ordre de travail",
-                loading: "Redirection en cours...",
-            },
-            reportsIndex: {
-                title: "Redirection rapports",
-                description: "L’ancienne section rapports a été réalignée sur le tableau de bord analytics.",
-                body: "Nous vous redirigeons automatiquement vers analytics.",
-                action: "Aller maintenant",
-                loading: "Redirection en cours...",
-            },
-            reportsChecklists: {
-                title: "Redirection rapport checklist",
-                description: "L’ancien rapport checklist correspond maintenant à l’historique des exécutions.",
-                body: "Nous vous redirigeons automatiquement vers la liste des exécutions checklist.",
-                action: "Ouvrir les exécutions",
-                loading: "Redirection en cours...",
-            },
-        },
-        execute: {
-            pageTitle: "Exécuter checklist",
-            emptyExecutionTitle: "Exécution introuvable",
-            backToChecklists: "Retour aux checklists",
-            back: "Retour",
-            operator: "Opérateur",
-            operatorPlaceholder: "Nom du technicien",
-            signatureOptional: "Signature (optionnelle)",
-            signatureReady: "Signature prête",
-            itemsTitle: "Éléments",
-            emptyItems: "Aucun élément dans cette checklist. Ajoutez des éléments au modèle.",
-            boolOk: "OK / Conforme",
-            boolKo: "KO / Non conforme",
-            boolNa: "N/A",
-            numberPlaceholder: "Valeur",
-            numberPlaceholderWithUnit: "Valeur",
-            rangeLabel: "Plage",
-            textPlaceholder: "Texte",
-            selectPlaceholder: "Sélectionner…",
-            uploadPhotos: "Télécharger une ou plusieurs photos",
-            filesSelected: "fichiers sélectionnés",
-            itemNotesPlaceholder: "Notes (optionnelles)",
-            incompleteTitle: "Checklist incomplète",
-            incompleteDescription: "Complétez les champs obligatoires avant de terminer la checklist.",
-            completedTitle: "Terminée",
-            completedDescription: "Checklist terminée avec succès.",
-            createError: "Erreur lors de la création de l’exécution checklist.",
-            loadError: "Erreur lors du chargement de la checklist.",
-            completeError: "Erreur lors de la finalisation de la checklist.",
-            saving: "Enregistrement…",
-            complete: "Terminer",
-            signatureTitle: "Signature",
-            saveSignature: "Enregistrer la signature avec l’exécution",
-            clear: "Effacer",
-            close: "Fermer",
-            useSignature: "Utiliser la signature",
-        },
-        workOrderExecute: {
+        common: {
             loading: "Chargement...",
-            notFound: "Ordre de travail introuvable.",
-            backToWorkOrder: "Retour à l’ordre de travail",
-            title: "Exécuter checklist",
-            descriptionPrefix: "Exécution checklist liée à l’ordre de travail :",
-            assignedChecklist: "Checklist assignée",
-            selectChecklist: "Sélectionner checklist",
-            noAssignedChecklist: "Aucune checklist assignée",
-            formTitle: "Exécution",
-            emptyTemplate: "Ce modèle ne contient encore aucun élément.",
-            requiredPrefix: "Complétez le contrôle obligatoire :",
-            selectResponse: "Sélectionner une réponse",
-            boolYes: "Oui",
-            boolNo: "Non",
-            boolNa: "—",
-            numberPlaceholder: "Saisir une valeur numérique",
-            textPlaceholder: "Saisir du texte",
-            genericPlaceholder: "Saisir une valeur",
-            itemNotes: "Notes élément",
-            itemNotesPlaceholder: "Notes optionnelles",
-            finalNotes: "Notes finales",
-            finalNotesPlaceholder: "Notes finales de la checklist",
-            savedTitle: "OK",
-            savedDescription: "Checklist enregistrée avec succès.",
-            save: "Enregistrer checklist",
+            back: "Retour",
+            refresh: "Actualiser",
+            search: "Rechercher",
+            save: "Enregistrer",
             saving: "Enregistrement...",
-            loadError: "Erreur chargement checklist",
-            loadChecklistError: "Erreur chargement checklist",
-            loadItemsError: "Erreur chargement des éléments checklist",
-            unauthenticated: "Utilisateur non authentifié.",
-            activeOrgMissing: "Aucune organisation active trouvée dans le contexte utilisateur.",
-            workOrderMachineMissing: "L’ordre de travail n’est lié à aucune machine.",
+            create: "Créer",
+            edit: "Modifier",
+            delete: "Supprimer",
+            cancel: "Annuler",
+            active: "Actif",
+            inactive: "Inactif",
+            yes: "Oui",
+            no: "Non",
+            all: "Tous",
+            details: "Détail",
+            noneFound: "Aucun élément trouvé.",
+            loginRedirect: "Redirection en cours...",
+            error: "Erreur",
+        },
+        legacy: {
+            title: "Redirection checklist legacy",
+            description: "Cette route legacy a été réalignée sur le nouveau domaine checklist/templates.",
+            body: "Nous vous redirigeons automatiquement vers la nouvelle section des modèles de checklist.",
+            action: "Aller maintenant",
+        },
+        templates: {
+            title: "Modèles de checklist",
+            subtitle: "Définissez les modèles opérationnels et leurs éléments de contrôle dans le contexte actif.",
+            new: "Nouveau modèle",
+            total: "Modèles totaux",
+            active: "Modèles actifs",
+            items: "Éléments totaux",
+            listTitle: "Liste des modèles",
+            noResults: "Aucun modèle de checklist trouvé.",
+            targetMachine: "Machine",
+            targetLine: "Ligne de production",
+            version: "Version",
+            itemCount: "éléments",
+            statusActive: "Actif",
+            statusInactive: "Inactif",
+            editTemplate: "Modifier le modèle",
+            newTemplate: "Nouveau modèle",
+            editorSubtitle: "Configurez la structure, la cible et les éléments de la checklist.",
+            name: "Nom du modèle",
+            description: "Description",
+            target: "Cible",
+            enabled: "Modèle actif",
+            itemsTitle: "Éléments de checklist",
+            noItems: "Aucun élément pour l'instant. Ajoutez au moins un élément pour rendre le modèle opérationnel.",
+            addItem: "Ajouter un élément",
+            itemTitle: "Titre de l'élément",
+            itemDescription: "Description de l'élément",
+            inputType: "Type de saisie",
+            required: "Obligatoire",
+            removeItem: "Supprimer l'élément",
+            saveSuccessCreate: "Modèle créé avec succès.",
+            saveSuccessUpdate: "Modèle mis à jour avec succès.",
+            saveError: "Erreur lors de l'enregistrement du modèle de checklist.",
+            loadError: "Erreur de chargement du modèle de checklist.",
+            validationName: "Le nom du modèle est obligatoire.",
+            validationItem: "Chaque élément de checklist doit avoir un titre.",
+            deleteConfirm: "Voulez-vous vraiment supprimer cet élément ?",
+            targetHelp: "Choisissez si le modèle s'applique à une machine unique ou à une ligne de production.",
+        },
+        inputs: {
+            boolean: "Oui / Non",
+            text: "Texte",
+            number: "Nombre",
+            value: "Valeur",
+        },
+        assignments: {
+            title: "Affectations checklist",
+            subtitle: "Reliez les modèles de checklist aux machines du contexte actif.",
+            newTitle: "Nouvelle affectation",
+            newDescription: "Associez un modèle actif à une machine de votre organisation.",
+            template: "Modèle",
+            machine: "Machine",
+            selectTemplate: "Sélectionner un modèle",
+            selectMachine: "Sélectionner une machine",
+            assign: "Affecter la checklist",
+            assigning: "Affectation...",
+            historyTitle: "Affectations actives et historiques",
+            noResults: "Aucune affectation de checklist trouvée.",
+            permissionDenied: "Permission refusée",
+            onlyManagers: "Seuls les admins et superviseurs peuvent gérer les affectations checklist.",
+            missingSelection: "Sélectionnez le modèle et la machine.",
+            duplicate: "Cette checklist est déjà affectée à la machine sélectionnée.",
+            assigned: "Checklist affectée avec succès.",
+            assignError: "Erreur d'affectation de la checklist.",
+            deactivateConfirm: "Voulez-vous vraiment désactiver cette affectation checklist ?",
+            deactivated: "Affectation désactivée.",
+            deactivateError: "Erreur lors de la désactivation de l'affectation.",
+            openMachine: "Ouvrir la machine",
+            deactivate: "Désactiver",
+            activeAssignments: "Affectations actives",
+            totalAssignments: "Affectations totales",
+            activeOnly: "Actives seulement",
+        },
+        executions: {
+            title: "Checklists exécutées",
+            subtitleCustomer: "Historique des checklists terminées dans votre contexte opérationnel.",
+            subtitleManufacturer: "Historique des checklists exécutées sur les machines liées à vos clients.",
+            total: "Total",
+            completed: "Terminées",
+            inProgress: "En cours",
+            failed: "KO / annulées",
+            filters: "Filtres",
+            searchPlaceholder: "Modèle, machine, ordre de travail...",
+            status: "Statut",
+            plant: "Usine",
+            allStatuses: "Tous les statuts",
+            allPlants: "Toutes les usines",
+            results: "résultats",
+            noResults: "Aucune exécution trouvée.",
+            detail: "Détail",
+            customerView: "Vue client",
+            manufacturerView: "Vue constructeur",
+            templateFallback: "Checklist sans titre",
+            machineFallback: "Machine introuvable",
+            workOrderFallback: "—",
+            startedAt: "Début",
+            executedAt: "Exécutée le",
+            completedAt: "Terminée le",
+            template: "Modèle",
+            machine: "Machine",
+            workOrder: "Ordre de travail",
+            notes: "Notes",
+            answers: "Détail des réponses",
+            noAnswers: "Aucune réponse enregistrée.",
+            ok: "OK",
+            ko: "KO",
+            value: "Valeur de réponse",
+            accessRules: "Règles d'accès",
+            customerRule: "Le client final gère l'exécution opérationnelle dans son propre contexte.",
+            manufacturerRule: "Le constructeur peut consulter l'historique uniquement pour les machines activement liées à son organisation.",
+            readonlyRule: "Cette page est en lecture seule : l'édition reste confinée aux flux opérationnels du client.",
+            detailTitle: "Détail d'exécution",
+            executionNotFound: "Exécution de checklist introuvable.",
+            loadError: "Erreur de chargement de l'exécution de checklist.",
         },
     },
     es: {
-        redirects: {
-            legacyExecution: {
-                title: "Redirección de ejecución checklist",
-                description: "Esta ruta legacy ahora apunta al detalle de ejecución dentro del nuevo dominio checklists/executions.",
-                body: "Te estamos redirigiendo automáticamente al detalle de ejecución de la checklist.",
-                action: "Ir ahora",
-                loading: "Redirigiendo...",
-            },
-            legacyWorkOrder: {
-                title: "Redirección checklist orden de trabajo",
-                description: "Esta ruta legacy se ha alineado con la página de detalle de la orden de trabajo.",
-                body: "Te estamos redirigiendo automáticamente a la orden de trabajo, donde vive el flujo checklist actualizado.",
-                action: "Abrir orden de trabajo",
-                loading: "Redirigiendo...",
-            },
-            reportsIndex: {
-                title: "Redirección de informes",
-                description: "La sección legacy de informes se ha alineado con el panel de analytics.",
-                body: "Te estamos redirigiendo automáticamente a analytics.",
-                action: "Ir ahora",
-                loading: "Redirigiendo...",
-            },
-            reportsChecklists: {
-                title: "Redirección informe checklist",
-                description: "El informe legacy de checklist ahora coincide con el historial de ejecuciones.",
-                body: "Te estamos redirigiendo automáticamente a la lista de ejecuciones checklist.",
-                action: "Abrir ejecuciones",
-                loading: "Redirigiendo...",
-            },
-        },
-        execute: {
-            pageTitle: "Ejecutar checklist",
-            emptyExecutionTitle: "Ejecución no encontrada",
-            backToChecklists: "Volver a checklists",
-            back: "Atrás",
-            operator: "Operador",
-            operatorPlaceholder: "Nombre del técnico",
-            signatureOptional: "Firma (opcional)",
-            signatureReady: "Firma lista",
-            itemsTitle: "Elementos",
-            emptyItems: "No hay elementos en esta checklist. Añade elementos a la plantilla.",
-            boolOk: "OK / Conforme",
-            boolKo: "KO / No conforme",
-            boolNa: "N/A",
-            numberPlaceholder: "Valor",
-            numberPlaceholderWithUnit: "Valor",
-            rangeLabel: "Rango",
-            textPlaceholder: "Texto",
-            selectPlaceholder: "Seleccionar…",
-            uploadPhotos: "Sube una o más fotos",
-            filesSelected: "archivos seleccionados",
-            itemNotesPlaceholder: "Notas (opcionales)",
-            incompleteTitle: "Checklist incompleta",
-            incompleteDescription: "Completa los campos obligatorios antes de finalizar la checklist.",
-            completedTitle: "Completada",
-            completedDescription: "Checklist completada correctamente.",
-            createError: "Error al crear la ejecución de la checklist.",
-            loadError: "Error al cargar la checklist.",
-            completeError: "Error al completar la checklist.",
-            saving: "Guardando…",
-            complete: "Completar",
-            signatureTitle: "Firma",
-            saveSignature: "Guardar firma en la ejecución",
-            clear: "Limpiar",
-            close: "Cerrar",
-            useSignature: "Usar firma",
-        },
-        workOrderExecute: {
+        common: {
             loading: "Cargando...",
-            notFound: "Orden de trabajo no encontrada.",
-            backToWorkOrder: "Volver a la orden de trabajo",
-            title: "Ejecutar checklist",
-            descriptionPrefix: "Ejecución de checklist vinculada a la orden de trabajo:",
-            assignedChecklist: "Checklist asignada",
-            selectChecklist: "Seleccionar checklist",
-            noAssignedChecklist: "No hay checklist asignada",
-            formTitle: "Ejecución",
-            emptyTemplate: "Esta plantilla todavía no contiene elementos.",
-            requiredPrefix: "Completa el control obligatorio:",
-            selectResponse: "Selecciona respuesta",
-            boolYes: "Sí",
-            boolNo: "No",
-            boolNa: "—",
-            numberPlaceholder: "Introduce un valor numérico",
-            textPlaceholder: "Introduce texto",
-            genericPlaceholder: "Introduce un valor",
-            itemNotes: "Notas del elemento",
-            itemNotesPlaceholder: "Notas opcionales",
-            finalNotes: "Notas finales",
-            finalNotesPlaceholder: "Notas finales de la checklist",
-            savedTitle: "OK",
-            savedDescription: "Checklist guardada correctamente.",
-            save: "Guardar checklist",
+            back: "Atrás",
+            refresh: "Actualizar",
+            search: "Buscar",
+            save: "Guardar",
             saving: "Guardando...",
-            loadError: "Error al cargar checklist",
-            loadChecklistError: "Error al cargar checklist",
-            loadItemsError: "Error al cargar elementos de checklist",
-            unauthenticated: "Usuario no autenticado.",
-            activeOrgMissing: "No se encontró una organización activa en el contexto del usuario.",
-            workOrderMachineMissing: "La orden de trabajo no tiene una máquina asociada.",
+            create: "Crear",
+            edit: "Editar",
+            delete: "Eliminar",
+            cancel: "Cancelar",
+            active: "Activo",
+            inactive: "Inactivo",
+            yes: "Sí",
+            no: "No",
+            all: "Todos",
+            details: "Detalle",
+            noneFound: "No se encontró ningún elemento.",
+            loginRedirect: "Redirigiendo...",
+            error: "Error",
+        },
+        legacy: {
+            title: "Redirección checklist legacy",
+            description: "Esta ruta legacy se ha alineado con el nuevo dominio checklist/templates.",
+            body: "Te estamos redirigiendo automáticamente a la nueva sección de plantillas de checklist.",
+            action: "Ir ahora",
+        },
+        templates: {
+            title: "Plantillas de checklist",
+            subtitle: "Define las plantillas operativas y sus elementos de control en el contexto activo.",
+            new: "Nueva plantilla",
+            total: "Plantillas totales",
+            active: "Plantillas activas",
+            items: "Elementos totales",
+            listTitle: "Lista de plantillas",
+            noResults: "No se encontró ninguna plantilla de checklist.",
+            targetMachine: "Máquina",
+            targetLine: "Línea de producción",
+            version: "Versión",
+            itemCount: "elementos",
+            statusActive: "Activa",
+            statusInactive: "Inactiva",
+            editTemplate: "Editar plantilla",
+            newTemplate: "Nueva plantilla",
+            editorSubtitle: "Configura estructura, objetivo y elementos de la checklist.",
+            name: "Nombre de la plantilla",
+            description: "Descripción",
+            target: "Objetivo",
+            enabled: "Plantilla activa",
+            itemsTitle: "Elementos de checklist",
+            noItems: "Todavía no hay elementos. Añade al menos uno para que la plantilla sea operativa.",
+            addItem: "Añadir elemento",
+            itemTitle: "Título del elemento",
+            itemDescription: "Descripción del elemento",
+            inputType: "Tipo de entrada",
+            required: "Obligatorio",
+            removeItem: "Eliminar elemento",
+            saveSuccessCreate: "Plantilla creada correctamente.",
+            saveSuccessUpdate: "Plantilla actualizada correctamente.",
+            saveError: "Error al guardar la plantilla de checklist.",
+            loadError: "Error al cargar la plantilla de checklist.",
+            validationName: "El nombre de la plantilla es obligatorio.",
+            validationItem: "Cada elemento de la checklist debe tener un título.",
+            deleteConfirm: "¿De verdad quieres eliminar este elemento?",
+            targetHelp: "Elige si la plantilla se aplica a una sola máquina o a una línea de producción.",
+        },
+        inputs: {
+            boolean: "Sí / No",
+            text: "Texto",
+            number: "Número",
+            value: "Valor",
+        },
+        assignments: {
+            title: "Asignaciones de checklist",
+            subtitle: "Vincula plantillas de checklist a las máquinas del contexto activo.",
+            newTitle: "Nueva asignación",
+            newDescription: "Asocia una plantilla activa a una máquina de tu organización.",
+            template: "Plantilla",
+            machine: "Máquina",
+            selectTemplate: "Seleccionar plantilla",
+            selectMachine: "Seleccionar máquina",
+            assign: "Asignar checklist",
+            assigning: "Asignando...",
+            historyTitle: "Asignaciones activas e históricas",
+            noResults: "No se encontró ninguna asignación de checklist.",
+            permissionDenied: "Permiso denegado",
+            onlyManagers: "Solo admins y supervisores pueden gestionar asignaciones de checklist.",
+            missingSelection: "Selecciona plantilla y máquina.",
+            duplicate: "Esta checklist ya está asignada a la máquina seleccionada.",
+            assigned: "Checklist asignada correctamente.",
+            assignError: "Error al asignar la checklist.",
+            deactivateConfirm: "¿De verdad quieres desactivar esta asignación de checklist?",
+            deactivated: "Asignación desactivada.",
+            deactivateError: "Error al desactivar la asignación.",
+            openMachine: "Abrir máquina",
+            deactivate: "Desactivar",
+            activeAssignments: "Asignaciones activas",
+            totalAssignments: "Asignaciones totales",
+            activeOnly: "Solo activas",
+        },
+        executions: {
+            title: "Checklists ejecutadas",
+            subtitleCustomer: "Historial de checklists completadas en tu contexto operativo.",
+            subtitleManufacturer: "Historial de checklists ejecutadas en máquinas vinculadas a tus clientes.",
+            total: "Totales",
+            completed: "Completadas",
+            inProgress: "En curso",
+            failed: "KO / canceladas",
+            filters: "Filtros",
+            searchPlaceholder: "Plantilla, máquina, orden de trabajo...",
+            status: "Estado",
+            plant: "Planta",
+            allStatuses: "Todos los estados",
+            allPlants: "Todas las plantas",
+            results: "resultados",
+            noResults: "No se encontró ninguna ejecución.",
+            detail: "Detalle",
+            customerView: "Vista cliente",
+            manufacturerView: "Vista fabricante",
+            templateFallback: "Checklist sin título",
+            machineFallback: "Máquina no encontrada",
+            workOrderFallback: "—",
+            startedAt: "Inicio",
+            executedAt: "Ejecutada el",
+            completedAt: "Completada el",
+            template: "Plantilla",
+            machine: "Máquina",
+            workOrder: "Orden de trabajo",
+            notes: "Notas",
+            answers: "Detalle de respuestas",
+            noAnswers: "No hay respuestas registradas.",
+            ok: "OK",
+            ko: "KO",
+            value: "Valor de respuesta",
+            accessRules: "Reglas de acceso",
+            customerRule: "El cliente final gestiona la ejecución operativa dentro de su propio contexto.",
+            manufacturerRule: "El fabricante puede consultar el historial solo para máquinas vinculadas activamente a su organización.",
+            readonlyRule: "Esta página es de solo lectura: la edición permanece en los flujos operativos del cliente.",
+            detailTitle: "Detalle de ejecución",
+            executionNotFound: "Ejecución de checklist no encontrada.",
+            loadError: "Error al cargar la ejecución de checklist.",
         },
     },
 };
 
-export function getChecklistFlowTexts(language: Language): ChecklistFlowTexts {
-    return texts[language] ?? texts.en;
+export function getChecklistTexts(language: Language) {
+    return texts[language] ?? texts.it;
+}
+
+export function formatChecklistDate(value: string | null | undefined, language: Language) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+
+    const localeMap: Record<Language, string> = {
+        it: "it-IT",
+        en: "en-GB",
+        fr: "fr-FR",
+        es: "es-ES",
+    };
+
+    return date.toLocaleString(localeMap[language] ?? "it-IT");
+}
+
+export function canManageChecklists(role?: string | null) {
+    return role === "admin" || role === "supervisor";
+}
+
+export function translateChecklistTarget(
+    value: string | null | undefined,
+    language: Language
+) {
+    const t = getChecklistTexts(language);
+    return value === "production_line"
+        ? t.templates.targetLine
+        : t.templates.targetMachine;
+}
+
+export function translateChecklistInputType(
+    value: string | null | undefined,
+    language: Language
+) {
+    const t = getChecklistTexts(language);
+    switch (value) {
+        case "text":
+            return t.inputs.text;
+        case "number":
+            return t.inputs.number;
+        case "value":
+            return t.inputs.value;
+        default:
+            return t.inputs.boolean;
+    }
+}
+
+export function normalizeExecutionStatus(raw?: string | null) {
+    const value = String(raw ?? "").toLowerCase();
+
+    if (["completed", "passed", "ok"].includes(value)) return "completed";
+    if (["in_progress", "open", "pending", "draft"].includes(value)) return "in_progress";
+    if (["failed", "ko", "cancelled", "canceled"].includes(value)) return "failed";
+
+    return value || "in_progress";
 }
