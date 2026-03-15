@@ -1,52 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { getProfileData } from "@/lib/supabaseHelpers";
-
-type AAL = "aal1" | "aal2" | null;
+import { useAuth } from "@/hooks/useAuth";
+import { mfaService, type AuthenticatorLevel } from "@/services/mfaService";
 
 export function useMfaGuard() {
+    const { loading: authLoading, membership, isPlatformAdmin, isAuthenticated } = useAuth();
     const [loading, setLoading] = useState(true);
-    const [aal, setAal] = useState < AAL > (null);
-    const [userRole, setUserRole] = useState < string | null > (null);
-    const [hasAuthenticator, setHasAuthenticator] = useState < boolean > (false);
+    const [aal, setAal] = useState < AuthenticatorLevel > (null);
+    const [hasAuthenticator, setHasAuthenticator] = useState(false);
 
     useEffect(() => {
         let mounted = true;
 
         const load = async () => {
-            try {
-                const [
-                    authUserRes,
-                    assuranceRes,
-                    factorsRes,
-                ] = await Promise.all([
-                    supabase.auth.getUser(),
-                    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-                    supabase.auth.mfa.listFactors(),
-                ]);
+            if (authLoading) return;
 
-                const user = authUserRes.data.user ?? null;
-                const currentAal = (assuranceRes.data?.currentLevel as AAL) ?? "aal1";
-
-                let role: string | null = null;
-                if (user) {
-                    const profile = await getProfileData(user.id);
-                    role = profile?.role ?? null;
-                }
-
-                const authenticatorFactors =
-                    factorsRes.data?.all?.filter((f) => f.factor_type === "totp") ?? [];
-
+            if (!isAuthenticated) {
                 if (!mounted) return;
+                setAal(null);
+                setHasAuthenticator(false);
+                setLoading(false);
+                return;
+            }
 
-                setAal(currentAal);
-                setUserRole(role);
-                setHasAuthenticator(authenticatorFactors.length > 0);
+            try {
+                setLoading(true);
+                const status = await mfaService.getStatus();
+                if (!mounted) return;
+                setAal(status.currentLevel);
+                setHasAuthenticator(status.hasMfaEnabled);
             } catch (error) {
                 console.error("useMfaGuard error:", error);
                 if (!mounted) return;
                 setAal("aal1");
-                setUserRole(null);
                 setHasAuthenticator(false);
             } finally {
                 if (mounted) setLoading(false);
@@ -54,33 +39,23 @@ export function useMfaGuard() {
         };
 
         load();
-
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async () => {
-            load();
-        });
-
         return () => {
             mounted = false;
-            subscription.unsubscribe();
         };
-    }, []);
+    }, [authLoading, isAuthenticated]);
+
+    const userRole = membership?.role ?? null;
 
     const isPrivilegedRole = useMemo(() => {
-        return userRole === "admin" || userRole === "supervisor";
-    }, [userRole]);
+        return ["owner", "admin", "supervisor"].includes(userRole ?? "") || isPlatformAdmin;
+    }, [isPlatformAdmin, userRole]);
 
     const isAal2 = aal === "aal2";
-
-    // Admin/supervisor devono avere MFA obbligatoria
     const mustEnforceMfa = isPrivilegedRole;
-
-    // Serve MFA ma non è ancora soddisfatta
     const needsMfa = mustEnforceMfa && !isAal2;
 
     return {
-        loading,
+        loading: authLoading || loading,
         aal,
         isAal2,
         userRole,
