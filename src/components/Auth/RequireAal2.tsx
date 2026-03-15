@@ -1,9 +1,10 @@
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
 import { useRouter } from "next/router";
-import { ShieldAlert, Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { useMfaGuard } from "@/hooks/useMfaGuard";
 
 interface RequireAal2Props {
     children: ReactNode;
@@ -12,6 +13,13 @@ interface RequireAal2Props {
     description?: string;
 }
 
+const copy = {
+    it: { goToSecurity: "Vai a Sicurezza" },
+    en: { goToSecurity: "Go to Security" },
+    fr: { goToSecurity: "Aller à Sécurité" },
+    es: { goToSecurity: "Ir a Seguridad" },
+} as const;
+
 export default function RequireAal2({
     children,
     userRole,
@@ -19,6 +27,8 @@ export default function RequireAal2({
     description = "Per accedere a questa area devi completare l’autenticazione a due fattori.",
 }: RequireAal2Props) {
     const router = useRouter();
+    const { language } = useLanguage();
+    const text = useMemo(() => copy[language], [language]);
     const { loading, mustEnforceMfa, isAal2 } = useMfaGuard();
 
     if (loading) {
@@ -43,9 +53,7 @@ export default function RequireAal2({
                             <div className="space-y-3">
                                 <div className="text-lg font-semibold">{title}</div>
                                 <div className="text-sm text-muted-foreground">{description}</div>
-                                <Button onClick={() => router.push("/settings/security")}>
-                                    Vai a Sicurezza
-                                </Button>
+                                <Button onClick={() => router.push("/settings/security")}>{text.goToSecurity}</Button>
                             </div>
                         </div>
                     </div>
