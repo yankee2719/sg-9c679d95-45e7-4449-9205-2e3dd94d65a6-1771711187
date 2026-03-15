@@ -31,6 +31,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Lingua",
         "common.notifications": "Notifiche",
         "common.system": "Sistema",
+        "common.ago": "fa",
+        "common.error": "Errore",
         "common.management": "Gestione",
         "common.viewAll": "Vedi tutti",
 
@@ -383,6 +385,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Language",
         "common.notifications": "Notifications",
         "common.system": "System",
+        "common.ago": "ago",
+        "common.error": "Error",
         "common.management": "Management",
         "common.viewAll": "View all",
 
@@ -736,6 +740,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Langue",
         "common.notifications": "Notifications",
         "common.system": "Système",
+        "common.ago": "il y a",
+        "common.error": "Erreur",
         "common.management": "Gestion",
         "common.viewAll": "Voir tout",
 
@@ -1064,7 +1070,7 @@ const translations: Record<Language, Record<string, string>> = {
         "activeOrg.membershipsDescription": "Vérifiez rapidement dans quelles organisations vous êtes actif et avec quel rôle.",
         "activeOrg.activeBadge": "Active",
         "activeOrg.fallbackOrganization": "organisation",
-        
+
     },
 
     es: {
@@ -1089,6 +1095,8 @@ const translations: Record<Language, Record<string, string>> = {
         "common.language": "Idioma",
         "common.notifications": "Notificaciones",
         "common.system": "Sistema",
+        "common.ago": "hace",
+        "common.error": "Error",
         "common.management": "Gestión",
         "common.viewAll": "Ver todos",
 
@@ -1420,10 +1428,10 @@ const translations: Record<Language, Record<string, string>> = {
     },
 };
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState<Language > ("it");
+    const [language, setLanguageState] = useState < Language > ("it");
 
     useEffect(() => {
         const stored = localStorage.getItem("app-language") as Language | null;
