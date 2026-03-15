@@ -2,97 +2,80 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
+import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { getUserContext } from "@/lib/supabaseHelpers";
-import { ArrowLeft, ClipboardCheck, Wrench, FileText, ShieldCheck } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import {
+    formatChecklistDate,
+    getChecklistTexts,
+    normalizeExecutionStatus,
+} from "@/lib/checklistsPageText";
+import { ArrowLeft, ClipboardCheck, FileText, ShieldCheck } from "lucide-react";
 
-type OrgType = "manufacturer" | "customer";
-
-type ExecutionAnswer = {
+type ExecutionRecord = {
     id: string;
-    item_id: string | null;
-    response_value: string | null;
-    response_note: string | null;
-    is_ok: boolean | null;
-    created_at: string | null;
-    checklist_template_item?: {
-        id: string;
-        title: string | null;
-        description: string | null;
-        sort_order: number | null;
-        item_type: string | null;
-        is_required: boolean | null;
-    } | null;
+    assignment_id?: string | null;
+    organization_id?: string | null;
+    work_order_id?: string | null;
+    machine_id?: string | null;
+    executed_by?: string | null;
+    executed_at?: string | null;
+    template_version?: number | null;
+    overall_status?: string | null;
+    status?: string | null;
+    notes?: string | null;
+    results?: any;
+    created_at?: string | null;
 };
 
-type ExecutionData = {
+type TemplateItem = {
     id: string;
-    template_id: string | null;
-    work_order_id: string | null;
-    machine_id: string | null;
-    organization_id: string | null;
-    status: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    created_at: string | null;
-    updated_at: string | null;
-    checklist_template?: {
-        id: string;
-        title: string | null;
-        category: string | null;
-        description: string | null;
-    } | null;
-    machines?: {
-        id: string;
-        name: string | null;
-        internal_code: string | null;
-        organization_id: string | null;
-    } | null;
-    work_orders?: {
-        id: string;
-        title: string | null;
-        status: string | null;
-    } | null;
+    title: string | null;
+    description: string | null;
+    input_type: string | null;
+    is_required: boolean | null;
+    order_index: number | null;
 };
 
-type UserCtx = {
-    userId: string;
-    orgId: string | null;
-    orgType: OrgType | null;
-    role: string;
-    displayName: string;
-    email: string;
+type ExecutionItem = {
+    id: string;
+    template_item_id: string;
+    value: string | null;
+    notes: string | null;
 };
-
-function formatDate(value?: string | null) {
-    if (!value) return "—";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("it-IT");
-}
-
-function normalizeStatus(raw?: string | null) {
-    const v = String(raw ?? "").toLowerCase();
-    if (["completed", "done", "closed"].includes(v)) return "completed";
-    if (["in_progress", "started", "open"].includes(v)) return "in_progress";
-    if (["draft", "pending"].includes(v)) return "draft";
-    return v || "unknown";
-}
 
 export default function ChecklistExecutionDetailPage() {
     const router = useRouter();
     const { id } = router.query;
     const { toast } = useToast();
+    const { language } = useLanguage();
+    const text = getChecklistTexts(language);
 
-    const [ctx, setCtx] = useState < UserCtx | null > (null);
+    const [role, setRole] = useState("technician");
+    const [orgType, setOrgType] = useState < "manufacturer" | "customer" | null > (null);
     const [loading, setLoading] = useState(true);
-    const [execution, setExecution] = useState < ExecutionData | null > (null);
-    const [answers, setAnswers] = useState < ExecutionAnswer[] > ([]);
+
+    const [execution, setExecution] = useState < ExecutionRecord | null > (null);
+    const [templateName, setTemplateName] = useState < string > (text.executions.detailTitle);
+    const [machineName, setMachineName] = useState < string > (text.executions.machineFallback);
+    const [workOrderTitle, setWorkOrderTitle] = useState < string > (text.executions.workOrderFallback);
+    const [answers, setAnswers] = useState <
+        Array < {
+        id: string;
+        title: string;
+        description: string | null;
+        value: string | null;
+        notes: string | null;
+        isRequired: boolean;
+        orderIndex: number;
+        boolState: "ok" | "ko" | "neutral";
+    } >
+  > ([]);
 
     useEffect(() => {
         if (!router.isReady || !id) return;
@@ -100,90 +83,160 @@ export default function ChecklistExecutionDetailPage() {
         const load = async () => {
             setLoading(true);
             try {
-                const userCtx = (await getUserContext()) as UserCtx | null;
-                if (!userCtx) {
+                const ctx = await getUserContext();
+                if (!ctx || !ctx.orgId || !ctx.orgType) {
                     router.push("/login");
                     return;
                 }
-                if (!userCtx.orgId || !userCtx.orgType) {
-                    throw new Error("Contesto organizzativo non valido.");
-                }
-                setCtx(userCtx);
+
+                setRole(ctx.role ?? "technician");
+                setOrgType(ctx.orgType);
 
                 const { data: executionRow, error: executionError } = await supabase
                     .from("checklist_executions")
-                    .select(`
-            id,
-            template_id,
-            work_order_id,
-            machine_id,
-            organization_id,
-            status,
-            started_at,
-            completed_at,
-            created_at,
-            updated_at,
-            checklist_template:template_id ( id, title, category, description ),
-            machines:machine_id ( id, name, internal_code, organization_id ),
-            work_orders:work_order_id ( id, title, status )
-          `)
+                    .select("*")
                     .eq("id", id)
                     .single();
 
                 if (executionError) throw executionError;
-                if (!executionRow) throw new Error("Esecuzione checklist non trovata.");
+                const currentExecution = executionRow as any as ExecutionRecord;
 
-                if (userCtx.orgType === "customer") {
-                    if ((executionRow as any).organization_id !== userCtx.orgId) {
-                        throw new Error("Non puoi accedere a questa esecuzione.");
+                if (!currentExecution) {
+                    throw new Error(text.executions.executionNotFound);
+                }
+
+                if (ctx.orgType === "customer") {
+                    if (currentExecution.organization_id !== ctx.orgId) {
+                        throw new Error(text.executions.executionNotFound);
                     }
                 } else {
-                    const machineId = (executionRow as any).machine_id;
-                    if (!machineId) throw new Error("Macchina non valida.");
-
-                    const { data: assignment, error: assignmentError } = await supabase
+                    const { data: linkRow, error: linkError } = await supabase
                         .from("machine_assignments")
                         .select("id")
-                        .eq("manufacturer_org_id", userCtx.orgId)
-                        .eq("machine_id", machineId)
+                        .eq("manufacturer_org_id", ctx.orgId)
+                        .eq("machine_id", currentExecution.machine_id)
                         .eq("is_active", true)
                         .maybeSingle();
 
-                    if (assignmentError) throw assignmentError;
-                    if (!assignment) {
-                        throw new Error("Questa esecuzione non appartiene a una macchina collegata alla tua organizzazione.");
+                    if (linkError) throw linkError;
+                    if (!linkRow) throw new Error(text.executions.executionNotFound);
+                }
+
+                setExecution(currentExecution);
+
+                let templateId: string | null = null;
+
+                if (currentExecution.assignment_id) {
+                    const { data: assignmentRow } = await supabase
+                        .from("checklist_assignments")
+                        .select("template_id, machine_id")
+                        .eq("id", currentExecution.assignment_id)
+                        .maybeSingle();
+
+                    templateId = (assignmentRow as any)?.template_id ?? null;
+                }
+
+                if (templateId) {
+                    const { data: templateRow } = await supabase
+                        .from("checklist_templates")
+                        .select("name")
+                        .eq("id", templateId)
+                        .maybeSingle();
+
+                    setTemplateName((templateRow as any)?.name ?? text.executions.templateFallback);
+
+                    const { data: templateItems } = await supabase
+                        .from("checklist_template_items")
+                        .select("id, title, description, input_type, is_required, order_index")
+                        .eq("template_id", templateId)
+                        .order("order_index", { ascending: true });
+
+                    const itemsMap = new Map < string, TemplateItem> ();
+                    for (const row of (templateItems ?? []) as any[]) {
+                        itemsMap.set(row.id, row as TemplateItem);
+                    }
+
+                    const { data: executionItems } = await supabase
+                        .from("checklist_execution_items")
+                        .select("id, template_item_id, value, notes")
+                        .eq("execution_id", currentExecution.id);
+
+                    if (executionItems && executionItems.length > 0) {
+                        const normalized = (executionItems as any[]).map((row) => {
+                            const item = itemsMap.get(row.template_item_id);
+                            const rawValue = row.value ?? null;
+                            const boolState =
+                                rawValue === "true" ? "ok" : rawValue === "false" ? "ko" : "neutral";
+
+                            return {
+                                id: row.id,
+                                title: item?.title ?? text.executions.templateFallback,
+                                description: item?.description ?? null,
+                                value: rawValue,
+                                notes: row.notes ?? null,
+                                isRequired: Boolean(item?.is_required ?? false),
+                                orderIndex: item?.order_index ?? 999999,
+                                boolState,
+                            };
+                        });
+
+                        normalized.sort((a, b) => a.orderIndex - b.orderIndex);
+                        setAnswers(normalized);
+                    } else if (currentExecution.results?.items?.length) {
+                        const normalized = (currentExecution.results.items as any[]).map((row, index) => {
+                            const rawValue = row.value ?? null;
+                            const boolState =
+                                rawValue === true || rawValue === "true"
+                                    ? "ok"
+                                    : rawValue === false || rawValue === "false"
+                                        ? "ko"
+                                        : "neutral";
+
+                            return {
+                                id: row.template_item_id ?? String(index),
+                                title: row.title ?? text.executions.templateFallback,
+                                description: null,
+                                value:
+                                    rawValue === true
+                                        ? "true"
+                                        : rawValue === false
+                                            ? "false"
+                                            : rawValue?.toString?.() ?? null,
+                                notes: row.notes ?? null,
+                                isRequired: false,
+                                orderIndex: index,
+                                boolState,
+                            };
+                        });
+
+                        setAnswers(normalized);
                     }
                 }
 
-                const { data: answerRows, error: answersError } = await supabase
-                    .from("checklist_execution_answers")
-                    .select(`
-            id,
-            item_id,
-            response_value,
-            response_note,
-            is_ok,
-            created_at,
-            checklist_template_item:item_id ( id, title, description, sort_order, item_type, is_required )
-          `)
-                    .eq("execution_id", id)
-                    .order("created_at", { ascending: true });
+                if (currentExecution.machine_id) {
+                    const { data: machineRow } = await supabase
+                        .from("machines")
+                        .select("name")
+                        .eq("id", currentExecution.machine_id)
+                        .maybeSingle();
 
-                if (answersError) throw answersError;
+                    setMachineName((machineRow as any)?.name ?? text.executions.machineFallback);
+                }
 
-                const sortedAnswers = ((answerRows ?? []) as ExecutionAnswer[]).sort((a, b) => {
-                    const aa = a.checklist_template_item?.sort_order ?? 999999;
-                    const bb = b.checklist_template_item?.sort_order ?? 999999;
-                    return aa - bb;
-                });
+                if (currentExecution.work_order_id) {
+                    const { data: workOrderRow } = await supabase
+                        .from("work_orders")
+                        .select("title")
+                        .eq("id", currentExecution.work_order_id)
+                        .maybeSingle();
 
-                setExecution(executionRow as ExecutionData);
-                setAnswers(sortedAnswers);
+                    setWorkOrderTitle((workOrderRow as any)?.title ?? text.executions.workOrderFallback);
+                }
             } catch (error: any) {
                 console.error(error);
                 toast({
-                    title: "Errore",
-                    description: error?.message ?? "Errore caricamento dettaglio esecuzione.",
+                    title: text.common.error,
+                    description: error?.message ?? text.executions.loadError,
                     variant: "destructive",
                 });
                 router.push("/checklists/executions");
@@ -193,94 +246,125 @@ export default function ChecklistExecutionDetailPage() {
         };
 
         load();
-    }, [id, router, router.isReady, toast]);
+    }, [id, router, router.isReady, toast, text.executions.executionNotFound, text.executions.loadError, text.executions.machineFallback, text.executions.workOrderFallback, text.executions.templateFallback]);
 
     const stats = useMemo(() => {
         const total = answers.length;
-        const ok = answers.filter((a) => a.is_ok === true).length;
-        const ko = answers.filter((a) => a.is_ok === false).length;
-        const notes = answers.filter((a) => !!a.response_note).length;
+        const ok = answers.filter((answer) => answer.boolState === "ok").length;
+        const ko = answers.filter((answer) => answer.boolState === "ko").length;
+        const notes = answers.filter((answer) => Boolean(answer.notes)).length;
         return { total, ok, ko, notes };
     }, [answers]);
 
-    const normalizedStatus = normalizeStatus(execution?.status);
+    const normalizedStatus = normalizeExecutionStatus(execution?.overall_status || execution?.status);
 
     return (
-        <MainLayout userRole={(ctx?.role as any) || "technician"}>
-            <SEO title="Dettaglio esecuzione checklist - MACHINA" />
+        <MainLayout userRole={role}>
+            <SEO title={`${text.executions.detailTitle} - MACHINA`} />
 
             <div className="container mx-auto max-w-6xl px-4 py-8 space-y-6">
                 <div className="flex items-center justify-between gap-3">
                     <Button variant="ghost" onClick={() => router.back()}>
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Indietro
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        {text.common.back}
                     </Button>
 
                     <Button asChild variant="outline">
-                        <Link href="/checklists/executions">Tutte le esecuzioni</Link>
+                        <Link href="/checklists/executions">{text.executions.title}</Link>
                     </Button>
                 </div>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5" /> {execution?.checklist_template?.title ?? "Dettaglio esecuzione"}</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <ClipboardCheck className="h-5 w-5" />
+                            {templateName}
+                        </CardTitle>
                         <CardDescription>
-                            {ctx?.orgType === "manufacturer"
-                                ? "Vista costruttore: sola lettura sullo storico esecutivo del cliente."
-                                : "Vista cliente: storico esecutivo nel tuo contesto operativo."}
+                            {orgType === "manufacturer"
+                                ? text.executions.subtitleManufacturer
+                                : text.executions.subtitleCustomer}
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Stato</div><div className="mt-2"><Badge variant="outline">{normalizedStatus}</Badge></div></div>
-                        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Macchina</div><div className="mt-2 text-sm font-medium">{execution?.machines?.name ?? "—"}</div></div>
-                        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Work order</div><div className="mt-2 text-sm font-medium">{execution?.work_orders?.title ?? "—"}</div></div>
-                        <div className="rounded-xl border p-4"><div className="text-xs text-muted-foreground">Completata il</div><div className="mt-2 text-sm font-medium">{formatDate(execution?.completed_at)}</div></div>
+                    <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                        <div className="rounded-xl border p-4">
+                            <div className="text-xs text-muted-foreground">{text.executions.status}</div>
+                            <div className="mt-2">
+                                <Badge variant="outline">{normalizedStatus}</Badge>
+                            </div>
+                        </div>
+                        <div className="rounded-xl border p-4">
+                            <div className="text-xs text-muted-foreground">{text.executions.machine}</div>
+                            <div className="mt-2 text-sm font-medium">{machineName}</div>
+                        </div>
+                        <div className="rounded-xl border p-4">
+                            <div className="text-xs text-muted-foreground">{text.executions.workOrder}</div>
+                            <div className="mt-2 text-sm font-medium">{workOrderTitle}</div>
+                        </div>
+                        <div className="rounded-xl border p-4">
+                            <div className="text-xs text-muted-foreground">{text.executions.executedAt}</div>
+                            <div className="mt-2 text-sm font-medium">
+                                {formatChecklistDate(execution?.executed_at || execution?.created_at, language)}
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card><CardHeader className="pb-2"><CardDescription>Totale risposte</CardDescription><CardTitle>{stats.total}</CardTitle></CardHeader></Card>
-                    <Card><CardHeader className="pb-2"><CardDescription>OK</CardDescription><CardTitle>{stats.ok}</CardTitle></CardHeader></Card>
-                    <Card><CardHeader className="pb-2"><CardDescription>KO</CardDescription><CardTitle>{stats.ko}</CardTitle></CardHeader></Card>
-                    <Card><CardHeader className="pb-2"><CardDescription>Con note</CardDescription><CardTitle>{stats.notes}</CardTitle></CardHeader></Card>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.results}</CardDescription><CardTitle>{stats.total}</CardTitle></CardHeader></Card>
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.ok}</CardDescription><CardTitle>{stats.ok}</CardTitle></CardHeader></Card>
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.ko}</CardDescription><CardTitle>{stats.ko}</CardTitle></CardHeader></Card>
+                    <Card><CardHeader className="pb-2"><CardDescription>{text.executions.notes}</CardDescription><CardTitle>{stats.notes}</CardTitle></CardHeader></Card>
                 </div>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" /> Dettaglio risposte</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            {text.executions.answers}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {loading ? (
-                            <div className="text-sm text-muted-foreground">Caricamento...</div>
+                            <div className="text-sm text-muted-foreground">{text.common.loading}</div>
                         ) : answers.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Nessuna risposta registrata.</div>
+                            <div className="text-sm text-muted-foreground">{text.executions.noAnswers}</div>
                         ) : (
                             <div className="space-y-3">
                                 {answers.map((answer, index) => (
-                                    <div key={answer.id} className="rounded-2xl border p-4 space-y-3">
+                                    <div key={answer.id} className="space-y-3 rounded-2xl border p-4">
                                         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                             <div className="min-w-0">
-                                                <div className="text-xs text-muted-foreground">Voce #{index + 1}</div>
-                                                <div className="font-medium">{answer.checklist_template_item?.title ?? "Item senza titolo"}</div>
-                                                {answer.checklist_template_item?.description && (
-                                                    <div className="text-sm text-muted-foreground mt-1">{answer.checklist_template_item.description}</div>
+                                                <div className="text-xs text-muted-foreground">#{index + 1}</div>
+                                                <div className="font-medium">{answer.title}</div>
+                                                {answer.description && (
+                                                    <div className="mt-1 text-sm text-muted-foreground">{answer.description}</div>
                                                 )}
                                             </div>
 
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                {answer.is_ok === true && <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">OK</Badge>}
-                                                {answer.is_ok === false && <Badge className="bg-rose-50 text-rose-700 border-rose-200">KO</Badge>}
-                                                {answer.checklist_template_item?.is_required && <Badge variant="outline">Obbligatoria</Badge>}
+                                            <div className="flex items-center gap-2">
+                                                {answer.boolState === "ok" && (
+                                                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                        {text.executions.ok}
+                                                    </Badge>
+                                                )}
+                                                {answer.boolState === "ko" && (
+                                                    <Badge className="bg-rose-50 text-rose-700 border-rose-200">
+                                                        {text.executions.ko}
+                                                    </Badge>
+                                                )}
+                                                {answer.isRequired && <Badge variant="outline">{text.templates.required}</Badge>}
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
                                             <div className="rounded-xl bg-muted/40 p-3">
-                                                <div className="text-xs text-muted-foreground mb-1">Valore risposta</div>
-                                                <div>{answer.response_value || "—"}</div>
+                                                <div className="mb-1 text-xs text-muted-foreground">{text.executions.value}</div>
+                                                <div>{answer.value || "—"}</div>
                                             </div>
                                             <div className="rounded-xl bg-muted/40 p-3">
-                                                <div className="text-xs text-muted-foreground mb-1">Nota</div>
-                                                <div>{answer.response_note || "—"}</div>
+                                                <div className="mb-1 text-xs text-muted-foreground">{text.executions.notes}</div>
+                                                <div>{answer.notes || "—"}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -292,12 +376,15 @@ export default function ChecklistExecutionDetailPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Regole di accesso</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4" />
+                            {text.executions.accessRules}
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground space-y-2">
-                        <p>Il cliente finale gestisce l&apos;esecuzione operativa nel proprio contesto.</p>
-                        <p>Il costruttore può consultare lo storico solo per macchine collegate attivamente alla propria organizzazione.</p>
-                        <p>Questa pagina è in sola lettura: l&apos;editing resta confinato ai flussi operativi del customer owner.</p>
+                    <CardContent className="space-y-2 text-sm text-muted-foreground">
+                        <p>{text.executions.customerRule}</p>
+                        <p>{text.executions.manufacturerRule}</p>
+                        <p>{text.executions.readonlyRule}</p>
                     </CardContent>
                 </Card>
             </div>
