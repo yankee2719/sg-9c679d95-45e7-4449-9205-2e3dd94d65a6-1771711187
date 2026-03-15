@@ -164,6 +164,10 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.title": "Checklist",
         "checklists.subtitle": "Gestisci template checklist per controlli, verifiche e procedure operative.",
         "checklists.newTemplate": "Nuovo Template",
+        "checklists.addChecklist": "Aggiungi checklist",
+        "checklists.noChecklists": "Nessuna checklist trovata",
+        "checklists.noChecklistsDesc": "Crea il primo template checklist per iniziare a gestire controlli e procedure.",
+        "checklists.addFirst": "Crea la prima checklist",
 
         "checklists.kpi.templates": "Template",
         "checklists.kpi.totalItems": "Voci Totali",
@@ -518,6 +522,10 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.title": "Checklists",
         "checklists.subtitle": "Manage checklist templates for inspections, checks and operational procedures.",
         "checklists.newTemplate": "New Template",
+        "checklists.addChecklist": "Add checklist",
+        "checklists.noChecklists": "No checklists found",
+        "checklists.noChecklistsDesc": "Create your first checklist template to start managing inspections and procedures.",
+        "checklists.addFirst": "Create first checklist",
 
         "checklists.kpi.templates": "Templates",
         "checklists.kpi.totalItems": "Total Items",
@@ -873,6 +881,10 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.title": "Check-lists",
         "checklists.subtitle": "Gérez les modèles de check-lists pour contrôles, vérifications et procédures opérationnelles.",
         "checklists.newTemplate": "Nouveau modèle",
+        "checklists.addChecklist": "Ajouter une check-list",
+        "checklists.noChecklists": "Aucune check-list trouvée",
+        "checklists.noChecklistsDesc": "Créez votre premier modèle de check-list pour commencer à gérer contrôles et procédures.",
+        "checklists.addFirst": "Créer la première check-list",
 
         "checklists.kpi.templates": "Modèles",
         "checklists.kpi.totalItems": "Éléments totaux",
@@ -1228,6 +1240,10 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.title": "Checklists",
         "checklists.subtitle": "Gestiona plantillas de checklist para controles, verificaciones y procedimientos operativos.",
         "checklists.newTemplate": "Nueva plantilla",
+        "checklists.addChecklist": "Añadir checklist",
+        "checklists.noChecklists": "No se encontraron checklists",
+        "checklists.noChecklistsDesc": "Crea tu primera plantilla de checklist para empezar a gestionar controles y procedimientos.",
+        "checklists.addFirst": "Crear la primera checklist",
 
         "checklists.kpi.templates": "Plantillas",
         "checklists.kpi.totalItems": "Elementos totales",
