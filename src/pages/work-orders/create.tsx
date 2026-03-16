@@ -17,6 +17,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, Save } from "lucide-react";
+import { PageLoader } from "@/components/feedback/PageLoader";
 
 type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
 type WorkStatus = "draft" | "scheduled" | "in_progress" | "pending_review" | "completed" | "cancelled";
@@ -236,7 +237,13 @@ export default function WorkOrderCreatePage() {
         }
     };
 
-    if (loading) return null;
+    if (loading) {
+        return (
+            <MainLayout userRole={role as any}>
+                <PageLoader title="Crea Work Order" description="Stiamo preparando il contesto operativo, le macchine e gli assegnatari disponibili." />
+            </MainLayout>
+        );
+    }
 
     return (
         <MainLayout userRole={role as any}>
