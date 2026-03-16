@@ -1,7 +1,6 @@
-import { ReactNode, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { mfaService } from "@/services/mfaService";
+import { ReactNode } from "react";
+import { useMfaGuard } from "@/hooks/useMfaGuard";
+import { PageLoader } from "@/components/feedback/PageLoader";
 import { MfaChallenge } from "./MfaChallenge";
 
 interface MfaGuardProps {
@@ -11,61 +10,17 @@ interface MfaGuardProps {
 }
 
 export function MfaGuard({ children, excludePaths = [], currentPath = "" }: MfaGuardProps) {
-    const { isAuthenticated, loading: authLoading } = useAuth();
-    const [mfaRequired, setMfaRequired] = useState(false);
-    const [mfaChecked, setMfaChecked] = useState(false);
+    const { loading, needsMfa } = useMfaGuard();
 
-    const isExcluded = excludePaths.some((path) => currentPath.startsWith(path));
+    const normalizedPath = currentPath || "";
+    const isExcluded = excludePaths.some((path) => normalizedPath.startsWith(path));
 
-    useEffect(() => {
-        let mounted = true;
-
-        const check = async () => {
-            if (authLoading) return;
-
-            if (!isAuthenticated || isExcluded) {
-                if (!mounted) return;
-                setMfaRequired(false);
-                setMfaChecked(true);
-                return;
-            }
-
-            try {
-                const needsVerification = await mfaService.needsVerification();
-                if (!mounted) return;
-                setMfaRequired(needsVerification);
-            } catch (error) {
-                console.error("MfaGuard check error:", error);
-                if (!mounted) return;
-                setMfaRequired(false);
-            } finally {
-                if (mounted) setMfaChecked(true);
-            }
-        };
-
-        setMfaChecked(false);
-        check();
-
-        return () => {
-            mounted = false;
-        };
-    }, [authLoading, currentPath, isAuthenticated, isExcluded]);
-
-    if (authLoading || (isAuthenticated && !mfaChecked && !isExcluded)) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-        );
+    if (!isExcluded && loading) {
+        return <PageLoader title="Security check" description="Verifying your session and MFA status." fullscreen />;
     }
 
-    if (mfaRequired && isAuthenticated && !isExcluded) {
-        return (
-            <MfaChallenge
-                onVerified={() => setMfaRequired(false)}
-                onCancel={() => setMfaRequired(false)}
-            />
-        );
+    if (!isExcluded && needsMfa) {
+        return <MfaChallenge onVerified={() => window.location.reload()} onCancel={() => window.location.assign("/settings/security")} />;
     }
 
     return <>{children}</>;
