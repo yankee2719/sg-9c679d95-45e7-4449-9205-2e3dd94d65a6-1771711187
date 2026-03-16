@@ -1,5 +1,5 @@
-import { NextApiResponse } from "next";
-import { withAuth, AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import type { NextApiResponse } from "next";
+import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "DELETE") {
@@ -10,40 +10,70 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const { id } = req.query;
 
         if (!id || typeof id !== "string") {
-            return res.status(400).json({ error: "Invalid user ID" });
+            return res.status(400).json({ error: "Invalid membership ID" });
         }
 
-        // Prevent self-deletion
-        if (id === req.user.id) {
-            return res.status(400).json({ error: "Cannot delete your own account" });
+        if (!req.user.organizationId) {
+            return res.status(400).json({ error: "No active organization context" });
         }
 
         const serviceSupabase = getServiceSupabase();
 
-        // Step 1: Delete profile from database
-        const { error: profileError } = await serviceSupabase
-            .from("profiles")
+        let { data: targetMembership, error: membershipError } = await serviceSupabase
+            .from("organization_memberships")
+            .select("id, user_id, organization_id")
+            .eq("id", id)
+            .eq("organization_id", req.user.organizationId)
+            .maybeSingle();
+
+        if (membershipError) {
+            return res.status(500).json({ error: membershipError.message });
+        }
+
+        if (!targetMembership) {
+            const fallback = await serviceSupabase
+                .from("organization_memberships")
+                .select("id, user_id, organization_id")
+                .eq("user_id", id)
+                .eq("organization_id", req.user.organizationId)
+                .maybeSingle();
+
+            targetMembership = fallback.data ?? null;
+            membershipError = fallback.error ?? null;
+        }
+
+        if (membershipError) {
+            return res.status(500).json({ error: membershipError.message });
+        }
+
+        if (!targetMembership) {
+            return res.status(404).json({ error: "Membership not found" });
+        }
+
+        if (targetMembership.user_id === req.user.id) {
+            return res.status(400).json({ error: "Cannot delete your own membership" });
+        }
+
+        const { error: deleteError } = await serviceSupabase
+            .from("organization_memberships")
             .delete()
-            .eq("id", id);
+            .eq("id", targetMembership.id)
+            .eq("organization_id", req.user.organizationId);
 
-        if (profileError) {
-            console.error("Error deleting profile:", profileError);
-            return res.status(500).json({ error: "Failed to delete user profile" });
+        if (deleteError) {
+            console.error("Error deleting membership:", deleteError);
+            return res.status(500).json({ error: "Failed to remove user from organization" });
         }
 
-        // Step 2: Delete user from Supabase Auth
-        const { error: authError } = await serviceSupabase.auth.admin.deleteUser(id);
-
-        if (authError) {
-            console.error("Error deleting auth user:", authError);
-            return res.status(500).json({ error: "Failed to delete user from auth" });
-        }
-
-        return res.status(200).json({ message: "User deleted successfully" });
+        return res.status(200).json({
+            message: "User removed from organization successfully",
+            membership_id: targetMembership.id,
+            user_id: targetMembership.user_id,
+        });
     } catch (error) {
         console.error("Unexpected error in /api/users/[id]/delete:", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 }
 
-export default withAuth(["admin"], handler);
+export default withAuth(["owner", "admin"], handler, { requireAal2: true });
