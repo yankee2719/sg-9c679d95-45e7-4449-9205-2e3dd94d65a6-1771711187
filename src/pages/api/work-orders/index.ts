@@ -1,137 +1,135 @@
-// ============================================================================
-// API: POST /api/work-orders
-// ============================================================================
-// File: pages/api/work-orders/index.ts
-// Crea nuovo work order
-// ============================================================================
+import type { NextApiResponse } from "next";
+import {
+    withAuth,
+    type AuthenticatedRequest,
+    getSupabaseAdmin,
+} from "@/lib/middleware/auth";
 
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { getMaintenanceService } from '@/services/maintenanceService';
-import { createClient } from '@supabase/supabase-js';
-
-// Helper per estrarre token
-function getAuthToken(req: NextApiRequest): string | null {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-        return authHeader.substring(7);
+function normalizeWorkType(value: unknown) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (["preventive", "corrective", "predictive", "inspection", "emergency"].includes(normalized)) {
+        return normalized;
     }
-
-    const cookies = req.headers.cookie?.split(';') || [];
-    for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'sb-access-token' || name.includes('auth-token')) {
-            return value;
-        }
-    }
-
-    return null;
+    return "preventive";
 }
 
-// Helper per verificare auth
-async function verifyAuth(req: NextApiRequest) {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const token = getAuthToken(req);
-    if (!token) {
-        return { user: null, error: 'No auth token', supabase };
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return { user, error, supabase };
+function mapWorkOrder(row: any) {
+    return {
+        ...row,
+        wo_number: row.wo_number || `WO-${String(row.id).slice(0, 8).toUpperCase()}`,
+        wo_type: row.wo_type || row.work_type,
+        scheduled_start: row.scheduled_start || row.scheduled_start_time || null,
+        scheduled_end: row.scheduled_end || null,
+    };
 }
 
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
-    // Auth check
-    const { user, error: authError } = await verifyAuth(req);
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+    const supabase = getSupabaseAdmin();
+    const organizationId = req.user.organization_id;
 
-    if (authError || !user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+    if (!organizationId) {
+        return res.status(400).json({ error: "Active organization not found" });
     }
-
-    const maintenanceService = getMaintenanceService();
 
     try {
-        // ========================================================================
-        // POST: Create work order
-        // ========================================================================
-        if (req.method === 'POST') {
-            const body = req.body;
+        if (req.method === "POST") {
+            const body = req.body ?? {};
+            const machineId = body.machine_id || body.equipment_id || null;
+            const title = typeof body.title === "string" ? body.title.trim() : "";
 
-            // Validation
-            if (!body.equipment_id || !body.plant_id || !body.title || !body.wo_type) {
+            if (!machineId || !title) {
                 return res.status(400).json({
-                    error: 'equipment_id, plant_id, title, and wo_type are required'
+                    error: "machine_id and title are required",
                 });
             }
 
-            // Get organization_id from user profile
-            const { data: profile } = await (await verifyAuth(req)).supabase
-                .from('profiles')
-                .select('organization_id')
-                .eq('id', user.id)
-                .single();
+            const { data: machine, error: machineError } = await supabase
+                .from("machines")
+                .select("id, plant_id, organization_id")
+                .eq("id", machineId)
+                .eq("organization_id", organizationId)
+                .maybeSingle();
 
-            if (!profile?.organization_id) {
-                return res.status(400).json({ error: 'User organization not found' });
+            if (machineError) {
+                return res.status(500).json({ error: machineError.message });
             }
 
-            // Create work order
-            const workOrder = await maintenanceService.createWorkOrder(
-                {
-                    equipment_id: body.equipment_id,
-                    plant_id: body.plant_id,
-                    maintenance_plan_id: body.maintenance_plan_id,
-                    title: body.title,
-                    description: body.description,
-                    priority: body.priority || 'medium',
-                    wo_type: body.wo_type,
-                    scheduled_start: body.scheduled_start,
-                    scheduled_end: body.scheduled_end,
-                    estimated_duration_minutes: body.estimated_duration_minutes,
-                },
-                user.id,
-                profile.organization_id
-            );
+            if (!machine) {
+                return res.status(404).json({ error: "Machine not found in active organization" });
+            }
+
+            const payload = {
+                organization_id: organizationId,
+                machine_id: machine.id,
+                plant_id: body.plant_id || machine.plant_id || null,
+                maintenance_plan_id: body.maintenance_plan_id || null,
+                title,
+                description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : null,
+                work_type: normalizeWorkType(body.work_type || body.wo_type),
+                priority: body.priority || "medium",
+                status: body.status || "draft",
+                scheduled_date: body.scheduled_date || null,
+                scheduled_start_time: body.scheduled_start || body.scheduled_start_time || null,
+                due_date: body.due_date || body.scheduled_end || null,
+                assigned_to: body.assigned_to || null,
+                created_by: req.user.id,
+                notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
+            };
+
+            const { data, error } = await supabase
+                .from("work_orders")
+                .insert(payload)
+                .select("*")
+                .single();
+
+            if (error) {
+                return res.status(500).json({ error: error.message });
+            }
 
             return res.status(201).json({
                 success: true,
-                message: 'Work order created successfully',
-                workOrder,
+                message: "Work order created successfully",
+                workOrder: mapWorkOrder(data),
             });
         }
 
-        // ========================================================================
-        // GET: List work orders (with filters)
-        // ========================================================================
-        else if (req.method === 'GET') {
-            const { equipment_id, status, my_orders } = req.query;
+        if (req.method === "GET") {
+            const machineId =
+                (typeof req.query.machine_id === "string" && req.query.machine_id) ||
+                (typeof req.query.equipment_id === "string" && req.query.equipment_id) ||
+                null;
+            const myOrders = req.query.my_orders === "true";
+            const status = req.query.status;
 
-            let workOrders;
+            let query = supabase
+                .from("work_orders")
+                .select("*")
+                .eq("organization_id", organizationId)
+                .order("created_at", { ascending: false });
 
-            if (my_orders === 'true') {
-                // Get user's assigned work orders
-                workOrders = await maintenanceService.getMyWorkOrders(user.id);
-            } else if (equipment_id) {
-                // Get work orders by equipment
-                const statusFilter = status
-                    ? (Array.isArray(status) ? status : [status]) as any[]
-                    : undefined;
-
-                workOrders = await maintenanceService.getWorkOrdersByEquipment(
-                    equipment_id as string,
-                    { status: statusFilter }
-                );
-            } else {
-                return res.status(400).json({
-                    error: 'Either equipment_id or my_orders=true is required'
-                });
+            if (myOrders) {
+                query = query.eq("assigned_to", req.user.id);
             }
+
+            if (machineId) {
+                query = query.eq("machine_id", machineId);
+            }
+
+            if (status) {
+                if (Array.isArray(status)) {
+                    query = query.in("status", status);
+                } else {
+                    query = query.eq("status", status);
+                }
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                return res.status(500).json({ error: error.message });
+            }
+
+            const workOrders = (data ?? []).map(mapWorkOrder);
 
             return res.status(200).json({
                 success: true,
@@ -140,23 +138,19 @@ export default async function handler(
             });
         }
 
-        // ========================================================================
-        // Method not allowed
-        // ========================================================================
-        else {
-            return res.status(405).json({
-                error: 'Method not allowed',
-                allowedMethods: ['GET', 'POST']
-            });
-        }
-
+        return res.status(405).json({
+            error: "Method not allowed",
+            allowedMethods: ["GET", "POST"],
+        });
     } catch (error) {
-        console.error('Work Orders API Error:', error);
+        console.error("Work Orders API Error:", error);
 
         return res.status(500).json({
             success: false,
-            error: 'Operation failed',
-            message: error instanceof Error ? error.message : 'Unknown error',
+            error: "Operation failed",
+            message: error instanceof Error ? error.message : "Unknown error",
         });
     }
 }
+
+export default withAuth(handler);
