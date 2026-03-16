@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/table';
 import { Search, Filter, Calendar, AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 // ============================================================================
 // TYPES
@@ -95,7 +96,7 @@ export function WorkOrderList({
             const params = new URLSearchParams();
 
             if (equipmentId) {
-                params.append('equipment_id', equipmentId);
+                params.append('machine_id', equipmentId);
             }
 
             if (myOrders) {
@@ -106,8 +107,13 @@ export function WorkOrderList({
                 params.append('status', statusFilter);
             }
 
+            const { data: { session } } = await supabase.auth.getSession();
+
             const res = await fetch(`/api/work-orders?${params.toString()}`, {
                 credentials: 'include',
+                headers: session?.access_token
+                    ? { Authorization: `Bearer ${session.access_token}` }
+                    : undefined,
             });
 
             if (!res.ok) throw new Error('Failed to load work orders');
@@ -135,7 +141,7 @@ export function WorkOrderList({
             const query = searchQuery.toLowerCase();
             const matchesSearch =
                 wo.title.toLowerCase().includes(query) ||
-                wo.wo_number.toLowerCase().includes(query) ||
+                (wo.wo_number || '').toLowerCase().includes(query) ||
                 wo.description?.toLowerCase().includes(query);
 
             if (!matchesSearch) return false;
@@ -252,7 +258,7 @@ export function WorkOrderList({
                                     <TableRow key={wo.id} className="cursor-pointer hover:bg-gray-50">
                                         {/* WO Number */}
                                         <TableCell className="font-mono text-sm font-medium">
-                                            {wo.wo_number}
+                                            {wo.wo_number || `WO-${wo.id.slice(0, 8).toUpperCase()}`}
                                         </TableCell>
 
                                         {/* Title */}
@@ -284,7 +290,7 @@ export function WorkOrderList({
 
                                         {/* Type */}
                                         <TableCell className="text-sm capitalize">
-                                            {wo.wo_type.replace('_', ' ')}
+                                            {(wo.wo_type || wo.work_type).replace('_', ' ')}
                                         </TableCell>
 
                                         {/* Scheduled */}
