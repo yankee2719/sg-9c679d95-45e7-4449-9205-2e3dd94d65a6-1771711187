@@ -57,6 +57,27 @@ function normalizeNotification(row: any): Notification {
     };
 }
 
+async function getCurrentUserId(): Promise<string | null> {
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    return user?.id ?? null;
+}
+
+function emitNotificationsUpdated(unreadCount?: number) {
+    if (typeof window === "undefined") return;
+
+    window.dispatchEvent(
+        new CustomEvent("machina:notifications-updated", {
+            detail:
+                typeof unreadCount === "number"
+                    ? { unreadCount: Math.max(0, unreadCount) }
+                    : {},
+        })
+    );
+}
+
 async function insertNotificationRow(payload: Record<string, unknown>) {
     const { error } = await supabase.from("notifications").insert(payload as any);
     if (!error) return;
@@ -101,54 +122,58 @@ export const notificationService = {
         isRead?: boolean;
         type?: NotificationType;
     }): Promise<{ notifications: Notification[]; unreadCount: number }> {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return { notifications: [], unreadCount: 0 };
+        const userId = await getCurrentUserId();
+        if (!userId) return { notifications: [], unreadCount: 0 };
 
-        let query = supabase
+        let listQuery = supabase
             .from("notifications")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .order("created_at", { ascending: false })
             .limit(opts?.limit || 50);
 
         if (opts?.isRead !== undefined) {
-            query = query.eq("is_read", opts.isRead);
+            listQuery = listQuery.eq("is_read", opts.isRead);
         }
+
         if (opts?.type) {
-            query = query.eq("type", opts.type);
+            listQuery = listQuery.eq("type", opts.type);
         }
 
-        const { data, error } = await query;
-        if (error) {
-            console.error("Error fetching notifications:", error);
-            return { notifications: [], unreadCount: 0 };
-        }
+        const [listResult, unreadResult] = await Promise.all([
+            listQuery,
+            supabase
+                .from("notifications")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("is_read", false),
+        ]);
 
-        const { count } = await supabase
-            .from("notifications")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("is_read", false);
+        if (listResult.error) {
+            console.error("Error fetching notifications:", listResult.error);
+            return { notifications: [], unreadCount: unreadResult.count || 0 };
+        }
 
         return {
-            notifications: (data || []).map(normalizeNotification),
-            unreadCount: count || 0,
+            notifications: (listResult.data || []).map(normalizeNotification),
+            unreadCount: unreadResult.count || 0,
         };
     },
 
-    async getUnreadCount(): Promise<number> {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return 0;
+    async getUnreadCount(userId?: string): Promise<number> {
+        const resolvedUserId = userId ?? (await getCurrentUserId());
+        if (!resolvedUserId) return 0;
 
-        const { count } = await supabase
+        const { count, error } = await supabase
             .from("notifications")
             .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id)
+            .eq("user_id", resolvedUserId)
             .eq("is_read", false);
+
+        if (error) {
+            console.error("Error fetching unread count:", error);
+            return 0;
+        }
 
         return count || 0;
     },
@@ -160,21 +185,24 @@ export const notificationService = {
             .eq("id", notificationId);
 
         if (error) throw error;
+
+        const unreadCount = await this.getUnreadCount();
+        emitNotificationsUpdated(unreadCount);
     },
 
     async markAllAsRead(): Promise<void> {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
+        const userId = await getCurrentUserId();
+        if (!userId) return;
 
         const { error } = await supabase
             .from("notifications")
             .update({ is_read: true })
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("is_read", false);
 
         if (error) throw error;
+
+        emitNotificationsUpdated(0);
     },
 
     async deleteNotification(notificationId: string): Promise<void> {
@@ -184,21 +212,25 @@ export const notificationService = {
             .eq("id", notificationId);
 
         if (error) throw error;
+
+        const unreadCount = await this.getUnreadCount();
+        emitNotificationsUpdated(unreadCount);
     },
 
     async deleteAllRead(): Promise<void> {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
+        const userId = await getCurrentUserId();
+        if (!userId) return;
 
         const { error } = await supabase
             .from("notifications")
             .delete()
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("is_read", true);
 
         if (error) throw error;
+
+        const unreadCount = await this.getUnreadCount(userId);
+        emitNotificationsUpdated(unreadCount);
     },
 
     async create(params: {
@@ -264,7 +296,11 @@ export const notificationService = {
         });
     },
 
-    async notifyWOCompleted(woId: string, woTitle: string, supervisorIds: string[]): Promise<void> {
+    async notifyWOCompleted(
+        woId: string,
+        woTitle: string,
+        supervisorIds: string[]
+    ): Promise<void> {
         await this.createBulk({
             userIds: supervisorIds,
             title: "Ordine di lavoro completato",
@@ -298,6 +334,7 @@ export const notificationService = {
         technicianIds: string[]
     ): Promise<void> {
         const d = new Date(dueDate).toLocaleDateString("it-IT");
+
         await this.createBulk({
             userIds: technicianIds,
             title: "Manutenzione in scadenza",
@@ -335,6 +372,7 @@ export const notificationService = {
             under_maintenance: "in manutenzione",
             decommissioned: "dismesso",
         };
+
         await this.createBulk({
             userIds: supervisorIds,
             title: "Cambio stato macchina",
@@ -357,13 +395,17 @@ export const notificationService = {
                     filter: `user_id=eq.${userId}`,
                 },
                 (payload) => {
-                    onNew(normalizeNotification(payload.new));
+                    const normalized = normalizeNotification(payload.new);
+                    onNew(normalized);
+                    emitNotificationsUpdated();
                 }
             )
             .subscribe();
     },
 
     unsubscribe(channel: any) {
-        if (channel) supabase.removeChannel(channel);
+        if (channel) {
+            void supabase.removeChannel(channel);
+        }
     },
 };
