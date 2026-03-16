@@ -1,7 +1,6 @@
-// src/hooks/useActiveOrganization.ts
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import { useAuth } from "@/hooks/useAuth";
 
 export type ActiveOrganizationType = "manufacturer" | "customer";
 
@@ -37,52 +36,41 @@ function normalizeOrgType(value: unknown): ActiveOrganizationType | null {
 }
 
 export function useActiveOrganization(): ActiveOrganizationState {
+    const { user, organization, membership, loading: authLoading, switchOrganization, refresh } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [userId, setUserId] = useState < string | null > (null);
-    const [activeOrgId, setActiveOrgId] = useState < string | null > (null);
-    const [activeOrgType, setActiveOrgType] = useState < ActiveOrganizationType | null > (null);
-    const [activeRole, setActiveRole] = useState < string | null > (null);
     const [memberships, setMemberships] = useState < MembershipOrganization[] > ([]);
     const [error, setError] = useState < string | null > (null);
 
     const load = useCallback(async () => {
-        setLoading(true);
         setError(null);
 
+        if (authLoading) {
+            setLoading(true);
+            return;
+        }
+
+        if (!user) {
+            setMemberships([]);
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+
         try {
-            const ctx = await getUserContext();
-
-            const {
-                data: { user },
-                error: userError,
-            } = await supabase.auth.getUser();
-
-            if (userError) throw userError;
-
-            if (!user) {
-                setUserId(null);
-                setActiveOrgId(null);
-                setActiveOrgType(null);
-                setActiveRole(null);
-                setMemberships([]);
-                return;
-            }
-
-            setUserId(user.id);
-
             const { data, error: membershipsError } = await supabase
                 .from("organization_memberships")
                 .select(`
-          organization_id,
-          role,
-          is_active,
-          organization:organizations (
-            id,
-            name,
-            type
-          )
-        `)
+                    organization_id,
+                    role,
+                    is_active,
+                    organization:organizations (
+                        id,
+                        name,
+                        type
+                    )
+                `)
                 .eq("user_id", user.id)
                 .eq("is_active", true)
                 .order("organization_id", { ascending: true });
@@ -105,30 +93,26 @@ export function useActiveOrganization(): ActiveOrganizationState {
                 .filter((row) => !!row.organization_id);
 
             setMemberships(rows);
-
-            setActiveOrgId(ctx?.orgId ?? null);
-            setActiveOrgType((ctx?.orgType as ActiveOrganizationType | null) ?? null);
-            setActiveRole(ctx?.role ?? null);
         } catch (e: any) {
             console.error(e);
             setError(e?.message ?? "Errore caricamento organizzazioni attive.");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [authLoading, user]);
 
     useEffect(() => {
-        load();
+        void load();
     }, [load]);
 
     const setActiveOrganization = useCallback(
         async (organizationId: string) => {
-            if (!userId) {
+            if (!user) {
                 throw new Error("Utente non autenticato.");
             }
 
-            const membership = memberships.find((m) => m.organization_id === organizationId);
-            if (!membership) {
+            const selectedMembership = memberships.find((m) => m.organization_id === organizationId);
+            if (!selectedMembership) {
                 throw new Error("L'organizzazione selezionata non appartiene alle tue membership attive.");
             }
 
@@ -136,16 +120,9 @@ export function useActiveOrganization(): ActiveOrganizationState {
             setError(null);
 
             try {
-                const { error: updateError } = await supabase
-                    .from("profiles")
-                    .update({ default_organization_id: organizationId })
-                    .eq("id", userId);
-
-                if (updateError) throw updateError;
-
-                setActiveOrgId(organizationId);
-                setActiveOrgType(membership.organization?.type ?? null);
-                setActiveRole(membership.role ?? "technician");
+                await switchOrganization(organizationId);
+                await refresh();
+                await load();
             } catch (e: any) {
                 console.error(e);
                 setError(e?.message ?? "Errore aggiornamento organizzazione attiva.");
@@ -154,16 +131,16 @@ export function useActiveOrganization(): ActiveOrganizationState {
                 setSaving(false);
             }
         },
-        [memberships, userId]
+        [load, memberships, refresh, switchOrganization, user]
     );
 
     return {
-        loading,
+        loading: authLoading || loading,
         saving,
-        userId,
-        activeOrgId,
-        activeOrgType,
-        activeRole,
+        userId: user?.id ?? null,
+        activeOrgId: organization?.id ?? null,
+        activeOrgType: (normalizeOrgType(organization?.type) as ActiveOrganizationType | null) ?? null,
+        activeRole: membership?.role ?? null,
         memberships,
         error,
         reload: load,
