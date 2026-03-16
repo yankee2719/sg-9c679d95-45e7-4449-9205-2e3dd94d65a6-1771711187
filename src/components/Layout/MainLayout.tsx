@@ -6,7 +6,6 @@ import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { notificationService } from "@/services/notificationService";
-import { Badge } from "@/components/ui/badge";
 import {
     LayoutDashboard,
     Wrench,
@@ -22,7 +21,6 @@ import {
     Factory,
     FileText,
     ShieldCheck,
-    ShieldAlert,
     CheckSquare,
     Package,
     Layers3,
@@ -89,10 +87,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         const handleNotificationUpdate = (event: Event) => {
             const customEvent = event as CustomEvent<{ unreadCount?: number }>;
             if (!active) return;
+
             if (typeof customEvent.detail?.unreadCount === "number") {
                 setNotificationCount(Math.max(0, customEvent.detail.unreadCount));
                 return;
             }
+
             void syncUnreadCount();
         };
 
@@ -100,30 +100,21 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
         if (user?.id) {
             channel = notificationService.subscribeToMyNotifications(user.id, () => {
-                if (!active) return;
-                setNotificationCount((prev) => prev + 1);
+                void syncUnreadCount();
             });
         }
 
-        const handleFocus = () => {
-            void syncUnreadCount();
-        };
-
-        const handleVisibility = () => {
-            if (document.visibilityState === "visible") {
-                void syncUnreadCount();
-            }
-        };
-
-        window.addEventListener("focus", handleFocus);
-        window.addEventListener("machina:notifications-updated", handleNotificationUpdate as EventListener);
-        document.addEventListener("visibilitychange", handleVisibility);
+        window.addEventListener(
+            "machina:notifications-updated",
+            handleNotificationUpdate as EventListener
+        );
 
         return () => {
             active = false;
-            window.removeEventListener("focus", handleFocus);
-            window.removeEventListener("machina:notifications-updated", handleNotificationUpdate as EventListener);
-            document.removeEventListener("visibilitychange", handleVisibility);
+            window.removeEventListener(
+                "machina:notifications-updated",
+                handleNotificationUpdate as EventListener
+            );
             if (channel) notificationService.unsubscribe(channel);
         };
     }, [user?.id]);
@@ -146,14 +137,46 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
         { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
         { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
-        { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
+        {
+            href: "/analytics",
+            labelKey: "nav.analytics",
+            icon: BarChart3,
+            roles: ["admin", "supervisor"],
+        },
         { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
         { href: "/documents", labelKey: "nav.documents", icon: FileText },
-        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
-        { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
-        { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
+        {
+            href: "/plants",
+            labelKey: "nav.plants",
+            icon: Building2,
+            roles: ["admin", "supervisor"],
+            orgTypes: ["customer"],
+        },
+        {
+            href: "/users",
+            labelKey: "nav.users",
+            icon: Users,
+            roles: ["admin", "supervisor"],
+        },
+        {
+            href: "/customers",
+            labelKey: "nav.customers",
+            icon: Building2,
+            roles: ["admin", "supervisor"],
+            orgTypes: ["manufacturer"],
+        },
+        {
+            href: "/assignments",
+            labelKey: "nav.assignments",
+            icon: Layers3,
+            roles: ["admin", "supervisor"],
+            orgTypes: ["manufacturer"],
+        },
+        {
+            href: "/settings/organization",
+            labelKey: "nav.activeOrganization",
+            icon: Package,
+        },
         { href: "/settings", labelKey: "nav.settings", icon: Settings },
     ];
 
@@ -164,22 +187,36 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     });
 
     const mainItems = filteredNavItems.filter(
-        (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
+        (item) =>
+            ![
+                "/customers",
+                "/assignments",
+                "/users",
+                "/settings",
+                "/settings/organization",
+            ].includes(item.href)
     );
 
-    const managementItems = filteredNavItems.filter((item) => ["/customers", "/assignments", "/users"].includes(item.href));
-    const settingsItems = filteredNavItems.filter((item) => ["/settings/organization", "/settings"].includes(item.href));
+    const managementItems = filteredNavItems.filter((item) =>
+        ["/customers", "/assignments", "/users"].includes(item.href)
+    );
+
+    const settingsItems = filteredNavItems.filter((item) =>
+        ["/settings/organization", "/settings"].includes(item.href)
+    );
 
     const handleLogout = async () => {
         try {
             await signOut();
-            router.push("/login");
+            void router.push("/login");
         } catch (error) {
             console.error("Logout error:", error);
         }
     };
 
-    const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
+    const isActive = (href: string) =>
+        router.pathname === href ||
+        (href !== "/dashboard" && router.pathname.startsWith(href));
 
     const getOrgTypeLabel = () => {
         if (orgType === "manufacturer") return t("org.manufacturer");
@@ -197,7 +234,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
         if (exactMatch) return exactMatch.labelKey;
 
-        const startsWithMatch = filteredNavItems.find((item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href));
+        const startsWithMatch = filteredNavItems.find(
+            (item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href)
+        );
+
         return startsWithMatch?.labelKey ?? "nav.dashboard";
     };
 
@@ -225,8 +265,12 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">MACHINA</div>
-                        <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
+                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">
+                            MACHINA
+                        </div>
+                        <div className="truncate text-sm text-muted-foreground">
+                            {getOrgTypeLabel()}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -246,7 +290,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {managementItems.length > 0 && (
                     <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("common.management")}</div>
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            {t("common.management")}
+                        </div>
                         {managementItems.map((item) => (
                             <NavLink key={item.href} {...item} />
                         ))}
@@ -255,7 +301,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {settingsItems.length > 0 && (
                     <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("common.system")}</div>
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            {t("common.system")}
+                        </div>
                         {settingsItems.map((item) => (
                             <NavLink key={item.href} {...item} />
                         ))}
@@ -289,12 +337,18 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
                         <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
                             <div className="flex items-center gap-3">
-                                <button className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden" onClick={() => setSidebarOpen(true)} type="button">
+                                <button
+                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
+                                    onClick={() => setSidebarOpen(true)}
+                                    type="button"
+                                >
                                     <Menu className="h-5 w-5" />
                                 </button>
 
                                 <div>
-                                    <div className="text-lg font-semibold">{t(getCurrentPageKey())}</div>
+                                    <div className="text-lg font-semibold">
+                                        {t(getCurrentPageKey())}
+                                    </div>
                                     <div className="text-xs text-muted-foreground">
                                         {orgName} · {getHeaderContextLabel()}
                                     </div>
@@ -302,8 +356,6 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             </div>
 
                             <div className="flex items-center gap-3">
-                              
-
                                 <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
                                     <Globe className="h-4 w-4 text-muted-foreground" />
                                     <select
@@ -343,10 +395,16 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 </Link>
 
                                 <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] md:flex">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">{initials}</div>
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+                                        {initials}
+                                    </div>
                                     <div className="min-w-0">
-                                        <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
-                                        <div className="text-xs capitalize text-muted-foreground">{profileRole}</div>
+                                        <div className="max-w-[180px] truncate text-sm font-semibold">
+                                            {profileName}
+                                        </div>
+                                        <div className="text-xs capitalize text-muted-foreground">
+                                            {profileRole}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -359,9 +417,16 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
             {sidebarOpen && (
                 <div className="fixed inset-0 z-50 lg:hidden">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+                    <div
+                        className="absolute inset-0 bg-black/50"
+                        onClick={() => setSidebarOpen(false)}
+                    />
                     <div className="absolute inset-y-0 left-0 w-[272px] shadow-2xl">
-                        <button className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground" onClick={() => setSidebarOpen(false)} type="button">
+                        <button
+                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
+                            onClick={() => setSidebarOpen(false)}
+                            type="button"
+                        >
                             <X className="h-4 w-4" />
                         </button>
                         <SideContent />
