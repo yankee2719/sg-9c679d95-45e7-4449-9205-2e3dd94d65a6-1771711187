@@ -1,13 +1,14 @@
-// src/pages/machines/new.tsx
-import { useEffect } from "react";
-import { useRouter } from "next/router";
+import { RouteRedirectNotice } from "@/components/feedback/RouteRedirectNotice";
 
 export default function MachinesNewRedirect() {
-    const router = useRouter();
-
-    useEffect(() => {
-        router.replace("/equipment/new");
-    }, [router]);
-
-    return null;
+    return (
+        <RouteRedirectNotice
+            to="/equipment/new"
+            title="Nuova macchina"
+            description="La creazione macchina è stata consolidata nel dominio equipment per mantenere il catalogo tecnico coerente."
+            targetLabel="/equipment/new"
+            withLayout
+            seoTitle="Nuova macchina - MACHINA"
+        />
+    );
 }
