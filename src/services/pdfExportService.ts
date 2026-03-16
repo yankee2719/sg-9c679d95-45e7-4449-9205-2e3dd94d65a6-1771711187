@@ -54,9 +54,9 @@ export interface MaintenanceReportData {
     checklistExecutions: {
         id: string;
         checklist_name: string;
-        status: string;
+        status: string | null;
         executed_by_name: string | null;
-        started_at: string | null;
+        executed_at: string | null;
         completed_at: string | null;
     }[];
 }
@@ -242,12 +242,12 @@ export function exportMaintenanceReport(data: MaintenanceReportData): void {
     } else {
         autoTable(doc, {
             startY: y,
-            head: [['Checklist', 'Stato', 'Eseguita da', 'Inizio', 'Fine']],
+            head: [['Checklist', 'Stato', 'Eseguita da', 'Eseguita il', 'Fine']],
             body: data.checklistExecutions.map(ce => [
                 ce.checklist_name,
-                ce.status === 'completed' ? 'Completata' : 'In corso',
+                ce.status === 'passed' ? 'Superata' : ce.status === 'failed' ? 'Fallita' : ce.status === 'partial' ? 'Parziale' : 'In corso',
                 ce.executed_by_name || '—',
-                fmtDateTime(ce.started_at),
+                fmtDateTime(ce.executed_at),
                 fmtDateTime(ce.completed_at),
             ]),
             styles: { fontSize: 8, cellPadding: 2 },
