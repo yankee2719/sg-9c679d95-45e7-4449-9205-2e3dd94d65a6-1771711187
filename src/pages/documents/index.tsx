@@ -1,4 +1,3 @@
-// src/pages/documents/index.tsx
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,16 +42,18 @@ export default function DocumentsHomePage() {
 
                 const { data, error } = await supabase
                     .from("documents")
-                    .select("id, scope, organization_id")
-                    .eq("organization_id", ctx.orgId);
+                    .select("id, organization_id, machine_id")
+                    .eq("organization_id", ctx.orgId)
+                    .eq("is_archived", false);
 
                 if (error) throw error;
 
                 const rows = data ?? [];
+
                 setStats({
                     total: rows.length,
-                    manufacturerScope: rows.filter((r: any) => r.scope === "manufacturer").length,
-                    customerScope: rows.filter((r: any) => r.scope === "customer").length,
+                    manufacturerScope: ctx.orgType === "manufacturer" ? rows.length : 0,
+                    customerScope: ctx.orgType === "customer" ? rows.length : 0,
                 });
             } catch (error) {
                 console.error("Documents hub load error:", error);
@@ -88,9 +89,7 @@ export default function DocumentsHomePage() {
             <div className="container mx-auto max-w-6xl space-y-6 px-4 py-8">
                 <div>
                     <h1 className="text-2xl font-semibold">{t("documents.title")}</h1>
-                    <p className="text-sm text-muted-foreground">
-                        {t("documents.subtitle")}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t("documents.subtitle")}</p>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
