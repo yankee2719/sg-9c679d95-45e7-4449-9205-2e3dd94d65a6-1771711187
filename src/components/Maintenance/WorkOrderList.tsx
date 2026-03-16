@@ -1,13 +1,7 @@
-// ============================================================================
-// WORK ORDER LIST COMPONENT
-// ============================================================================
-// File: src/components/Maintenance/WorkOrderList.tsx
-// Lista work orders con filtri e ricerca
-// ============================================================================
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { authService } from '@/services/authService';
 import { WorkOrder, WorkOrderStatus, MaintenancePriority } from '@/services/maintenanceService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,11 +23,6 @@ import {
 } from '@/components/ui/table';
 import { Search, Filter, Calendar, AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface WorkOrderListProps {
     equipmentId?: string;
@@ -41,10 +30,6 @@ interface WorkOrderListProps {
     onViewWorkOrder?: (workOrder: WorkOrder) => void;
     onRefresh?: () => void;
 }
-
-// ============================================================================
-// HELPER: Status Badge
-// ============================================================================
 
 const getStatusConfig = (status: WorkOrderStatus) => {
     const configs = {
@@ -70,10 +55,6 @@ const getPriorityConfig = (priority: MaintenancePriority) => {
     return configs[priority] || configs.medium;
 };
 
-// ============================================================================
-// COMPONENT
-// ============================================================================
-
 export function WorkOrderList({
     equipmentId,
     myOrders = false,
@@ -86,42 +67,31 @@ export function WorkOrderList({
     const [statusFilter, setStatusFilter] = useState < string > ('all');
     const [priorityFilter, setPriorityFilter] = useState < string > ('all');
 
-    // --------------------------------------------------------------------------
-    // LOAD WORK ORDERS
-    // --------------------------------------------------------------------------
-
     const loadWorkOrders = async () => {
         setLoading(true);
         try {
+            const session = await authService.getCurrentSession();
+            if (!session?.access_token) throw new Error('Not authenticated');
+
             const params = new URLSearchParams();
-
-            if (equipmentId) {
-                params.append('machine_id', equipmentId);
-            }
-
-            if (myOrders) {
-                params.append('my_orders', 'true');
-            }
-
-            if (statusFilter !== 'all') {
-                params.append('status', statusFilter);
-            }
-
-            const { data: { session } } = await supabase.auth.getSession();
+            if (equipmentId) params.append('machine_id', equipmentId);
+            if (myOrders) params.append('my_orders', 'true');
+            if (statusFilter !== 'all') params.append('status', statusFilter);
 
             const res = await fetch(`/api/work-orders?${params.toString()}`, {
-                credentials: 'include',
-                headers: session?.access_token
-                    ? { Authorization: `Bearer ${session.access_token}` }
-                    : undefined,
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
             });
 
-            if (!res.ok) throw new Error('Failed to load work orders');
+            const payload = await res.json();
+            if (!res.ok) throw new Error(payload?.error || 'Failed to load work orders');
 
-            const { workOrders: data } = await res.json();
+            const data = (payload?.workOrders || payload?.data || []) as WorkOrder[];
             setWorkOrders(data);
         } catch (error) {
             console.error('Failed to load work orders:', error);
+            setWorkOrders([]);
         } finally {
             setLoading(false);
         }
@@ -129,35 +99,28 @@ export function WorkOrderList({
 
     useEffect(() => {
         loadWorkOrders();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [equipmentId, myOrders, statusFilter]);
 
-    // --------------------------------------------------------------------------
-    // FILTERING
-    // --------------------------------------------------------------------------
+    const filteredWorkOrders = useMemo(() => {
+        return workOrders.filter((wo) => {
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                const matchesSearch =
+                    wo.title?.toLowerCase().includes(query) ||
+                    (wo.wo_number ?? '').toLowerCase().includes(query) ||
+                    wo.description?.toLowerCase().includes(query);
 
-    const filteredWorkOrders = workOrders.filter((wo) => {
-        // Search filter
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const matchesSearch =
-                wo.title.toLowerCase().includes(query) ||
-                (wo.wo_number || '').toLowerCase().includes(query) ||
-                wo.description?.toLowerCase().includes(query);
+                if (!matchesSearch) return false;
+            }
 
-            if (!matchesSearch) return false;
-        }
+            if (priorityFilter !== 'all' && wo.priority !== priorityFilter) {
+                return false;
+            }
 
-        // Priority filter
-        if (priorityFilter !== 'all' && wo.priority !== priorityFilter) {
-            return false;
-        }
-
-        return true;
-    });
-
-    // --------------------------------------------------------------------------
-    // RENDER
-    // --------------------------------------------------------------------------
+            return true;
+        });
+    }, [priorityFilter, searchQuery, workOrders]);
 
     if (loading) {
         return (
@@ -169,9 +132,7 @@ export function WorkOrderList({
 
     return (
         <div className="space-y-4">
-            {/* Filters */}
             <div className="flex gap-4 items-center">
-                {/* Search */}
                 <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -182,7 +143,6 @@ export function WorkOrderList({
                     />
                 </div>
 
-                {/* Status Filter */}
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[180px]">
                         <Filter className="h-4 w-4 mr-2" />
@@ -201,7 +161,6 @@ export function WorkOrderList({
                     </SelectContent>
                 </Select>
 
-                {/* Priority Filter */}
                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                     <SelectTrigger className="w-[150px]">
                         <SelectValue placeholder="Priority" />
@@ -215,7 +174,6 @@ export function WorkOrderList({
                     </SelectContent>
                 </Select>
 
-                {/* Refresh */}
                 {onRefresh && (
                     <Button variant="outline" onClick={() => { loadWorkOrders(); onRefresh(); }}>
                         Refresh
@@ -223,109 +181,81 @@ export function WorkOrderList({
                 )}
             </div>
 
-            {/* Results count */}
-            <div className="text-sm text-gray-500">
-                Showing {filteredWorkOrders.length} of {workOrders.length} work orders
+            <div className="text-sm text-gray-600">
+                {filteredWorkOrders.length} work order{filteredWorkOrders.length !== 1 ? 's' : ''} found
             </div>
 
-            {/* Table */}
             {filteredWorkOrders.length === 0 ? (
-                <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                    <p className="text-gray-500">No work orders found</p>
+                <div className="text-center py-12 text-gray-500">
+                    No work orders found
                 </div>
             ) : (
-                <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>WO Number</TableHead>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Priority</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Scheduled</TableHead>
-                                <TableHead>Created</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredWorkOrders.map((wo) => {
-                                const statusConfig = getStatusConfig(wo.status);
-                                const priorityConfig = getPriorityConfig(wo.priority);
-                                const StatusIcon = statusConfig.icon;
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>WO #</TableHead>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Priority</TableHead>
+                            <TableHead>Scheduled</TableHead>
+                            <TableHead>Assigned To</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {filteredWorkOrders.map((wo) => {
+                            const statusConfig = getStatusConfig((wo.status ?? 'draft') as WorkOrderStatus);
+                            const priorityConfig = getPriorityConfig((wo.priority ?? 'medium') as MaintenancePriority);
+                            const StatusIcon = statusConfig.icon;
 
-                                return (
-                                    <TableRow key={wo.id} className="cursor-pointer hover:bg-gray-50">
-                                        {/* WO Number */}
-                                        <TableCell className="font-mono text-sm font-medium">
-                                            {wo.wo_number || `WO-${wo.id.slice(0, 8).toUpperCase()}`}
-                                        </TableCell>
-
-                                        {/* Title */}
-                                        <TableCell>
-                                            <div className="max-w-xs">
-                                                <div className="font-medium truncate">{wo.title}</div>
-                                                {wo.description && (
-                                                    <div className="text-sm text-gray-500 truncate">
-                                                        {wo.description}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </TableCell>
-
-                                        {/* Status */}
-                                        <TableCell>
-                                            <Badge className={`${statusConfig.color} text-white gap-1`}>
-                                                <StatusIcon className="h-3 w-3" />
-                                                {statusConfig.label}
-                                            </Badge>
-                                        </TableCell>
-
-                                        {/* Priority */}
-                                        <TableCell>
-                                            <Badge variant="outline" className={priorityConfig.color}>
-                                                {priorityConfig.label}
-                                            </Badge>
-                                        </TableCell>
-
-                                        {/* Type */}
-                                        <TableCell className="text-sm capitalize">
-                                            {(wo.wo_type || wo.work_type).replace('_', ' ')}
-                                        </TableCell>
-
-                                        {/* Scheduled */}
-                                        <TableCell className="text-sm text-gray-500">
-                                            {wo.scheduled_start ? (
-                                                <div className="flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {new Date(wo.scheduled_start).toLocaleDateString()}
+                            return (
+                                <TableRow key={wo.id}>
+                                    <TableCell className="font-mono text-sm">
+                                        {wo.wo_number || wo.id.slice(0, 8).toUpperCase()}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div>
+                                            <div className="font-medium">{wo.title}</div>
+                                            {wo.description && (
+                                                <div className="text-sm text-gray-500 truncate max-w-xs">
+                                                    {wo.description}
                                                 </div>
-                                            ) : (
-                                                <span className="text-gray-400">Not scheduled</span>
                                             )}
-                                        </TableCell>
-
-                                        {/* Created */}
-                                        <TableCell className="text-sm text-gray-500">
-                                            {formatDistanceToNow(new Date(wo.created_at), { addSuffix: true })}
-                                        </TableCell>
-
-                                        {/* Actions */}
-                                        <TableCell className="text-right">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => onViewWorkOrder?.(wo)}
-                                            >
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge className={`${statusConfig.color} text-white`}>
+                                            <StatusIcon className="h-3 w-3 mr-1" />
+                                            {statusConfig.label}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={priorityConfig.color}>
+                                            {priorityConfig.label}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {wo.scheduled_start
+                                            ? formatDistanceToNow(new Date(wo.scheduled_start), { addSuffix: true })
+                                            : wo.scheduled_date
+                                                ? formatDistanceToNow(new Date(wo.scheduled_date), { addSuffix: true })
+                                                : 'Not scheduled'}
+                                    </TableCell>
+                                    <TableCell>
+                                        {wo.assigned_to || 'Unassigned'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {onViewWorkOrder && (
+                                            <Button variant="outline" size="sm" onClick={() => onViewWorkOrder(wo)}>
                                                 View
                                             </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                </div>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
             )}
         </div>
     );
