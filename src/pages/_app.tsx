@@ -1,6 +1,5 @@
 import type { AppProps } from "next/app";
 import Head from "next/head";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import "@/styles/globals.css";
 import { OfflineStatusBar } from "@/components/Offline/OfflineStatusBar";
@@ -15,10 +14,7 @@ function AppShell({ Component, pageProps }: AppProps) {
     const router = useRouter();
 
     return (
-        <MfaGuard
-            currentPath={router.pathname}
-            excludePaths={["/login", "/register", "/forgot-password", "/reset-password", "/offline"]}
-        >
+        <MfaGuard currentPath={router.pathname} excludePaths={["/login", "/register", "/forgot-password", "/reset-password", "/offline"]}>
             <OfflineStatusBar />
             <Component {...pageProps} />
         </MfaGuard>
@@ -26,12 +22,6 @@ function AppShell({ Component, pageProps }: AppProps) {
 }
 
 export default function App(props: AppProps) {
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
     return (
         <>
             <Head>
@@ -42,7 +32,7 @@ export default function App(props: AppProps) {
                 <LanguageProvider>
                     <AuthProvider>
                         <PWAProvider>
-                            {mounted ? <AppShell {...props} /> : null}
+                            <AppShell {...props} />
                             <Toaster />
                         </PWAProvider>
                     </AuthProvider>
