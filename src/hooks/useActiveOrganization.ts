@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 export type ActiveOrganizationType = "manufacturer" | "customer";
@@ -36,74 +35,35 @@ function normalizeOrgType(value: unknown): ActiveOrganizationType | null {
 }
 
 export function useActiveOrganization(): ActiveOrganizationState {
-    const { user, organization, membership, loading: authLoading, switchOrganization } = useAuth();
-    const [loading, setLoading] = useState(true);
+    const {
+        user,
+        organization,
+        membership,
+        memberships: authMemberships,
+        loading: authLoading,
+        switchOrganization,
+        refresh,
+    } = useAuth();
+
     const [saving, setSaving] = useState(false);
-    const [memberships, setMemberships] = useState<MembershipOrganization[]>([]);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState < string | null > (null);
 
-    const load = useCallback(async () => {
-        setError(null);
-
-        if (authLoading) {
-            setLoading(true);
-            return;
-        }
-
-        if (!user) {
-            setMemberships([]);
-            setLoading(false);
-            return;
-        }
-
-        setLoading(true);
-
-        try {
-            const { data, error: membershipsError } = await supabase
-                .from("organization_memberships")
-                .select(`
-                    organization_id,
-                    role,
-                    is_active,
-                    organization:organizations (
-                        id,
-                        name,
-                        type
-                    )
-                `)
-                .eq("user_id", user.id)
-                .eq("is_active", true)
-                .order("organization_id", { ascending: true });
-
-            if (membershipsError) throw membershipsError;
-
-            const rows = ((data ?? []) as any[])
-                .map((row) => ({
-                    organization_id: row.organization_id,
-                    role: row.role ?? "technician",
-                    is_active: !!row.is_active,
-                    organization: row.organization
-                        ? {
-                              id: row.organization.id,
-                              name: row.organization.name,
-                              type: normalizeOrgType(row.organization.type) ?? "customer",
-                          }
-                        : null,
-                }))
-                .filter((row) => !!row.organization_id);
-
-            setMemberships(rows);
-        } catch (e: any) {
-            console.error(e);
-            setError(e?.message ?? "Errore caricamento organizzazioni attive.");
-        } finally {
-            setLoading(false);
-        }
-    }, [authLoading, user]);
-
-    useEffect(() => {
-        void load();
-    }, [load]);
+    const memberships = useMemo < MembershipOrganization[] > (
+        () =>
+            (authMemberships ?? []).map((row) => ({
+                organization_id: row.organization_id,
+                role: row.role ?? "technician",
+                is_active: row.is_active,
+                organization: row.organization
+                    ? {
+                        id: row.organization.id,
+                        name: row.organization.name,
+                        type: normalizeOrgType(row.organization.type) ?? "customer",
+                    }
+                    : null,
+            })),
+        [authMemberships]
+    );
 
     const setActiveOrganization = useCallback(
         async (organizationId: string) => {
@@ -112,7 +72,7 @@ export function useActiveOrganization(): ActiveOrganizationState {
             }
 
             const selectedMembership = memberships.find(
-                (m) => m.organization_id === organizationId
+                (item) => item.organization_id === organizationId
             );
 
             if (!selectedMembership) {
@@ -137,17 +97,28 @@ export function useActiveOrganization(): ActiveOrganizationState {
         [memberships, switchOrganization, user]
     );
 
+    const reload = useCallback(async () => {
+        setError(null);
+
+        try {
+            await refresh();
+        } catch (e: any) {
+            console.error(e);
+            setError(e?.message ?? "Errore caricamento organizzazioni attive.");
+            throw e;
+        }
+    }, [refresh]);
+
     return {
-        loading: authLoading || loading,
+        loading: authLoading,
         saving,
         userId: user?.id ?? null,
         activeOrgId: organization?.id ?? null,
-        activeOrgType:
-            (normalizeOrgType(organization?.type) as ActiveOrganizationType | null) ?? null,
+        activeOrgType: normalizeOrgType(organization?.type),
         activeRole: membership?.role ?? null,
         memberships,
         error,
-        reload: load,
+        reload,
         setActiveOrganization,
     };
 }
