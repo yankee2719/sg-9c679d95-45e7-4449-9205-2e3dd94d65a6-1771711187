@@ -14,6 +14,7 @@ import { Camera, ChevronLeft, Clock, Flag, Loader2, MessageSquare } from "lucide
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
+import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
 
 type InputType = "text" | "number" | "boolean" | "select" | "photo";
 type BooleanState = "ok" | "ko" | "na";
@@ -35,17 +36,15 @@ interface ExecutionItemUI {
 
 interface ChecklistExecution {
     id: string;
-    status: string;
     overall_status?: string | null;
-    started_at: string | null;
     completed_at: string | null;
     executed_by: string;
-    signature?: string | null;
-    work_order_id?: string | null;
+    executed_at: string;
     notes?: string | null;
-    results?: any;
-    checklist_id?: string;
+    checklist_id?: string | null;
     assignment_id?: string | null;
+    work_order_id?: string | null;
+    machine_id?: string | null;
 }
 
 export default function ChecklistExecutionPage() {
@@ -98,38 +97,7 @@ export default function ChecklistExecutionPage() {
     const createExecutionFromAssignment = async (aid: string) => {
         try {
             setLoading(true);
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            const { data: assignmentRow, error: assignmentError } = await supabase
-                .from("checklist_assignments")
-                .select("id, organization_id, machine_id")
-                .eq("id", aid)
-                .single();
-
-            if (assignmentError) throw assignmentError;
-
-            const { data, error } = await supabase
-                .from("checklist_executions")
-                .insert({
-                    executed_by: user.id,
-                    status: "in_progress",
-                    overall_status: "in_progress",
-                    started_at: new Date().toISOString(),
-                    assignment_id: aid,
-                    organization_id: (assignmentRow as any)?.organization_id ?? null,
-                    machine_id: (assignmentRow as any)?.machine_id ?? null,
-                } as any)
-                .select("id")
-                .single();
-
-            if (error) throw error;
+            const data = await checklistExecutionApi.create({ assignment_id: aid });
             router.replace(`/checklist/execute?id=${data.id}`);
         } catch (error: any) {
             console.error(error);
@@ -145,42 +113,40 @@ export default function ChecklistExecutionPage() {
     const loadExecution = async (executionId: string) => {
         try {
             setLoading(true);
+            const data = await checklistExecutionApi.get(executionId);
 
-            const { data: executionData, error: executionError } = await supabase
-                .from("checklist_executions")
-                .select("*")
-                .eq("id", executionId)
-                .single();
+            setExecution(data.execution as ChecklistExecution);
+            setChecklistTitle(data.template?.name ?? text.pageTitle);
+            setChecklistDescription(data.template?.description ?? null);
+            setTechnicianName(data.technician?.display_name ?? "");
 
-            if (executionError) throw executionError;
+            const nextItems = (data.items ?? []).map((item: any) => {
+                const answer = item.answer;
+                const rawValue = answer?.value ?? "";
+                return {
+                    id: item.id,
+                    title: item.title,
+                    description: item.description ?? null,
+                    input_type: (item.input_type ?? "boolean") as InputType,
+                    is_required: Boolean(item.is_required),
+                    order_index: item.order_index ?? 0,
+                    metadata: item.metadata ?? {},
+                    booleanState:
+                        item.input_type === "boolean"
+                            ? rawValue === "true"
+                                ? "ok"
+                                : rawValue === "false"
+                                    ? "ko"
+                                    : "na"
+                            : undefined,
+                    value: item.input_type === "boolean" ? "" : rawValue ?? "",
+                    notes: answer?.notes ?? "",
+                    files: [],
+                    uploadedPaths: answer?.photos ?? [],
+                } as ExecutionItemUI;
+            });
 
-            const currentExecution = executionData as any as ChecklistExecution;
-            setExecution(currentExecution);
-
-            const aid = (executionData as any)?.assignment_id as string | null | undefined;
-            if (aid) {
-                await loadFromAssignment(aid);
-            } else if (currentExecution.checklist_id) {
-                await loadLegacy(currentExecution.checklist_id);
-            } else {
-                setChecklistTitle(text.pageTitle);
-                setChecklistDescription(null);
-                setItems([]);
-            }
-
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            if (user) {
-                const { data: profile } = await supabase
-                    .from("profiles")
-                    .select("full_name")
-                    .eq("id", user.id)
-                    .single();
-                if ((profile as any)?.full_name) {
-                    setTechnicianName((profile as any).full_name);
-                }
-            }
+            setItems(nextItems);
         } catch (error: any) {
             console.error(error);
             toast({
@@ -193,93 +159,6 @@ export default function ChecklistExecutionPage() {
         }
     };
 
-    const loadFromAssignment = async (aid: string) => {
-        const { data: assignment, error: assignmentError } = await supabase
-            .from("checklist_assignments")
-            .select(`
-        id,
-        organization_id,
-        template_id,
-        checklist_templates:template_id (
-          id,
-          name,
-          description,
-          version,
-          target_type
-        )
-      `)
-            .eq("id", aid)
-            .single();
-
-        if (assignmentError) throw assignmentError;
-
-        const template = (assignment as any)?.checklist_templates;
-        setChecklistTitle(template?.name ?? text.pageTitle);
-        setChecklistDescription(template?.description ?? null);
-
-        const { data: templateItems, error: itemsError } = await supabase
-            .from("checklist_template_items")
-            .select("id, title, description, input_type, is_required, order_index, metadata")
-            .eq("template_id", (assignment as any).template_id)
-            .order("order_index", { ascending: true });
-
-        if (itemsError) throw itemsError;
-
-        setItems(
-            (templateItems ?? []).map((item: any) => ({
-                id: item.id,
-                title: item.title,
-                description: item.description,
-                input_type: (item.input_type ?? "boolean") as InputType,
-                is_required: Boolean(item.is_required),
-                order_index: item.order_index ?? 0,
-                metadata: item.metadata ?? {},
-                booleanState: item.input_type === "boolean" ? "na" : undefined,
-                value: "",
-                notes: "",
-                files: [],
-                uploadedPaths: [],
-            }))
-        );
-    };
-
-    const loadLegacy = async (checklistId: string) => {
-        const { data: checklistData, error: checklistError } = await supabase
-            .from("checklists")
-            .select("id, title, description")
-            .eq("id", checklistId)
-            .single();
-        if (checklistError) throw checklistError;
-
-        setChecklistTitle((checklistData as any)?.title ?? text.pageTitle);
-        setChecklistDescription((checklistData as any)?.description ?? null);
-
-        const { data: itemsData, error: itemsError } = await supabase
-            .from("checklist_items")
-            .select("*")
-            .eq("checklist_id", checklistId)
-            .order("order_index", { ascending: true });
-
-        if (itemsError) throw itemsError;
-
-        setItems(
-            (itemsData || []).map((item: any, index: number) => ({
-                id: item.id,
-                title: item.title,
-                description: item.description,
-                input_type: (item.input_type ?? "boolean") as InputType,
-                is_required: Boolean(item.is_required ?? true),
-                order_index: item.order_index ?? item.item_order ?? index,
-                metadata: { images: item.images ?? [] },
-                booleanState: item.input_type === "boolean" ? "na" : undefined,
-                value: "",
-                notes: "",
-                files: [],
-                uploadedPaths: [],
-            }))
-        );
-    };
-
     const setItemPatch = (itemId: string, patch: Partial<ExecutionItemUI>) => {
         setItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...patch } : item)));
     };
@@ -290,10 +169,10 @@ export default function ChecklistExecutionPage() {
     };
 
     const uploadPhotosIfAny = async (executionId: string, item: ExecutionItemUI) => {
-        if (!item.files || item.files.length === 0) return [] as string[];
+        if (!item.files || item.files.length === 0) return item.uploadedPaths ?? [];
 
         const bucket = "checklist-photos";
-        const uploaded: string[] = [];
+        const uploaded: string[] = [...(item.uploadedPaths ?? [])];
 
         for (const file of item.files) {
             const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -313,15 +192,9 @@ export default function ChecklistExecutionPage() {
         return items.filter((item) => {
             if (!item.is_required) return false;
             if (item.input_type === "boolean") return (item.booleanState ?? "na") === "na";
-            if (item.input_type === "photo") return !(item.files && item.files.length > 0);
+            if (item.input_type === "photo") return !((item.files && item.files.length > 0) || (item.uploadedPaths && item.uploadedPaths.length > 0));
             return !(item.value && item.value.trim().length > 0);
         });
-    };
-
-    const getBooleanResult = (value: BooleanState | undefined) => {
-        if (value === "ok") return true;
-        if (value === "ko") return false;
-        return null;
     };
 
     const getBooleanStorageValue = (value: BooleanState | undefined) => {
@@ -350,72 +223,28 @@ export default function ChecklistExecutionPage() {
         try {
             const itemsWithUploads: ExecutionItemUI[] = [];
             for (const item of items) {
-                const uploadedPaths = item.input_type === "photo" ? await uploadPhotosIfAny(execution.id, item) : [];
+                const uploadedPaths = item.input_type === "photo" ? await uploadPhotosIfAny(execution.id, item) : item.uploadedPaths ?? [];
                 itemsWithUploads.push({ ...item, uploadedPaths });
             }
 
-            const resultsJson = {
-                checklistTitle,
-                completedAt: new Date().toISOString(),
-                technicianName: technicianName || null,
+            await checklistExecutionApi.complete(execution.id, {
                 items: itemsWithUploads.map((item) => ({
-                    template_item_id: item.id,
-                    title: item.title,
-                    input_type: item.input_type,
-                    value: item.input_type === "boolean" ? getBooleanResult(item.booleanState) : item.value ?? null,
-                    notes: item.notes ?? null,
-                    photos: item.uploadedPaths ?? [],
-                })),
-            };
-
-            try {
-                const rows = itemsWithUploads.map((item) => ({
-                    execution_id: execution.id,
                     template_item_id: item.id,
                     value: item.input_type === "boolean" ? getBooleanStorageValue(item.booleanState) : item.value ?? null,
                     notes: item.notes ?? null,
-                }));
+                    photos: item.uploadedPaths ?? [],
+                })),
+                notes: technicianName?.trim() ? `Operator: ${technicianName.trim()}` : null,
+            });
 
-                const { data: insertedItems, error: insertError } = await supabase
-                    .from("checklist_execution_items")
-                    .insert(rows as any)
-                    .select("id, template_item_id");
-
-                if (insertError) throw insertError;
-
-                const photoRows: any[] = [];
-                for (const item of itemsWithUploads) {
-                    const insertedRow = (insertedItems ?? []).find((row: any) => row.template_item_id === item.id);
-                    if (!insertedRow) continue;
-                    for (const path of item.uploadedPaths ?? []) {
-                        photoRows.push({ execution_item_id: insertedRow.id, storage_path: path });
-                    }
-                }
-
-                if (photoRows.length > 0) {
-                    const { error: photoError } = await supabase.from("checklist_execution_photos").insert(photoRows as any);
-                    if (photoError) throw photoError;
-                }
-            } catch (error) {
-                console.warn("Normalized checklist save skipped:", error);
-            }
-
-            const payload: any = {
-                status: "completed",
-                overall_status: "completed",
-                completed_at: new Date().toISOString(),
-                executed_at: new Date().toISOString(),
-                results: resultsJson,
-                notes: null,
-            };
             if (saveSignature && signatureDataUrl) {
-                payload.signature = signatureDataUrl;
+                toast({
+                    title: text.completedTitle,
+                    description: `${text.completedDescription} (${text.signatureOptional})`,
+                });
+            } else {
+                toast({ title: text.completedTitle, description: text.completedDescription });
             }
-
-            const { error: updateError } = await supabase.from("checklist_executions").update(payload).eq("id", execution.id);
-            if (updateError) throw updateError;
-
-            toast({ title: text.completedTitle, description: text.completedDescription });
             router.push(`/checklists/executions/${execution.id}`);
         } catch (error: any) {
             console.error(error);
@@ -502,8 +331,8 @@ export default function ChecklistExecutionPage() {
                         <ChevronLeft className="mr-2 h-4 w-4" />
                         {text.back}
                     </Button>
-                    <Badge variant={(execution.overall_status || execution.status) === "completed" ? "default" : "secondary"}>
-                        {execution.overall_status || execution.status}
+                    <Badge variant={(execution.overall_status || "pending") === "passed" ? "default" : "secondary"}>
+                        {execution.overall_status || "pending"}
                     </Badge>
                 </div>
 
@@ -513,7 +342,7 @@ export default function ChecklistExecutionPage() {
                             <span>{checklistTitle}</span>
                             <span className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Clock className="h-4 w-4" />
-                                {execution.started_at ? format(new Date(execution.started_at), "dd/MM/yyyy HH:mm") : "-"}
+                                {execution.executed_at ? format(new Date(execution.executed_at), "dd/MM/yyyy HH:mm") : "-"}
                             </span>
                         </CardTitle>
                     </CardHeader>
@@ -625,9 +454,9 @@ export default function ChecklistExecutionPage() {
                                                 {text.uploadPhotos}
                                             </div>
                                             <Input type="file" accept="image/*" multiple onChange={(event) => handleFileChange(item.id, event.target.files)} />
-                                            {item.files && item.files.length > 0 ? (
+                                            {((item.files && item.files.length > 0) || (item.uploadedPaths && item.uploadedPaths.length > 0)) ? (
                                                 <div className="text-xs text-muted-foreground">
-                                                    {item.files.length} {text.filesSelected}
+                                                    {(item.files?.length ?? 0) + (item.uploadedPaths?.length ?? 0)} {text.filesSelected}
                                                 </div>
                                             ) : null}
                                         </div>
