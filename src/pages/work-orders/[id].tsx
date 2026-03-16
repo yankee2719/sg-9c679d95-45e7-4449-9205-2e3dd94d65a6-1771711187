@@ -18,6 +18,7 @@ import {
     SelectItem,
 } from "@/components/ui/select";
 import { ArrowLeft, Save, User, Wrench, CalendarClock, ClipboardCheck } from "lucide-react";
+import { PageLoader } from "@/components/feedback/PageLoader";
 
 type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
 type WorkStatus = "draft" | "scheduled" | "in_progress" | "pending_review" | "completed" | "cancelled";
@@ -262,7 +263,13 @@ export default function WorkOrderDetailPage() {
         }
     };
 
-    if (loading || !wo) return null;
+    if (loading || !wo) {
+        return (
+            <MainLayout userRole={role as any}>
+                <PageLoader title="Dettaglio Work Order" description="Stiamo caricando i dati operativi, lo stato e i riferimenti di assegnazione." />
+            </MainLayout>
+        );
+    }
 
     return (
         <MainLayout userRole={role as any}>
