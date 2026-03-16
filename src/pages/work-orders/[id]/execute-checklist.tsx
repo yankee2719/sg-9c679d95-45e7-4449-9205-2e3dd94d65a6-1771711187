@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
+import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
 
 type WorkOrderRow = {
     id: string;
@@ -57,13 +58,6 @@ type ItemValue = {
     notes: string | null;
     bool?: "yes" | "no" | "na";
 };
-
-function getRandomId() {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID();
-    }
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 export default function ExecuteChecklistInWorkOrderPage() {
     const router = useRouter();
@@ -234,11 +228,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
 
         setSaving(true);
         try {
-            const { data: userData } = await supabase.auth.getUser();
-            const executedBy = userData.user?.id;
-            if (!executedBy) throw new Error(text.unauthenticated);
-
-            const executionSummary = templateItems.map((item) => {
+            const itemsPayload = templateItems.map((item) => {
                 const value = values[item.id];
                 let finalValue: string | null = value?.value ?? null;
                 if (item.input_type === "boolean") {
@@ -246,59 +236,21 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 }
                 return {
                     template_item_id: item.id,
-                    title: item.title,
                     value: finalValue,
                     notes: value?.notes ?? null,
                 };
             });
 
-            const now = new Date().toISOString();
-            const executionPayload: any = {
+            const executionRow = await checklistExecutionApi.create({
                 assignment_id: selectedAssignment.id,
-                organization_id: workOrder.organization_id,
                 work_order_id: workOrder.id,
-                machine_id: workOrder.machine_id,
-                executed_by: executedBy,
-                executed_at: now,
-                started_at: now,
-                completed_at: now,
-                template_version: selectedAssignment.template?.version ?? 1,
-                status: "completed",
-                overall_status: "completed",
-                notes: globalNotes.trim() || null,
-                results: executionSummary,
-            };
-
-            const { data: executionRow, error: executionError } = await supabase
-                .from("checklist_executions")
-                .insert(executionPayload)
-                .select("id")
-                .single();
-
-            if (executionError) throw executionError;
-
-            const executionId = (executionRow as any).id as string;
-            const itemRows = templateItems.map((item) => {
-                const value = values[item.id] ?? { value: null, notes: null };
-                let finalValue: string | null = value.value;
-
-                if (item.input_type === "boolean") {
-                    finalValue = value.bool === "yes" ? "true" : value.bool === "no" ? "false" : null;
-                }
-
-                return {
-                    id: getRandomId(),
-                    execution_id: executionId,
-                    template_item_id: item.id,
-                    value: finalValue,
-                    notes: value.notes?.trim() || null,
-                };
             });
 
-            if (itemRows.length > 0) {
-                const { error: itemError } = await supabase.from("checklist_execution_items").insert(itemRows as any);
-                if (itemError) throw itemError;
-            }
+            const executionId = executionRow.id;
+            await checklistExecutionApi.complete(executionId, {
+                items: itemsPayload,
+                notes: globalNotes.trim() || null,
+            });
 
             toast({ title: text.savedTitle, description: text.savedDescription });
             router.push(`/checklists/executions/${executionId}`);
