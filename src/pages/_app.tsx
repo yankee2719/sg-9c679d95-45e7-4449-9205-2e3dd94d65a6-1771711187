@@ -1,5 +1,6 @@
 import type { AppProps } from "next/app";
 import Head from "next/head";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import "@/styles/globals.css";
 import { OfflineStatusBar } from "@/components/Offline/OfflineStatusBar";
@@ -32,6 +33,12 @@ function AppShell({ Component, pageProps }: AppProps) {
 }
 
 export default function App(props: AppProps) {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     return (
         <>
             <Head>
@@ -42,7 +49,7 @@ export default function App(props: AppProps) {
                 <LanguageProvider>
                     <AuthProvider>
                         <PWAProvider>
-                            <AppShell {...props} />
+                            {mounted ? <AppShell {...props} /> : null}
                             <Toaster />
                         </PWAProvider>
                     </AuthProvider>
