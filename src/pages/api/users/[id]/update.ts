@@ -1,5 +1,5 @@
-import { NextApiResponse } from "next";
-import { withAuth, AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import type { NextApiResponse } from "next";
+import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "PATCH") {
@@ -8,43 +8,102 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     try {
         const { id } = req.query;
-        const { full_name, role, phone, is_active } = req.body;
+        const { user_id, display_name, role, is_active } = req.body ?? {};
 
         if (!id || typeof id !== "string") {
-            return res.status(400).json({ error: "Invalid user ID" });
+            return res.status(400).json({ error: "Invalid membership ID" });
         }
 
-        if (role && !["admin", "supervisor", "technician"].includes(role)) {
+        if (role && !["owner", "admin", "supervisor", "technician", "viewer"].includes(role)) {
             return res.status(400).json({ error: "Invalid role" });
+        }
+
+        if (!req.user.organizationId) {
+            return res.status(400).json({ error: "No active organization context" });
         }
 
         const serviceSupabase = getServiceSupabase();
 
-        // Update profile
-        const updateData: any = {
-            updated_at: new Date().toISOString(),
-        };
+        const { data: targetMembership, error: membershipError } = await serviceSupabase
+            .from("organization_memberships")
+            .select("id, user_id, organization_id, role, is_active")
+            .eq("id", id)
+            .eq("organization_id", req.user.organizationId)
+            .maybeSingle();
 
-        if (full_name !== undefined) updateData.full_name = full_name;
-        if (role !== undefined) updateData.role = role;
-        if (phone !== undefined) updateData.phone = phone;
-        if (is_active !== undefined) updateData.is_active = is_active;
-
-        const { error: profileError } = await serviceSupabase
-            .from("profiles")
-            .update(updateData)
-            .eq("id", id);
-
-        if (profileError) {
-            console.error("Error updating profile:", profileError);
-            return res.status(500).json({ error: "Failed to update user profile" });
+        if (membershipError) {
+            return res.status(500).json({ error: membershipError.message });
         }
 
-        return res.status(200).json({ message: "User updated successfully" });
+        if (!targetMembership) {
+            return res.status(404).json({ error: "Membership not found" });
+        }
+
+        if (user_id && user_id !== targetMembership.user_id) {
+            return res.status(400).json({ error: "user_id does not match membership" });
+        }
+
+        if (targetMembership.user_id === req.user.id) {
+            if (is_active === false) {
+                return res.status(400).json({ error: "You cannot deactivate yourself" });
+            }
+            if (role && role !== targetMembership.role) {
+                return res.status(400).json({ error: "You cannot change your own role" });
+            }
+        }
+
+        const membershipUpdate: Record<string, unknown> = {};
+        if (role !== undefined) membershipUpdate.role = role;
+        if (is_active !== undefined) {
+            membershipUpdate.is_active = is_active;
+            if (is_active) {
+                membershipUpdate.deactivated_at = null;
+                membershipUpdate.deactivated_by = null;
+            } else {
+                membershipUpdate.deactivated_at = new Date().toISOString();
+                membershipUpdate.deactivated_by = req.user.id;
+            }
+        }
+
+        if (Object.keys(membershipUpdate).length > 0) {
+            const { error: updateMembershipError } = await serviceSupabase
+                .from("organization_memberships")
+                .update(membershipUpdate as any)
+                .eq("id", targetMembership.id)
+                .eq("organization_id", req.user.organizationId);
+
+            if (updateMembershipError) {
+                return res.status(500).json({ error: updateMembershipError.message });
+            }
+        }
+
+        if (display_name !== undefined) {
+            const fullName = String(display_name || "").trim();
+            const parts = fullName.split(" ").filter(Boolean);
+            const { error: profileError } = await serviceSupabase
+                .from("profiles")
+                .update({
+                    display_name: fullName || null,
+                    first_name: parts[0] ?? null,
+                    last_name: parts.length > 1 ? parts.slice(1).join(" ") : null,
+                    updated_at: new Date().toISOString(),
+                } as any)
+                .eq("id", targetMembership.user_id);
+
+            if (profileError) {
+                return res.status(500).json({ error: profileError.message });
+            }
+        }
+
+        return res.status(200).json({
+            message: "User updated successfully",
+            membership_id: targetMembership.id,
+            user_id: targetMembership.user_id,
+        });
     } catch (error) {
         console.error("Unexpected error in /api/users/[id]/update:", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 }
 
-export default withAuth(["admin"], handler);
+export default withAuth(["owner", "admin"], handler, { requireAal2: true });
