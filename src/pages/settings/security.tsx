@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import { useAuth } from "@/hooks/useAuth";
 import {
     challengeFactor,
     enrollTotpFactor,
@@ -38,67 +38,72 @@ interface FactorRow {
 
 const copy = {
     it: {
-        seo: "Sicurezza - MACHINA",
+        seo: "Sicurezza account - MACHINA",
         title: "Sicurezza account",
-        subtitle: "Gestisci autenticazione a due fattori e livello di garanzia della sessione.",
-        currentLevel: "Livello corrente",
-        nextLevel: "Livello richiesto",
-        verified: "Sessione verificata con 2FA",
-        notVerified: "Sessione non ancora verificata con 2FA",
-        setupTitle: "Nuovo autenticatore",
-        setupDescription: "Configura una app TOTP come Google Authenticator, Authy o 1Password.",
+        subtitle:
+            "Configura l'autenticazione a due fattori. La web app usa il contesto di sessione reale, non controlli duplicati sparsi.",
+        currentLevel: "Livello attuale",
+        nextLevel: "Livello successivo",
+        verified: "Verifica MFA completata",
+        notVerified: "MFA non ancora verificata",
+        setupTitle: "Configura TOTP",
+        setupDescription:
+            "Attiva un autenticatore TOTP per passare ad AAL2 e proteggere funzioni sensibili.",
         factorName: "Nome fattore",
-        factorNamePlaceholder: "Es. iPhone di Denis",
-        defaultFactorName: "Authenticator principale",
+        factorNamePlaceholder: "Es. iPhone Denis",
+        defaultFactorName: "Autenticatore principale",
         startSetup: "Avvia configurazione",
         qrUnavailable: "QR non disponibile",
-        scanQr: "Scansiona il QR code con la tua app di autenticazione.",
+        scanQr: "Scansiona il QR con la tua app di autenticazione.",
         manualSecret: "Oppure inserisci manualmente questo secret:",
         verificationCode: "Codice di verifica",
         verificationPlaceholder: "000000",
         verifyAndActivate: "Verifica e attiva",
         cancel: "Annulla",
         activeFactors: "Fattori attivi",
-        noFactors: "Nessun fattore verificato presente.",
+        noFactors: "Nessun fattore verificato trovato.",
         active: "Attivo",
-        pending: "In attesa",
+        pending: "Pending",
         remove: "Rimuovi",
         removeConfirm: "Conferma rimozione",
         addedOn: "Aggiunto il",
         loadError: "Impossibile caricare le impostazioni di sicurezza.",
         enrollStarted: "Configurazione avviata",
-        enrollStartedDescription: "Scansiona il QR code e inserisci il primo codice per completare l’attivazione.",
+        enrollStartedDescription:
+            "Scansiona il QR e inserisci il primo codice per completare l'attivazione.",
         enrollError: "Errore avvio 2FA",
-        enrollErrorDescription: "Non è stato possibile iniziare la configurazione del fattore.",
+        enrollErrorDescription: "Non è stato possibile avviare la configurazione del fattore.",
         verifiedToast: "2FA attivata",
-        verifiedDescription: "Il fattore è stato verificato con successo.",
+        verifiedDescription: "Il fattore è stato verificato correttamente.",
         verifyError: "Errore verifica",
-        verifyErrorDescription: "Il codice inserito non è valido o è scaduto.",
+        verifyErrorDescription: "Il codice non è valido o è scaduto.",
         removed: "Fattore rimosso",
         removedDescription: "Il fattore MFA è stato eliminato.",
         removeError: "Errore rimozione",
         removeErrorDescription: "Non è stato possibile rimuovere il fattore selezionato.",
     },
     en: {
-        seo: "Security - MACHINA",
+        seo: "Account security - MACHINA",
         title: "Account security",
-        subtitle: "Manage two-factor authentication and session assurance level.",
+        subtitle:
+            "Configure two-factor authentication. The app must use the real session context, not duplicated checks all over the UI.",
         currentLevel: "Current level",
-        nextLevel: "Required level",
-        verified: "Session verified with 2FA",
-        notVerified: "Session not yet verified with 2FA",
-        setupTitle: "New authenticator",
-        setupDescription: "Set up a TOTP app such as Google Authenticator, Authy, or 1Password.",
+        nextLevel: "Next level",
+        verified: "MFA verification completed",
+        notVerified: "MFA not yet verified",
+        setupTitle: "Set up TOTP",
+        setupDescription:
+            "Enable a TOTP authenticator to move to AAL2 and protect sensitive actions.",
         factorName: "Factor name",
-        factorNamePlaceholder: "Example: Denis iPhone",
+        factorNamePlaceholder: "Ex. Denis iPhone",
         defaultFactorName: "Primary authenticator",
         startSetup: "Start setup",
         qrUnavailable: "QR unavailable",
         scanQr: "Scan the QR code with your authenticator app.",
-        manualSecret: "Or enter this secret manually:",
+        manualSecret: "Or manually type this secret:",
         verificationCode: "Verification code",
         verificationPlaceholder: "000000",
-        verifyAndActivate: "Verify and enable",
+        verifyAndActivate: "Verify and activate",
         cancel: "Cancel",
         activeFactors: "Active factors",
         noFactors: "No verified factors found.",
@@ -109,7 +114,8 @@ const copy = {
         addedOn: "Added on",
         loadError: "Unable to load security settings.",
         enrollStarted: "Setup started",
-        enrollStartedDescription: "Scan the QR code and enter the first code to complete activation.",
+        enrollStartedDescription:
+            "Scan the QR code and enter the first code to complete activation.",
         enrollError: "2FA setup error",
         enrollErrorDescription: "Unable to start factor setup.",
         verifiedToast: "2FA enabled",
@@ -117,26 +123,28 @@ const copy = {
         verifyError: "Verification error",
         verifyErrorDescription: "The code is invalid or expired.",
         removed: "Factor removed",
-        removedDescription: "The MFA factor has been deleted.",
-        removeError: "Removal error",
+        removedDescription: "The MFA factor has been removed.",
+        removeError: "Remove error",
         removeErrorDescription: "Unable to remove the selected factor.",
     },
     fr: {
-        seo: "Sécurité - MACHINA",
+        seo: "Sécurité du compte - MACHINA",
         title: "Sécurité du compte",
-        subtitle: "Gérez l’authentification à deux facteurs et le niveau d’assurance de la session.",
+        subtitle:
+            "Configurez l'authentification à deux facteurs. L'application doit utiliser le vrai contexte de session.",
         currentLevel: "Niveau actuel",
-        nextLevel: "Niveau requis",
-        verified: "Session vérifiée avec la 2FA",
-        notVerified: "Session pas encore vérifiée avec la 2FA",
-        setupTitle: "Nouvel authentificateur",
-        setupDescription: "Configurez une application TOTP comme Google Authenticator, Authy ou 1Password.",
+        nextLevel: "Niveau suivant",
+        verified: "Vérification MFA terminée",
+        notVerified: "MFA pas encore vérifiée",
+        setupTitle: "Configurer TOTP",
+        setupDescription:
+            "Activez un authentificateur TOTP pour passer à AAL2 et protéger les actions sensibles.",
         factorName: "Nom du facteur",
-        factorNamePlaceholder: "Ex. iPhone de Denis",
+        factorNamePlaceholder: "Ex. iPhone Denis",
         defaultFactorName: "Authentificateur principal",
         startSetup: "Démarrer la configuration",
         qrUnavailable: "QR indisponible",
-        scanQr: "Scannez le QR code avec votre application d’authentification.",
+        scanQr: "Scannez le QR avec votre application d'authentification.",
         manualSecret: "Ou saisissez manuellement ce secret :",
         verificationCode: "Code de vérification",
         verificationPlaceholder: "000000",
@@ -151,30 +159,33 @@ const copy = {
         addedOn: "Ajouté le",
         loadError: "Impossible de charger les paramètres de sécurité.",
         enrollStarted: "Configuration démarrée",
-        enrollStartedDescription: "Scannez le QR code et saisissez le premier code pour terminer l’activation.",
-        enrollError: "Erreur de configuration 2FA",
+        enrollStartedDescription:
+            "Scannez le QR et saisissez le premier code pour terminer l'activation.",
+        enrollError: "Erreur configuration 2FA",
         enrollErrorDescription: "Impossible de démarrer la configuration du facteur.",
         verifiedToast: "2FA activée",
         verifiedDescription: "Le facteur a été vérifié avec succès.",
         verifyError: "Erreur de vérification",
-        verifyErrorDescription: "Le code est invalide ou expiré.",
+        verifyErrorDescription: "Le code n'est pas valide ou a expiré.",
         removed: "Facteur supprimé",
         removedDescription: "Le facteur MFA a été supprimé.",
-        removeError: "Erreur de suppression",
+        removeError: "Erreur suppression",
         removeErrorDescription: "Impossible de supprimer le facteur sélectionné.",
     },
     es: {
-        seo: "Seguridad - MACHINA",
+        seo: "Seguridad de la cuenta - MACHINA",
         title: "Seguridad de la cuenta",
-        subtitle: "Gestiona la autenticación de dos factores y el nivel de garantía de la sesión.",
+        subtitle:
+            "Configura la autenticación de dos factores. La app debe usar el contexto real de sesión.",
         currentLevel: "Nivel actual",
-        nextLevel: "Nivel requerido",
-        verified: "Sesión verificada con 2FA",
-        notVerified: "Sesión aún no verificada con 2FA",
-        setupTitle: "Nuevo autenticador",
-        setupDescription: "Configura una app TOTP como Google Authenticator, Authy o 1Password.",
+        nextLevel: "Siguiente nivel",
+        verified: "Verificación MFA completada",
+        notVerified: "MFA aún no verificada",
+        setupTitle: "Configurar TOTP",
+        setupDescription:
+            "Activa un autenticador TOTP para pasar a AAL2 y proteger acciones sensibles.",
         factorName: "Nombre del factor",
-        factorNamePlaceholder: "Ej. iPhone de Denis",
+        factorNamePlaceholder: "Ej. iPhone Denis",
         defaultFactorName: "Autenticador principal",
         startSetup: "Iniciar configuración",
         qrUnavailable: "QR no disponible",
@@ -193,7 +204,8 @@ const copy = {
         addedOn: "Añadido el",
         loadError: "No se pudieron cargar los ajustes de seguridad.",
         enrollStarted: "Configuración iniciada",
-        enrollStartedDescription: "Escanea el QR e introduce el primer código para completar la activación.",
+        enrollStartedDescription:
+            "Escanea el QR e introduce el primer código para completar la activación.",
         enrollError: "Error al iniciar 2FA",
         enrollErrorDescription: "No se pudo iniciar la configuración del factor.",
         verifiedToast: "2FA activada",
@@ -211,6 +223,7 @@ export default function SecuritySettingsPage() {
     const { language } = useLanguage();
     const text = useMemo(() => copy[language], [language]);
     const { toast } = useToast();
+    const { loading: authLoading, membership } = useAuth();
 
     const [userRole, setUserRole] = useState("technician");
     const [loading, setLoading] = useState(true);
@@ -231,30 +244,50 @@ export default function SecuritySettingsPage() {
         setFriendlyName((current) => (current.trim() ? current : text.defaultFactorName));
     }, [text.defaultFactorName]);
 
+    useEffect(() => {
+        setUserRole(membership?.role ?? "technician");
+    }, [membership?.role]);
+
     const loadAll = async () => {
-        const [ctx, factorRows, status] = await Promise.all([getUserContext(), listMfaFactors(), getMfaStatus()]);
-        setUserRole(ctx?.role ?? "technician");
+        const [factorRows, status] = await Promise.all([listMfaFactors(), getMfaStatus()]);
         setFactors(factorRows);
         setAal(status.currentLevel ?? null);
         setNextLevel(status.nextLevel ?? null);
     };
 
     useEffect(() => {
+        let active = true;
+
         const init = async () => {
+            if (authLoading) return;
+
             try {
                 await loadAll();
             } catch (error: any) {
                 console.error(error);
-                toast({ title: text.title, description: error?.message ?? text.loadError, variant: "destructive" });
+                if (active) {
+                    toast({
+                        title: text.title,
+                        description: error?.message ?? text.loadError,
+                        variant: "destructive",
+                    });
+                }
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
 
-        init();
-    }, [text.loadError, text.title, toast]);
+        void init();
 
-    const verifiedFactors = useMemo(() => factors.filter((factor) => factor.status === "verified"), [factors]);
+        return () => {
+            active = false;
+        };
+    }, [authLoading, text.loadError, text.title, toast]);
+
+    const verifiedFactors = useMemo(
+        () => factors.filter((factor) => factor.status === "verified"),
+        [factors]
+    );
 
     const handleStartEnroll = async () => {
         setEnrolling(true);
@@ -263,10 +296,17 @@ export default function SecuritySettingsPage() {
             setPendingFactorId(result.factorId);
             setPendingSecret(result.secret);
             setPendingUri(result.uri);
-            toast({ title: text.enrollStarted, description: text.enrollStartedDescription });
+            toast({
+                title: text.enrollStarted,
+                description: text.enrollStartedDescription,
+            });
         } catch (error: any) {
             console.error(error);
-            toast({ title: text.enrollError, description: error?.message ?? text.enrollErrorDescription, variant: "destructive" });
+            toast({
+                title: text.enrollError,
+                description: error?.message ?? text.enrollErrorDescription,
+                variant: "destructive",
+            });
         } finally {
             setEnrolling(false);
         }
@@ -274,11 +314,21 @@ export default function SecuritySettingsPage() {
 
     const handleVerifyEnroll = async () => {
         if (!pendingFactorId || !code.trim()) return;
+
         setVerifying(true);
         try {
             const challenge = await challengeFactor(pendingFactorId);
-            await verifyFactor({ factorId: pendingFactorId, challengeId: challenge.id, code });
-            toast({ title: text.verifiedToast, description: text.verifiedDescription });
+            await verifyFactor({
+                factorId: pendingFactorId,
+                challengeId: challenge.id,
+                code,
+            });
+
+            toast({
+                title: text.verifiedToast,
+                description: text.verifiedDescription,
+            });
+
             setCode("");
             setPendingFactorId(null);
             setPendingSecret(null);
@@ -286,7 +336,11 @@ export default function SecuritySettingsPage() {
             await loadAll();
         } catch (error: any) {
             console.error(error);
-            toast({ title: text.verifyError, description: error?.message ?? text.verifyErrorDescription, variant: "destructive" });
+            toast({
+                title: text.verifyError,
+                description: error?.message ?? text.verifyErrorDescription,
+                variant: "destructive",
+            });
         } finally {
             setVerifying(false);
         }
@@ -296,12 +350,19 @@ export default function SecuritySettingsPage() {
         setRemovingFactorId(factorId);
         try {
             await unenrollFactor(factorId);
-            toast({ title: text.removed, description: text.removedDescription });
+            toast({
+                title: text.removed,
+                description: text.removedDescription,
+            });
             setConfirmingFactorId(null);
             await loadAll();
         } catch (error: any) {
             console.error(error);
-            toast({ title: text.removeError, description: error?.message ?? text.removeErrorDescription, variant: "destructive" });
+            toast({
+                title: text.removeError,
+                description: error?.message ?? text.removeErrorDescription,
+                variant: "destructive",
+            });
         } finally {
             setRemovingFactorId(null);
         }
@@ -311,7 +372,7 @@ export default function SecuritySettingsPage() {
         <MainLayout userRole={userRole}>
             <SEO title={text.seo} />
 
-            <div className="container mx-auto max-w-5xl px-4 py-8 space-y-6">
+            <div className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -321,8 +382,13 @@ export default function SecuritySettingsPage() {
                         <CardDescription>{text.subtitle}</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap items-center gap-3">
-                        <Badge variant={aal === "aal2" ? "default" : "outline"}>{text.currentLevel}: {aal ?? "—"}</Badge>
-                        <Badge variant="outline">{text.nextLevel}: {nextLevel ?? "—"}</Badge>
+                        <Badge variant={aal === "aal2" ? "default" : "outline"}>
+                            {text.currentLevel}: {aal ?? "—"}
+                        </Badge>
+                        <Badge variant="outline">
+                            {text.nextLevel}: {nextLevel ?? "—"}
+                        </Badge>
+
                         {aal === "aal2" ? (
                             <div className="inline-flex items-center gap-2 text-sm text-green-600">
                                 <CheckCircle2 className="h-4 w-4" />
@@ -348,7 +414,7 @@ export default function SecuritySettingsPage() {
                     <CardContent className="space-y-5">
                         {!pendingFactorId ? (
                             <>
-                                <div className="space-y-2 max-w-md">
+                                <div className="max-w-md space-y-2">
                                     <Label htmlFor="friendlyName">{text.factorName}</Label>
                                     <Input
                                         id="friendlyName"
@@ -357,39 +423,65 @@ export default function SecuritySettingsPage() {
                                         placeholder={text.factorNamePlaceholder}
                                     />
                                 </div>
+
                                 <Button onClick={handleStartEnroll} disabled={enrolling}>
-                                    {enrolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                                    {enrolling ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <KeyRound className="mr-2 h-4 w-4" />
+                                    )}
                                     {text.startSetup}
                                 </Button>
                             </>
                         ) : (
                             <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-                                <div className="rounded-2xl border border-border p-4 flex items-center justify-center">
-                                    {pendingUri ? <QRCodeGenerator value={pendingUri} size={220} /> : <div className="text-sm text-muted-foreground">{text.qrUnavailable}</div>}
+                                <div className="flex items-center justify-center rounded-2xl border border-border p-4">
+                                    {pendingUri ? (
+                                        <QRCodeGenerator value={pendingUri} size={220} />
+                                    ) : (
+                                        <div className="text-sm text-muted-foreground">
+                                            {text.qrUnavailable}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="text-sm text-muted-foreground">{text.scanQr}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                        {text.scanQr}
+                                    </div>
+
                                     <div className="space-y-2">
                                         <Label>{text.manualSecret}</Label>
-                                        <div className="rounded-xl border border-border bg-muted/40 p-3 font-mono text-sm break-all">{pendingSecret ?? "—"}</div>
+                                        <div className="break-all rounded-xl border border-border bg-muted/40 p-3 font-mono text-sm">
+                                            {pendingSecret ?? "—"}
+                                        </div>
                                     </div>
-                                    <div className="space-y-2 max-w-xs">
+
+                                    <div className="max-w-xs space-y-2">
                                         <Label htmlFor="verifyCode">{text.verificationCode}</Label>
                                         <Input
                                             id="verifyCode"
                                             value={code}
-                                            onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                                            onChange={(event) =>
+                                                setCode(event.target.value.replace(/\D/g, ""))
+                                            }
                                             inputMode="numeric"
                                             maxLength={6}
                                             placeholder={text.verificationPlaceholder}
                                         />
                                     </div>
+
                                     <div className="flex flex-wrap gap-3">
-                                        <Button onClick={handleVerifyEnroll} disabled={verifying || code.trim().length < 6}>
-                                            {verifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        <Button
+                                            onClick={handleVerifyEnroll}
+                                            disabled={verifying || code.trim().length < 6}
+                                        >
+                                            {verifying && (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            )}
                                             {text.verifyAndActivate}
                                         </Button>
+
                                         <Button
                                             variant="outline"
                                             onClick={() => {
@@ -418,26 +510,53 @@ export default function SecuritySettingsPage() {
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                             </div>
                         ) : verifiedFactors.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">{text.noFactors}</div>
+                            <div className="text-sm text-muted-foreground">
+                                {text.noFactors}
+                            </div>
                         ) : (
                             <div className="space-y-3">
                                 {verifiedFactors.map((factor) => (
-                                    <div key={factor.id} className="flex flex-col gap-4 rounded-xl border border-border p-4 md:flex-row md:items-center md:justify-between">
+                                    <div
+                                        key={factor.id}
+                                        className="flex flex-col gap-4 rounded-xl border border-border p-4 md:flex-row md:items-center md:justify-between"
+                                    >
                                         <div>
-                                            <div className="font-medium">{factor.friendly_name || text.defaultFactorName}</div>
+                                            <div className="font-medium">
+                                                {factor.friendly_name || text.defaultFactorName}
+                                            </div>
                                             <div className="text-sm text-muted-foreground">
-                                                {(factor.factor_type ?? "totp").toUpperCase()} · {text.addedOn} {factor.created_at ? new Date(factor.created_at).toLocaleDateString() : "—"}
+                                                {text.addedOn}:{" "}
+                                                {factor.created_at
+                                                    ? new Date(factor.created_at).toLocaleString()
+                                                    : "—"}
                                             </div>
                                         </div>
+
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <Badge variant="secondary">{factor.status === "verified" ? text.active : text.pending}</Badge>
+                                            <Badge variant="secondary">
+                                                {factor.status === "verified"
+                                                    ? text.active
+                                                    : text.pending}
+                                            </Badge>
+
                                             {confirmingFactorId === factor.id ? (
-                                                <Button variant="destructive" onClick={() => handleRemoveFactor(factor.id)} disabled={removingFactorId === factor.id}>
-                                                    {removingFactorId === factor.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                                <Button
+                                                    variant="destructive"
+                                                    onClick={() => handleRemoveFactor(factor.id)}
+                                                    disabled={removingFactorId === factor.id}
+                                                >
+                                                    {removingFactorId === factor.id ? (
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                    )}
                                                     {text.removeConfirm}
                                                 </Button>
                                             ) : (
-                                                <Button variant="outline" onClick={() => setConfirmingFactorId(factor.id)}>
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={() => setConfirmingFactorId(factor.id)}
+                                                >
                                                     <Trash2 className="mr-2 h-4 w-4" />
                                                     {text.remove}
                                                 </Button>
