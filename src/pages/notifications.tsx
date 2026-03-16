@@ -165,6 +165,7 @@ const copy = {
 } as const;
 
 function getEntityRoute(n: Notification): string | null {
+    if (n.link) return n.link;
     if (!n.related_entity_type || !n.related_entity_id) return null;
     switch (n.related_entity_type) {
         case "work_order":
