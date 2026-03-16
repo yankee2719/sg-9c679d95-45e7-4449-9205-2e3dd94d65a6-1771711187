@@ -1,4 +1,3 @@
-// src/components/organization/OrganizationSwitcher.tsx
 import { useMemo } from "react";
 import { useRouter } from "next/router";
 import { Factory, Building2, RefreshCw } from "lucide-react";
@@ -49,7 +48,7 @@ export default function OrganizationSwitcher() {
                 description: "Organizzazione attiva aggiornata.",
             });
 
-            router.replace(router.asPath);
+            void router.replace(router.asPath);
         } catch (e: any) {
             toast({
                 title: "Errore",
@@ -90,35 +89,49 @@ export default function OrganizationSwitcher() {
                 <div className="min-w-0">
                     <div className="text-sm font-medium">Organizzazione attiva</div>
                     <div className="text-xs text-muted-foreground truncate">
-                        {activeLabel} · {activeOrgType ?? "organization"} · {activeRole ?? "technician"}
+                        {activeLabel} · {activeOrgType ?? "organization"} ·{" "}
+                        {activeRole ?? "technician"}
                     </div>
                 </div>
 
                 <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => reload()}
+                    onClick={() => void reload()}
                     disabled={saving}
                     title="Ricarica organizzazioni"
+                    type="button"
                 >
                     <RefreshCw className="w-4 h-4" />
                 </Button>
             </div>
 
-            <Select value={activeOrgId ?? undefined} onValueChange={handleChange} disabled={saving}>
+            <Select
+                value={activeOrgId ?? undefined}
+                onValueChange={handleChange}
+                disabled={saving}
+            >
                 <SelectTrigger className="w-full">
                     <SelectValue placeholder="Seleziona organizzazione..." />
                 </SelectTrigger>
                 <SelectContent>
                     {memberships.map((membership) => {
                         const Icon = getOrgIcon(membership.organization?.type ?? null);
+
                         return (
-                            <SelectItem key={membership.organization_id} value={membership.organization_id}>
+                            <SelectItem
+                                key={membership.organization_id}
+                                value={membership.organization_id}
+                            >
                                 <div className="flex items-center gap-2">
                                     <Icon className="w-4 h-4" />
-                                    <span>{membership.organization?.name ?? membership.organization_id}</span>
+                                    <span>
+                                        {membership.organization?.name ??
+                                            membership.organization_id}
+                                    </span>
                                     <span className="text-xs text-muted-foreground capitalize">
-                                        · {membership.organization?.type ?? "organization"} · {membership.role}
+                                        · {membership.organization?.type ?? "organization"} ·{" "}
+                                        {membership.role}
                                     </span>
                                 </div>
                             </SelectItem>
