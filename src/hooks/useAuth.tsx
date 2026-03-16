@@ -194,14 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadAuthContext(user);
     }, [loadAuthContext, user]);
 
-    const role = membership?.role ?? null;
+    const role = (membership?.role as string | null) ?? null;
     const isOwner = role === "owner";
-    const isAdmin = role ? hasMinimumRole(role, "admin") : false;
-    const shouldEnforceMfa = isPlatformAdmin || role === "owner" || role === "admin";
+    const isAdmin = ["owner", "admin"].includes(role ?? "");
+    const shouldEnforceMfa = isPlatformAdmin || ["owner", "admin", "supervisor"].includes(role ?? "");
     const canManageMembers = isAdmin || isPlatformAdmin;
     const canManagePlants = isAdmin || isPlatformAdmin;
     const canManageMachines = isAdmin || isPlatformAdmin;
-    const canExecuteWorkOrders = role ? hasMinimumRole(role, "technician") : false;
+    const canExecuteWorkOrders = ["owner", "admin", "supervisor", "technician"].includes(role ?? "") || (role ? hasMinimumRole(role as OrgRole, "technician") : false);
     const canViewOnly = role === "viewer";
 
     const value: AuthState = {
