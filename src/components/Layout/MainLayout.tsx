@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { getNotificationCount, getUserContext } from "@/lib/supabaseHelpers";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
+import { useAuth } from "@/hooks/useAuth";
+import { notificationService } from "@/services/notificationService";
 import { Badge } from "@/components/ui/badge";
 import {
     LayoutDashboard,
@@ -55,48 +55,80 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const router = useRouter();
     const { t, language, setLanguage } = useLanguage();
     const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
+    const { profile, organization, membership, user, signOut } = useAuth();
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [profileName, setProfileName] = useState("Utente");
-    const [profileRole, setProfileRole] = useState < string > (userRole);
-    const [orgType, setOrgType] = useState < OrgType > (null);
-    const [orgName, setOrgName] = useState("Organizzazione");
     const [notificationCount, setNotificationCount] = useState(0);
 
+    const profileName =
+        profile?.display_name?.trim() ||
+        `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ||
+        user?.email?.split("@")[0] ||
+        "Utente";
+
+    const profileRole = (membership?.role as string | null) ?? userRole;
+    const orgType = ((organization?.type as OrgType | undefined) ?? null) as OrgType;
+    const orgName = organization?.name ?? "Organizzazione";
+
     useEffect(() => {
-        const loadHeader = async () => {
+        let active = true;
+        let channel: any = null;
+
+        const syncUnreadCount = async () => {
+            if (!user?.id) {
+                if (active) setNotificationCount(0);
+                return;
+            }
+
             try {
-                const ctx = await getUserContext();
-
-                if (ctx?.displayName) setProfileName(ctx.displayName);
-                if (ctx?.role) setProfileRole(ctx.role);
-                if (ctx?.orgType) setOrgType(ctx.orgType as OrgType);
-
-                if (ctx?.orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", ctx.orgId)
-                        .maybeSingle();
-
-                    setOrgName((org as { name?: string } | null)?.name ?? "Organizzazione");
-                }
-
-                const {
-                    data: { user },
-                } = await supabase.auth.getUser();
-
-                if (user) {
-                    const notif = await getNotificationCount(user.id);
-                    setNotificationCount(notif || 0);
-                }
+                const unread = await notificationService.getUnreadCount();
+                if (active) setNotificationCount(unread || 0);
             } catch (error) {
-                console.error("MainLayout loadHeader error:", error);
+                console.error("MainLayout notification sync error:", error);
             }
         };
 
-        loadHeader();
-    }, [userRole, router.asPath]);
+        const handleNotificationUpdate = (event: Event) => {
+            const customEvent = event as CustomEvent<{ unreadCount?: number }>;
+            if (!active) return;
+            if (typeof customEvent.detail?.unreadCount === "number") {
+                setNotificationCount(Math.max(0, customEvent.detail.unreadCount));
+                return;
+            }
+            void syncUnreadCount();
+        };
+
+        void syncUnreadCount();
+
+        if (user?.id) {
+            channel = notificationService.subscribeToMyNotifications(user.id, () => {
+                if (!active) return;
+                setNotificationCount((prev) => prev + 1);
+            });
+        }
+
+        const handleFocus = () => {
+            void syncUnreadCount();
+        };
+
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") {
+                void syncUnreadCount();
+            }
+        };
+
+        window.addEventListener("focus", handleFocus);
+        window.addEventListener("machina:notifications-updated", handleNotificationUpdate as EventListener);
+        document.addEventListener("visibilitychange", handleVisibility);
+
+        return () => {
+            active = false;
+            window.removeEventListener("focus", handleFocus);
+            window.removeEventListener("machina:notifications-updated", handleNotificationUpdate as EventListener);
+            document.removeEventListener("visibilitychange", handleVisibility);
+            if (channel) notificationService.unsubscribe(channel);
+        };
+    }, [user?.id]);
 
     const initials = useMemo(() => {
         const parts = (profileName || "Utente")
@@ -137,25 +169,19 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         (item) => !["/customers", "/assignments", "/users", "/settings", "/settings/organization"].includes(item.href)
     );
 
-    const managementItems = filteredNavItems.filter((item) =>
-        ["/customers", "/assignments", "/users"].includes(item.href)
-    );
-
-    const settingsItems = filteredNavItems.filter((item) =>
-        ["/settings/organization", "/settings"].includes(item.href)
-    );
+    const managementItems = filteredNavItems.filter((item) => ["/customers", "/assignments", "/users"].includes(item.href));
+    const settingsItems = filteredNavItems.filter((item) => ["/settings/organization", "/settings"].includes(item.href));
 
     const handleLogout = async () => {
         try {
-            await supabase.auth.signOut();
+            await signOut();
             router.push("/login");
         } catch (error) {
             console.error("Logout error:", error);
         }
     };
 
-    const isActive = (href: string) =>
-        router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
+    const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
 
     const getOrgTypeLabel = () => {
         if (orgType === "manufacturer") return t("org.manufacturer");
@@ -173,10 +199,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
         if (exactMatch) return exactMatch.labelKey;
 
-        const startsWithMatch = filteredNavItems.find(
-            (item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href)
-        );
-
+        const startsWithMatch = filteredNavItems.find((item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href));
         return startsWithMatch?.labelKey ?? "nav.dashboard";
     };
 
@@ -204,9 +227,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                         <Wrench className="h-5 w-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">
-                            MACHINA
-                        </div>
+                        <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">MACHINA</div>
                         <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
                     </div>
                 </div>
@@ -227,9 +248,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {managementItems.length > 0 && (
                     <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            {t("common.management")}
-                        </div>
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("common.management")}</div>
                         {managementItems.map((item) => (
                             <NavLink key={item.href} {...item} />
                         ))}
@@ -238,9 +257,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                 {settingsItems.length > 0 && (
                     <div className="space-y-2">
-                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            {t("common.system")}
-                        </div>
+                        <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("common.system")}</div>
                         {settingsItems.map((item) => (
                             <NavLink key={item.href} {...item} />
                         ))}
@@ -274,11 +291,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
                         <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
                             <div className="flex items-center gap-3">
-                                <button
-                                    className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden"
-                                    onClick={() => setSidebarOpen(true)}
-                                    type="button"
-                                >
+                                <button className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden" onClick={() => setSidebarOpen(true)} type="button">
                                     <Menu className="h-5 w-5" />
                                 </button>
 
@@ -350,13 +363,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 </Link>
 
                                 <div className="hidden items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] md:flex">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                                        {initials}
-                                    </div>
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">{initials}</div>
                                     <div className="min-w-0">
-                                        <div className="max-w-[180px] truncate text-sm font-semibold">
-                                            {profileName}
-                                        </div>
+                                        <div className="max-w-[180px] truncate text-sm font-semibold">{profileName}</div>
                                         <div className="text-xs capitalize text-muted-foreground">{profileRole}</div>
                                     </div>
                                 </div>
@@ -372,11 +381,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 <div className="fixed inset-0 z-50 lg:hidden">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
                     <div className="absolute inset-y-0 left-0 w-[272px] shadow-2xl">
-                        <button
-                            className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground"
-                            onClick={() => setSidebarOpen(false)}
-                            type="button"
-                        >
+                        <button className="absolute right-3 top-3 z-10 rounded-xl border border-border bg-card p-2 text-foreground" onClick={() => setSidebarOpen(false)} type="button">
                             <X className="h-4 w-4" />
                         </button>
                         <SideContent />
