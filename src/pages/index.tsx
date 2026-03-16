@@ -1,32 +1,14 @@
-// src/pages/index.tsx
-import { useEffect } from "react";
-import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
+import { RouteRedirectNotice } from "@/components/feedback/RouteRedirectNotice";
 
-export default function HomeRedirectPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    const run = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          router.replace("/dashboard");
-          return;
-        }
-
-        router.replace("/login");
-      } catch (error) {
-        console.error(error);
-        router.replace("/login");
-      }
-    };
-
-    run();
-  }, [router]);
-
-  return null;
+export default function FilesIndexRedirect() {
+    return (
+        <RouteRedirectNotice
+            to="/documents"
+            title="Archivio documentale"
+            description="Il vecchio namespace file è stato unificato nel modulo documenti. Ti stiamo portando alla libreria aggiornata."
+            targetLabel="/documents"
+            withLayout
+            seoTitle="Documenti - MACHINA"
+        />
+    );
 }
