@@ -3,11 +3,12 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import { notificationService, type Notification, type NotificationType } from "@/services/notificationService";
 import { Bell, ClipboardList, AlertTriangle, Clock, Wrench, CheckCircle2, Trash2, CheckCheck, BellOff, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/useAuth";
+import { PageLoader } from "@/components/feedback/PageLoader";
 
 const copy = {
     it: {
@@ -185,6 +186,7 @@ export default function NotificationsPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { language } = useLanguage();
+    const { loading: authLoading, membership, isAuthenticated } = useAuth();
     const text = useMemo(() => copy[language], [language]);
 
     const typeConfig: Record<string, { label: string; icon: any; chip: string }> = {
@@ -210,31 +212,44 @@ export default function NotificationsPage() {
         return new Date(d).toLocaleDateString(text.relative.locale);
     }, [text.relative]);
 
-    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > ("technician");
+    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > (((membership?.role as any) ?? "technician"));
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState < Notification[] > ([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [activeFilter, setActiveFilter] = useState < "all" | "unread" | NotificationType > ("all");
 
+    const syncLayoutUnread = useCallback((count: number) => {
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(new CustomEvent("machina:notifications-updated", { detail: { unreadCount: count } }));
+    }, []);
+
     const loadNotifications = useCallback(async () => {
         const result = await notificationService.getMyNotifications({ limit: 100 });
         setNotifications(result.notifications);
         setUnreadCount(result.unreadCount);
-    }, []);
+        syncLayoutUnread(result.unreadCount);
+    }, [syncLayoutUnread]);
 
     useEffect(() => {
+        if (authLoading) return;
+
+        if (!isAuthenticated) {
+            void router.push("/login");
+            return;
+        }
+
+        setUserRole(((membership?.role as any) ?? "technician"));
+
         const init = async () => {
-            const ctx = await getUserContext();
-            if (!ctx) {
-                router.push("/login");
-                return;
+            try {
+                await loadNotifications();
+            } finally {
+                setLoading(false);
             }
-            setUserRole((ctx.role as any) ?? "technician");
-            await loadNotifications();
-            setLoading(false);
         };
-        init();
-    }, [router, loadNotifications]);
+
+        void init();
+    }, [authLoading, isAuthenticated, loadNotifications, membership?.role, router]);
 
     useEffect(() => {
         let channel: any = null;
@@ -245,20 +260,28 @@ export default function NotificationsPage() {
             if (!user) return;
             channel = notificationService.subscribeToMyNotifications(user.id, (newNotif) => {
                 setNotifications((prev) => [newNotif, ...prev]);
-                setUnreadCount((prev) => prev + 1);
+                setUnreadCount((prev) => {
+                    const next = prev + 1;
+                    syncLayoutUnread(next);
+                    return next;
+                });
             });
         };
         setup();
         return () => {
             if (channel) notificationService.unsubscribe(channel);
         };
-    }, []);
+    }, [syncLayoutUnread]);
 
     const handleClick = async (n: Notification) => {
         if (!n.is_read) {
             await notificationService.markAsRead(n.id);
             setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
-            setUnreadCount((prev) => Math.max(0, prev - 1));
+            setUnreadCount((prev) => {
+                const next = Math.max(0, prev - 1);
+                syncLayoutUnread(next);
+                return next;
+            });
         }
         const route = getEntityRoute(n);
         if (route) router.push(route);
@@ -268,6 +291,7 @@ export default function NotificationsPage() {
         await notificationService.markAllAsRead();
         setNotifications((prev) => prev.map((x) => ({ ...x, is_read: true })));
         setUnreadCount(0);
+        syncLayoutUnread(0);
         toast({ title: text.toastAllRead });
     };
 
@@ -276,7 +300,13 @@ export default function NotificationsPage() {
         const current = notifications.find((x) => x.id === id);
         await notificationService.deleteNotification(id);
         setNotifications((prev) => prev.filter((x) => x.id !== id));
-        if (current && !current.is_read) setUnreadCount((prev) => Math.max(0, prev - 1));
+        if (current && !current.is_read) {
+            setUnreadCount((prev) => {
+                const next = Math.max(0, prev - 1);
+                syncLayoutUnread(next);
+                return next;
+            });
+        }
     };
 
     const handleDeleteAllRead = async () => {
@@ -300,7 +330,16 @@ export default function NotificationsPage() {
         { key: "system", label: text.filters.system },
     ];
 
-    if (loading) return null;
+    if (loading || authLoading) {
+        return (
+            <MainLayout userRole={userRole}>
+                <PageLoader
+                    title={text.pageTitle}
+                    description={language === "it" ? "Stiamo caricando il centro notifiche operativo." : "Loading your notification center."}
+                />
+            </MainLayout>
+        );
+    }
 
     return (
         <MainLayout userRole={userRole}>
