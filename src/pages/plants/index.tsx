@@ -1,12 +1,11 @@
-// src/pages/plants/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Building2, ArrowRight, Plus, GitBranch, Save, X } from "lucide-react";
 
 interface PlantRow {
@@ -34,9 +33,7 @@ function CardShell({
 
 export default function PlantsPage() {
     const { t } = useLanguage();
-
-    const [userRole, setUserRole] = useState("technician");
-    const [orgId, setOrgId] = useState < string | null > (null);
+    const { loading: authLoading, organization, membership, canManagePlants } = useAuth();
 
     const [plants, setPlants] = useState < PlantRow[] > ([]);
     const [lines, setLines] = useState < LineRow[] > ([]);
@@ -53,27 +50,29 @@ export default function PlantsPage() {
     const [lineCode, setLineCode] = useState("");
     const [linePlantId, setLinePlantId] = useState("");
 
-    const canManage = userRole === "admin" || userRole === "supervisor";
+    const userRole = membership?.role ?? "technician";
+    const orgId = organization?.id ?? null;
 
     const loadData = async () => {
-        try {
-            const ctx = await getUserContext();
-            if (!ctx?.orgId) return;
+        if (!orgId) {
+            setLoading(false);
+            return;
+        }
 
-            setOrgId(ctx.orgId);
-            setUserRole(ctx.role ?? "technician");
+        try {
+            setLoading(true);
 
             const [plantsRes, linesRes] = await Promise.all([
                 supabase
                     .from("plants")
                     .select("id, name, code")
-                    .eq("organization_id", ctx.orgId)
+                    .eq("organization_id", orgId)
                     .eq("is_archived", false)
                     .order("name", { ascending: true }),
                 supabase
                     .from("production_lines")
                     .select("id, name, code, plant_id")
-                    .eq("organization_id", ctx.orgId)
+                    .eq("organization_id", orgId)
                     .eq("is_archived", false)
                     .order("name", { ascending: true }),
             ]);
@@ -91,24 +90,48 @@ export default function PlantsPage() {
     };
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (authLoading) return;
+        void loadData();
+    }, [authLoading, orgId]);
 
     const linesByPlant = useMemo(() => {
         const map = new Map < string, LineRow[]> ();
         for (const line of lines) {
-            const key = line.plant_id ?? "unassigned";
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(line);
+            const plantId = line.plant_id ?? "";
+            if (!map.has(plantId)) map.set(plantId, []);
+            map.get(plantId)!.push(line);
         }
         return map;
     }, [lines]);
 
+    const stats = useMemo(() => {
+        return {
+            plants: plants.length,
+            lines: lines.length,
+            avgLinesPerPlant:
+                plants.length > 0 ? Math.round((lines.length / plants.length) * 10) / 10 : 0,
+        };
+    }, [plants, lines]);
+
+    const resetPlantForm = () => {
+        setPlantName("");
+        setPlantCode("");
+        setShowPlantForm(false);
+    };
+
+    const resetLineForm = () => {
+        setLineName("");
+        setLineCode("");
+        setLinePlantId("");
+        setShowLineForm(false);
+    };
+
     const handleCreatePlant = async () => {
         if (!orgId || !plantName.trim()) return;
 
-        setSavingPlant(true);
         try {
+            setSavingPlant(true);
+
             const { error } = await supabase.from("plants").insert({
                 organization_id: orgId,
                 name: plantName.trim(),
@@ -118,9 +141,7 @@ export default function PlantsPage() {
 
             if (error) throw error;
 
-            setPlantName("");
-            setPlantCode("");
-            setShowPlantForm(false);
+            resetPlantForm();
             await loadData();
         } catch (error) {
             console.error("Create plant error:", error);
@@ -132,8 +153,9 @@ export default function PlantsPage() {
     const handleCreateLine = async () => {
         if (!orgId || !lineName.trim() || !linePlantId) return;
 
-        setSavingLine(true);
         try {
+            setSavingLine(true);
+
             const { error } = await supabase.from("production_lines").insert({
                 organization_id: orgId,
                 plant_id: linePlantId,
@@ -144,13 +166,10 @@ export default function PlantsPage() {
 
             if (error) throw error;
 
-            setLineName("");
-            setLineCode("");
-            setLinePlantId("");
-            setShowLineForm(false);
+            resetLineForm();
             await loadData();
         } catch (error) {
-            console.error("Create production line error:", error);
+            console.error("Create line error:", error);
         } finally {
             setSavingLine(false);
         }
@@ -173,27 +192,21 @@ export default function PlantsPage() {
                                 </p>
                             </div>
 
-                            {canManage && (
+                            {canManagePlants && (
                                 <div className="flex flex-wrap gap-3">
                                     <button
-                                        onClick={() => {
-                                            setShowPlantForm((v) => !v);
-                                            setShowLineForm(false);
-                                        }}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
                                         type="button"
+                                        onClick={() => setShowPlantForm((prev) => !prev)}
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
                                     >
                                         <Plus className="h-4 w-4" />
                                         {t("plants.newPlant")}
                                     </button>
 
                                     <button
-                                        onClick={() => {
-                                            setShowLineForm((v) => !v);
-                                            setShowPlantForm(false);
-                                        }}
-                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-muted"
                                         type="button"
+                                        onClick={() => setShowLineForm((prev) => !prev)}
+                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-muted"
                                     >
                                         <GitBranch className="h-4 w-4" />
                                         {t("plants.newLine")}
@@ -208,10 +221,10 @@ export default function PlantsPage() {
                                     <Building2 className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">
-                                    {plants.length}
+                                    {stats.plants}
                                 </div>
                                 <div className="mt-2 text-[22px] font-medium text-muted-foreground">
-                                    {t("plants.kpi.activePlants")}
+                                    {t("plants.totalPlants")}
                                 </div>
                             </CardShell>
 
@@ -220,148 +233,146 @@ export default function PlantsPage() {
                                     <GitBranch className="h-5 w-5" />
                                 </div>
                                 <div className="text-5xl font-bold leading-none text-foreground">
-                                    {lines.length}
+                                    {stats.lines}
                                 </div>
                                 <div className="mt-2 text-[22px] font-medium text-muted-foreground">
-                                    {t("plants.kpi.activeLines")}
+                                    {t("plants.totalLines")}
+                                </div>
+                            </CardShell>
+
+                            <CardShell className="p-6">
+                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-300">
+                                    <GitBranch className="h-5 w-5" />
+                                </div>
+                                <div className="text-5xl font-bold leading-none text-foreground">
+                                    {stats.avgLinesPerPlant}
+                                </div>
+                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    {t("plants.avgLinesPerPlant")}
                                 </div>
                             </CardShell>
                         </div>
 
-                        {canManage && showPlantForm && (
-                            <CardShell className="p-6">
-                                <div className="mb-5 flex items-center justify-between gap-4">
-                                    <div>
-                                        <div className="text-2xl font-bold text-foreground">
-                                            {t("plants.form.plant.title")}
-                                        </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            {t("plants.form.plant.subtitle")}
-                                        </div>
+                        {canManagePlants && showPlantForm && (
+                            <CardShell className="p-5">
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h2 className="text-2xl font-bold text-foreground">
+                                            {t("plants.newPlant")}
+                                        </h2>
+                                        <button
+                                            type="button"
+                                            onClick={resetPlantForm}
+                                            className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => setShowPlantForm(false)}
-                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                        type="button"
-                                    >
-                                        <X className="h-5 w-5" />
-                                    </button>
-                                </div>
 
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">
-                                            {t("plants.form.plant.name")} *
-                                        </label>
+                                    <div className="grid gap-4 md:grid-cols-2">
                                         <input
                                             value={plantName}
                                             onChange={(e) => setPlantName(e.target.value)}
-                                            placeholder={t("plants.form.plant.namePlaceholder")}
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.plantName")}
+                                            className="h-12 rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">
-                                            {t("plants.form.code")}
-                                        </label>
                                         <input
                                             value={plantCode}
                                             onChange={(e) => setPlantCode(e.target.value)}
-                                            placeholder={t("plants.form.plant.codePlaceholder")}
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.plantCode")}
+                                            className="h-12 rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
-                                </div>
 
-                                <div className="mt-5 flex justify-end">
-                                    <button
-                                        onClick={handleCreatePlant}
-                                        disabled={!plantName.trim() || savingPlant}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                                        type="button"
-                                    >
-                                        <Save className="h-4 w-4" />
-                                        {savingPlant ? t("plants.saving") : t("plants.savePlant")}
-                                    </button>
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleCreatePlant}
+                                            disabled={savingPlant || !plantName.trim()}
+                                            className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            <Save className="h-4 w-4" />
+                                            {savingPlant ? t("common.saving") : t("common.save")}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={resetPlantForm}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-muted"
+                                        >
+                                            <X className="h-4 w-4" />
+                                            {t("common.cancel")}
+                                        </button>
+                                    </div>
                                 </div>
                             </CardShell>
                         )}
 
-                        {canManage && showLineForm && (
-                            <CardShell className="p-6">
-                                <div className="mb-5 flex items-center justify-between gap-4">
-                                    <div>
-                                        <div className="text-2xl font-bold text-foreground">
-                                            {t("plants.form.line.title")}
-                                        </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            {t("plants.form.line.subtitle")}
-                                        </div>
+                        {canManagePlants && showLineForm && (
+                            <CardShell className="p-5">
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h2 className="text-2xl font-bold text-foreground">
+                                            {t("plants.newLine")}
+                                        </h2>
+                                        <button
+                                            type="button"
+                                            onClick={resetLineForm}
+                                            className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => setShowLineForm(false)}
-                                        className="rounded-2xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                        type="button"
-                                    >
-                                        <X className="h-5 w-5" />
-                                    </button>
-                                </div>
 
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">
-                                            {t("plants.form.line.plant")} *
-                                        </label>
+                                    <div className="grid gap-4 md:grid-cols-3">
                                         <select
                                             value={linePlantId}
                                             onChange={(e) => setLinePlantId(e.target.value)}
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none"
+                                            className="h-12 rounded-2xl border border-border bg-background px-4 text-foreground outline-none"
                                         >
-                                            <option value="">{t("plants.form.line.selectPlant")}</option>
+                                            <option value="">{t("plants.selectPlant")}</option>
                                             {plants.map((plant) => (
                                                 <option key={plant.id} value={plant.id}>
-                                                    {plant.name ?? plant.code ?? t("plants.fallbackPlant")}
+                                                    {plant.name ?? plant.code ?? plant.id}
                                                 </option>
                                             ))}
                                         </select>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">
-                                            {t("plants.form.line.name")} *
-                                        </label>
                                         <input
                                             value={lineName}
                                             onChange={(e) => setLineName(e.target.value)}
-                                            placeholder={t("plants.form.line.namePlaceholder")}
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.lineName")}
+                                            className="h-12 rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-muted-foreground">
-                                            {t("plants.form.code")}
-                                        </label>
                                         <input
                                             value={lineCode}
                                             onChange={(e) => setLineCode(e.target.value)}
-                                            placeholder={t("plants.form.line.codePlaceholder")}
-                                            className="h-12 w-full rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
+                                            placeholder={t("plants.lineCode")}
+                                            className="h-12 rounded-2xl border border-border bg-background px-4 text-foreground outline-none placeholder:text-muted-foreground"
                                         />
                                     </div>
-                                </div>
 
-                                <div className="mt-5 flex justify-end">
-                                    <button
-                                        onClick={handleCreateLine}
-                                        disabled={!lineName.trim() || !linePlantId || savingLine}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                                        type="button"
-                                    >
-                                        <Save className="h-4 w-4" />
-                                        {savingLine ? t("plants.saving") : t("plants.saveLine")}
-                                    </button>
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleCreateLine}
+                                            disabled={savingLine || !lineName.trim() || !linePlantId}
+                                            className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            <Save className="h-4 w-4" />
+                                            {savingLine ? t("common.saving") : t("common.save")}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={resetLineForm}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-muted"
+                                        >
+                                            <X className="h-4 w-4" />
+                                            {t("common.cancel")}
+                                        </button>
+                                    </div>
                                 </div>
                             </CardShell>
                         )}
@@ -385,7 +396,11 @@ export default function PlantsPage() {
                                         const plantLines = linesByPlant.get(plant.id) ?? [];
 
                                         return (
-                                            <Link key={plant.id} href={`/plants/${plant.id}`} className="block">
+                                            <Link
+                                                key={plant.id}
+                                                href={`/plants/${plant.id}`}
+                                                className="block"
+                                            >
                                                 <CardShell className="p-5 transition hover:translate-y-[-2px]">
                                                     <div className="space-y-4">
                                                         <div className="flex items-center justify-between gap-3">
@@ -395,7 +410,8 @@ export default function PlantsPage() {
                                                                 </div>
                                                                 <div className="min-w-0">
                                                                     <div className="truncate text-xl font-semibold text-foreground">
-                                                                        {plant.name ?? t("plants.fallbackPlant")}
+                                                                        {plant.name ??
+                                                                            t("plants.fallbackPlant")}
                                                                     </div>
                                                                     <div className="text-sm text-muted-foreground">
                                                                         {plant.code ?? "—"}
@@ -422,7 +438,9 @@ export default function PlantsPage() {
                                                                             key={line.id}
                                                                             className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"
                                                                         >
-                                                                            {line.name ?? line.code ?? t("plants.fallbackLine")}
+                                                                            {line.name ??
+                                                                                line.code ??
+                                                                                t("plants.fallbackLine")}
                                                                         </span>
                                                                     ))}
                                                                 </div>
