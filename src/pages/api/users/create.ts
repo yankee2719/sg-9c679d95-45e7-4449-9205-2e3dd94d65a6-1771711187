@@ -1,7 +1,7 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { createClient } from "@supabase/supabase-js";
+import type { NextApiResponse } from "next";
+import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 
-type Role = "admin" | "supervisor" | "technician";
+type Role = "owner" | "admin" | "supervisor" | "technician" | "viewer";
 
 type ApiSuccess = {
     ok: true;
@@ -15,241 +15,90 @@ type ApiError = {
     error: string;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-function getBearerToken(req: NextApiRequest): string | null {
-    const auth = req.headers.authorization;
-    if (!auth) return null;
-    const [type, token] = auth.split(" ");
-    if (type !== "Bearer" || !token) return null;
-    return token;
-}
-
 function isValidRole(value: unknown): value is Role {
-    return value === "admin" || value === "supervisor" || value === "technician";
+    return ["owner", "admin", "supervisor", "technician", "viewer"].includes(String(value));
 }
 
-function getJwtPayload(token: string): Record<string, any> | null {
-    try {
-        const parts = token.split(".");
-        if (parts.length < 2) return null;
-        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-        const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-        const json = Buffer.from(padded, "base64").toString("utf8");
-        return JSON.parse(json);
-    } catch {
-        return null;
-    }
-}
-
-function getAalFromJwt(token: string): "aal1" | "aal2" | null {
-    const payload = getJwtPayload(token);
-    if (!payload) return null;
-
-    if (payload.aal === "aal1" || payload.aal === "aal2") {
-        return payload.aal;
-    }
-
-    if (payload.session_level === "aal1" || payload.session_level === "aal2") {
-        return payload.session_level;
-    }
-
-    if (payload.authenticator_assurance_level === "aal1" || payload.authenticator_assurance_level === "aal2") {
-        return payload.authenticator_assurance_level;
-    }
-
-    return null;
-}
-
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse<ApiSuccess | ApiError>
-) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSuccess | ApiError>) {
     if (req.method !== "POST") {
-        return res.status(405).json({
-            ok: false,
-            error: "Method not allowed",
-        });
+        return res.status(405).json({ ok: false, error: "Method not allowed" });
     }
 
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
-        return res.status(500).json({
-            ok: false,
-            error: "Server configuration missing",
-        });
+    const { email, password, full_name, role, organization_id } = req.body ?? {};
+
+    if (!email || !password || !organization_id || !isValidRole(role)) {
+        return res.status(400).json({ ok: false, error: "Missing or invalid required fields" });
     }
 
-    const token = getBearerToken(req);
-    if (!token) {
-        return res.status(401).json({
-            ok: false,
-            error: "Missing bearer token",
-        });
-    }
-
-    const {
-        email,
-        password,
-        full_name,
-        role,
-        organization_id,
-    } = req.body ?? {};
-
-    if (
-        !email ||
-        !password ||
-        !organization_id ||
-        !isValidRole(role)
-    ) {
-        return res.status(400).json({
-            ok: false,
-            error: "Missing or invalid required fields",
-        });
-    }
-
-    const supabaseUserClient = createClient(supabaseUrl, supabaseAnonKey, {
-        global: {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        },
-        auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-        },
-    });
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-        auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-        },
-    });
-
+    const serviceSupabase = getServiceSupabase();
     let createdUserId: string | null = null;
 
     try {
-        // 1) Verifica utente autenticato
-        const {
-            data: { user },
-            error: getUserError,
-        } = await supabaseUserClient.auth.getUser();
-
-        if (getUserError || !user) {
-            return res.status(401).json({
-                ok: false,
-                error: "Invalid session",
-            });
-        }
-
-        // 2) Verifica ruolo chiamante
-        const { data: membership, error: membershipError } = await supabaseAdmin
+        const { data: actorMembership, error: actorMembershipError } = await serviceSupabase
             .from("organization_memberships")
-            .select("id, role, is_active, organization_id")
+            .select("id, role, organization_id, is_active")
             .eq("organization_id", organization_id)
-            .eq("user_id", user.id)
+            .eq("user_id", req.user.id)
             .eq("is_active", true)
             .maybeSingle();
 
-        if (membershipError) {
-            return res.status(500).json({
-                ok: false,
-                error: membershipError.message,
-            });
+        if (actorMembershipError) {
+            return res.status(500).json({ ok: false, error: actorMembershipError.message });
         }
 
-        if (!membership) {
-            return res.status(403).json({
-                ok: false,
-                error: "You are not an active member of this organization",
-            });
+        if (!actorMembership || !["owner", "admin"].includes(actorMembership.role)) {
+            return res.status(403).json({ ok: false, error: "Only organization admins can create users" });
         }
 
-        if (membership.role !== "admin") {
-            return res.status(403).json({
-                ok: false,
-                error: "Only admins can create users",
-            });
-        }
+        const normalizedEmail = String(email).trim().toLowerCase();
 
-        // 3) Verifica MFA / AAL2 per admin
-        const aal = getAalFromJwt(token);
-
-        if (aal !== "aal2") {
-            return res.status(403).json({
-                ok: false,
-                error: "AAL2 required. Complete MFA verification before creating users.",
-            });
-        }
-
-        // 4) Verifica che organization esista
-        const { data: org, error: orgError } = await supabaseAdmin
-            .from("organizations")
-            .select("id, name")
-            .eq("id", organization_id)
-            .single();
-
-        if (orgError || !org) {
-            return res.status(400).json({
-                ok: false,
-                error: "Organization not found",
-            });
-        }
-
-        // 5) Crea utente auth
-        const { data: createdAuthUser, error: createUserError } =
-            await supabaseAdmin.auth.admin.createUser({
-                email: String(email).trim().toLowerCase(),
-                password: String(password),
-                email_confirm: true,
-                user_metadata: {
-                    full_name: full_name ? String(full_name).trim() : null,
-                },
-            });
+        const { data: createdAuthUser, error: createUserError } = await serviceSupabase.auth.admin.createUser({
+            email: normalizedEmail,
+            password: String(password),
+            email_confirm: true,
+            user_metadata: {
+                full_name: full_name ? String(full_name).trim() : null,
+                display_name: full_name ? String(full_name).trim() : null,
+            },
+        });
 
         if (createUserError || !createdAuthUser.user) {
-            return res.status(400).json({
-                ok: false,
-                error: createUserError?.message ?? "User creation failed",
-            });
+            return res.status(400).json({ ok: false, error: createUserError?.message ?? "User creation failed" });
         }
 
         createdUserId = createdAuthUser.user.id;
 
-        // 6) Aggiorna profilo se esiste già trigger automatico profiles
-        // Se il trigger crea profiles automaticamente, questo update va bene.
-        // Se non esiste il profilo, questa query potrebbe non trovare righe: non è grave.
-        const { error: profileError } = await supabaseAdmin
+        const displayName = full_name ? String(full_name).trim() : null;
+        const nameParts = displayName ? displayName.split(" ").filter(Boolean) : [];
+        const firstName = nameParts.length > 0 ? nameParts[0] : null;
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : null;
+
+        await serviceSupabase
             .from("profiles")
-            .update({
-                display_name: full_name ? String(full_name).trim() : null,
-            })
-            .eq("id", createdUserId);
+            .upsert({
+                id: createdUserId,
+                email: normalizedEmail,
+                display_name: displayName,
+                first_name: firstName,
+                last_name: lastName,
+                default_organization_id: organization_id,
+            } as any, { onConflict: "id" });
 
-        if (profileError) {
-            console.warn("Profile update warning:", profileError.message);
-        }
-
-        // 7) Crea membership
-        const { data: insertedMembership, error: insertMembershipError } =
-            await supabaseAdmin
-                .from("organization_memberships")
-                .insert({
-                    organization_id,
-                    user_id: createdUserId,
-                    role,
-                    is_active: true,
-                    accepted_at: new Date().toISOString(),
-                })
-                .select("id")
-                .single();
+        const { data: insertedMembership, error: insertMembershipError } = await serviceSupabase
+            .from("organization_memberships")
+            .insert({
+                organization_id,
+                user_id: createdUserId,
+                role,
+                is_active: true,
+                accepted_at: new Date().toISOString(),
+                invited_by: req.user.id,
+            } as any)
+            .select("id")
+            .single();
 
         if (insertMembershipError || !insertedMembership) {
-            // rollback auth user
-            await supabaseAdmin.auth.admin.deleteUser(createdUserId);
-
+            await serviceSupabase.auth.admin.deleteUser(createdUserId);
             return res.status(500).json({
                 ok: false,
                 error: insertMembershipError?.message ?? "Membership creation failed",
@@ -260,14 +109,14 @@ export default async function handler(
             ok: true,
             user_id: createdUserId,
             membership_id: insertedMembership.id,
-            email: String(email).trim().toLowerCase(),
+            email: normalizedEmail,
         });
     } catch (error: any) {
         console.error("API /users/create error:", error);
 
         if (createdUserId) {
             try {
-                await supabaseAdmin.auth.admin.deleteUser(createdUserId);
+                await serviceSupabase.auth.admin.deleteUser(createdUserId);
             } catch (rollbackError) {
                 console.error("Rollback deleteUser error:", rollbackError);
             }
@@ -279,3 +128,5 @@ export default async function handler(
         });
     }
 }
+
+export default withAuth(["owner", "admin"], handler, { requireAal2: true });
