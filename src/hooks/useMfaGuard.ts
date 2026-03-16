@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { mfaService, type AuthenticatorLevel } from "@/services/mfaService";
 
 export function useMfaGuard() {
-    const { loading: authLoading, membership, isPlatformAdmin, isAuthenticated } = useAuth();
+    const {
+        loading: authLoading,
+        membership,
+        isPlatformAdmin,
+        isAuthenticated,
+        shouldEnforceMfa,
+    } = useAuth();
+
     const [loading, setLoading] = useState(true);
     const [aal, setAal] = useState < AuthenticatorLevel > (null);
     const [hasAuthenticator, setHasAuthenticator] = useState(false);
@@ -44,14 +51,10 @@ export function useMfaGuard() {
         };
     }, [authLoading, isAuthenticated]);
 
-    const userRole = membership?.role ?? null;
-
-    const isPrivilegedRole = useMemo(() => {
-        return ["owner", "admin", "supervisor"].includes(userRole ?? "") || isPlatformAdmin;
-    }, [isPlatformAdmin, userRole]);
-
+    const userRole = (membership?.role as string | null) ?? null;
     const isAal2 = aal === "aal2";
-    const mustEnforceMfa = isPrivilegedRole;
+    const mustEnforceMfa = shouldEnforceMfa;
+    const needsEnrollment = mustEnforceMfa && !hasAuthenticator;
     const needsMfa = mustEnforceMfa && !isAal2;
 
     return {
@@ -59,9 +62,10 @@ export function useMfaGuard() {
         aal,
         isAal2,
         userRole,
-        isPrivilegedRole,
+        isPrivilegedRole: mustEnforceMfa || isPlatformAdmin,
         hasAuthenticator,
         mustEnforceMfa,
+        needsEnrollment,
         needsMfa,
     };
 }
