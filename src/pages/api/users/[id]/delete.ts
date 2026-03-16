@@ -19,9 +19,25 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const serviceSupabase = getServiceSupabase();
 
+        const { data: actorMembership, error: actorMembershipError } = await serviceSupabase
+            .from("organization_memberships")
+            .select("id, role, organization_id")
+            .eq("organization_id", req.user.organizationId)
+            .eq("user_id", req.user.id)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (actorMembershipError) {
+            return res.status(500).json({ error: actorMembershipError.message });
+        }
+
+        if (!actorMembership || !["owner", "admin"].includes(actorMembership.role)) {
+            return res.status(403).json({ error: "Only organization admins can remove users" });
+        }
+
         let { data: targetMembership, error: membershipError } = await serviceSupabase
             .from("organization_memberships")
-            .select("id, user_id, organization_id")
+            .select("id, user_id, organization_id, role")
             .eq("id", id)
             .eq("organization_id", req.user.organizationId)
             .maybeSingle();
@@ -33,7 +49,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         if (!targetMembership) {
             const fallback = await serviceSupabase
                 .from("organization_memberships")
-                .select("id, user_id, organization_id")
+                .select("id, user_id, organization_id, role")
                 .eq("user_id", id)
                 .eq("organization_id", req.user.organizationId)
                 .maybeSingle();
@@ -64,6 +80,24 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             console.error("Error deleting membership:", deleteError);
             return res.status(500).json({ error: "Failed to remove user from organization" });
         }
+
+        await serviceSupabase
+            .from("audit_logs")
+            .insert({
+                organization_id: req.user.organizationId,
+                actor_user_id: req.user.id,
+                entity_type: "user_membership",
+                entity_id: targetMembership.id,
+                action: "delete",
+                metadata: {
+                    target_user_id: targetMembership.user_id,
+                    target_role: targetMembership.role,
+                },
+            } as any)
+            .then(() => undefined)
+            .catch((err) => {
+                console.error("Audit log insert failed:", err);
+            });
 
         return res.status(200).json({
             message: "User removed from organization successfully",
