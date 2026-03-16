@@ -1,14 +1,16 @@
-import { RouteRedirectNotice } from "@/components/feedback/RouteRedirectNotice";
+import { useEffect } from "react";
+import { useRouter } from "next/router";
+import { useAuth } from "@/hooks/useAuth";
+import { PageLoader } from "@/components/feedback/PageLoader";
 
-export default function FilesIndexRedirect() {
-    return (
-        <RouteRedirectNotice
-            to="/documents"
-            title="Archivio documentale"
-            description="Il vecchio namespace file è stato unificato nel modulo documenti. Ti stiamo portando alla libreria aggiornata."
-            targetLabel="/documents"
-            withLayout
-            seoTitle="Documenti - MACHINA"
-        />
-    );
+export default function HomeRedirectPage() {
+    const router = useRouter();
+    const { loading, isAuthenticated } = useAuth();
+
+    useEffect(() => {
+        if (loading) return;
+        void router.replace(isAuthenticated ? "/dashboard" : "/login");
+    }, [isAuthenticated, loading, router]);
+
+    return <PageLoader title="MACHINA" description="Preparing your workspace and redirecting you to the correct entry point." fullscreen />;
 }
