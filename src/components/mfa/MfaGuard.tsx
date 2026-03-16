@@ -1,10 +1,22 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, LogOut, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+    Loader2,
+    LogOut,
+    RefreshCw,
+    ShieldAlert,
+    ShieldCheck,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { mfaService } from "@/services/mfaService";
 import { MfaChallenge } from "./MfaChallenge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,7 +30,8 @@ type GuardState =
     | { status: "idle" | "loading" }
     | { status: "allow" }
     | { status: "needs-enrollment" }
-    | { status: "needs-verification" };
+    | { status: "needs-verification" }
+    | { status: "error"; message: string };
 
 export function MfaGuard({
     children,
@@ -31,7 +44,8 @@ export function MfaGuard({
         shouldEnforceMfa,
     } = useAuth();
 
-    const [guardState, setGuardState] = useState<GuardState>({ status: "idle" });
+    const [guardState, setGuardState] = useState < GuardState > ({ status: "idle" });
+    const [retryKey, setRetryKey] = useState(0);
 
     const isExcluded = useMemo(
         () => excludePaths.some((path) => currentPath.startsWith(path)),
@@ -51,6 +65,7 @@ export function MfaGuard({
             }
 
             try {
+                if (!mounted) return;
                 setGuardState({ status: "loading" });
 
                 const status = await mfaService.getStatus();
@@ -73,25 +88,46 @@ export function MfaGuard({
 
                 if (!mounted) return;
 
-                // Fail-open qui è voluto per non bloccare tutta l'app
-                // in caso di errore temporaneo lato check MFA.
-                setGuardState({ status: "allow" });
+                setGuardState({
+                    status: "error",
+                    message:
+                        error instanceof Error
+                            ? error.message
+                            : "Impossibile verificare lo stato MFA.",
+                });
             }
         };
 
         setGuardState({ status: "idle" });
-        check();
+        void check();
 
         return () => {
             mounted = false;
         };
-    }, [authLoading, isAuthenticated, isExcluded, shouldEnforceMfa, currentPath]);
+    }, [
+        authLoading,
+        isAuthenticated,
+        isExcluded,
+        shouldEnforceMfa,
+        currentPath,
+        retryKey,
+    ]);
 
-    const handleSignOut = async () => {
+    const handleSignOut = useCallback(async () => {
         await supabase.auth.signOut();
-    };
+    }, []);
 
-    if (authLoading || (isAuthenticated && !isExcluded && shouldEnforceMfa && (guardState.status === "idle" || guardState.status === "loading"))) {
+    const handleRetry = useCallback(() => {
+        setRetryKey((prev) => prev + 1);
+    }, []);
+
+    if (
+        authLoading ||
+        (isAuthenticated &&
+            !isExcluded &&
+            shouldEnforceMfa &&
+            (guardState.status === "idle" || guardState.status === "loading"))
+    ) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -145,12 +181,58 @@ export function MfaGuard({
         );
     }
 
-    if (guardState.status === "needs-verification" && isAuthenticated && !isExcluded && shouldEnforceMfa) {
+    if (
+        guardState.status === "needs-verification" &&
+        isAuthenticated &&
+        !isExcluded &&
+        shouldEnforceMfa
+    ) {
         return (
             <MfaChallenge
                 onVerified={() => setGuardState({ status: "allow" })}
-                onCancel={() => setGuardState({ status: "allow" })}
             />
+        );
+    }
+
+    if (guardState.status === "error") {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+                <Card className="w-full max-w-md">
+                    <CardHeader className="text-center">
+                        <div className="flex justify-center mb-4">
+                            <div className="rounded-full bg-destructive/10 p-4">
+                                <ShieldAlert className="h-8 w-8 text-destructive" />
+                            </div>
+                        </div>
+                        <CardTitle>Verifica MFA non disponibile</CardTitle>
+                        <CardDescription>
+                            Non è stato possibile verificare lo stato della 2FA.
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4">
+                        <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+                            {guardState.message}
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <Button onClick={handleRetry} className="w-full">
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Riprova
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                onClick={handleSignOut}
+                                className="w-full"
+                            >
+                                <LogOut className="h-4 w-4 mr-2" />
+                                Esci
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         );
     }
 
