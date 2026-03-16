@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,11 +24,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Wrench, User, CalendarDays } from "lucide-react";
 import { PageLoader } from "@/components/feedback/PageLoader";
 
 type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
-type WorkStatus = "draft" | "scheduled" | "in_progress" | "pending_review" | "completed" | "cancelled";
+type WorkStatus =
+    | "draft"
+    | "scheduled"
+    | "in_progress"
+    | "pending_review"
+    | "completed"
+    | "cancelled";
 type WorkPriority = "low" | "medium" | "high" | "critical";
 
 type MachineRow = {
@@ -46,12 +60,11 @@ function formatName(profile: ProfileRow) {
 export default function WorkOrderCreatePage() {
     const router = useRouter();
     const { toast } = useToast();
+    const { loading: authLoading, organization, membership, user } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [role, setRole] = useState < string > ("technician");
-    const [orgId, setOrgId] = useState < string | null > (null);
     const [machines, setMachines] = useState < MachineRow[] > ([]);
     const [assignees, setAssignees] = useState < ProfileRow[] > ([]);
 
@@ -78,7 +91,10 @@ export default function WorkOrderCreatePage() {
     const [machineId, setMachineId] = useState < string > (preselectedMachineId ?? "none");
     const [assignedTo, setAssignedTo] = useState < string > ("none");
 
-    const canCreate = role === "admin" || role === "supervisor";
+    const orgId = organization?.id ?? null;
+    const orgType = organization?.type ?? null;
+    const role = membership?.role ?? "technician";
+    const canCreate = role === "owner" || role === "admin" || role === "supervisor";
 
     useEffect(() => {
         setWorkType(workTypeFromQuery);
@@ -91,55 +107,101 @@ export default function WorkOrderCreatePage() {
     }, [preselectedMachineId]);
 
     useEffect(() => {
+        let active = true;
+
         const load = async () => {
-            setLoading(true);
+            if (authLoading) return;
+
+            if (!orgId) {
+                if (active) setLoading(false);
+                return;
+            }
+
             try {
-                const ctx = await getUserContext();
-                if (!ctx) {
-                    router.push("/login");
-                    return;
-                }
+                setLoading(true);
 
-                const activeOrgId = ctx.orgId ?? null;
-                if (!activeOrgId) {
-                    throw new Error("Organizzazione attiva non trovata nel contesto utente.");
-                }
+                let machineRows: MachineRow[] = [];
 
-                setRole(ctx.role ?? "technician");
-                setOrgId(activeOrgId);
-
-                const [{ data: machineRows, error: machineErr }, { data: memberships, error: memErr }] = await Promise.all([
-                    supabase
+                if (orgType === "manufacturer") {
+                    const { data, error } = await supabase
                         .from("machines")
                         .select("id, name, internal_code, plant_id")
-                        .eq("organization_id", activeOrgId)
+                        .eq("organization_id", orgId)
                         .eq("is_archived", false)
-                        .order("name", { ascending: true }),
-                    supabase
-                        .from("organization_memberships")
-                        .select("user_id")
-                        .eq("organization_id", activeOrgId)
-                        .eq("is_active", true),
-                ]);
+                        .order("name", { ascending: true });
 
-                if (machineErr) throw machineErr;
+                    if (error) throw error;
+                    machineRows = (data ?? []) as MachineRow[];
+                } else {
+                    const [ownedMachinesRes, assignmentsRes] = await Promise.all([
+                        supabase
+                            .from("machines")
+                            .select("id, name, internal_code, plant_id")
+                            .eq("organization_id", orgId)
+                            .eq("is_archived", false)
+                            .order("name", { ascending: true }),
+                        supabase
+                            .from("machine_assignments")
+                            .select("machine_id")
+                            .eq("customer_org_id", orgId)
+                            .eq("is_active", true),
+                    ]);
+
+                    if (ownedMachinesRes.error) throw ownedMachinesRes.error;
+                    if (assignmentsRes.error) throw assignmentsRes.error;
+
+                    const assignedIds = Array.from(
+                        new Set((assignmentsRes.data ?? []).map((row: any) => row.machine_id).filter(Boolean))
+                    );
+
+                    let assignedMachines: MachineRow[] = [];
+                    if (assignedIds.length > 0) {
+                        const { data, error } = await supabase
+                            .from("machines")
+                            .select("id, name, internal_code, plant_id")
+                            .in("id", assignedIds)
+                            .eq("is_archived", false)
+                            .order("name", { ascending: true });
+
+                        if (error) throw error;
+                        assignedMachines = (data ?? []) as MachineRow[];
+                    }
+
+                    const uniqueMap = new Map < string, MachineRow> ();
+                    for (const row of [...((ownedMachinesRes.data ?? []) as MachineRow[]), ...assignedMachines]) {
+                        uniqueMap.set(row.id, row);
+                    }
+                    machineRows = Array.from(uniqueMap.values());
+                }
+
+                const { data: memberships, error: memErr } = await supabase
+                    .from("organization_memberships")
+                    .select("user_id")
+                    .eq("organization_id", orgId)
+                    .eq("is_active", true);
+
                 if (memErr) throw memErr;
 
-                setMachines((machineRows ?? []) as MachineRow[]);
+                const userIds = Array.from(
+                    new Set((memberships ?? []).map((m: any) => m.user_id).filter(Boolean))
+                );
 
-                const userIds = Array.from(new Set((memberships ?? []).map((m: any) => m.user_id).filter(Boolean)));
+                let profileRows: ProfileRow[] = [];
                 if (userIds.length > 0) {
-                    const { data: profRows, error: profErr } = await supabase
+                    const { data, error } = await supabase
                         .from("profiles")
                         .select("id, display_name, first_name, last_name")
                         .in("id", userIds)
                         .order("display_name", { ascending: true });
 
-                    if (profErr) throw profErr;
-                    setAssignees((profRows ?? []) as ProfileRow[]);
-                } else {
-                    setAssignees([]);
+                    if (error) throw error;
+                    profileRows = (data ?? []) as ProfileRow[];
                 }
+
+                if (!active) return;
+
+                setMachines(machineRows);
+                setAssignees(profileRows);
             } catch (e: any) {
                 console.error(e);
                 toast({
@@ -147,49 +209,70 @@ export default function WorkOrderCreatePage() {
                     description: e?.message ?? "Errore caricamento pagina",
                     variant: "destructive",
                 });
-                router.push("/work-orders");
+                void router.push("/work-orders");
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
 
-        load();
-    }, [router, toast]);
+        void load();
+
+        return () => {
+            active = false;
+        };
+    }, [authLoading, orgId, orgType, router, toast]);
 
     const handleSave = async () => {
         if (!canCreate) {
             toast({
                 title: "Permesso negato",
-                description: "Solo Admin e Supervisor possono creare work order.",
+                description: "Solo Owner, Admin e Supervisor possono creare work order.",
                 variant: "destructive",
             });
             return;
         }
 
         if (!title.trim()) {
-            toast({ title: "Errore", description: "Inserisci il titolo.", variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: "Inserisci il titolo.",
+                variant: "destructive",
+            });
             return;
         }
 
         if (!orgId) {
-            toast({ title: "Errore", description: "Contesto organizzativo non valido.", variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: "Contesto organizzativo non valido.",
+                variant: "destructive",
+            });
             return;
         }
 
         if (machineId === "none") {
             toast({
                 title: "Errore",
-                description: "Seleziona una macchina. Il work order appartiene sempre alla macchina owner del contesto attivo.",
+                description: "Seleziona una macchina.",
                 variant: "destructive",
             });
             return;
         }
 
         const selectedMachine = machines.find((m) => m.id === machineId);
-        if (!selectedMachine?.plant_id) {
+        if (!selectedMachine) {
             toast({
                 title: "Errore",
-                description: "La macchina selezionata non ha uno stabilimento associato (plant_id).",
+                description: "Macchina selezionata non valida.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (!selectedMachine.plant_id) {
+            toast({
+                title: "Errore",
+                description: "La macchina selezionata non ha uno stabilimento associato.",
                 variant: "destructive",
             });
             return;
@@ -197,10 +280,6 @@ export default function WorkOrderCreatePage() {
 
         setSaving(true);
         try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
             const payload: any = {
                 organization_id: orgId,
                 machine_id: selectedMachine.id,
@@ -223,8 +302,12 @@ export default function WorkOrderCreatePage() {
 
             if (error) throw error;
 
-            toast({ title: "OK", description: "Work order creato correttamente." });
-            router.push(`/work-orders/${data.id}`);
+            toast({
+                title: "OK",
+                description: "Work order creato correttamente.",
+            });
+
+            void router.push(`/work-orders/${data.id}`);
         } catch (e: any) {
             console.error(e);
             toast({
@@ -237,133 +320,189 @@ export default function WorkOrderCreatePage() {
         }
     };
 
-    if (loading) {
+    if (authLoading || loading) {
         return (
-            <MainLayout userRole={role as any}>
-                <PageLoader title="Crea Work Order" description="Stiamo preparando il contesto operativo, le macchine e gli assegnatari disponibili." />
-            </MainLayout>
+            <OrgContextGuard>
+                <MainLayout userRole={role as any}>
+                    <SEO title="Crea Work Order - MACHINA" />
+                    <PageLoader
+                        title="Crea Work Order"
+                        description="Stiamo preparando il contesto operativo, le macchine e gli assegnatari disponibili."
+                    />
+                </MainLayout>
+            </OrgContextGuard>
         );
     }
 
     return (
-        <MainLayout userRole={role as any}>
-            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-                <Button variant="ghost" onClick={() => router.back()}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Indietro
-                </Button>
+        <OrgContextGuard>
+            <MainLayout userRole={role as any}>
+                <SEO title="Crea Work Order - MACHINA" />
 
-                <Card className="rounded-2xl border-0 bg-card shadow-sm">
-                    <CardHeader>
-                        <CardTitle>Crea Work Order</CardTitle>
-                        <CardDescription>
-                            Il work order è sempre operativo e appartiene all&apos;organizzazione owner della macchina nel contesto attivo.
-                        </CardDescription>
-                    </CardHeader>
+                <div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
+                    <Button variant="ghost" onClick={() => router.back()}>
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Indietro
+                    </Button>
 
-                    <CardContent className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Titolo *</Label>
-                                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="es. Sostituzione cuscinetto lato motore" />
+                    <Card className="rounded-2xl border-0 bg-card shadow-sm">
+                        <CardHeader>
+                            <CardTitle>Crea Work Order</CardTitle>
+                            <CardDescription>
+                                Il work order appartiene sempre all&apos;organizzazione attiva.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="space-y-6">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label>Titolo *</Label>
+                                    <Input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="es. Sostituzione cuscinetto lato motore"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <Wrench className="h-4 w-4" />
+                                        Macchina *
+                                    </Label>
+                                    <Select value={machineId} onValueChange={setMachineId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Seleziona macchina..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Seleziona macchina</SelectItem>
+                                            {machines.map((machine) => (
+                                                <SelectItem key={machine.id} value={machine.id}>
+                                                    {machine.name}
+                                                    {machine.internal_code ? ` · ${machine.internal_code}` : ""}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <User className="h-4 w-4" />
+                                        Assegna a
+                                    </Label>
+                                    <Select value={assignedTo} onValueChange={setAssignedTo}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Non assegnato" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Non assegnato</SelectItem>
+                                            {assignees.map((profile) => (
+                                                <SelectItem key={profile.id} value={profile.id}>
+                                                    {formatName(profile)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Tipo lavoro</Label>
+                                    <Select
+                                        value={workType}
+                                        onValueChange={(v) => setWorkType(v as WorkType)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="preventive">Preventive</SelectItem>
+                                            <SelectItem value="corrective">Corrective</SelectItem>
+                                            <SelectItem value="predictive">Predictive</SelectItem>
+                                            <SelectItem value="inspection">Inspection</SelectItem>
+                                            <SelectItem value="emergency">Emergency</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Stato</Label>
+                                    <Select
+                                        value={status}
+                                        onValueChange={(v) => setStatus(v as WorkStatus)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="draft">Bozza</SelectItem>
+                                            <SelectItem value="scheduled">Pianificato</SelectItem>
+                                            <SelectItem value="in_progress">In corso</SelectItem>
+                                            <SelectItem value="pending_review">In revisione</SelectItem>
+                                            <SelectItem value="completed">Completato</SelectItem>
+                                            <SelectItem value="cancelled">Annullato</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Priorità</Label>
+                                    <Select
+                                        value={priority}
+                                        onValueChange={(v) => setPriority(v as WorkPriority)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="low">Bassa</SelectItem>
+                                            <SelectItem value="medium">Media</SelectItem>
+                                            <SelectItem value="high">Alta</SelectItem>
+                                            <SelectItem value="critical">Critica</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label className="flex items-center gap-2">
+                                        <CalendarDays className="h-4 w-4" />
+                                        Scadenza
+                                    </Label>
+                                    <Input
+                                        type="datetime-local"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label>Descrizione</Label>
+                                    <Textarea
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        rows={5}
+                                        placeholder="Descrizione intervento, sintomi, note operative..."
+                                    />
+                                </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Macchina *</Label>
-                                <Select value={machineId} onValueChange={setMachineId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleziona macchina..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Seleziona macchina</SelectItem>
-                                        {machines.map((machine) => (
-                                            <SelectItem key={machine.id} value={machine.id}>
-                                                {machine.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex justify-end">
+                                <Button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]"
+                                >
+                                    {saving ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Save className="mr-2 h-4 w-4" />
+                                    )}
+                                    {saving ? "Salvataggio..." : "Salva work order"}
+                                </Button>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label>Assegna a</Label>
-                                <Select value={assignedTo} onValueChange={setAssignedTo}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Non assegnato" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Non assegnato</SelectItem>
-                                        {assignees.map((profile) => (
-                                            <SelectItem key={profile.id} value={profile.id}>
-                                                {formatName(profile)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Tipo lavoro</Label>
-                                <Select value={workType} onValueChange={(v) => setWorkType(v as WorkType)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="preventive">Preventive</SelectItem>
-                                        <SelectItem value="corrective">Corrective</SelectItem>
-                                        <SelectItem value="predictive">Predictive</SelectItem>
-                                        <SelectItem value="inspection">Inspection</SelectItem>
-                                        <SelectItem value="emergency">Emergency</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Stato</Label>
-                                <Select value={status} onValueChange={(v) => setStatus(v as WorkStatus)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="draft">Bozza</SelectItem>
-                                        <SelectItem value="scheduled">Pianificato</SelectItem>
-                                        <SelectItem value="in_progress">In corso</SelectItem>
-                                        <SelectItem value="pending_review">In revisione</SelectItem>
-                                        <SelectItem value="completed">Completato</SelectItem>
-                                        <SelectItem value="cancelled">Annullato</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Priorità</Label>
-                                <Select value={priority} onValueChange={(v) => setPriority(v as WorkPriority)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="low">Bassa</SelectItem>
-                                        <SelectItem value="medium">Media</SelectItem>
-                                        <SelectItem value="high">Alta</SelectItem>
-                                        <SelectItem value="critical">Critica</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Scadenza</Label>
-                                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                            </div>
-
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Descrizione</Label>
-                                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} placeholder="Descrizione intervento, sintomi, note operative..." />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end">
-                            <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
-                                <Save className="w-4 h-4 mr-2" />
-                                {saving ? "Salvataggio..." : "Salva work order"}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </MainLayout>
+                        </CardContent>
+                    </Card>
+                </div>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
