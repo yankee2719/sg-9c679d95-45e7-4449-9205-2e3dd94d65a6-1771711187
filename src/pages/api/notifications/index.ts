@@ -1,29 +1,32 @@
 import type { NextApiResponse } from "next";
-import { withAuth, AuthenticatedRequest, getSupabaseAdmin } from "@/lib/middleware/auth";
-import {
-    sendSuccess,
-    sendError,
-    sendPaginated,
-    ApiError,
-    handleSupabaseError
-} from "@/lib/middleware/errorHandler";
+import { ALL_APP_ROLES, withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+
+function buildNotificationLink(relatedEntityType?: string, relatedEntityId?: string) {
+    if (!relatedEntityType || !relatedEntityId) return null;
+
+    switch (relatedEntityType) {
+        case "work_order":
+            return `/work-orders/${relatedEntityId}`;
+        case "maintenance_plan":
+            return `/maintenance/${relatedEntityId}`;
+        case "machine":
+            return `/equipment/${relatedEntityId}`;
+        case "checklist_execution":
+            return `/checklist/${relatedEntityId}`;
+        default:
+            return null;
+    }
+}
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-    const supabase = getSupabaseAdmin();
+    const supabase = getServiceSupabase();
     const { user } = req;
 
-    // GET - List user's notifications
     if (req.method === "GET") {
         try {
-            const {
-                page = "1",
-                limit = "20",
-                is_read,
-                type
-            } = req.query;
-
-            const pageNum = parseInt(page as string, 10);
-            const limitNum = Math.min(parseInt(limit as string, 10), 100);
+            const { page = "1", limit = "20", is_read, type } = req.query;
+            const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
+            const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
             const offset = (pageNum - 1) * limitNum;
 
             let query = supabase
@@ -39,18 +42,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 query = query.eq("type", type);
             }
 
-            query = query
+            const { data, error, count } = await query
                 .order("created_at", { ascending: false })
                 .range(offset, offset + limitNum - 1);
 
-            const { data, error, count } = await query;
-
             if (error) {
-                throw handleSupabaseError(error);
+                return res.status(500).json({ success: false, error: error.message });
             }
 
-            // Get unread count
-            const { count: unreadCount } = await supabase
+            const unread = await supabase
                 .from("notifications")
                 .select("*", { count: "exact", head: true })
                 .eq("user_id", user.id)
@@ -59,66 +59,72 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(200).json({
                 success: true,
                 data: data || [],
-                unread_count: unreadCount || 0,
+                unread_count: unread.count || 0,
                 pagination: {
                     page: pageNum,
                     limit: limitNum,
                     total: count || 0,
                     totalPages: Math.ceil((count || 0) / limitNum),
-                    hasMore: pageNum < Math.ceil((count || 0) / limitNum)
-                }
+                    hasMore: pageNum < Math.ceil((count || 0) / limitNum),
+                },
             });
-
         } catch (error) {
-            return sendError(res, error as Error);
+            console.error("Notifications GET error:", error);
+            return res.status(500).json({ success: false, error: "Internal server error" });
         }
     }
 
-    // POST - Create notification (admin only or system)
     if (req.method === "POST") {
-        if (user.role !== "admin") {
-            return sendError(res, ApiError.forbidden("Only admins can create notifications"));
+        if (!["owner", "admin", "supervisor"].includes(user.role)) {
+            return res.status(403).json({ success: false, error: "Insufficient permissions" });
         }
 
         try {
-            const {
+            const { user_id, title, message, type = "system", link, related_entity_type, related_entity_id } = req.body ?? {};
+
+            if (!user_id || !title || !message) {
+                return res.status(400).json({ success: false, error: "user_id, title, and message are required" });
+            }
+
+            const payload = {
                 user_id,
                 title,
                 message,
-                type = "info",
-                link
-            } = req.body;
+                type,
+                link: link ?? buildNotificationLink(related_entity_type, related_entity_id),
+                related_entity_type: related_entity_type ?? null,
+                related_entity_id: related_entity_id ?? null,
+                is_read: false,
+                is_email_sent: false,
+                created_at: new Date().toISOString(),
+            };
 
-            if (!user_id || !title || !message) {
-                throw ApiError.badRequest("user_id, title, and message are required");
-            }
+            let insert = await supabase.from("notifications").insert(payload as any).select().single();
 
-            const { data, error } = await supabase
-                .from("notifications")
-                .insert({
+            if (insert.error) {
+                const fallbackPayload = {
                     user_id,
                     title,
                     message,
                     type,
-                    link,
+                    link: payload.link,
                     is_read: false,
-                    created_at: new Date().toISOString()
-                })
-                .select()
-                .single();
-
-            if (error) {
-                throw handleSupabaseError(error);
+                    created_at: payload.created_at,
+                };
+                insert = await supabase.from("notifications").insert(fallbackPayload as any).select().single();
             }
 
-            return sendSuccess(res, data, 201);
+            if (insert.error) {
+                return res.status(500).json({ success: false, error: insert.error.message });
+            }
 
+            return res.status(201).json({ success: true, data: insert.data });
         } catch (error) {
-            return sendError(res, error as Error);
+            console.error("Notifications POST error:", error);
+            return res.status(500).json({ success: false, error: "Internal server error" });
         }
     }
 
-    // PATCH - Mark all as read
     if (req.method === "PATCH") {
         try {
             const { error } = await supabase
@@ -128,17 +134,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 .eq("is_read", false);
 
             if (error) {
-                throw handleSupabaseError(error);
+                return res.status(500).json({ success: false, error: error.message });
             }
 
-            return sendSuccess(res, { message: "All notifications marked as read" });
-
+            return res.status(200).json({ success: true, data: { message: "All notifications marked as read" } });
         } catch (error) {
-            return sendError(res, error as Error);
+            console.error("Notifications PATCH error:", error);
+            return res.status(500).json({ success: false, error: "Internal server error" });
         }
     }
 
-    return sendError(res, ApiError.methodNotAllowed(req.method || ""));
+    return res.status(405).json({ success: false, error: "Method not allowed" });
 }
 
-export default withAuth(handler);
+export default withAuth(ALL_APP_ROLES, handler);
