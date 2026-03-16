@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { getProfileData } from "@/lib/supabaseHelpers";
-import { useMfaGuard } from "@/hooks/useMfaGuard";
 import {
     Select,
     SelectContent,
@@ -35,6 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/useAuth";
 import {
     UserPlus,
     Users,
@@ -43,32 +42,191 @@ import {
     Trash2,
     Search,
     Building2,
-    Shield,
-    ShieldAlert,
     CheckCircle,
     XCircle,
 } from "lucide-react";
 
 interface MemberUser {
     id: string;
-    user_id: string;
+    membership_id: string;
     email: string;
     display_name: string | null;
-    role: "admin" | "supervisor" | "technician";
+    role: "owner" | "admin" | "supervisor" | "technician" | "viewer";
     is_active: boolean;
     accepted_at: string | null;
+    created_at?: string | null;
 }
 
-export default function UsersPage() {
-    const router = useRouter();
-    const { toast } = useToast();
-    const { t, language } = useLanguage();
-    const { loading: mfaLoading, isAal2, needsMfa } = useMfaGuard();
+const copy = {
+    it: {
+        seo: "Utenti - MACHINA",
+        title: "Utenti",
+        subtitle: "Gestisci gli utenti dell’organizzazione attiva.",
+        total: "Utenti totali",
+        active: "Utenti attivi",
+        admins: "Admin e owner",
+        search: "Cerca utente...",
+        orgLabel: "Organizzazione",
+        newUser: "Nuovo utente",
+        loading: "Caricamento utenti...",
+        noResults: "Nessun utente trovato.",
+        createTitle: "Crea utente",
+        createDescription: "Crea un nuovo utente e aggiungilo all’organizzazione attiva.",
+        editTitle: "Modifica utente",
+        editDescription: "Aggiorna ruolo, nome e stato dell’utente.",
+        deleteTitle: "Rimuovi utente",
+        deleteDescription: "Questa operazione rimuove la membership dell’utente dall’organizzazione.",
+        fullName: "Nome completo",
+        email: "Email",
+        password: "Password",
+        role: "Ruolo",
+        status: "Stato",
+        activeStatus: "Attivo",
+        inactiveStatus: "Disattivo",
+        actions: "Azioni",
+        cancel: "Annulla",
+        save: "Salva",
+        create: "Crea",
+        remove: "Rimuovi",
+        confirmRemove: "Confermi la rimozione di questo utente?",
+        created: "Utente creato",
+        updated: "Utente aggiornato",
+        removed: "Utente rimosso",
+        error: "Errore",
+        sessionExpired: "Sessione scaduta",
+        missingData: "Compila email e password",
+        cannotEditSelfRole: "Non puoi cambiare il tuo ruolo o disattivarti.",
+        memberSince: "Abilitato",
+    },
+    en: {
+        seo: "Users - MACHINA",
+        title: "Users",
+        subtitle: "Manage users in the active organization.",
+        total: "Total users",
+        active: "Active users",
+        admins: "Admins and owners",
+        search: "Search user...",
+        orgLabel: "Organization",
+        newUser: "New user",
+        loading: "Loading users...",
+        noResults: "No users found.",
+        createTitle: "Create user",
+        createDescription: "Create a new user and add it to the active organization.",
+        editTitle: "Edit user",
+        editDescription: "Update user role, name and status.",
+        deleteTitle: "Remove user",
+        deleteDescription: "This removes the user's membership from the organization.",
+        fullName: "Full name",
+        email: "Email",
+        password: "Password",
+        role: "Role",
+        status: "Status",
+        activeStatus: "Active",
+        inactiveStatus: "Inactive",
+        actions: "Actions",
+        cancel: "Cancel",
+        save: "Save",
+        create: "Create",
+        remove: "Remove",
+        confirmRemove: "Confirm removal of this user?",
+        created: "User created",
+        updated: "User updated",
+        removed: "User removed",
+        error: "Error",
+        sessionExpired: "Session expired",
+        missingData: "Email and password are required",
+        cannotEditSelfRole: "You cannot change your own role or deactivate yourself.",
+        memberSince: "Enabled",
+    },
+    fr: {
+        seo: "Utilisateurs - MACHINA",
+        title: "Utilisateurs",
+        subtitle: "Gérez les utilisateurs de l’organisation active.",
+        total: "Utilisateurs totaux",
+        active: "Utilisateurs actifs",
+        admins: "Admins et owners",
+        search: "Rechercher un utilisateur...",
+        orgLabel: "Organisation",
+        newUser: "Nouvel utilisateur",
+        loading: "Chargement des utilisateurs...",
+        noResults: "Aucun utilisateur trouvé.",
+        createTitle: "Créer un utilisateur",
+        createDescription: "Créez un nouvel utilisateur et ajoutez-le à l’organisation active.",
+        editTitle: "Modifier l’utilisateur",
+        editDescription: "Mettez à jour le rôle, le nom et l’état.",
+        deleteTitle: "Supprimer l’utilisateur",
+        deleteDescription: "Cette opération supprime l’adhésion de l’utilisateur à l’organisation.",
+        fullName: "Nom complet",
+        email: "Email",
+        password: "Mot de passe",
+        role: "Rôle",
+        status: "Statut",
+        activeStatus: "Actif",
+        inactiveStatus: "Inactif",
+        actions: "Actions",
+        cancel: "Annuler",
+        save: "Enregistrer",
+        create: "Créer",
+        remove: "Supprimer",
+        confirmRemove: "Confirmer la suppression de cet utilisateur ?",
+        created: "Utilisateur créé",
+        updated: "Utilisateur mis à jour",
+        removed: "Utilisateur supprimé",
+        error: "Erreur",
+        sessionExpired: "Session expirée",
+        missingData: "Email et mot de passe requis",
+        cannotEditSelfRole: "Vous ne pouvez pas changer votre propre rôle ni vous désactiver.",
+        memberSince: "Activé",
+    },
+    es: {
+        seo: "Usuarios - MACHINA",
+        title: "Usuarios",
+        subtitle: "Gestiona los usuarios de la organización activa.",
+        total: "Usuarios totales",
+        active: "Usuarios activos",
+        admins: "Admins y owners",
+        search: "Buscar usuario...",
+        orgLabel: "Organización",
+        newUser: "Nuevo usuario",
+        loading: "Cargando usuarios...",
+        noResults: "No se encontraron usuarios.",
+        createTitle: "Crear usuario",
+        createDescription: "Crea un nuevo usuario y añádelo a la organización activa.",
+        editTitle: "Editar usuario",
+        editDescription: "Actualiza rol, nombre y estado del usuario.",
+        deleteTitle: "Eliminar usuario",
+        deleteDescription: "Esta operación elimina la membresía del usuario en la organización.",
+        fullName: "Nombre completo",
+        email: "Email",
+        password: "Contraseña",
+        role: "Rol",
+        status: "Estado",
+        activeStatus: "Activo",
+        inactiveStatus: "Inactivo",
+        actions: "Acciones",
+        cancel: "Cancelar",
+        save: "Guardar",
+        create: "Crear",
+        remove: "Eliminar",
+        confirmRemove: "¿Confirmas la eliminación de este usuario?",
+        created: "Usuario creado",
+        updated: "Usuario actualizado",
+        removed: "Usuario eliminado",
+        error: "Error",
+        sessionExpired: "Sesión expirada",
+        missingData: "Email y contraseña obligatorios",
+        cannotEditSelfRole: "No puedes cambiar tu propio rol ni desactivarte.",
+        memberSince: "Habilitado",
+    },
+} as const;
 
-    const [currentUserRole, setCurrentUserRole] = useState < string | null > (null);
-    const [currentUserId, setCurrentUserId] = useState < string | null > (null);
-    const [currentOrgId, setCurrentOrgId] = useState < string | null > (null);
-    const [currentOrgName, setCurrentOrgName] = useState < string > ("");
+export default function UsersPage() {
+    const { toast } = useToast();
+    const { language } = useLanguage();
+    const text = copy[language];
+    const { organization, membership, session, canManageMembers, loading: authLoading, user } =
+        useAuth();
+
     const [loading, setLoading] = useState(true);
     const [members, setMembers] = useState < MemberUser[] > ([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -79,7 +237,7 @@ export default function UsersPage() {
         email: "",
         password: "",
         full_name: "",
-        role: "technician" as "admin" | "supervisor" | "technician",
+        role: "technician" as MemberUser["role"],
     });
 
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -87,7 +245,7 @@ export default function UsersPage() {
     const [selectedMember, setSelectedMember] = useState < MemberUser | null > (null);
     const [editData, setEditData] = useState({
         display_name: "",
-        role: "technician" as "admin" | "supervisor" | "technician",
+        role: "technician" as MemberUser["role"],
         is_active: true,
     });
 
@@ -95,171 +253,125 @@ export default function UsersPage() {
     const [deleting, setDeleting] = useState(false);
     const [memberToDelete, setMemberToDelete] = useState < MemberUser | null > (null);
 
-    const isAdmin = currentUserRole === "admin";
+    const currentOrgId = organization?.id ?? null;
+    const currentOrgName = organization?.name ?? "";
+    const currentUserRole = membership?.role ?? "technician";
+    const isAdmin = currentUserRole === "admin" || currentUserRole === "owner";
 
-    const mfaCopy = {
-        it: {
-            title: "Verifica 2FA richiesta",
-            description:
-                "Per accedere alla gestione utenti devi completare l’autenticazione a due fattori.",
-            action: "Vai a Sicurezza",
-        },
-        en: {
-            title: "2FA verification required",
-            description:
-                "To access user management you must complete two-factor authentication.",
-            action: "Go to Security",
-        },
-        fr: {
-            title: "Vérification 2FA requise",
-            description:
-                "Pour accéder à la gestion des utilisateurs, vous devez terminer l’authentification à deux facteurs.",
-            action: "Aller à Sécurité",
-        },
-        es: {
-            title: "Verificación 2FA obligatoria",
-            description:
-                "Para acceder a la gestión de usuarios debes completar la autenticación en dos factores.",
-            action: "Ir a Seguridad",
-        },
-    }[language];
-
-    useEffect(() => {
-        const checkAccess = async () => {
-            try {
-                const {
-                    data: { user },
-                } = await supabase.auth.getUser();
-
-                if (!user) {
-                    router.push("/login");
-                    return;
-                }
-
-                const profileData = await getProfileData(user.id);
-                if (!profileData || !["admin", "supervisor"].includes(profileData.role)) {
-                    router.push("/dashboard");
-                    return;
-                }
-
-                setCurrentUserRole(profileData.role);
-                setCurrentUserId(user.id);
-                setCurrentOrgId(profileData.organizationId);
-
-                if (profileData.organizationId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", profileData.organizationId)
-                        .single();
-
-                    if (org) setCurrentOrgName(org.name);
-                }
-
-                await loadMembers(profileData.organizationId);
-            } catch (error) {
-                console.error("Error checking users page access:", error);
-                router.push("/login");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        checkAccess();
-    }, [router]);
-
-    const loadMembers = async (orgId: string | null) => {
-        if (!orgId) return;
-
-        try {
-            const { data, error } = await supabase
-                .from("organization_memberships")
-                .select("id, user_id, role, is_active, accepted_at, profiles!inner(display_name, email)")
-                .eq("organization_id", orgId)
-                .order("accepted_at", { ascending: false });
-
-            if (error) throw error;
-
-            setMembers(
-                (data || []).map((m: any) => ({
-                    id: m.id,
-                    user_id: m.user_id,
-                    email: m.profiles?.email || "",
-                    display_name: m.profiles?.display_name || null,
-                    role: m.role,
-                    is_active: m.is_active,
-                    accepted_at: m.accepted_at,
-                }))
-            );
-        } catch (error) {
-            console.error("Error loading members:", error);
-            toast({
-                variant: "destructive",
-                title: t("users.toast.error"),
-                description: t("users.toast.loadError"),
-            });
-        }
-    };
-
-    const filteredMembers = useMemo(() => {
-        if (!searchQuery.trim()) return members;
-        const q = searchQuery.toLowerCase();
-        return members.filter(
-            (m) =>
-                m.email?.toLowerCase().includes(q) ||
-                m.display_name?.toLowerCase().includes(q) ||
-                m.role?.toLowerCase().includes(q)
-        );
-    }, [members, searchQuery]);
-
-    const handleCreateUser = async () => {
-        if (!isAdmin) {
-            toast({
-                variant: "destructive",
-                title: t("users.toast.permissionDenied"),
-                description: t("users.toast.adminOnlyCreate"),
-            });
+    const loadMembers = async () => {
+        if (!currentOrgId) {
+            setLoading(false);
             return;
         }
 
-        if (!newUserData.email || !newUserData.password || !currentOrgId) {
+        try {
+            setLoading(true);
+
+            const accessToken =
+                session?.access_token ??
+                (
+                    await supabase.auth.getSession()
+                ).data.session?.access_token;
+
+            if (!accessToken) throw new Error(text.sessionExpired);
+
+            const res = await fetch("/api/users/list", {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || text.error);
+
+            setMembers((result.users ?? []) as MemberUser[]);
+        } catch (error: any) {
+            console.error("Error loading members:", error);
             toast({
                 variant: "destructive",
-                title: t("users.toast.missingData"),
-                description: t("users.toast.emailPasswordRequired"),
+                title: text.error,
+                description: error?.message || text.error,
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (authLoading) return;
+        void loadMembers();
+    }, [authLoading, currentOrgId]);
+
+    const filteredMembers = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return members;
+
+        return members.filter((m) => {
+            return (
+                m.email?.toLowerCase().includes(q) ||
+                m.display_name?.toLowerCase().includes(q) ||
+                m.role?.toLowerCase().includes(q)
+            );
+        });
+    }, [members, searchQuery]);
+
+    const stats = useMemo(() => {
+        return {
+            total: members.length,
+            active: members.filter((m) => m.is_active).length,
+            admins: members.filter((m) => m.role === "owner" || m.role === "admin").length,
+        };
+    }, [members]);
+
+    const getAccessToken = async () => {
+        const accessToken =
+            session?.access_token ??
+            (
+                await supabase.auth.getSession()
+            ).data.session?.access_token;
+
+        if (!accessToken) throw new Error(text.sessionExpired);
+        return accessToken;
+    };
+
+    const handleCreateUser = async () => {
+        if (!isAdmin || !currentOrgId) return;
+
+        if (!newUserData.email.trim() || !newUserData.password.trim()) {
+            toast({
+                variant: "destructive",
+                title: text.error,
+                description: text.missingData,
             });
             return;
         }
 
         setCreating(true);
         try {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
-
-            if (!session?.access_token) throw new Error(t("users.toast.sessionExpired"));
+            const accessToken = await getAccessToken();
 
             const res = await fetch("/api/users/create", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({
-                    email: newUserData.email,
+                    email: newUserData.email.trim(),
                     password: newUserData.password,
-                    full_name: newUserData.full_name || undefined,
+                    full_name: newUserData.full_name.trim() || undefined,
                     role: newUserData.role,
                     organization_id: currentOrgId,
                 }),
             });
 
             const result = await res.json();
-            if (!res.ok) throw new Error(result.error || t("users.toast.createFailed"));
+            if (!res.ok) throw new Error(result.error || text.error);
 
             toast({
-                title: t("users.toast.userCreated"),
-                description: newUserData.email,
+                title: text.created,
+                description: newUserData.email.trim(),
             });
 
             setCreateDialogOpen(false);
@@ -270,537 +382,530 @@ export default function UsersPage() {
                 role: "technician",
             });
 
-            await loadMembers(currentOrgId);
-        } catch (error: unknown) {
+            await loadMembers();
+        } catch (error: any) {
             console.error("Error creating user:", error);
             toast({
                 variant: "destructive",
-                title: t("users.toast.error"),
-                description: error instanceof Error ? error.message : t("users.toast.createError"),
+                title: text.error,
+                description: error?.message || text.error,
             });
         } finally {
             setCreating(false);
         }
     };
 
+    const openEditDialog = (member: MemberUser) => {
+        setSelectedMember(member);
+        setEditData({
+            display_name: member.display_name ?? "",
+            role: member.role,
+            is_active: member.is_active,
+        });
+        setEditDialogOpen(true);
+    };
+
     const handleEditMember = async () => {
-        if (!isAdmin || !selectedMember || !currentOrgId) {
-            toast({
-                variant: "destructive",
-                title: t("users.toast.permissionDenied"),
-                description: t("users.toast.adminOnlyEdit"),
-            });
-            return;
+        if (!isAdmin || !selectedMember) return;
+
+        if (selectedMember.id === user?.id) {
+            if (editData.role !== selectedMember.role || !editData.is_active) {
+                toast({
+                    variant: "destructive",
+                    title: text.error,
+                    description: text.cannotEditSelfRole,
+                });
+                return;
+            }
         }
 
         setEditing(true);
         try {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
+            const accessToken = await getAccessToken();
 
-            if (!session?.access_token) throw new Error(t("users.toast.sessionExpired"));
-
-            const res = await fetch(`/api/users/${selectedMember.id}/update`, {
+            const res = await fetch(`/api/users/${selectedMember.membership_id}/update`, {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({
-                    user_id: selectedMember.user_id,
-                    display_name: editData.display_name,
+                    user_id: selectedMember.id,
+                    display_name: editData.display_name.trim(),
                     role: editData.role,
                     is_active: editData.is_active,
                 }),
             });
 
-            const result = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(result.error || t("users.toast.updateError"));
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || text.error);
 
             toast({
-                title: t("users.toast.userUpdated"),
+                title: text.updated,
                 description: selectedMember.email,
             });
 
             setEditDialogOpen(false);
             setSelectedMember(null);
-            await loadMembers(currentOrgId);
-        } catch (error: unknown) {
-            console.error("Error updating member:", error);
+            await loadMembers();
+        } catch (error: any) {
+            console.error("Error updating user:", error);
             toast({
                 variant: "destructive",
-                title: t("users.toast.error"),
-                description: error instanceof Error ? error.message : t("users.toast.updateError"),
+                title: text.error,
+                description: error?.message || text.error,
             });
         } finally {
             setEditing(false);
         }
     };
 
-    const handleDeactivateMember = async () => {
-        if (!isAdmin || !memberToDelete || !currentOrgId) {
-            toast({
-                variant: "destructive",
-                title: t("users.toast.permissionDenied"),
-                description: t("users.toast.adminOnlyDeactivate"),
-            });
-            return;
-        }
+    const openDeleteDialog = (member: MemberUser) => {
+        setMemberToDelete(member);
+        setDeleteDialogOpen(true);
+    };
 
-        if (memberToDelete.user_id === currentUserId) {
-            toast({
-                variant: "destructive",
-                title: t("users.toast.operationNotAllowed"),
-                description: t("users.toast.cannotDeactivateSelf"),
-            });
-            return;
-        }
+    const handleDeleteMember = async () => {
+        if (!isAdmin || !memberToDelete) return;
 
         setDeleting(true);
         try {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
+            const accessToken = await getAccessToken();
 
-            if (!session?.access_token) throw new Error(t("users.toast.sessionExpired"));
-
-            const res = await fetch("/api/users/deactivate", {
-                method: "POST",
+            const res = await fetch(`/api/users/${memberToDelete.membership_id}/delete`, {
+                method: "DELETE",
                 headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${accessToken}`,
                 },
-                body: JSON.stringify({
-                    membership_id: memberToDelete.id,
-                    organization_id: currentOrgId,
-                }),
             });
 
-            const result = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(result.error || t("users.toast.deactivateError"));
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || text.error);
 
             toast({
-                title: t("users.toast.userDeactivated"),
+                title: text.removed,
                 description: memberToDelete.email,
             });
 
             setDeleteDialogOpen(false);
             setMemberToDelete(null);
-            await loadMembers(currentOrgId);
-        } catch (error: unknown) {
-            console.error("Error deactivating member:", error);
+            await loadMembers();
+        } catch (error: any) {
+            console.error("Error deleting user:", error);
             toast({
                 variant: "destructive",
-                title: t("users.toast.error"),
-                description: error instanceof Error ? error.message : t("users.toast.deactivateError"),
+                title: text.error,
+                description: error?.message || text.error,
             });
         } finally {
             setDeleting(false);
         }
     };
 
-    const getRoleBadge = (role: string) => {
-        const config: Record<string, { label: string; className: string }> = {
-            admin: {
-                label: t("users.role.admin"),
-                className:
-                    "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30",
-            },
-            supervisor: {
-                label: t("users.role.supervisor"),
-                className:
-                    "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30",
-            },
-            technician: {
-                label: t("users.role.technician"),
-                className:
-                    "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30",
-            },
+    const roleBadge = (role: MemberUser["role"]) => {
+        const classes: Record<MemberUser["role"], string> = {
+            owner: "bg-red-500/15 text-red-300 border-red-500/30",
+            admin: "bg-orange-500/15 text-orange-300 border-orange-500/30",
+            supervisor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+            technician: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+            viewer: "bg-slate-500/15 text-slate-300 border-slate-500/30",
         };
 
-        const entry = config[role] || { label: role, className: "" };
-        return <Badge className={entry.className}>{entry.label}</Badge>;
+        return (
+            <Badge className={`border ${classes[role] ?? classes.viewer}`}>
+                {role}
+            </Badge>
+        );
     };
 
-    if (loading || mfaLoading) {
-        return (
-            <MainLayout userRole={currentUserRole ?? "technician"}>
-                <div className="flex min-h-[60vh] items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            </MainLayout>
-        );
-    }
-
-    if (needsMfa && !isAal2) {
-        return (
-            <MainLayout userRole={currentUserRole ?? "technician"}>
-                <SEO title={`${t("users.title")} - MACHINA`} />
-                <div className="container mx-auto max-w-2xl py-10">
-                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
-                        <div className="flex items-start gap-3">
-                            <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-500" />
-                            <div className="space-y-3">
-                                <div className="text-lg font-semibold">{mfaCopy.title}</div>
-                                <div className="text-sm text-muted-foreground">
-                                    {mfaCopy.description}
-                                </div>
-                                <Button onClick={() => router.push("/settings/security")}>
-                                    {mfaCopy.action}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </MainLayout>
-        );
+    if (authLoading) {
+        return null;
     }
 
     return (
-        <MainLayout userRole={currentUserRole ?? "technician"}>
-            <SEO title={`${t("users.title")} - MACHINA`} />
+        <OrgContextGuard>
+            <MainLayout userRole={currentUserRole}>
+                <SEO title={text.seo} />
 
-            <div className="space-y-6">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h1 className="flex items-center gap-3 text-3xl font-bold text-foreground">
-                            <Users className="h-8 w-8 text-primary" />
-                            {t("users.title")}
-                        </h1>
-                        <p className="mt-2 text-muted-foreground">
-                            {t("users.subtitle")} {currentOrgName || t("users.activeOrganizationFallback")}.
-                        </p>
+                <div className="px-5 py-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-[1380px] space-y-8">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="space-y-2">
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                    {text.title}
+                                </h1>
+                                <p className="text-base text-muted-foreground">
+                                    {text.subtitle}
+                                </p>
+                            </div>
+
+                            {canManageMembers && (
+                                <Button
+                                    className="rounded-2xl bg-orange-500 hover:bg-orange-600"
+                                    onClick={() => setCreateDialogOpen(true)}
+                                >
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    {text.newUser}
+                                </Button>
+                            )}
+                        </div>
+
+                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                                        <Users className="h-5 w-5" />
+                                        {text.total}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-4xl font-bold">
+                                    {stats.total}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                        {text.active}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-4xl font-bold">
+                                    {stats.active}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                                        <Building2 className="h-5 w-5" />
+                                        {text.orgLabel}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-lg font-semibold">
+                                    {currentOrgName || "—"}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                                        <Users className="h-5 w-5" />
+                                        {text.admins}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-4xl font-bold">
+                                    {stats.admins}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <Card className="rounded-2xl">
+                            <CardContent className="pt-6">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder={text.search}
+                                        className="h-12 rounded-2xl pl-12"
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="rounded-2xl">
+                            <CardHeader>
+                                <CardTitle>{text.title}</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                                        <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                                        {text.loading}
+                                    </div>
+                                ) : filteredMembers.length === 0 ? (
+                                    <div className="py-12 text-center text-muted-foreground">
+                                        {text.noResults}
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>{text.fullName}</TableHead>
+                                                    <TableHead>{text.email}</TableHead>
+                                                    <TableHead>{text.role}</TableHead>
+                                                    <TableHead>{text.status}</TableHead>
+                                                    <TableHead>{text.memberSince}</TableHead>
+                                                    <TableHead className="text-right">
+                                                        {text.actions}
+                                                    </TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {filteredMembers.map((member) => (
+                                                    <TableRow key={member.membership_id}>
+                                                        <TableCell className="font-medium">
+                                                            {member.display_name || "—"}
+                                                        </TableCell>
+                                                        <TableCell>{member.email}</TableCell>
+                                                        <TableCell>{roleBadge(member.role)}</TableCell>
+                                                        <TableCell>
+                                                            {member.is_active ? (
+                                                                <Badge className="border border-green-500/30 bg-green-500/15 text-green-300">
+                                                                    <CheckCircle className="mr-1 h-3 w-3" />
+                                                                    {text.activeStatus}
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge className="border border-slate-500/30 bg-slate-500/15 text-slate-300">
+                                                                    <XCircle className="mr-1 h-3 w-3" />
+                                                                    {text.inactiveStatus}
+                                                                </Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {member.accepted_at
+                                                                ? new Date(
+                                                                    member.accepted_at
+                                                                ).toLocaleDateString()
+                                                                : "—"}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex justify-end gap-2">
+                                                                {isAdmin && (
+                                                                    <>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() => openEditDialog(member)}
+                                                                        >
+                                                                            <Edit className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() =>
+                                                                                openDeleteDialog(member)
+                                                                            }
+                                                                            disabled={member.id === user?.id}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
-
-                    {isAdmin && (
-                        <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-                            <UserPlus className="h-4 w-4" />
-                            {t("users.new")}
-                        </Button>
-                    )}
                 </div>
 
-                {!isAdmin && (
-                    <Card>
-                        <CardContent className="flex items-center gap-3 py-4 text-sm text-muted-foreground">
-                            <Shield className="h-4 w-4 text-primary" />
-                            {t("users.supervisorMode")}
-                        </CardContent>
-                    </Card>
-                )}
+                <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{text.createTitle}</DialogTitle>
+                            <DialogDescription>{text.createDescription}</DialogDescription>
+                        </DialogHeader>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">{t("users.kpi.total")}</p>
-                                    <p className="mt-2 text-3xl font-bold text-foreground">{members.length}</p>
-                                </div>
-                                <Users className="h-6 w-6 text-primary" />
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>{text.fullName}</Label>
+                                <Input
+                                    value={newUserData.full_name}
+                                    onChange={(e) =>
+                                        setNewUserData((prev) => ({
+                                            ...prev,
+                                            full_name: e.target.value,
+                                        }))
+                                    }
+                                />
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">{t("users.kpi.active")}</p>
-                                    <p className="mt-2 text-3xl font-bold text-foreground">
-                                        {members.filter((m) => m.is_active).length}
-                                    </p>
-                                </div>
-                                <CheckCircle className="h-6 w-6 text-emerald-500" />
+                            <div className="space-y-2">
+                                <Label>{text.email}</Label>
+                                <Input
+                                    type="email"
+                                    value={newUserData.email}
+                                    onChange={(e) =>
+                                        setNewUserData((prev) => ({
+                                            ...prev,
+                                            email: e.target.value,
+                                        }))
+                                    }
+                                />
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">{t("users.kpi.inactive")}</p>
-                                    <p className="mt-2 text-3xl font-bold text-foreground">
-                                        {members.filter((m) => !m.is_active).length}
-                                    </p>
-                                </div>
-                                <XCircle className="h-6 w-6 text-amber-500" />
+                            <div className="space-y-2">
+                                <Label>{text.password}</Label>
+                                <Input
+                                    type="text"
+                                    value={newUserData.password}
+                                    onChange={(e) =>
+                                        setNewUserData((prev) => ({
+                                            ...prev,
+                                            password: e.target.value,
+                                        }))
+                                    }
+                                />
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-foreground">
-                            <Building2 className="h-5 w-5 text-primary" />
-                            {t("users.organizationMembers")}
-                        </CardTitle>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                        <div className="relative max-w-md">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder={t("users.searchPlaceholder")}
-                                className="pl-10"
-                            />
+                            <div className="space-y-2">
+                                <Label>{text.role}</Label>
+                                <Select
+                                    value={newUserData.role}
+                                    onValueChange={(value: MemberUser["role"]) =>
+                                        setNewUserData((prev) => ({
+                                            ...prev,
+                                            role: value,
+                                        }))
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="admin">admin</SelectItem>
+                                        <SelectItem value="supervisor">supervisor</SelectItem>
+                                        <SelectItem value="technician">technician</SelectItem>
+                                        <SelectItem value="viewer">viewer</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
 
-                        <div className="overflow-hidden rounded-xl border border-border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>{t("users.table.user")}</TableHead>
-                                        <TableHead>{t("users.table.role")}</TableHead>
-                                        <TableHead>{t("users.table.status")}</TableHead>
-                                        <TableHead>{t("users.table.acceptance")}</TableHead>
-                                        <TableHead className="text-right">{t("users.table.actions")}</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-
-                                <TableBody>
-                                    {filteredMembers.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                                                {t("users.noResults")}
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        filteredMembers.map((member) => (
-                                            <TableRow key={member.id}>
-                                                <TableCell>
-                                                    <div>
-                                                        <div className="font-medium text-foreground">
-                                                            {member.display_name || t("users.fallbackUnnamed")}
-                                                        </div>
-                                                        <div className="text-sm text-muted-foreground">{member.email}</div>
-                                                    </div>
-                                                </TableCell>
-
-                                                <TableCell>{getRoleBadge(member.role)}</TableCell>
-
-                                                <TableCell>
-                                                    {member.is_active ? (
-                                                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30">
-                                                            {t("users.status.active")}
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/30">
-                                                            {t("users.status.inactive")}
-                                                        </Badge>
-                                                    )}
-                                                </TableCell>
-
-                                                <TableCell className="text-muted-foreground">
-                                                    {member.accepted_at
-                                                        ? new Date(member.accepted_at).toLocaleDateString("it-IT")
-                                                        : t("users.status.pending")}
-                                                </TableCell>
-
-                                                <TableCell className="text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            disabled={!isAdmin}
-                                                            onClick={() => {
-                                                                setSelectedMember(member);
-                                                                setEditData({
-                                                                    display_name: member.display_name || "",
-                                                                    role: member.role,
-                                                                    is_active: member.is_active,
-                                                                });
-                                                                setEditDialogOpen(true);
-                                                            }}
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            disabled={!isAdmin || member.user_id === currentUserId}
-                                                            onClick={() => {
-                                                                setMemberToDelete(member);
-                                                                setDeleteDialogOpen(true);
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t("users.dialog.create.title")}</DialogTitle>
-                        <DialogDescription>{t("users.dialog.create.description")}</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="new-user-name">{t("users.field.fullName")}</Label>
-                            <Input
-                                id="new-user-name"
-                                value={newUserData.full_name}
-                                onChange={(e) => setNewUserData((p) => ({ ...p, full_name: e.target.value }))}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="new-user-email">{t("users.field.email")}</Label>
-                            <Input
-                                id="new-user-email"
-                                type="email"
-                                value={newUserData.email}
-                                onChange={(e) => setNewUserData((p) => ({ ...p, email: e.target.value }))}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="new-user-password">{t("users.field.password")}</Label>
-                            <Input
-                                id="new-user-password"
-                                type="password"
-                                value={newUserData.password}
-                                onChange={(e) => setNewUserData((p) => ({ ...p, password: e.target.value }))}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>{t("users.field.role")}</Label>
-                            <Select
-                                value={newUserData.role}
-                                onValueChange={(value: "admin" | "supervisor" | "technician") =>
-                                    setNewUserData((p) => ({ ...p, role: value }))
-                                }
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setCreateDialogOpen(false)}
                             >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="admin">{t("users.role.admin")}</SelectItem>
-                                    <SelectItem value="supervisor">{t("users.role.supervisor")}</SelectItem>
-                                    <SelectItem value="technician">{t("users.role.technician")}</SelectItem>
-                                </SelectContent>
-                            </Select>
+                                {text.cancel}
+                            </Button>
+                            <Button onClick={handleCreateUser} disabled={creating}>
+                                {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {text.create}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{text.editTitle}</DialogTitle>
+                            <DialogDescription>{text.editDescription}</DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>{text.fullName}</Label>
+                                <Input
+                                    value={editData.display_name}
+                                    onChange={(e) =>
+                                        setEditData((prev) => ({
+                                            ...prev,
+                                            display_name: e.target.value,
+                                        }))
+                                    }
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{text.role}</Label>
+                                <Select
+                                    value={editData.role}
+                                    onValueChange={(value: MemberUser["role"]) =>
+                                        setEditData((prev) => ({
+                                            ...prev,
+                                            role: value,
+                                        }))
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="admin">admin</SelectItem>
+                                        <SelectItem value="supervisor">supervisor</SelectItem>
+                                        <SelectItem value="technician">technician</SelectItem>
+                                        <SelectItem value="viewer">viewer</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{text.status}</Label>
+                                <Select
+                                    value={editData.is_active ? "active" : "inactive"}
+                                    onValueChange={(value) =>
+                                        setEditData((prev) => ({
+                                            ...prev,
+                                            is_active: value === "active",
+                                        }))
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="active">{text.activeStatus}</SelectItem>
+                                        <SelectItem value="inactive">
+                                            {text.inactiveStatus}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                    </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                            {t("common.cancel")}
-                        </Button>
-                        <Button onClick={handleCreateUser} disabled={creating}>
-                            {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {t("users.dialog.create.confirm")}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                                {text.cancel}
+                            </Button>
+                            <Button onClick={handleEditMember} disabled={editing}>
+                                {editing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {text.save}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
-            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t("users.dialog.edit.title")}</DialogTitle>
-                        <DialogDescription>{t("users.dialog.edit.description")}</DialogDescription>
-                    </DialogHeader>
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{text.deleteTitle}</DialogTitle>
+                            <DialogDescription>{text.deleteDescription}</DialogDescription>
+                        </DialogHeader>
 
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="edit-display-name">{t("users.field.displayName")}</Label>
-                            <Input
-                                id="edit-display-name"
-                                value={editData.display_name}
-                                onChange={(e) => setEditData((p) => ({ ...p, display_name: e.target.value }))}
-                            />
+                        <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
+                            {text.confirmRemove}
+                            {memberToDelete?.email ? ` ${memberToDelete.email}` : ""}
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>{t("users.field.role")}</Label>
-                            <Select
-                                value={editData.role}
-                                onValueChange={(value: "admin" | "supervisor" | "technician") =>
-                                    setEditData((p) => ({ ...p, role: value }))
-                                }
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setDeleteDialogOpen(false)}
                             >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="admin">{t("users.role.admin")}</SelectItem>
-                                    <SelectItem value="supervisor">{t("users.role.supervisor")}</SelectItem>
-                                    <SelectItem value="technician">{t("users.role.technician")}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>{t("users.field.status")}</Label>
-                            <Select
-                                value={editData.is_active ? "active" : "inactive"}
-                                onValueChange={(value: "active" | "inactive") =>
-                                    setEditData((p) => ({ ...p, is_active: value === "active" }))
-                                }
+                                {text.cancel}
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleDeleteMember}
+                                disabled={deleting}
                             >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="active">{t("users.status.active")}</SelectItem>
-                                    <SelectItem value="inactive">{t("users.status.inactive")}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                            {t("common.cancel")}
-                        </Button>
-                        <Button onClick={handleEditMember} disabled={editing}>
-                            {editing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {t("users.dialog.edit.confirm")}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t("users.dialog.deactivate.title")}</DialogTitle>
-                        <DialogDescription>
-                            {t("users.dialog.deactivate.description")}{" "}
-                            {memberToDelete?.display_name || memberToDelete?.email}?
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                            {t("common.cancel")}
-                        </Button>
-                        <Button variant="destructive" onClick={handleDeactivateMember} disabled={deleting}>
-                            {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {t("users.dialog.deactivate.confirm")}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </MainLayout>
+                                {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {text.remove}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
