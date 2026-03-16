@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
-import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { notificationService } from "@/services/notificationService";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +53,6 @@ function cn(...classes: Array<string | false | null | undefined>) {
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
     const router = useRouter();
     const { t, language, setLanguage } = useLanguage();
-    const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
     const { profile, organization, membership, user, signOut } = useAuth();
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -304,25 +302,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {!mfaLoading &&
-                                    (isAal2 ? (
-                                        <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                                            <ShieldCheck className="h-3.5 w-3.5" />
-                                            2FA
-                                        </div>
-                                    ) : mustEnforceMfa ? (
-                                        <button
-                                            onClick={() => router.push("/settings/security")}
-                                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
-                                            title="Completa la verifica 2FA"
-                                            type="button"
-                                        >
-                                            <ShieldAlert className="h-3.5 w-3.5" />
-                                            2FA richiesta
-                                        </button>
-                                    ) : (
-                                        <Badge variant="outline">2FA OFF</Badge>
-                                    ))}
+                              
 
                                 <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
                                     <Globe className="h-4 w-4 text-muted-foreground" />
