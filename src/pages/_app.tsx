@@ -14,20 +14,18 @@ function AppShell({ Component, pageProps }: AppProps) {
     const router = useRouter();
 
     return (
-<MfaGuard
-    currentPath={router.pathname}
-    excludePaths={[
-        "/login",
-        "/register",
-        "/forgot-password",
-        "/reset-password",
-        "/offline",
-        "/settings/security",
-    ]}
->
-    <OfflineStatusBar />
-    <Component {...pageProps} />
-</MfaGuard>
+        <MfaGuard
+            currentPath={router.pathname}
+            excludePaths={[
+                "/login",
+                "/register",
+                "/forgot-password",
+                "/reset-password",
+                "/offline",
+                "/settings/security",
+            ]}
+        >
+            <OfflineStatusBar />
             <Component {...pageProps} />
         </MfaGuard>
     );
