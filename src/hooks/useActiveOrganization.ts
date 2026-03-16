@@ -36,11 +36,11 @@ function normalizeOrgType(value: unknown): ActiveOrganizationType | null {
 }
 
 export function useActiveOrganization(): ActiveOrganizationState {
-    const { user, organization, membership, loading: authLoading, switchOrganization, refresh } = useAuth();
+    const { user, organization, membership, loading: authLoading, switchOrganization } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [memberships, setMemberships] = useState < MembershipOrganization[] > ([]);
-    const [error, setError] = useState < string | null > (null);
+    const [memberships, setMemberships] = useState<MembershipOrganization[]>([]);
+    const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setError(null);
@@ -84,10 +84,10 @@ export function useActiveOrganization(): ActiveOrganizationState {
                     is_active: !!row.is_active,
                     organization: row.organization
                         ? {
-                            id: row.organization.id,
-                            name: row.organization.name,
-                            type: normalizeOrgType(row.organization.type) ?? "customer",
-                        }
+                              id: row.organization.id,
+                              name: row.organization.name,
+                              type: normalizeOrgType(row.organization.type) ?? "customer",
+                          }
                         : null,
                 }))
                 .filter((row) => !!row.organization_id);
@@ -111,9 +111,14 @@ export function useActiveOrganization(): ActiveOrganizationState {
                 throw new Error("Utente non autenticato.");
             }
 
-            const selectedMembership = memberships.find((m) => m.organization_id === organizationId);
+            const selectedMembership = memberships.find(
+                (m) => m.organization_id === organizationId
+            );
+
             if (!selectedMembership) {
-                throw new Error("L'organizzazione selezionata non appartiene alle tue membership attive.");
+                throw new Error(
+                    "L'organizzazione selezionata non appartiene alle tue membership attive."
+                );
             }
 
             setSaving(true);
@@ -121,8 +126,6 @@ export function useActiveOrganization(): ActiveOrganizationState {
 
             try {
                 await switchOrganization(organizationId);
-                await refresh();
-                await load();
             } catch (e: any) {
                 console.error(e);
                 setError(e?.message ?? "Errore aggiornamento organizzazione attiva.");
@@ -131,7 +134,7 @@ export function useActiveOrganization(): ActiveOrganizationState {
                 setSaving(false);
             }
         },
-        [load, memberships, refresh, switchOrganization, user]
+        [memberships, switchOrganization, user]
     );
 
     return {
@@ -139,7 +142,8 @@ export function useActiveOrganization(): ActiveOrganizationState {
         saving,
         userId: user?.id ?? null,
         activeOrgId: organization?.id ?? null,
-        activeOrgType: (normalizeOrgType(organization?.type) as ActiveOrganizationType | null) ?? null,
+        activeOrgType:
+            (normalizeOrgType(organization?.type) as ActiveOrganizationType | null) ?? null,
         activeRole: membership?.role ?? null,
         memberships,
         error,
