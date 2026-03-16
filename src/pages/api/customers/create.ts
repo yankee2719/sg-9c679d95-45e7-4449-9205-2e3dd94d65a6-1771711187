@@ -1,20 +1,11 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import { getServiceSupabase } from "@/lib/apiAuth";
+import type { NextApiResponse } from "next";
+import {
+    withAuth,
+    type AuthenticatedRequest,
+    getServiceSupabase,
+} from "@/lib/apiAuth";
 
-/**
- * Manufacturer creates a customer organization + supervisor account.
- * Requires authentication (manufacturer admin).
- *
- * Flow:
- *   1. Create customer organization (type: 'customer', linked via manufacturer_org_id)
- *   2. Create auth user for supervisor
- *   3. Create profile for supervisor
- *   4. Create organization_membership (role: supervisor)
- */
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
@@ -27,16 +18,19 @@ export default async function handler(
         supervisorName,
         supervisorEmail,
         supervisorPassword,
-        manufacturerOrgId,
-    } = req.body;
+    } = req.body ?? {};
 
-    // Validation
-    if (!companyName || !supervisorName || !supervisorEmail || !supervisorPassword || !manufacturerOrgId) {
+    if (!companyName || !supervisorName || !supervisorEmail || !supervisorPassword) {
         return res.status(400).json({ error: "Campi obbligatori mancanti" });
     }
 
-    if (supervisorPassword.length < 8) {
+    if (String(supervisorPassword).length < 8) {
         return res.status(400).json({ error: "La password deve avere almeno 8 caratteri" });
+    }
+
+    const manufacturerOrgId = req.user.organizationId;
+    if (!manufacturerOrgId) {
+        return res.status(403).json({ error: "Organizzazione attiva non valida" });
     }
 
     const supabaseAdmin = getServiceSupabase();
@@ -45,41 +39,52 @@ export default async function handler(
     let customerOrgId: string | null = null;
 
     try {
-        // ── Verify manufacturer org exists and is type=manufacturer ──
-        const { data: mfrOrg } = await supabaseAdmin
+        const { data: mfrOrg, error: mfrOrgError } = await supabaseAdmin
             .from("organizations")
             .select("id, type")
             .eq("id", manufacturerOrgId)
-            .single();
+            .maybeSingle();
+
+        if (mfrOrgError) {
+            return res.status(500).json({ error: mfrOrgError.message });
+        }
 
         if (!mfrOrg || mfrOrg.type !== "manufacturer") {
             return res.status(403).json({ error: "Organizzazione costruttore non valida" });
         }
 
-        // ── Step 1: Generate slug ─────────────────────────────────────
-        let slug = companyName
+        let slug = String(companyName)
             .toLowerCase()
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "");
 
+        if (!slug) {
+            slug = `customer-${Date.now()}`;
+        }
+
         let slugCandidate = slug;
         let counter = 0;
+
         while (counter < 10) {
-            const { data: existing } = await supabaseAdmin
+            const { data: existing, error: existingError } = await supabaseAdmin
                 .from("organizations")
                 .select("id")
                 .eq("slug", slugCandidate)
                 .maybeSingle();
 
+            if (existingError) {
+                return res.status(500).json({ error: existingError.message });
+            }
+
             if (!existing) break;
-            counter++;
+            counter += 1;
             slugCandidate = `${slug}-${counter}`;
         }
-        if (counter > 0) slug = slugCandidate;
 
-        // ── Step 2: Create customer organization ──────────────────────
+        slug = slugCandidate;
+
         const { data: org, error: orgError } = await supabaseAdmin
             .from("organizations")
             .insert({
@@ -99,43 +104,38 @@ export default async function handler(
             .select("id")
             .single();
 
-        if (orgError) {
-            console.error("Org creation error:", orgError);
-            return res.status(500).json({ error: "Errore nella creazione organizzazione" });
+        if (orgError || !org) {
+            return res.status(500).json({ error: orgError?.message || "Errore nella creazione organizzazione" });
         }
 
         customerOrgId = org.id;
 
-        // ── Step 3: Create supervisor auth user ────────────────────────
+        const firstName = String(supervisorName).split(" ")[0] || supervisorName;
+        const lastName = String(supervisorName).split(" ").slice(1).join(" ") || null;
+
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email: supervisorEmail,
             password: supervisorPassword,
             email_confirm: true,
             user_metadata: {
                 display_name: supervisorName,
-                first_name: supervisorName.split(" ")[0] || supervisorName,
-                last_name: supervisorName.split(" ").slice(1).join(" ") || null,
+                first_name: firstName,
+                last_name: lastName,
             },
         });
 
-        if (authError) {
-            console.error("Auth error:", authError);
-            // Rollback org
+        if (authError || !authData?.user) {
             await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId);
-            if (authError.message?.includes("already been registered")) {
+
+            if (authError?.message?.includes("already been registered")) {
                 return res.status(409).json({ error: "Email supervisor già registrata" });
             }
-            return res.status(400).json({ error: authError.message });
-        }
 
-        if (!authData?.user) {
-            await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId);
-            return res.status(500).json({ error: "Errore nella creazione utente" });
+            return res.status(400).json({ error: authError?.message || "Errore nella creazione utente" });
         }
 
         supervisorUserId = authData.user.id;
 
-        // ── Step 4: Create membership (supervisor) ─────────────────────
         const { error: membershipError } = await supabaseAdmin
             .from("organization_memberships")
             .insert({
@@ -143,34 +143,27 @@ export default async function handler(
                 user_id: supervisorUserId,
                 role: "supervisor",
                 is_active: true,
-                invited_by: null, // Could be set to the manufacturer admin's user ID
+                invited_by: req.user.id,
                 invited_at: new Date().toISOString(),
                 accepted_at: new Date().toISOString(),
             });
 
         if (membershipError) {
-            console.error("Membership error:", membershipError);
             await supabaseAdmin.auth.admin.deleteUser(supervisorUserId);
             await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId);
             return res.status(500).json({ error: "Errore nella creazione membership" });
         }
 
-        // ── Step 5: Update profile ─────────────────────────────────────
-        const { error: profileError } = await supabaseAdmin
+        await supabaseAdmin
             .from("profiles")
             .update({
                 default_organization_id: customerOrgId,
-                first_name: supervisorName.split(" ")[0] || supervisorName,
-                last_name: supervisorName.split(" ").slice(1).join(" ") || null,
+                first_name: firstName,
+                last_name: lastName,
                 display_name: supervisorName,
             })
             .eq("id", supervisorUserId);
 
-        if (profileError) {
-            console.error("Profile update error (non-fatal):", profileError);
-        }
-
-        // ── Success ─────────────────────────────────────────────────────
         return res.status(201).json({
             message: "Cliente creato con successo",
             customer: {
@@ -183,21 +176,23 @@ export default async function handler(
                 },
             },
         });
-
     } catch (error) {
         console.error("Create customer error:", error);
 
-        // Best-effort rollback
         if (supervisorUserId) {
-            await supabaseAdmin.from("organization_memberships")
-                .delete().eq("user_id", supervisorUserId).catch(() => { });
+            await supabaseAdmin.from("organization_memberships").delete().eq("user_id", supervisorUserId).catch(() => { });
             await supabaseAdmin.auth.admin.deleteUser(supervisorUserId).catch(() => { });
         }
+
         if (customerOrgId) {
-            await supabaseAdmin.from("organizations")
-                .delete().eq("id", customerOrgId).catch(() => { });
+            await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId).catch(() => { });
         }
 
         return res.status(500).json({ error: "Errore interno" });
     }
 }
+
+export default withAuth(["owner", "admin"], handler, {
+    requireAal2: true,
+    allowPlatformAdmin: true,
+});
