@@ -1,129 +1,38 @@
-// ============================================================================
-// API: GET/PATCH /api/work-orders/[id]
-// ============================================================================
-// File: pages/api/work-orders/[id]/index.ts
-// Get, Update work order
-// ============================================================================
+import type { NextApiResponse } from "next";
+import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { getWorkOrderById, updateWorkOrder } from "@/lib/server/workOrderApiService";
 
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { getMaintenanceService } from '@/services/maintenanceService';
-import { createClient } from '@supabase/supabase-js';
-
-function getAuthToken(req: NextApiRequest): string | null {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-        return authHeader.substring(7);
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+    const id = typeof req.query.id === "string" ? req.query.id : null;
+    if (!id) {
+        return res.status(400).json({ error: "Work order ID is required" });
     }
 
-    const cookies = req.headers.cookie?.split(';') || [];
-    for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'sb-access-token' || name.includes('auth-token')) {
-            return value;
-        }
-    }
-
-    return null;
-}
-
-async function verifyAuth(req: NextApiRequest) {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const token = getAuthToken(req);
-    if (!token) {
-        return { user: null, error: 'No auth token', supabase };
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return { user, error, supabase };
-}
-
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
-    const { id } = req.query;
-
-    if (!id || typeof id !== 'string') {
-        return res.status(400).json({ error: 'Work order ID is required' });
-    }
-
-    const { user, error: authError } = await verifyAuth(req);
-
-    if (authError || !user) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const maintenanceService = getMaintenanceService();
+    const supabase = getServiceSupabase();
 
     try {
-        // ========================================================================
-        // GET: Get work order
-        // ========================================================================
-        if (req.method === 'GET') {
-            const workOrder = await maintenanceService.getWorkOrderById(id);
-
-            if (!workOrder) {
-                return res.status(404).json({ error: 'Work order not found' });
+        if (req.method === "GET") {
+            const data = await getWorkOrderById(supabase, req.user, id);
+            if (!data) {
+                return res.status(404).json({ error: "Work order not found" });
             }
-
-            return res.status(200).json({
-                success: true,
-                workOrder,
-            });
+            return res.status(200).json({ success: true, workOrder: data, data });
         }
 
-        // ========================================================================
-        // PATCH: Update work order
-        // ========================================================================
-        else if (req.method === 'PATCH') {
-            const body = req.body;
-
-            // Check if work order exists
-            const existing = await maintenanceService.getWorkOrderById(id);
-            if (!existing) {
-                return res.status(404).json({ error: 'Work order not found' });
+        if (req.method === "PATCH") {
+            if (!["admin", "supervisor"].includes(req.user.role)) {
+                return res.status(403).json({ error: "Only admin or supervisor can update work orders." });
             }
 
-            // Check if closed
-            if (existing.is_closed) {
-                return res.status(400).json({ error: 'Cannot update closed work order' });
-            }
-
-            // Update
-            const updated = await maintenanceService.updateWorkOrder(
-                id,
-                body,
-                user.id
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: 'Work order updated successfully',
-                workOrder: updated,
-            });
+            const data = await updateWorkOrder(supabase, req.user, id, req.body ?? {});
+            return res.status(200).json({ success: true, workOrder: data, data });
         }
 
-        // ========================================================================
-        // Method not allowed
-        // ========================================================================
-        else {
-            return res.status(405).json({
-                error: 'Method not allowed',
-                allowedMethods: ['GET', 'PATCH']
-            });
-        }
-
-    } catch (error) {
-        console.error('Work Order API Error:', error);
-
-        return res.status(500).json({
-            success: false,
-            error: 'Operation failed',
-            message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        return res.status(405).json({ error: "Method not allowed" });
+    } catch (error: any) {
+        console.error("Work order detail API error:", error);
+        return res.status(500).json({ error: error?.message || "Work order request failed" });
     }
 }
+
+export default withAuth(["admin", "supervisor", "technician"], handler);
