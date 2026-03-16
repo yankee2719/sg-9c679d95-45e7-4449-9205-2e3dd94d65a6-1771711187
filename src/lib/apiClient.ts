@@ -103,8 +103,10 @@ export interface Notification {
     user_id: string;
     title: string;
     message: string;
-    type: "info" | "warning" | "error" | "success";
-    link?: string;
+    type: string;
+    link?: string | null;
+    related_entity_type?: string | null;
+    related_entity_id?: string | null;
     is_read: boolean;
     created_at: string;
 }
@@ -137,32 +139,28 @@ export const notificationApi = {
 // =====================
 export interface User {
     id: string;
+    membership_id?: string;
     email: string;
-    full_name?: string;
-    role: "admin" | "supervisor" | "technician";
-    avatar_url?: string;
+    display_name?: string | null;
+    role: "owner" | "admin" | "supervisor" | "technician" | "viewer";
+    avatar_url?: string | null;
     is_active: boolean;
-    tenant_id?: string; // legacy naming in API payloads; ok to keep if your route returns it
     created_at?: string;
+    accepted_at?: string | null;
     updated_at?: string;
 }
 
-// Response of /api/users/create
 export interface CreateUserResponse {
-    message: string;
-    user: {
-        id: string;
-        email: string;
-        full_name?: string;
-        role: "admin" | "supervisor" | "technician";
-        phone?: string;
-    };
+    ok: boolean;
+    user_id: string;
+    membership_id: string;
+    email: string;
 }
 
 export const userApi = {
     list: () => fetchApi < User[] > ("/api/users/list"),
 
-    create: (data: { email: string; password: string; full_name?: string; role: User["role"] }) =>
+    create: (data: { email: string; password: string; full_name?: string; role: User["role"]; organization_id?: string }) =>
         fetchApi < CreateUserResponse > ("/api/users/create", {
             method: "POST",
             body: JSON.stringify(data),
