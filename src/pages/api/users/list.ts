@@ -15,9 +15,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const { data: memberships, error } = await serviceSupabase
             .from("organization_memberships")
-            .select(
-                "id, user_id, role, is_active, accepted_at, created_at, profiles!inner(email, display_name, avatar_url)"
-            )
+            .select("id, user_id, role, is_active, accepted_at, created_at")
             .eq("organization_id", req.user.organizationId)
             .order("accepted_at", { ascending: false, nullsFirst: false });
 
@@ -26,17 +24,41 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(500).json({ error: "Failed to fetch organization users" });
         }
 
-        const users = (memberships || []).map((membership: any) => ({
-            id: membership.user_id,
-            membership_id: membership.id,
-            email: membership.profiles?.email || "",
-            display_name: membership.profiles?.display_name || null,
-            avatar_url: membership.profiles?.avatar_url || null,
-            created_at: membership.created_at,
-            accepted_at: membership.accepted_at,
-            role: membership.role,
-            is_active: membership.is_active ?? true,
-        }));
+        const userIds = Array.from(
+            new Set((memberships ?? []).map((membership: any) => membership.user_id).filter(Boolean))
+        );
+
+        let profiles: any[] = [];
+        if (userIds.length > 0) {
+            const { data: profileRows, error: profileError } = await serviceSupabase
+                .from("profiles")
+                .select("id, email, display_name, avatar_url")
+                .in("id", userIds);
+
+            if (profileError) {
+                return res.status(500).json({ error: profileError.message });
+            }
+
+            profiles = profileRows ?? [];
+        }
+
+        const profileMap = new Map(profiles.map((profile: any) => [profile.id, profile]));
+
+        const users = (memberships || []).map((membership: any) => {
+            const profile = profileMap.get(membership.user_id);
+
+            return {
+                id: membership.user_id,
+                membership_id: membership.id,
+                email: profile?.email || "",
+                display_name: profile?.display_name || null,
+                avatar_url: profile?.avatar_url || null,
+                created_at: membership.created_at,
+                accepted_at: membership.accepted_at,
+                role: membership.role,
+                is_active: membership.is_active ?? true,
+            };
+        });
 
         return res.status(200).json({ users });
     } catch (error) {
