@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,38 +13,20 @@ import {
     getChecklistTexts,
     normalizeExecutionStatus,
 } from "@/lib/checklistsPageText";
-import { ArrowLeft, ClipboardCheck, FileText, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, FileText, ShieldCheck, Image as ImageIcon } from "lucide-react";
+import { checklistExecutionApi, type ChecklistExecutionDetail } from "@/lib/checklistExecutionApi";
+import { getUserContext } from "@/lib/supabaseHelpers";
 
-type ExecutionRecord = {
+type AnswerRow = {
     id: string;
-    assignment_id?: string | null;
-    organization_id?: string | null;
-    work_order_id?: string | null;
-    machine_id?: string | null;
-    executed_by?: string | null;
-    executed_at?: string | null;
-    template_version?: number | null;
-    overall_status?: string | null;
-    status?: string | null;
-    notes?: string | null;
-    results?: any;
-    created_at?: string | null;
-};
-
-type TemplateItem = {
-    id: string;
-    title: string | null;
+    title: string;
     description: string | null;
-    input_type: string | null;
-    is_required: boolean | null;
-    order_index: number | null;
-};
-
-type ExecutionItem = {
-    id: string;
-    template_item_id: string;
     value: string | null;
     notes: string | null;
+    isRequired: boolean;
+    orderIndex: number;
+    boolState: "ok" | "ko" | "neutral";
+    photos: string[];
 };
 
 export default function ChecklistExecutionDetailPage() {
@@ -59,179 +39,18 @@ export default function ChecklistExecutionDetailPage() {
     const [role, setRole] = useState("technician");
     const [orgType, setOrgType] = useState < "manufacturer" | "customer" | null > (null);
     const [loading, setLoading] = useState(true);
-
-    const [execution, setExecution] = useState < ExecutionRecord | null > (null);
-    const [templateName, setTemplateName] = useState < string > (text.executions.detailTitle);
-    const [machineName, setMachineName] = useState < string > (text.executions.machineFallback);
-    const [workOrderTitle, setWorkOrderTitle] = useState < string > (text.executions.workOrderFallback);
-    const [answers, setAnswers] = useState <
-        Array < {
-        id: string;
-        title: string;
-        description: string | null;
-        value: string | null;
-        notes: string | null;
-        isRequired: boolean;
-        orderIndex: number;
-        boolState: "ok" | "ko" | "neutral";
-    } >
-  > ([]);
+    const [detail, setDetail] = useState < ChecklistExecutionDetail | null > (null);
 
     useEffect(() => {
-        if (!router.isReady || !id) return;
+        if (!router.isReady || !id || typeof id !== "string") return;
 
         const load = async () => {
             setLoading(true);
             try {
-                const ctx = await getUserContext();
-                if (!ctx || !ctx.orgId || !ctx.orgType) {
-                    router.push("/login");
-                    return;
-                }
-
-                setRole(ctx.role ?? "technician");
-                setOrgType(ctx.orgType);
-
-                const { data: executionRow, error: executionError } = await supabase
-                    .from("checklist_executions")
-                    .select("*")
-                    .eq("id", id)
-                    .single();
-
-                if (executionError) throw executionError;
-                const currentExecution = executionRow as any as ExecutionRecord;
-
-                if (!currentExecution) {
-                    throw new Error(text.executions.executionNotFound);
-                }
-
-                if (ctx.orgType === "customer") {
-                    if (currentExecution.organization_id !== ctx.orgId) {
-                        throw new Error(text.executions.executionNotFound);
-                    }
-                } else {
-                    const { data: linkRow, error: linkError } = await supabase
-                        .from("machine_assignments")
-                        .select("id")
-                        .eq("manufacturer_org_id", ctx.orgId)
-                        .eq("machine_id", currentExecution.machine_id)
-                        .eq("is_active", true)
-                        .maybeSingle();
-
-                    if (linkError) throw linkError;
-                    if (!linkRow) throw new Error(text.executions.executionNotFound);
-                }
-
-                setExecution(currentExecution);
-
-                let templateId: string | null = null;
-
-                if (currentExecution.assignment_id) {
-                    const { data: assignmentRow } = await supabase
-                        .from("checklist_assignments")
-                        .select("template_id, machine_id")
-                        .eq("id", currentExecution.assignment_id)
-                        .maybeSingle();
-
-                    templateId = (assignmentRow as any)?.template_id ?? null;
-                }
-
-                if (templateId) {
-                    const { data: templateRow } = await supabase
-                        .from("checklist_templates")
-                        .select("name")
-                        .eq("id", templateId)
-                        .maybeSingle();
-
-                    setTemplateName((templateRow as any)?.name ?? text.executions.templateFallback);
-
-                    const { data: templateItems } = await supabase
-                        .from("checklist_template_items")
-                        .select("id, title, description, input_type, is_required, order_index")
-                        .eq("template_id", templateId)
-                        .order("order_index", { ascending: true });
-
-                    const itemsMap = new Map < string, TemplateItem> ();
-                    for (const row of (templateItems ?? []) as any[]) {
-                        itemsMap.set(row.id, row as TemplateItem);
-                    }
-
-                    const { data: executionItems } = await supabase
-                        .from("checklist_execution_items")
-                        .select("id, template_item_id, value, notes")
-                        .eq("execution_id", currentExecution.id);
-
-                    if (executionItems && executionItems.length > 0) {
-                        const normalized = (executionItems as any[]).map((row) => {
-                            const item = itemsMap.get(row.template_item_id);
-                            const rawValue = row.value ?? null;
-                            const boolState =
-                                rawValue === "true" ? "ok" : rawValue === "false" ? "ko" : "neutral";
-
-                            return {
-                                id: row.id,
-                                title: item?.title ?? text.executions.templateFallback,
-                                description: item?.description ?? null,
-                                value: rawValue,
-                                notes: row.notes ?? null,
-                                isRequired: Boolean(item?.is_required ?? false),
-                                orderIndex: item?.order_index ?? 999999,
-                                boolState,
-                            };
-                        });
-
-                        normalized.sort((a, b) => a.orderIndex - b.orderIndex);
-                        setAnswers(normalized);
-                    } else if (currentExecution.results?.items?.length) {
-                        const normalized = (currentExecution.results.items as any[]).map((row, index) => {
-                            const rawValue = row.value ?? null;
-                            const boolState =
-                                rawValue === true || rawValue === "true"
-                                    ? "ok"
-                                    : rawValue === false || rawValue === "false"
-                                        ? "ko"
-                                        : "neutral";
-
-                            return {
-                                id: row.template_item_id ?? String(index),
-                                title: row.title ?? text.executions.templateFallback,
-                                description: null,
-                                value:
-                                    rawValue === true
-                                        ? "true"
-                                        : rawValue === false
-                                            ? "false"
-                                            : rawValue?.toString?.() ?? null,
-                                notes: row.notes ?? null,
-                                isRequired: false,
-                                orderIndex: index,
-                                boolState,
-                            };
-                        });
-
-                        setAnswers(normalized);
-                    }
-                }
-
-                if (currentExecution.machine_id) {
-                    const { data: machineRow } = await supabase
-                        .from("machines")
-                        .select("name")
-                        .eq("id", currentExecution.machine_id)
-                        .maybeSingle();
-
-                    setMachineName((machineRow as any)?.name ?? text.executions.machineFallback);
-                }
-
-                if (currentExecution.work_order_id) {
-                    const { data: workOrderRow } = await supabase
-                        .from("work_orders")
-                        .select("title")
-                        .eq("id", currentExecution.work_order_id)
-                        .maybeSingle();
-
-                    setWorkOrderTitle((workOrderRow as any)?.title ?? text.executions.workOrderFallback);
-                }
+                const [ctx, data] = await Promise.all([getUserContext(), checklistExecutionApi.get(id)]);
+                setDetail(data);
+                setRole(ctx?.role ?? "technician");
+                setOrgType(ctx?.orgType ?? null);
             } catch (error: any) {
                 console.error(error);
                 toast({
@@ -246,7 +65,29 @@ export default function ChecklistExecutionDetailPage() {
         };
 
         load();
-    }, [id, router, router.isReady, toast, text.executions.executionNotFound, text.executions.loadError, text.executions.machineFallback, text.executions.workOrderFallback, text.executions.templateFallback]);
+    }, [id, router, router.isReady, text.common.error, text.executions.loadError, toast]);
+
+    const answers = useMemo < AnswerRow[] > (() => {
+        if (!detail) return [];
+        return (detail.items ?? [])
+            .map((item, index) => {
+                const rawValue = item.answer?.value ?? null;
+                const boolState =
+                    rawValue === "true" ? "ok" : rawValue === "false" ? "ko" : "neutral";
+                return {
+                    id: item.answer?.id ?? item.id,
+                    title: item.title,
+                    description: item.description ?? null,
+                    value: rawValue,
+                    notes: item.answer?.notes ?? null,
+                    isRequired: Boolean(item.is_required),
+                    orderIndex: item.order_index ?? index,
+                    boolState,
+                    photos: item.answer?.photos ?? [],
+                };
+            })
+            .sort((a, b) => a.orderIndex - b.orderIndex);
+    }, [detail]);
 
     const stats = useMemo(() => {
         const total = answers.length;
@@ -256,7 +97,10 @@ export default function ChecklistExecutionDetailPage() {
         return { total, ok, ko, notes };
     }, [answers]);
 
-    const normalizedStatus = normalizeExecutionStatus(execution?.overall_status || execution?.status);
+    const normalizedStatus = normalizeExecutionStatus(detail?.execution.overall_status);
+    const templateName = detail?.template?.name ?? text.executions.detailTitle;
+    const machineName = detail?.machine?.name ?? text.executions.machineFallback;
+    const workOrderTitle = detail?.workOrder?.title ?? text.executions.workOrderFallback;
 
     return (
         <MainLayout userRole={role}>
@@ -304,7 +148,7 @@ export default function ChecklistExecutionDetailPage() {
                         <div className="rounded-xl border p-4">
                             <div className="text-xs text-muted-foreground">{text.executions.executedAt}</div>
                             <div className="mt-2 text-sm font-medium">
-                                {formatChecklistDate(execution?.executed_at || execution?.created_at, language)}
+                                {formatChecklistDate(detail?.execution.executed_at || detail?.execution.completed_at, language)}
                             </div>
                         </div>
                     </CardContent>
@@ -367,6 +211,22 @@ export default function ChecklistExecutionDetailPage() {
                                                 <div>{answer.notes || "—"}</div>
                                             </div>
                                         </div>
+
+                                        {answer.photos.length > 0 && (
+                                            <div className="rounded-xl bg-muted/20 p-3">
+                                                <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                                    <ImageIcon className="h-4 w-4" />
+                                                    Photos: {answer.photos.length}
+                                                </div>
+                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                    {answer.photos.map((path) => (
+                                                        <div key={path} className="rounded border p-2 text-xs break-all text-muted-foreground">
+                                                            {path}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
