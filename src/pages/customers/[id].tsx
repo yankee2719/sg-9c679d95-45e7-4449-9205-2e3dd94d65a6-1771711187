@@ -99,23 +99,26 @@ export default function CustomerDetailPage() {
     const manufacturerOrgId = organization?.id ?? null;
     const orgType = organization?.type ?? null;
     const userRole = membership?.role ?? "technician";
-    const canManage = userRole === "owner" || userRole === "admin" || userRole === "supervisor";
+    const canManage =
+        userRole === "owner" || userRole === "admin" || userRole === "supervisor";
+
+    const resolvedCustomerId = useMemo(() => {
+        return typeof id === "string" ? id : null;
+    }, [id]);
 
     const getAccessToken = async () => {
         const accessToken =
             session?.access_token ??
-            (
-                await supabase.auth.getSession()
-            ).data.session?.access_token;
+            (await supabase.auth.getSession()).data.session?.access_token;
 
         if (!accessToken) throw new Error("Sessione scaduta");
         return accessToken;
     };
 
     useEffect(() => {
-        if (!id || typeof id !== "string" || authLoading) return;
-        void loadAll(id);
-    }, [id, authLoading, manufacturerOrgId, orgType]);
+        if (!resolvedCustomerId || authLoading) return;
+        void loadAll(resolvedCustomerId);
+    }, [resolvedCustomerId, authLoading, manufacturerOrgId, orgType]);
 
     async function loadAll(customerId: string) {
         if (!manufacturerOrgId || orgType !== "manufacturer") {
@@ -157,7 +160,9 @@ export default function CustomerDetailPage() {
                     .order("role"),
                 supabase
                     .from("machine_assignments")
-                    .select("id, machine_id, assigned_at, machines(name, internal_code, category, lifecycle_state)")
+                    .select(
+                        "id, machine_id, assigned_at, machines(name, internal_code, category, lifecycle_state)"
+                    )
                     .eq("customer_org_id", customerId)
                     .eq("is_active", true)
                     .order("assigned_at", { ascending: false }),
@@ -220,34 +225,77 @@ export default function CustomerDetailPage() {
 
     const openAssignPanel = async () => {
         if (!manufacturerOrgId || !customer) return;
+
         setShowAssignPanel(true);
         setMachineSearch("");
 
-        const assignedIds = assignedMachines.map((a) => a.machine_id);
+        try {
+            const [machinesRes, activeAssignmentsRes] = await Promise.all([
+                supabase
+                    .from("machines")
+                    .select("id, name, internal_code, category")
+                    .eq("organization_id", manufacturerOrgId)
+                    .eq("is_archived", false)
+                    .order("name"),
+                supabase
+                    .from("machine_assignments")
+                    .select("machine_id")
+                    .eq("manufacturer_org_id", manufacturerOrgId)
+                    .eq("is_active", true),
+            ]);
 
-        const { data, error } = await supabase
-            .from("machines")
-            .select("id, name, internal_code, category")
-            .eq("organization_id", manufacturerOrgId)
-            .order("name");
+            if (machinesRes.error) throw machinesRes.error;
+            if (activeAssignmentsRes.error) throw activeAssignmentsRes.error;
 
-        if (error) {
-            toast({ title: "Errore", description: error.message, variant: "destructive" });
-            return;
+            const activeAssignedIds = new Set(
+                (activeAssignmentsRes.data ?? [])
+                    .map((row: any) => row.machine_id)
+                    .filter(Boolean)
+            );
+
+            setAvailableMachines(
+                ((machinesRes.data ?? []) as any[]).filter(
+                    (machine) => !activeAssignedIds.has(machine.id)
+                )
+            );
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: "Errore",
+                description: error?.message || "Errore caricamento macchine disponibili",
+                variant: "destructive",
+            });
         }
-
-        setAvailableMachines(
-            ((data ?? []) as any[]).filter((m) => !assignedIds.includes(m.id))
-        );
     };
 
     const handleAssign = async (machineId: string) => {
-        if (!customer || !user?.id) return;
+        if (!customer || !user?.id || !manufacturerOrgId) return;
 
         setAssigning(machineId);
+
         try {
+            const { data: existingAssignment, error: existingError } = await supabase
+                .from("machine_assignments")
+                .select("id, customer_org_id")
+                .eq("machine_id", machineId)
+                .eq("is_active", true)
+                .maybeSingle();
+
+            if (existingError) throw existingError;
+
+            if (existingAssignment) {
+                toast({
+                    title: "Macchina già assegnata",
+                    description:
+                        "Questa macchina ha già un'assegnazione attiva e non può essere assegnata due volte.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
             const { error } = await supabase.from("machine_assignments").insert({
                 machine_id: machineId,
+                manufacturer_org_id: manufacturerOrgId,
                 customer_org_id: customer.id,
                 assigned_by: user.id,
                 is_active: true,
@@ -256,10 +304,16 @@ export default function CustomerDetailPage() {
             if (error) throw error;
 
             toast({ title: "Macchina assegnata" });
+
             await loadAll(customer.id);
             setAvailableMachines((prev) => prev.filter((m) => m.id !== machineId));
         } catch (err: any) {
-            toast({ title: "Errore", description: err?.message, variant: "destructive" });
+            console.error(err);
+            toast({
+                title: "Errore",
+                description: err?.message || "Errore assegnazione macchina",
+                variant: "destructive",
+            });
         } finally {
             setAssigning(null);
         }
@@ -317,7 +371,11 @@ export default function CustomerDetailPage() {
             toast({ title: "Utente creato" });
             await loadAll(customer.id);
         } catch (err: any) {
-            toast({ title: "Errore", description: err.message, variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: err.message,
+                variant: "destructive",
+            });
         } finally {
             setAddingUser(false);
         }
@@ -351,7 +409,11 @@ export default function CustomerDetailPage() {
             setEditing(false);
             toast({ title: "Cliente aggiornato" });
         } catch (err: any) {
-            toast({ title: "Errore", description: err?.message, variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: err?.message,
+                variant: "destructive",
+            });
         } finally {
             setSaving(false);
         }
@@ -360,9 +422,12 @@ export default function CustomerDetailPage() {
     const getLifecycleColor = (state: string | null) => {
         const map: Record<string, string> = {
             active: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30",
-            inactive: "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
-            under_maintenance: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30",
-            decommissioned: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30",
+            inactive:
+                "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
+            under_maintenance:
+                "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30",
+            decommissioned:
+                "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/30",
         };
         return map[state || "active"] || map.active;
     };
