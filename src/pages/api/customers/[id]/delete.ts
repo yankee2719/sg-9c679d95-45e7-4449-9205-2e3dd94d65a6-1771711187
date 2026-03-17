@@ -25,7 +25,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const { data: customerOrg, error: customerError } = await serviceSupabase
             .from("organizations")
-            .select("id, name, type, manufacturer_org_id, subscription_status")
+            .select("id, name, type, manufacturer_org_id, is_deleted")
             .eq("id", id)
             .eq("type", "customer")
             .maybeSingle();
@@ -42,10 +42,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             !req.user.isPlatformAdmin &&
             customerOrg.manufacturer_org_id !== req.user.organizationId
         ) {
-            return res.status(403).json({ error: "Customer does not belong to active manufacturer" });
+            return res
+                .status(403)
+                .json({ error: "Customer does not belong to active manufacturer" });
         }
 
-        if (customerOrg.subscription_status === "deleted") {
+        if (customerOrg.is_deleted) {
             return res.status(200).json({
                 success: true,
                 message: "Customer already deleted",
@@ -58,7 +60,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const { error: updateOrgError } = await serviceSupabase
             .from("organizations")
             .update({
-                subscription_status: "deleted",
+                is_deleted: true,
+                deleted_at: now,
+                deleted_by: req.user.id,
                 updated_at: now,
             } as any)
             .eq("id", customerOrg.id);
@@ -110,13 +114,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 actor_user_id: req.user.id,
                 entity_type: "organization",
                 entity_id: customerOrg.id,
-                action: "delete",
+                action: "soft_delete",
                 metadata: {
                     target_customer_name: customerOrg.name,
-                    soft_delete: true,
+                    trash_system: true,
                 },
                 new_data: {
-                    subscription_status: "deleted",
+                    is_deleted: true,
+                    deleted_at: now,
+                    deleted_by: req.user.id,
                 },
             } as any)
             .then(() => undefined)
@@ -126,7 +132,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         return res.status(200).json({
             success: true,
-            message: "Customer deleted successfully",
+            message: "Customer moved to trash successfully",
             customer_id: customerOrg.id,
         });
     } catch (error) {
