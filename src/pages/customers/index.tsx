@@ -140,7 +140,7 @@ export default function CustomersPage() {
                     .select("id, name, city, email, created_at")
                     .eq("manufacturer_org_id", orgId)
                     .eq("type", "customer")
-                    .neq("subscription_status", "deleted")
+                    .or("is_deleted.is.null,is_deleted.eq.false")
                     .order("created_at", { ascending: false });
 
                 if (customerError) throw customerError;
@@ -250,13 +250,22 @@ export default function CustomersPage() {
                             </div>
 
                             {orgType === "manufacturer" && (
-                                <Link
-                                    href="/customers/new"
-                                    className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                    {text.new}
-                                </Link>
+                                <div className="flex gap-3">
+                                    <Link
+                                        href="/settings/trash"
+                                        className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-5 py-3 font-semibold text-foreground transition hover:bg-muted"
+                                    >
+                                        Cestino
+                                    </Link>
+
+                                    <Link
+                                        href="/customers/new"
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        {text.new}
+                                    </Link>
+                                </div>
                             )}
                         </div>
 
