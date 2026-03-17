@@ -30,6 +30,7 @@ interface MachineRow {
     plant_id: string | null;
     production_line_id: string | null;
     is_archived: boolean | null;
+    is_deleted?: boolean | null;
     created_at?: string | null;
 }
 
@@ -92,9 +93,10 @@ export default function EquipmentPage() {
                     supabase
                         .from("machines")
                         .select(
-                            "id, name, internal_code, serial_number, model, brand, lifecycle_state, organization_id, plant_id, production_line_id, is_archived, created_at"
+                            "id, name, internal_code, serial_number, model, brand, lifecycle_state, organization_id, plant_id, production_line_id, is_archived, is_deleted, created_at"
                         )
                         .eq("is_archived", false)
+                        .or("is_deleted.is.null,is_deleted.eq.false")
                         .order("created_at", { ascending: false }),
                     supabase
                         .from("machine_assignments")
