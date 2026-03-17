@@ -6,10 +6,12 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import DocumentManager from "@/components/documents/DocumentManager";
+import { MachinePhotoUpload } from "@/components/Equipment/MachinePhotoUpload";
+import { MachineEventTimeline } from "@/components/MachineEventTimeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building2, FileText, Factory, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Factory, Wrench, History, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -28,6 +30,7 @@ interface MachineRow {
     plant_id: string | null;
     production_line_id: string | null;
     is_archived: boolean | null;
+    photo_url?: string | null;
     created_at?: string | null;
 }
 
@@ -57,6 +60,8 @@ export default function EquipmentDetailPage() {
     const userRole = membership?.role ?? "technician";
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
+    const canEdit =
+        userRole === "owner" || userRole === "admin" || userRole === "supervisor";
 
     const resolvedId = useMemo(() => {
         return typeof id === "string" ? id : null;
@@ -94,7 +99,6 @@ export default function EquipmentDetailPage() {
                 }
 
                 const machineData = machineRow as MachineRow;
-
                 let allowed = false;
 
                 if (orgType === "manufacturer") {
@@ -227,7 +231,7 @@ export default function EquipmentDetailPage() {
                                         {machine.name ?? "Macchina"}
                                     </CardTitle>
                                     <CardDescription>
-                                        Dettaglio macchina e documentazione collegata.
+                                        Dettaglio macchina, documentazione e cronologia eventi.
                                     </CardDescription>
                                 </div>
 
@@ -255,43 +259,63 @@ export default function EquipmentDetailPage() {
                             </div>
                         </CardHeader>
 
-                        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            <div className="rounded-xl border border-border p-4">
-                                <div className="mb-1 text-xs text-muted-foreground">Codice interno</div>
-                                <div className="font-medium">{machine.internal_code || "—"}</div>
+                        <CardContent className="grid gap-6 xl:grid-cols-[360px_1fr]">
+                            <div className="space-y-4">
+                                <Card className="rounded-2xl border border-border shadow-none">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2 text-base">
+                                            <Camera className="h-4 w-4" />
+                                            Foto macchina
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <MachinePhotoUpload
+                                            machineId={machine.id}
+                                            currentPhotoUrl={machine.photo_url ?? null}
+                                            onPhotoChange={(url) =>
+                                                setMachine((prev) =>
+                                                    prev ? { ...prev, photo_url: url } : prev
+                                                )
+                                            }
+                                            readonly={!canEdit}
+                                        />
+                                    </CardContent>
+                                </Card>
                             </div>
 
-                            <div className="rounded-xl border border-border p-4">
-                                <div className="mb-1 text-xs text-muted-foreground">Matricola</div>
-                                <div className="font-medium">{machine.serial_number || "—"}</div>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <InfoCard label="Codice interno" value={machine.internal_code} />
+                                <InfoCard label="Matricola" value={machine.serial_number} />
+                                <InfoCard label="Modello" value={machine.model} />
+                                <InfoCard label="Marca" value={machine.brand} />
+                                <InfoCard label="Stabilimento" value={plant?.name || plant?.code} />
+                                <InfoCard label="Linea" value={line?.name || line?.code} />
+                                <InfoCard
+                                    label="Note"
+                                    value={machine.notes}
+                                    className="md:col-span-2 xl:col-span-3"
+                                />
                             </div>
+                        </CardContent>
+                    </Card>
 
-                            <div className="rounded-xl border border-border p-4">
-                                <div className="mb-1 text-xs text-muted-foreground">Modello</div>
-                                <div className="font-medium">{machine.model || "—"}</div>
-                            </div>
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <History className="h-4 w-4" />
+                                Timeline macchina
+                            </CardTitle>
+                            <CardDescription>
+                                Eventi operativi e cronologia registrata sulla macchina.
+                            </CardDescription>
+                        </CardHeader>
 
-                            <div className="rounded-xl border border-border p-4">
-                                <div className="mb-1 text-xs text-muted-foreground">Marca</div>
-                                <div className="font-medium">{machine.brand || "—"}</div>
-                            </div>
-
-                            <div className="rounded-xl border border-border p-4">
-                                <div className="mb-1 text-xs text-muted-foreground">Stabilimento</div>
-                                <div className="font-medium">{plant?.name || plant?.code || "—"}</div>
-                            </div>
-
-                            <div className="rounded-xl border border-border p-4">
-                                <div className="mb-1 text-xs text-muted-foreground">Linea</div>
-                                <div className="font-medium">{line?.name || line?.code || "—"}</div>
-                            </div>
-
-                            <div className="rounded-xl border border-border p-4 md:col-span-2 xl:col-span-3">
-                                <div className="mb-1 text-xs text-muted-foreground">Note</div>
-                                <div className="whitespace-pre-wrap font-medium">
-                                    {machine.notes || "—"}
-                                </div>
-                            </div>
+                        <CardContent>
+                            <MachineEventTimeline
+                                machineId={machine.id}
+                                limit={50}
+                                showIntegrityCheck={true}
+                            />
                         </CardContent>
                     </Card>
 
@@ -319,5 +343,22 @@ export default function EquipmentDetailPage() {
                 </div>
             </MainLayout>
         </OrgContextGuard>
+    );
+}
+
+function InfoCard({
+    label,
+    value,
+    className = "",
+}: {
+    label: string;
+    value: string | null | undefined;
+    className?: string;
+}) {
+    return (
+        <div className={`rounded-xl border border-border p-4 ${className}`}>
+            <div className="mb-1 text-xs text-muted-foreground">{label}</div>
+            <div className="whitespace-pre-wrap font-medium">{value || "—"}</div>
+        </div>
     );
 }
