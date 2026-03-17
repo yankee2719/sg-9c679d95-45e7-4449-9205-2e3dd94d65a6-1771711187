@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
-    archiveDocument,
     createDocumentAndUploadV1,
     getSignedUrl,
-    listMachineDocuments,
-    uploadNewVersion,
     type DocumentCategory,
-    type DocumentVersionRow,
-    type DocumentWithVersions,
+    uploadNewVersion,
 } from "@/services/documentService";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +25,7 @@ import {
     Upload,
     Plus,
     Download,
-    Archive,
+    Trash2,
     History,
     Loader2,
     Factory,
@@ -36,6 +33,34 @@ import {
 } from "lucide-react";
 
 type OrgType = "manufacturer" | "customer";
+
+interface DocumentVersionRow {
+    id: string;
+    document_id: string;
+    version_number: number | null;
+    file_name: string | null;
+    file_path: string | null;
+    file_size: number | null;
+    change_summary: string | null;
+    created_at: string | null;
+}
+
+interface DocumentWithVersions {
+    id: string;
+    organization_id: string;
+    machine_id: string | null;
+    title: string;
+    description: string | null;
+    category: string | null;
+    language: string | null;
+    regulatory_reference: string | null;
+    current_version_id: string | null;
+    version_count: number | null;
+    file_size: number | null;
+    updated_at: string | null;
+    is_archived: boolean | null;
+    document_versions: DocumentVersionRow[];
+}
 
 interface DocumentManagerProps {
     machineId: string;
@@ -110,7 +135,7 @@ export default function DocumentManager({
     currentUserRole = null,
 }: DocumentManagerProps) {
     const { toast } = useToast();
-    const { organization, membership, user } = useAuth();
+    const { organization, membership, user, session } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -127,7 +152,7 @@ export default function DocumentManager({
     const [versionFiles, setVersionFiles] = useState < Record < string, File | null >> ({});
     const [versionNotes, setVersionNotes] = useState < Record < string, string>> ({});
     const [uploadingVersionId, setUploadingVersionId] = useState < string | null > (null);
-    const [archivingId, setArchivingId] = useState < string | null > (null);
+    const [deletingId, setDeletingId] = useState < string | null > (null);
     const [downloadingId, setDownloadingId] = useState < string | null > (null);
 
     const ctxOrgId = currentOrgId ?? organization?.id ?? null;
@@ -152,9 +177,50 @@ export default function DocumentManager({
         return false;
     }, [readOnly, ctxOrgId, ctxOrgType, ctxRole, machineOwnerOrgId]);
 
+    const getAccessToken = async () => {
+        const accessToken =
+            session?.access_token ??
+            (await supabase.auth.getSession()).data.session?.access_token;
+
+        if (!accessToken) throw new Error("Sessione scaduta");
+        return accessToken;
+    };
+
     const reloadDocuments = async () => {
-        const rows = await listMachineDocuments(machineId);
-        setDocuments(rows);
+        const { data, error } = await supabase
+            .from("documents")
+            .select(`
+                id,
+                organization_id,
+                machine_id,
+                title,
+                description,
+                category,
+                language,
+                regulatory_reference,
+                current_version_id,
+                version_count,
+                file_size,
+                updated_at,
+                is_archived,
+                document_versions (
+                    id,
+                    document_id,
+                    version_number,
+                    file_name,
+                    file_path,
+                    file_size,
+                    change_summary,
+                    created_at
+                )
+            `)
+            .eq("machine_id", machineId)
+            .eq("is_archived", false)
+            .order("updated_at", { ascending: false });
+
+        if (error) throw error;
+
+        setDocuments((data ?? []) as unknown as DocumentWithVersions[]);
     };
 
     useEffect(() => {
@@ -163,9 +229,41 @@ export default function DocumentManager({
         const init = async () => {
             setLoading(true);
             try {
-                const rows = await listMachineDocuments(machineId);
+                const { data, error } = await supabase
+                    .from("documents")
+                    .select(`
+                        id,
+                        organization_id,
+                        machine_id,
+                        title,
+                        description,
+                        category,
+                        language,
+                        regulatory_reference,
+                        current_version_id,
+                        version_count,
+                        file_size,
+                        updated_at,
+                        is_archived,
+                        document_versions (
+                            id,
+                            document_id,
+                            version_number,
+                            file_name,
+                            file_path,
+                            file_size,
+                            change_summary,
+                            created_at
+                        )
+                    `)
+                    .eq("machine_id", machineId)
+                    .eq("is_archived", false)
+                    .order("updated_at", { ascending: false });
+
+                if (error) throw error;
                 if (!active) return;
-                setDocuments(rows);
+
+                setDocuments((data ?? []) as unknown as DocumentWithVersions[]);
             } catch (e: any) {
                 console.error(e);
                 if (!active) return;
@@ -326,33 +424,46 @@ export default function DocumentManager({
                 variant: "destructive",
             });
         } finally {
-            setUploadingVersionId(doc.id);
             setUploadingVersionId(null);
         }
     };
 
-    const handleArchive = async (doc: DocumentWithVersions) => {
-        if (!canWrite || !ctxOrgId) return;
-        if (!confirm(`Archiviare il documento "${doc.title}"?`)) return;
+    const handleMoveToTrash = async (doc: DocumentWithVersions) => {
+        if (!canWrite) return;
+        if (!confirm(`Spostare "${doc.title}" nel cestino?`)) return;
 
-        setArchivingId(doc.id);
+        setDeletingId(doc.id);
         try {
-            await archiveDocument(doc.id, ctxOrgId, user?.id ?? null, machineId);
+            const accessToken = await getAccessToken();
+
+            const response = await fetch(`/api/documents/${doc.id}/delete`, {
+                method: "DELETE",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.error || "Errore spostamento documento nel cestino");
+            }
+
             await reloadDocuments();
 
             toast({
-                title: "Documento archiviato",
+                title: "Documento spostato nel cestino",
                 description: doc.title,
             });
         } catch (e: any) {
             console.error(e);
             toast({
-                title: "Errore archivio",
-                description: e?.message ?? "Impossibile archiviare il documento.",
+                title: "Errore cestino",
+                description: e?.message ?? "Impossibile spostare il documento nel cestino.",
                 variant: "destructive",
             });
         } finally {
-            setArchivingId(null);
+            setDeletingId(null);
         }
     };
 
@@ -554,15 +665,15 @@ export default function DocumentManager({
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => handleArchive(doc)}
-                                                        disabled={archivingId === doc.id}
+                                                        onClick={() => handleMoveToTrash(doc)}
+                                                        disabled={deletingId === doc.id}
                                                     >
-                                                        {archivingId === doc.id ? (
+                                                        {deletingId === doc.id ? (
                                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                         ) : (
-                                                            <Archive className="mr-2 h-4 w-4" />
+                                                            <Trash2 className="mr-2 h-4 w-4" />
                                                         )}
-                                                        Archivia
+                                                        Cestino
                                                     </Button>
                                                 )}
                                             </div>
