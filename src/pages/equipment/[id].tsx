@@ -11,7 +11,17 @@ import { MachineEventTimeline } from "@/components/MachineEventTimeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building2, FileText, Factory, Wrench, History, Camera } from "lucide-react";
+import {
+    ArrowLeft,
+    Building2,
+    FileText,
+    Factory,
+    Wrench,
+    History,
+    Camera,
+    Trash2,
+    Loader2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -30,6 +40,7 @@ interface MachineRow {
     plant_id: string | null;
     production_line_id: string | null;
     is_archived: boolean | null;
+    is_deleted?: boolean | null;
     photo_url?: string | null;
     created_at?: string | null;
 }
@@ -50,9 +61,10 @@ export default function EquipmentDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { id } = router.query;
-    const { loading: authLoading, organization, membership } = useAuth();
+    const { loading: authLoading, organization, membership, session } = useAuth();
 
     const [loading, setLoading] = useState(true);
+    const [deleting, setDeleting] = useState(false);
     const [machine, setMachine] = useState < MachineRow | null > (null);
     const [plant, setPlant] = useState < PlantRow | null > (null);
     const [line, setLine] = useState < LineRow | null > (null);
@@ -66,6 +78,59 @@ export default function EquipmentDetailPage() {
     const resolvedId = useMemo(() => {
         return typeof id === "string" ? id : null;
     }, [id]);
+
+    const canDeleteMachine = useMemo(() => {
+        if (!machine || !orgId) return false;
+        return canEdit && machine.organization_id === orgId;
+    }, [machine, orgId, canEdit]);
+
+    const getAccessToken = async () => {
+        const accessToken =
+            session?.access_token ??
+            (await supabase.auth.getSession()).data.session?.access_token;
+
+        if (!accessToken) throw new Error("Sessione scaduta");
+        return accessToken;
+    };
+
+    const handleDeleteMachine = async () => {
+        if (!machine) return;
+        if (!confirm(`Spostare la macchina "${machine.name || machine.id}" nel cestino?`)) return;
+
+        setDeleting(true);
+        try {
+            const accessToken = await getAccessToken();
+
+            const response = await fetch(`/api/machines/${machine.id}/delete`, {
+                method: "DELETE",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.error || "Errore eliminazione macchina");
+            }
+
+            toast({
+                title: "Macchina spostata nel cestino",
+                description: machine.name || machine.id,
+            });
+
+            void router.push("/equipment");
+        } catch (err: any) {
+            console.error(err);
+            toast({
+                title: "Errore",
+                description: err?.message || "Errore eliminazione macchina",
+                variant: "destructive",
+            });
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     useEffect(() => {
         let active = true;
@@ -85,6 +150,8 @@ export default function EquipmentDetailPage() {
                     .from("machines")
                     .select("*")
                     .eq("id", resolvedId)
+                    .eq("is_archived", false)
+                    .or("is_deleted.is.null,is_deleted.eq.false")
                     .maybeSingle();
 
                 if (machineError) throw machineError;
@@ -99,6 +166,7 @@ export default function EquipmentDetailPage() {
                 }
 
                 const machineData = machineRow as MachineRow;
+
                 let allowed = false;
 
                 if (orgType === "manufacturer") {
@@ -214,6 +282,21 @@ export default function EquipmentDetailPage() {
                         </Button>
 
                         <div className="flex items-center gap-2">
+                            {canDeleteMachine && (
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleDeleteMachine}
+                                    disabled={deleting}
+                                >
+                                    {deleting ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                    )}
+                                    Sposta nel cestino
+                                </Button>
+                            )}
+
                             <Button variant="outline" asChild>
                                 <Link href={`/equipment/${machine.id}/maintenance`}>
                                     <Wrench className="mr-2 h-4 w-4" />
