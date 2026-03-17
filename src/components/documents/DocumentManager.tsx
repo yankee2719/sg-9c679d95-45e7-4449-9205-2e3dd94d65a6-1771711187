@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import {
     archiveDocument,
     createDocumentAndUploadV1,
     getSignedUrl,
     listMachineDocuments,
     uploadNewVersion,
-    DocumentCategory,
-    DocumentVersionRow,
-    DocumentWithVersions,
+    type DocumentCategory,
+    type DocumentVersionRow,
+    type DocumentWithVersions,
 } from "@/services/documentService";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -29,12 +28,12 @@ import {
     Upload,
     Plus,
     Download,
-    Factory,
-    Building2,
     Archive,
     History,
+    Loader2,
+    Factory,
+    Building2,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 type OrgType = "manufacturer" | "customer";
 
@@ -89,7 +88,7 @@ function categoryLabel(category: string | null | undefined) {
     return DOCUMENT_CATEGORY_OPTIONS.find((x) => x.value === category)?.label ?? category ?? "—";
 }
 
-function currentVersion(doc: DocumentWithVersions): DocumentVersionRow | null {
+function resolveCurrentVersion(doc: DocumentWithVersions): DocumentVersionRow | null {
     if (!doc.document_versions?.length) return null;
 
     if (doc.current_version_id) {
@@ -102,19 +101,20 @@ function currentVersion(doc: DocumentWithVersions): DocumentVersionRow | null {
     )[0] ?? null;
 }
 
-export default function DocumentManager(props: DocumentManagerProps) {
+export default function DocumentManager({
+    machineId,
+    readOnly = false,
+    machineOwnerOrgId = null,
+    currentOrgId = null,
+    currentOrgType = null,
+    currentUserRole = null,
+}: DocumentManagerProps) {
     const { toast } = useToast();
+    const { organization, membership, user } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [documents, setDocuments] = useState < DocumentWithVersions[] > ([]);
-
-    const [ctxOrgId, setCtxOrgId] = useState < string | null > (props.currentOrgId ?? null);
-    const [ctxOrgType, setCtxOrgType] = useState < OrgType | null > (props.currentOrgType ?? null);
-    const [ctxRole, setCtxRole] = useState < string > (props.currentUserRole ?? "technician");
-    const [resolvedMachineOwnerOrgId, setResolvedMachineOwnerOrgId] = useState < string | null > (
-        props.machineOwnerOrgId ?? null
-    );
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -128,72 +128,63 @@ export default function DocumentManager(props: DocumentManagerProps) {
     const [versionNotes, setVersionNotes] = useState < Record < string, string>> ({});
     const [uploadingVersionId, setUploadingVersionId] = useState < string | null > (null);
     const [archivingId, setArchivingId] = useState < string | null > (null);
+    const [downloadingId, setDownloadingId] = useState < string | null > (null);
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    await archiveDocument(doc.id, ctxOrgId!, user?.id ?? null, props.machineId);
+    const ctxOrgId = currentOrgId ?? organization?.id ?? null;
+    const ctxOrgType = (currentOrgType ?? organization?.type ?? null) as OrgType | null;
+    const ctxRole = currentUserRole ?? membership?.role ?? "technician";
 
     const canWrite = useMemo(() => {
-        if (props.readOnly) return false;
+        if (readOnly) return false;
         if (!ctxOrgId || !ctxOrgType) return false;
 
-        const isAdminLike = ctxRole === "admin" || ctxRole === "supervisor";
+        const isAdminLike = ["owner", "admin", "supervisor"].includes(ctxRole);
 
         if (ctxOrgType === "manufacturer") {
             return isAdminLike;
         }
 
         if (ctxOrgType === "customer") {
-            const isOwner = resolvedMachineOwnerOrgId === ctxOrgId;
-            return isOwner && (isAdminLike || ctxRole === "technician");
+            const isOwnerOrg = machineOwnerOrgId === ctxOrgId;
+            return isOwnerOrg && (isAdminLike || ctxRole === "technician");
         }
 
         return false;
-    }, [props.readOnly, ctxOrgId, ctxOrgType, ctxRole, resolvedMachineOwnerOrgId]);
+    }, [readOnly, ctxOrgId, ctxOrgType, ctxRole, machineOwnerOrgId]);
 
     const reloadDocuments = async () => {
-        const rows = await listMachineDocuments(props.machineId);
+        const rows = await listMachineDocuments(machineId);
         setDocuments(rows);
     };
 
     useEffect(() => {
+        let active = true;
+
         const init = async () => {
             setLoading(true);
-
             try {
-                const ctx = await getUserContext();
-                if (ctx?.orgId) setCtxOrgId(ctx.orgId);
-                if (ctx?.orgType) setCtxOrgType(ctx.orgType as OrgType);
-                if (ctx?.role) setCtxRole(ctx.role);
-
-                if (!props.machineOwnerOrgId) {
-                    const { data: machineRow, error: machineError } = await supabase
-                        .from("machines")
-                        .select("organization_id")
-                        .eq("id", props.machineId)
-                        .maybeSingle();
-
-                    if (machineError) throw machineError;
-                    setResolvedMachineOwnerOrgId((machineRow as any)?.organization_id ?? null);
-                }
-
-                await reloadDocuments();
+                const rows = await listMachineDocuments(machineId);
+                if (!active) return;
+                setDocuments(rows);
             } catch (e: any) {
                 console.error(e);
+                if (!active) return;
                 toast({
                     title: "Errore",
                     description: e?.message ?? "Errore caricamento documenti.",
                     variant: "destructive",
                 });
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
 
-        init();
-    }, [props.machineId, props.machineOwnerOrgId]);
+        void init();
+
+        return () => {
+            active = false;
+        };
+    }, [machineId, toast]);
 
     const resetForm = () => {
         setTitle("");
@@ -210,6 +201,15 @@ export default function DocumentManager(props: DocumentManagerProps) {
             toast({
                 title: "Azione non consentita",
                 description: "Non hai permessi di scrittura nel contesto attuale.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        if (!ctxOrgId) {
+            toast({
+                title: "Errore",
+                description: "Organizzazione attiva non trovata.",
                 variant: "destructive",
             });
             return;
@@ -233,25 +233,11 @@ export default function DocumentManager(props: DocumentManagerProps) {
             return;
         }
 
-        if (!ctxOrgId) {
-            toast({
-                title: "Errore",
-                description: "Organizzazione attiva non trovata.",
-                variant: "destructive",
-            });
-            return;
-        }
-
         setSaving(true);
-
         try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
             await createDocumentAndUploadV1({
                 organizationId: ctxOrgId,
-                machineId: props.machineId,
+                machineId,
                 title: title.trim(),
                 description: description.trim() || null,
                 category,
@@ -259,23 +245,21 @@ export default function DocumentManager(props: DocumentManagerProps) {
                 changeSummary: changeSummary.trim() || null,
                 language: language.trim() || "it",
                 regulatoryReference: regulatoryReference.trim() || null,
-                isMandatory: false,
-                tags: [],
                 createdBy: user?.id ?? null,
             });
 
-            toast({
-                title: "OK",
-                description: "Documento caricato correttamente.",
-            });
-
-            resetForm();
             await reloadDocuments();
+            resetForm();
+
+            toast({
+                title: "Documento creato",
+                description: "File caricato correttamente.",
+            });
         } catch (e: any) {
             console.error(e);
             toast({
                 title: "Errore upload",
-                description: e?.message ?? "Errore durante il caricamento del documento.",
+                description: e?.message ?? "Impossibile creare il documento.",
                 variant: "destructive",
             });
         } finally {
@@ -284,98 +268,82 @@ export default function DocumentManager(props: DocumentManagerProps) {
     };
 
     const handleDownload = async (doc: DocumentWithVersions) => {
+        const version = resolveCurrentVersion(doc);
+        if (!version?.file_path) return;
+
+        setDownloadingId(doc.id);
         try {
-            const version = currentVersion(doc);
-            if (!version?.file_path) {
-                throw new Error("Versione corrente del documento non disponibile.");
-            }
-
             const signedUrl = await getSignedUrl(version.file_path, 600);
-
-            const a = window.document.createElement("a");
-            a.href = signedUrl;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.download = version.file_name || "document";
-            a.click();
+            window.open(signedUrl, "_blank", "noopener,noreferrer");
         } catch (e: any) {
             console.error(e);
             toast({
                 title: "Errore download",
-                description: e?.message ?? "Impossibile scaricare il documento.",
+                description: e?.message ?? "Impossibile aprire il file.",
                 variant: "destructive",
             });
+        } finally {
+            setDownloadingId(null);
         }
     };
 
     const handleUploadNewVersion = async (doc: DocumentWithVersions) => {
-        const file = versionFiles[doc.id];
-        const note = versionNotes[doc.id] ?? "";
+        if (!canWrite || !ctxOrgId) return;
 
+        const file = versionFiles[doc.id];
         if (!file) {
             toast({
                 title: "Errore",
-                description: "Seleziona il file della nuova versione.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        if (!ctxOrgId) {
-            toast({
-                title: "Errore",
-                description: "Organizzazione attiva non trovata.",
+                description: "Seleziona un file per la nuova versione.",
                 variant: "destructive",
             });
             return;
         }
 
         setUploadingVersionId(doc.id);
-
         try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
             await uploadNewVersion({
                 documentId: doc.id,
                 organizationId: ctxOrgId,
                 file,
-                changeSummary: note.trim() || null,
+                changeSummary: versionNotes[doc.id]?.trim() || null,
                 createdBy: user?.id ?? null,
             });
 
+            await reloadDocuments();
             setVersionFiles((prev) => ({ ...prev, [doc.id]: null }));
             setVersionNotes((prev) => ({ ...prev, [doc.id]: "" }));
 
             toast({
-                title: "OK",
-                description: "Nuova versione caricata correttamente.",
+                title: "Nuova versione caricata",
+                description: doc.title,
             });
-
-            await reloadDocuments();
         } catch (e: any) {
             console.error(e);
             toast({
-                title: "Errore versione",
-                description: e?.message ?? "Impossibile caricare la nuova versione.",
+                title: "Errore nuova versione",
+                description: e?.message ?? "Upload versione fallito.",
                 variant: "destructive",
             });
         } finally {
+            setUploadingVersionId(doc.id);
             setUploadingVersionId(null);
         }
     };
 
-    const handleArchiveDocument = async (doc: DocumentWithVersions) => {
-        setArchivingId(doc.id);
+    const handleArchive = async (doc: DocumentWithVersions) => {
+        if (!canWrite || !ctxOrgId) return;
+        if (!confirm(`Archiviare il documento "${doc.title}"?`)) return;
 
+        setArchivingId(doc.id);
         try {
-            await archiveDocument(doc.id);
-            toast({
-                title: "OK",
-                description: "Documento archiviato.",
-            });
+            await archiveDocument(doc.id, ctxOrgId, user?.id ?? null, machineId);
             await reloadDocuments();
+
+            toast({
+                title: "Documento archiviato",
+                description: doc.title,
+            });
         } catch (e: any) {
             console.error(e);
             toast({
@@ -393,201 +361,260 @@ export default function DocumentManager(props: DocumentManagerProps) {
             <Card className="rounded-2xl">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
+                        {ctxOrgType === "manufacturer" ? (
+                            <Factory className="h-5 w-5 text-orange-500" />
+                        ) : (
+                            <Building2 className="h-5 w-5 text-blue-500" />
+                        )}
                         Documenti macchina
                     </CardTitle>
                     <CardDescription>
-                        Archivio documentale collegato alla macchina con versioning.
+                        Archivio documentale tecnico collegato alla macchina nel contesto attivo.
                     </CardDescription>
                 </CardHeader>
             </Card>
 
-            <Card className="rounded-2xl">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                        <Plus className="h-4 w-4" />
-                        Nuovo documento
-                    </CardTitle>
-                    <CardDescription>
-                        {ctxOrgType === "manufacturer"
-                            ? "Il costruttore può caricare documenti tecnici della macchina."
-                            : "Il cliente finale può caricare documenti operativi della propria macchina."}
-                    </CardDescription>
-                </CardHeader>
+            {canWrite && (
+                <Card className="rounded-2xl">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Plus className="h-5 w-5" />
+                            Nuovo documento
+                        </CardTitle>
+                        <CardDescription>
+                            Crea il documento e carica subito la prima versione.
+                        </CardDescription>
+                    </CardHeader>
 
-                <CardContent className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label>Titolo *</Label>
-                            <Input
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Es. Manuale uso e manutenzione"
-                            />
-                        </div>
+                    <CardContent className="space-y-5">
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2 md:col-span-2">
+                                <LabelLite>Titolo *</LabelLite>
+                                <Input
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="Es. Manuale uso e manutenzione"
+                                />
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label>Categoria</Label>
-                            <Select value={category} onValueChange={(v) => setCategory(v as DocumentCategory)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleziona categoria..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {DOCUMENT_CATEGORY_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                            <div className="space-y-2">
+                                <LabelLite>Categoria</LabelLite>
+                                <Select
+                                    value={category}
+                                    onValueChange={(value) =>
+                                        setCategory(value as DocumentCategory)
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {DOCUMENT_CATEGORY_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label>Lingua</Label>
-                            <Input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="it" />
-                        </div>
+                            <div className="space-y-2">
+                                <LabelLite>Lingua</LabelLite>
+                                <Input
+                                    value={language}
+                                    onChange={(e) => setLanguage(e.target.value)}
+                                    placeholder="it / en / es ..."
+                                />
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label>Riferimento normativo</Label>
-                            <Input
-                                value={regulatoryReference}
-                                onChange={(e) => setRegulatoryReference(e.target.value)}
-                                placeholder="Es. EN ISO 12100"
-                            />
-                        </div>
+                            <div className="space-y-2">
+                                <LabelLite>Riferimento normativo</LabelLite>
+                                <Input
+                                    value={regulatoryReference}
+                                    onChange={(e) => setRegulatoryReference(e.target.value)}
+                                    placeholder="Es. 2006/42/CE"
+                                />
+                            </div>
 
-                        <div className="space-y-2">
-                            <Label>Note versione</Label>
-                            <Input
-                                value={changeSummary}
-                                onChange={(e) => setChangeSummary(e.target.value)}
-                                placeholder="Es. Prima emissione"
-                            />
-                        </div>
+                            <div className="space-y-2">
+                                <LabelLite>File</LabelLite>
+                                <Input
+                                    type="file"
+                                    onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                                />
+                            </div>
 
-                        <div className="space-y-2 md:col-span-2">
-                            <Label>Descrizione</Label>
-                            <Textarea
-                                rows={3}
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Descrizione documento..."
-                            />
-                        </div>
+                            <div className="space-y-2 md:col-span-2">
+                                <LabelLite>Descrizione</LabelLite>
+                                <Textarea
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    rows={3}
+                                    placeholder="Descrizione documento..."
+                                />
+                            </div>
 
-                        <div className="space-y-2 md:col-span-2">
-                            <Label>File</Label>
-                            <Input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
-                            <div className="text-xs text-muted-foreground">
-                                Formati consigliati: PDF, DOCX, XLSX, PPTX, JPG, PNG, MP4.
+                            <div className="space-y-2 md:col-span-2">
+                                <LabelLite>Note versione iniziale</LabelLite>
+                                <Textarea
+                                    value={changeSummary}
+                                    onChange={(e) => setChangeSummary(e.target.value)}
+                                    rows={3}
+                                    placeholder="Es. prima emissione, bozza iniziale..."
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex justify-end">
-                        <Button onClick={handleCreateDocument} disabled={saving || !canWrite}>
-                            <Upload className="mr-2 h-4 w-4" />
-                            {saving ? "Caricamento..." : "Carica documento"}
-                        </Button>
-                    </div>
-
-                    {!canWrite && (
-                        <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-                            Non hai permessi di scrittura nel contesto attuale per questa macchina.
+                        <div className="flex justify-end">
+                            <Button onClick={handleCreateDocument} disabled={saving}>
+                                {saving ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Upload className="mr-2 h-4 w-4" />
+                                )}
+                                {saving ? "Caricamento..." : "Crea documento"}
+                            </Button>
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
 
             <Card className="rounded-2xl">
                 <CardHeader>
-                    <CardTitle className="text-base">Elenco documenti</CardTitle>
-                    <CardDescription>Visualizzazione documenti collegati alla macchina.</CardDescription>
+                    <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Elenco documenti
+                    </CardTitle>
                 </CardHeader>
 
                 <CardContent>
                     {loading ? (
-                        <div className="text-sm text-muted-foreground">Caricamento documenti...</div>
+                        <div className="flex items-center justify-center py-10 text-muted-foreground">
+                            <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                            Caricamento documenti...
+                        </div>
                     ) : documents.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Nessun documento presente.</div>
+                        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                            Nessun documento trovato per questa macchina.
+                        </div>
                     ) : (
                         <div className="space-y-4">
                             {documents.map((doc) => {
-                                const version = currentVersion(doc);
+                                const version = resolveCurrentVersion(doc);
 
                                 return (
                                     <div
                                         key={doc.id}
-                                        className="rounded-xl border border-border p-4 space-y-4"
+                                        className="rounded-2xl border border-border p-4"
                                     >
-                                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                                             <div className="min-w-0 space-y-2">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <div className="font-medium">{doc.title || "Documento"}</div>
-
-                                                    <Badge variant="outline" className="capitalize">
+                                                    <div className="truncate text-lg font-semibold">
+                                                        {doc.title}
+                                                    </div>
+                                                    <Badge variant="outline">
                                                         {categoryLabel(doc.category)}
                                                     </Badge>
-
-                                                    {doc.organization_id === resolvedMachineOwnerOrgId ? (
-                                                        <Badge variant="outline" className="gap-1">
-                                                            <Building2 className="h-3 w-3" />
-                                                            Owner
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge className="gap-1">
-                                                            <Factory className="h-3 w-3" />
-                                                            Documento locale
-                                                        </Badge>
-                                                    )}
+                                                    <Badge variant="secondary">
+                                                        v{version?.version_number ?? doc.version_count ?? 1}
+                                                    </Badge>
                                                 </div>
 
                                                 {doc.description && (
-                                                    <div className="text-sm text-muted-foreground">{doc.description}</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {doc.description}
+                                                    </div>
                                                 )}
 
                                                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                    <span>File: {version?.file_name ?? "—"}</span>
-                                                    <span>Mime: {version?.mime_type || "—"}</span>
-                                                    <span>Dimensione: {formatBytes(version?.file_size)}</span>
-                                                    <span>Versioni: {doc.version_count ?? "—"}</span>
-                                                    <span>Creato: {formatDate(doc.created_at)}</span>
+                                                    <span>Lingua: {doc.language || "—"}</span>
+                                                    <span>Size: {formatBytes(version?.file_size ?? doc.file_size)}</span>
                                                     <span>Aggiornato: {formatDate(doc.updated_at)}</span>
+                                                    <span>Versioni: {doc.version_count ?? 1}</span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <Button variant="outline" onClick={() => handleDownload(doc)}>
-                                                    <Download className="mr-2 h-4 w-4" />
-                                                    Scarica
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleDownload(doc)}
+                                                    disabled={!version?.file_path || downloadingId === doc.id}
+                                                >
+                                                    {downloadingId === doc.id ? (
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Download className="mr-2 h-4 w-4" />
+                                                    )}
+                                                    Apri
                                                 </Button>
 
                                                 {canWrite && (
                                                     <Button
                                                         variant="outline"
-                                                        onClick={() => handleArchiveDocument(doc)}
+                                                        size="sm"
+                                                        onClick={() => handleArchive(doc)}
                                                         disabled={archivingId === doc.id}
                                                     >
-                                                        <Archive className="mr-2 h-4 w-4" />
-                                                        {archivingId === doc.id ? "Archivio..." : "Archivia"}
+                                                        {archivingId === doc.id ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Archive className="mr-2 h-4 w-4" />
+                                                        )}
+                                                        Archivia
                                                     </Button>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <div className="rounded-xl bg-muted/30 p-4 space-y-3">
-                                            <div className="flex items-center gap-2 text-sm font-medium">
-                                                <History className="h-4 w-4" />
-                                                Versione corrente: {version?.version_number ?? "—"}
-                                            </div>
-
-                                            {version?.change_summary && (
-                                                <div className="text-sm text-muted-foreground">
-                                                    Note versione: {version.change_summary}
+                                        {doc.document_versions?.length > 1 && (
+                                            <div className="mt-4 rounded-xl bg-muted/40 p-3">
+                                                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                                                    <History className="h-4 w-4" />
+                                                    Cronologia versioni
                                                 </div>
-                                            )}
 
-                                            {canWrite && (
+                                                <div className="space-y-2">
+                                                    {doc.document_versions
+                                                        .sort(
+                                                            (a, b) =>
+                                                                (b.version_number ?? 0) -
+                                                                (a.version_number ?? 0)
+                                                        )
+                                                        .map((ver) => (
+                                                            <div
+                                                                key={ver.id}
+                                                                className="flex flex-col gap-1 rounded-lg border border-border bg-background p-3 text-sm md:flex-row md:items-center md:justify-between"
+                                                            >
+                                                                <div className="min-w-0">
+                                                                    <div className="font-medium">
+                                                                        v{ver.version_number} ·{" "}
+                                                                        {ver.file_name}
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground">
+                                                                        {formatDate(ver.created_at)}
+                                                                        {ver.change_summary
+                                                                            ? ` · ${ver.change_summary}`
+                                                                            : ""}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="text-xs text-muted-foreground">
+                                                                    {formatBytes(ver.file_size)}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {canWrite && (
+                                            <div className="mt-4 rounded-xl border border-dashed border-border p-4">
+                                                <div className="mb-3 text-sm font-medium">
+                                                    Carica nuova versione
+                                                </div>
+
                                                 <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
                                                     <Input
                                                         type="file"
@@ -598,7 +625,6 @@ export default function DocumentManager(props: DocumentManagerProps) {
                                                             }))
                                                         }
                                                     />
-
                                                     <Input
                                                         value={versionNotes[doc.id] ?? ""}
                                                         onChange={(e) =>
@@ -607,19 +633,22 @@ export default function DocumentManager(props: DocumentManagerProps) {
                                                                 [doc.id]: e.target.value,
                                                             }))
                                                         }
-                                                        placeholder="Nota nuova versione"
+                                                        placeholder="Note nuova versione"
                                                     />
-
                                                     <Button
                                                         onClick={() => handleUploadNewVersion(doc)}
                                                         disabled={uploadingVersionId === doc.id}
                                                     >
-                                                        <Upload className="mr-2 h-4 w-4" />
-                                                        {uploadingVersionId === doc.id ? "Carico..." : "Nuova versione"}
+                                                        {uploadingVersionId === doc.id ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Upload className="mr-2 h-4 w-4" />
+                                                        )}
+                                                        Carica
                                                     </Button>
                                                 </div>
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -629,4 +658,8 @@ export default function DocumentManager(props: DocumentManagerProps) {
             </Card>
         </div>
     );
+}
+
+function LabelLite({ children }: { children: React.ReactNode }) {
+    return <div className="text-sm font-medium text-foreground">{children}</div>;
 }
