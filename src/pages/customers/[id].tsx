@@ -76,6 +76,7 @@ export default function CustomerDetailPage() {
     const { organization, membership, user, session, loading: authLoading } = useAuth();
 
     const [loading, setLoading] = useState(true);
+    const [deletingCustomer, setDeletingCustomer] = useState(false);
     const [customer, setCustomer] = useState < CustomerOrg | null > (null);
     const [members, setMembers] = useState < Member[] > ([]);
     const [assignedMachines, setAssignedMachines] = useState < AssignedMachine[] > ([]);
@@ -137,6 +138,7 @@ export default function CustomerDetailPage() {
                 .eq("id", customerId)
                 .eq("manufacturer_org_id", manufacturerOrgId)
                 .eq("type", "customer")
+                .neq("subscription_status", "deleted")
                 .single();
 
             if (orgError || !org) {
@@ -333,7 +335,11 @@ export default function CustomerDetailPage() {
             setAssignedMachines((prev) => prev.filter((a) => a.assignment_id !== assignmentId));
             toast({ title: "Macchina rimossa" });
         } catch (err: any) {
-            toast({ title: "Errore", description: err?.message, variant: "destructive" });
+            toast({
+                title: "Errore",
+                description: err?.message,
+                variant: "destructive",
+            });
         }
     };
 
@@ -419,9 +425,50 @@ export default function CustomerDetailPage() {
         }
     };
 
+    const handleDeleteCustomer = async () => {
+        if (!customer) return;
+        if (!confirm(`Eliminare il cliente "${customer.name}"?`)) return;
+
+        setDeletingCustomer(true);
+
+        try {
+            const accessToken = await getAccessToken();
+
+            const response = await fetch(`/api/customers/${customer.id}/delete`, {
+                method: "DELETE",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.error || "Errore eliminazione cliente");
+            }
+
+            toast({
+                title: "Cliente eliminato",
+                description: customer.name,
+            });
+
+            void router.push("/customers");
+        } catch (err: any) {
+            console.error(err);
+            toast({
+                title: "Errore",
+                description: err?.message || "Errore eliminazione cliente",
+                variant: "destructive",
+            });
+        } finally {
+            setDeletingCustomer(false);
+        }
+    };
+
     const getLifecycleColor = (state: string | null) => {
         const map: Record<string, string> = {
-            active: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30",
+            active:
+                "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30",
             inactive:
                 "bg-gray-100 dark:bg-slate-500/20 text-gray-600 dark:text-slate-400 border-gray-300 dark:border-slate-500/30",
             under_maintenance:
@@ -493,10 +540,25 @@ export default function CustomerDetailPage() {
                         {canManage && (
                             <div className="flex gap-2">
                                 {!editing ? (
-                                    <Button variant="outline" onClick={() => setEditing(true)}>
-                                        <Edit2 className="mr-2 h-4 w-4" />
-                                        Modifica
-                                    </Button>
+                                    <>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleDeleteCustomer}
+                                            disabled={deletingCustomer}
+                                        >
+                                            {deletingCustomer ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                            )}
+                                            Elimina cliente
+                                        </Button>
+
+                                        <Button variant="outline" onClick={() => setEditing(true)}>
+                                            <Edit2 className="mr-2 h-4 w-4" />
+                                            Modifica
+                                        </Button>
+                                    </>
                                 ) : (
                                     <>
                                         <Button variant="outline" onClick={() => setEditing(false)}>
