@@ -1,440 +1,470 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/router";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { notificationService, type Notification, type NotificationType } from "@/services/notificationService";
-import { Bell, ClipboardList, AlertTriangle, Clock, Wrench, CheckCircle2, Trash2, CheckCheck, BellOff, User } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useEffect, useMemo, useState } from "react";
+import { Bell, CheckCheck, Loader2, Search, Trash2, Filter } from "lucide-react";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
+import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
-import { PageLoader } from "@/components/feedback/PageLoader";
+import { notificationService, type Notification } from "@/services/notificationService";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const copy = {
     it: {
-        pageTitle: "Notifiche",
-        allCaughtUp: "Tutto aggiornato",
-        unreadSuffix: "non lette",
-        markAllRead: "Segna tutte lette",
+        seo: "Notifiche - MACHINA",
+        title: "Notifiche",
+        subtitle: "Gestisci notifiche operative, alert e aggiornamenti sistema.",
+        total: "Totali",
+        unread: "Non lette",
+        read: "Lette",
+        loading: "Caricamento notifiche...",
+        empty: "Nessuna notifica trovata.",
+        search: "Cerca nelle notifiche...",
+        all: "Tutte",
+        onlyUnread: "Solo non lette",
+        onlyRead: "Solo lette",
+        markAllRead: "Segna tutte come lette",
         deleteRead: "Elimina lette",
-        emptyTitle: "Nessuna notifica",
-        emptyDescription: "Le notifiche appariranno qui quando ci saranno aggiornamenti.",
-        newBadge: "Nuova",
-        toastAllRead: "Tutte lette",
-        toastReadDeleted: "Notifiche lette eliminate",
-        filters: {
-            all: "Tutte",
-            unread: "Non lette",
-            overdue: "Scadute",
-            assigned: "Assegnati",
-            checklists: "Checklist",
-            system: "Sistema",
-        },
-        labels: {
-            maintenance_due: "Manutenzione",
-            maintenance_overdue: "Scaduta",
-            equipment_status: "Macchina",
-            checklist_assigned: "Checklist",
-            checklist_completed: "Checklist",
-            wo_assigned: "WO assegnato",
-            wo_completed: "WO completato",
-            system: "Sistema",
-        },
-        relative: {
-            now: "Ora",
-            minutes: "m fa",
-            hours: "h fa",
-            days: "g fa",
-            locale: "it-IT",
-        },
-        deleteAria: "Elimina notifica",
+        markRead: "Segna letta",
+        delete: "Elimina",
+        open: "Apri",
     },
     en: {
-        pageTitle: "Notifications",
-        allCaughtUp: "All caught up",
-        unreadSuffix: "unread",
+        seo: "Notifications - MACHINA",
+        title: "Notifications",
+        subtitle: "Manage operational alerts, reminders and system updates.",
+        total: "Total",
+        unread: "Unread",
+        read: "Read",
+        loading: "Loading notifications...",
+        empty: "No notifications found.",
+        search: "Search notifications...",
+        all: "All",
+        onlyUnread: "Unread only",
+        onlyRead: "Read only",
         markAllRead: "Mark all as read",
         deleteRead: "Delete read",
-        emptyTitle: "No notifications",
-        emptyDescription: "Notifications will appear here when updates arrive.",
-        newBadge: "New",
-        toastAllRead: "All notifications marked as read",
-        toastReadDeleted: "Read notifications deleted",
-        filters: {
-            all: "All",
-            unread: "Unread",
-            overdue: "Overdue",
-            assigned: "Assigned",
-            checklists: "Checklists",
-            system: "System",
-        },
-        labels: {
-            maintenance_due: "Maintenance",
-            maintenance_overdue: "Overdue",
-            equipment_status: "Machine",
-            checklist_assigned: "Checklist",
-            checklist_completed: "Checklist",
-            wo_assigned: "WO assigned",
-            wo_completed: "WO completed",
-            system: "System",
-        },
-        relative: {
-            now: "Now",
-            minutes: "m ago",
-            hours: "h ago",
-            days: "d ago",
-            locale: "en-GB",
-        },
-        deleteAria: "Delete notification",
+        markRead: "Mark as read",
+        delete: "Delete",
+        open: "Open",
     },
     fr: {
-        pageTitle: "Notifications",
-        allCaughtUp: "Tout est à jour",
-        unreadSuffix: "non lues",
+        seo: "Notifications - MACHINA",
+        title: "Notifications",
+        subtitle: "Gérez les alertes opérationnelles, rappels et mises à jour système.",
+        total: "Total",
+        unread: "Non lues",
+        read: "Lues",
+        loading: "Chargement des notifications...",
+        empty: "Aucune notification trouvée.",
+        search: "Rechercher dans les notifications...",
+        all: "Toutes",
+        onlyUnread: "Seulement non lues",
+        onlyRead: "Seulement lues",
         markAllRead: "Tout marquer comme lu",
         deleteRead: "Supprimer les lues",
-        emptyTitle: "Aucune notification",
-        emptyDescription: "Les notifications apparaîtront ici lorsqu'il y aura des mises à jour.",
-        newBadge: "Nouvelle",
-        toastAllRead: "Toutes les notifications sont lues",
-        toastReadDeleted: "Notifications lues supprimées",
-        filters: {
-            all: "Toutes",
-            unread: "Non lues",
-            overdue: "En retard",
-            assigned: "Assignés",
-            checklists: "Checklist",
-            system: "Système",
-        },
-        labels: {
-            maintenance_due: "Maintenance",
-            maintenance_overdue: "En retard",
-            equipment_status: "Machine",
-            checklist_assigned: "Checklist",
-            checklist_completed: "Checklist",
-            wo_assigned: "OT assigné",
-            wo_completed: "OT terminé",
-            system: "Système",
-        },
-        relative: {
-            now: "À l’instant",
-            minutes: "min",
-            hours: "h",
-            days: "j",
-            locale: "fr-FR",
-        },
-        deleteAria: "Supprimer la notification",
+        markRead: "Marquer comme lue",
+        delete: "Supprimer",
+        open: "Ouvrir",
     },
     es: {
-        pageTitle: "Notificaciones",
-        allCaughtUp: "Todo al día",
-        unreadSuffix: "sin leer",
+        seo: "Notificaciones - MACHINA",
+        title: "Notificaciones",
+        subtitle: "Gestiona alertas operativas, recordatorios y actualizaciones del sistema.",
+        total: "Totales",
+        unread: "No leídas",
+        read: "Leídas",
+        loading: "Cargando notificaciones...",
+        empty: "No se encontraron notificaciones.",
+        search: "Buscar en notificaciones...",
+        all: "Todas",
+        onlyUnread: "Solo no leídas",
+        onlyRead: "Solo leídas",
         markAllRead: "Marcar todas como leídas",
         deleteRead: "Eliminar leídas",
-        emptyTitle: "Sin notificaciones",
-        emptyDescription: "Las notificaciones aparecerán aquí cuando haya actualizaciones.",
-        newBadge: "Nueva",
-        toastAllRead: "Todas las notificaciones marcadas como leídas",
-        toastReadDeleted: "Notificaciones leídas eliminadas",
-        filters: {
-            all: "Todas",
-            unread: "Sin leer",
-            overdue: "Vencidas",
-            assigned: "Asignadas",
-            checklists: "Checklists",
-            system: "Sistema",
-        },
-        labels: {
-            maintenance_due: "Mantenimiento",
-            maintenance_overdue: "Vencida",
-            equipment_status: "Máquina",
-            checklist_assigned: "Checklist",
-            checklist_completed: "Checklist",
-            wo_assigned: "OT asignada",
-            wo_completed: "OT completada",
-            system: "Sistema",
-        },
-        relative: {
-            now: "Ahora",
-            minutes: "m",
-            hours: "h",
-            days: "d",
-            locale: "es-ES",
-        },
-        deleteAria: "Eliminar notificación",
+        markRead: "Marcar leída",
+        delete: "Eliminar",
+        open: "Abrir",
     },
 } as const;
 
-function getEntityRoute(n: Notification): string | null {
-    if (n.link) return n.link;
-    if (!n.related_entity_type || !n.related_entity_id) return null;
-    switch (n.related_entity_type) {
-        case "work_order":
-            return `/work-orders/${n.related_entity_id}`;
-        case "maintenance_plan":
-            return `/maintenance/${n.related_entity_id}`;
-        case "machine":
-            return `/equipment/${n.related_entity_id}`;
-        case "checklist_execution":
-            return `/checklist/${n.related_entity_id}`;
+type FilterMode = "all" | "unread" | "read";
+
+function getTypeBadge(type: string) {
+    switch (type) {
+        case "maintenance_overdue":
+            return "bg-red-500/15 text-red-300 border-red-500/30";
+        case "maintenance_due":
+            return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+        case "wo_assigned":
+        case "wo_completed":
+            return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+        case "checklist_completed":
+        case "checklist_assigned":
+            return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
         default:
-            return null;
+            return "bg-slate-500/15 text-slate-300 border-slate-500/30";
     }
 }
 
+function formatDate(value: string, language: string) {
+    const locale =
+        language === "it"
+            ? "it-IT"
+            : language === "fr"
+                ? "fr-FR"
+                : language === "es"
+                    ? "es-ES"
+                    : "en-GB";
+
+    return new Date(value).toLocaleString(locale, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
 export default function NotificationsPage() {
-    const router = useRouter();
-    const { toast } = useToast();
     const { language } = useLanguage();
-    const { loading: authLoading, membership, isAuthenticated } = useAuth();
-    const text = useMemo(() => copy[language], [language]);
+    const text = copy[language];
+    const { membership } = useAuth();
 
-    const typeConfig: Record<string, { label: string; icon: any; chip: string }> = {
-        maintenance_due: { label: text.labels.maintenance_due, icon: Clock, chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-        maintenance_overdue: { label: text.labels.maintenance_overdue, icon: AlertTriangle, chip: "bg-red-500/15 text-red-700 dark:text-red-300" },
-        equipment_status: { label: text.labels.equipment_status, icon: Wrench, chip: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
-        checklist_assigned: { label: text.labels.checklist_assigned, icon: ClipboardList, chip: "bg-purple-500/15 text-purple-700 dark:text-purple-300" },
-        checklist_completed: { label: text.labels.checklist_completed, icon: CheckCircle2, chip: "bg-green-500/15 text-green-700 dark:text-green-300" },
-        wo_assigned: { label: text.labels.wo_assigned, icon: User, chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300" },
-        wo_completed: { label: text.labels.wo_completed, icon: CheckCircle2, chip: "bg-green-500/15 text-green-700 dark:text-green-300" },
-        system: { label: text.labels.system, icon: Bell, chip: "bg-slate-500/15 text-slate-700 dark:text-slate-300" },
-    };
-
-    const formatRelative = useCallback((d: string) => {
-        const ms = Date.now() - new Date(d).getTime();
-        const mins = Math.floor(ms / 60000);
-        const hrs = Math.floor(ms / 3600000);
-        const days = Math.floor(ms / 86400000);
-        if (mins < 1) return text.relative.now;
-        if (mins < 60) return `${mins}${text.relative.minutes}`;
-        if (hrs < 24) return `${hrs}${text.relative.hours}`;
-        if (days < 7) return `${days}${text.relative.days}`;
-        return new Date(d).toLocaleDateString(text.relative.locale);
-    }, [text.relative]);
-
-    const [userRole, setUserRole] = useState < "admin" | "supervisor" | "technician" > (((membership?.role as any) ?? "technician"));
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState < Notification[] > ([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [activeFilter, setActiveFilter] = useState < "all" | "unread" | NotificationType > ("all");
+    const [search, setSearch] = useState("");
+    const [filterMode, setFilterMode] = useState < FilterMode > ("all");
+    const [busyId, setBusyId] = useState < string | null > (null);
+    const [bulkBusy, setBulkBusy] = useState < "read" | "delete" | null > (null);
 
-    const syncLayoutUnread = useCallback((count: number) => {
-        if (typeof window === "undefined") return;
-        window.dispatchEvent(new CustomEvent("machina:notifications-updated", { detail: { unreadCount: count } }));
+    const userRole = membership?.role ?? "technician";
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const result = await notificationService.getMyNotifications({ limit: 100 });
+            setNotifications(result.notifications);
+            setUnreadCount(result.unreadCount);
+        } catch (error) {
+            console.error("Notifications load error:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void load();
     }, []);
 
-    const loadNotifications = useCallback(async () => {
-        const result = await notificationService.getMyNotifications({ limit: 100 });
-        setNotifications(result.notifications);
-        setUnreadCount(result.unreadCount);
-        syncLayoutUnread(result.unreadCount);
-    }, [syncLayoutUnread]);
+    const filteredNotifications = useMemo(() => {
+        return notifications.filter((notification) => {
+            const q = search.trim().toLowerCase();
 
-    useEffect(() => {
-        if (authLoading) return;
+            const matchesSearch =
+                !q ||
+                notification.title.toLowerCase().includes(q) ||
+                notification.message.toLowerCase().includes(q) ||
+                (notification.type || "").toLowerCase().includes(q);
 
-        if (!isAuthenticated) {
-            void router.push("/login");
-            return;
+            const matchesFilter =
+                filterMode === "all" ||
+                (filterMode === "unread" && !notification.is_read) ||
+                (filterMode === "read" && notification.is_read);
+
+            return matchesSearch && matchesFilter;
+        });
+    }, [notifications, search, filterMode]);
+
+    const stats = useMemo(() => {
+        return {
+            total: notifications.length,
+            unread: notifications.filter((n) => !n.is_read).length,
+            read: notifications.filter((n) => n.is_read).length,
+        };
+    }, [notifications]);
+
+    const handleMarkRead = async (id: string) => {
+        setBusyId(id);
+        try {
+            await notificationService.markAsRead(id);
+            setNotifications((prev) =>
+                prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setBusyId(null);
         }
+    };
 
-        setUserRole(((membership?.role as any) ?? "technician"));
-
-        const init = async () => {
-            try {
-                await loadNotifications();
-            } finally {
-                setLoading(false);
+    const handleDelete = async (id: string) => {
+        setBusyId(id);
+        try {
+            const target = notifications.find((n) => n.id === id);
+            await notificationService.deleteNotification(id);
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+            if (target && !target.is_read) {
+                setUnreadCount((prev) => Math.max(0, prev - 1));
             }
-        };
-
-        void init();
-    }, [authLoading, isAuthenticated, loadNotifications, membership?.role, router]);
-
-    useEffect(() => {
-        let channel: any = null;
-        const setup = async () => {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            if (!user) return;
-            channel = notificationService.subscribeToMyNotifications(user.id, (newNotif) => {
-                setNotifications((prev) => [newNotif, ...prev]);
-                setUnreadCount((prev) => {
-                    const next = prev + 1;
-                    syncLayoutUnread(next);
-                    return next;
-                });
-            });
-        };
-        setup();
-        return () => {
-            if (channel) notificationService.unsubscribe(channel);
-        };
-    }, [syncLayoutUnread]);
-
-    const handleClick = async (n: Notification) => {
-        if (!n.is_read) {
-            await notificationService.markAsRead(n.id);
-            setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
-            setUnreadCount((prev) => {
-                const next = Math.max(0, prev - 1);
-                syncLayoutUnread(next);
-                return next;
-            });
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setBusyId(null);
         }
-        const route = getEntityRoute(n);
-        if (route) router.push(route);
     };
 
     const handleMarkAllRead = async () => {
-        await notificationService.markAllAsRead();
-        setNotifications((prev) => prev.map((x) => ({ ...x, is_read: true })));
-        setUnreadCount(0);
-        syncLayoutUnread(0);
-        toast({ title: text.toastAllRead });
-    };
-
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        const current = notifications.find((x) => x.id === id);
-        await notificationService.deleteNotification(id);
-        setNotifications((prev) => prev.filter((x) => x.id !== id));
-        if (current && !current.is_read) {
-            setUnreadCount((prev) => {
-                const next = Math.max(0, prev - 1);
-                syncLayoutUnread(next);
-                return next;
-            });
+        setBulkBusy("read");
+        try {
+            await notificationService.markAllAsRead();
+            setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+            setUnreadCount(0);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setBulkBusy(null);
         }
     };
 
-    const handleDeleteAllRead = async () => {
-        await notificationService.deleteAllRead();
-        setNotifications((prev) => prev.filter((x) => !x.is_read));
-        toast({ title: text.toastReadDeleted });
+    const handleDeleteRead = async () => {
+        setBulkBusy("delete");
+        try {
+            await notificationService.deleteAllRead();
+            setNotifications((prev) => prev.filter((n) => !n.is_read));
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setBulkBusy(null);
+        }
     };
 
-    const filtered = notifications.filter((n) => {
-        if (activeFilter === "all") return true;
-        if (activeFilter === "unread") return !n.is_read;
-        return n.type === activeFilter;
-    });
-
-    const filterButtons: { key: string; label: string; count?: number }[] = [
-        { key: "all", label: text.filters.all },
-        { key: "unread", label: text.filters.unread, count: unreadCount },
-        { key: "maintenance_overdue", label: text.filters.overdue },
-        { key: "wo_assigned", label: text.filters.assigned },
-        { key: "checklist_completed", label: text.filters.checklists },
-        { key: "system", label: text.filters.system },
-    ];
-
-    if (loading || authLoading) {
-        return (
-            <MainLayout userRole={userRole}>
-                <PageLoader
-                    title={text.pageTitle}
-                    description={language === "it" ? "Stiamo caricando il centro notifiche operativo." : "Loading your notification center."}
-                />
-            </MainLayout>
-        );
-    }
-
     return (
-        <MainLayout userRole={userRole}>
-            <div className="mx-auto max-w-4xl space-y-6 px-5 py-6 lg:px-8 lg:py-8">
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">{text.pageTitle}</h1>
-                        <p className="mt-1 text-muted-foreground">
-                            {unreadCount > 0 ? `${unreadCount} ${text.unreadSuffix}` : text.allCaughtUp}
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
-                        {unreadCount > 0 && (
-                            <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
-                                <CheckCheck className="mr-1 h-4 w-4" /> {text.markAllRead}
-                            </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={handleDeleteAllRead} title={text.deleteRead}>
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title={text.seo} />
 
-                <div className="flex flex-wrap gap-2">
-                    {filterButtons.map((fb) => (
-                        <button
-                            key={fb.key}
-                            type="button"
-                            onClick={() => setActiveFilter(fb.key as any)}
-                            className={
-                                activeFilter === fb.key
-                                    ? "rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white"
-                                    : "rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"
-                            }
-                        >
-                            {fb.label}
-                            {fb.count !== undefined && fb.count > 0 && (
-                                <span className="ml-2 rounded-full bg-black/10 px-1.5 py-0.5 text-xs dark:bg-white/15">{fb.count}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="space-y-3">
-                    {filtered.length === 0 ? (
-                        <div className="surface-panel p-12 text-center">
-                            <BellOff className="mx-auto mb-3 h-12 w-12 text-muted-foreground/50" />
-                            <h3 className="mb-1 text-lg font-bold text-foreground">{text.emptyTitle}</h3>
-                            <p className="text-sm text-muted-foreground">{text.emptyDescription}</p>
+                <div className="px-5 py-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-[1380px] space-y-8">
+                        <div className="space-y-2">
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                {text.title}
+                            </h1>
+                            <p className="text-base text-muted-foreground">{text.subtitle}</p>
                         </div>
-                    ) : (
-                        filtered.map((n) => {
-                            const config = typeConfig[n.type] ?? typeConfig.system;
-                            const Icon = config.icon || Bell;
-                            return (
-                                <button
-                                    key={n.id}
-                                    type="button"
-                                    onClick={() => handleClick(n)}
-                                    className={`surface-panel w-full p-5 text-left transition hover:-translate-y-0.5 ${!n.is_read ? "ring-1 ring-orange-500/30" : ""}`}
-                                >
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="flex min-w-0 gap-4">
-                                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${config.chip}`}>
-                                                <Icon className="h-5 w-5" />
-                                            </div>
-                                            <div className="min-w-0 space-y-1">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <span className="text-base font-semibold text-foreground">{n.title}</span>
-                                                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${config.chip}`}>{config.label}</span>
-                                                    {!n.is_read && (
-                                                        <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-semibold text-orange-700 dark:text-orange-300">
-                                                            {text.newBadge}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-sm text-muted-foreground">{n.message}</p>
-                                                <div className="text-xs text-muted-foreground">{formatRelative(n.created_at)}</div>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={(e) => handleDelete(e, n.id)}
-                                            className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                            aria-label={text.deleteAria}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
+
+                        <div className="grid gap-5 md:grid-cols-3">
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="text-muted-foreground">
+                                        {text.total}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-4xl font-bold">
+                                    {stats.total}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="text-muted-foreground">
+                                        {text.unread}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-4xl font-bold">
+                                    {stats.unread}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="text-muted-foreground">
+                                        {text.read}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-4xl font-bold">
+                                    {stats.read}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <Card className="rounded-2xl">
+                            <CardContent className="pt-6 space-y-4">
+                                <div className="flex flex-col gap-4 xl:flex-row">
+                                    <div className="relative flex-1">
+                                        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            placeholder={text.search}
+                                            className="h-12 rounded-2xl pl-12"
+                                        />
                                     </div>
-                                </button>
-                            );
-                        })
-                    )}
+
+                                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-foreground xl:w-[260px]">
+                                        <Filter className="h-5 w-5 text-muted-foreground" />
+                                        <select
+                                            value={filterMode}
+                                            onChange={(e) =>
+                                                setFilterMode(e.target.value as FilterMode)
+                                            }
+                                            className="w-full bg-transparent outline-none"
+                                        >
+                                            <option value="all">{text.all}</option>
+                                            <option value="unread">{text.onlyUnread}</option>
+                                            <option value="read">{text.onlyRead}</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleMarkAllRead}
+                                        disabled={bulkBusy !== null || unreadCount === 0}
+                                    >
+                                        {bulkBusy === "read" ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <CheckCheck className="mr-2 h-4 w-4" />
+                                        )}
+                                        {text.markAllRead}
+                                    </Button>
+
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleDeleteRead}
+                                        disabled={bulkBusy !== null || stats.read === 0}
+                                    >
+                                        {bulkBusy === "delete" ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                        )}
+                                        {text.deleteRead}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="rounded-2xl">
+                            <CardHeader>
+                                <CardTitle>{text.title}</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                                        <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                                        {text.loading}
+                                    </div>
+                                ) : filteredNotifications.length === 0 ? (
+                                    <div className="py-12 text-center text-muted-foreground">
+                                        {text.empty}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {filteredNotifications.map((notification) => (
+                                            <div
+                                                key={notification.id}
+                                                className={`rounded-2xl border p-4 transition ${notification.is_read
+                                                        ? "border-border bg-background"
+                                                        : "border-primary/20 bg-primary/5"
+                                                    }`}
+                                            >
+                                                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                                    <div className="min-w-0 space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <div className="flex items-center gap-2 font-semibold text-foreground">
+                                                                <Bell className="h-4 w-4" />
+                                                                {notification.title}
+                                                            </div>
+
+                                                            <Badge
+                                                                className={`border ${getTypeBadge(
+                                                                    notification.type
+                                                                )}`}
+                                                            >
+                                                                {notification.type}
+                                                            </Badge>
+
+                                                            {!notification.is_read && (
+                                                                <Badge>new</Badge>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {notification.message}
+                                                        </div>
+
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {formatDate(
+                                                                notification.created_at,
+                                                                language
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {!notification.is_read && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    handleMarkRead(notification.id)
+                                                                }
+                                                                disabled={busyId === notification.id}
+                                                            >
+                                                                {busyId === notification.id ? (
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                ) : (
+                                                                    <CheckCheck className="mr-2 h-4 w-4" />
+                                                                )}
+                                                                {text.markRead}
+                                                            </Button>
+                                                        )}
+
+                                                        {notification.link && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                (window.location.href =
+                                                                    notification.link || "/notifications")
+                                                                }
+                                                            >
+                                                                {text.open}
+                                                            </Button>
+                                                        )}
+
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                handleDelete(notification.id)
+                                                            }
+                                                            disabled={busyId === notification.id}
+                                                        >
+                                                            {busyId === notification.id ? (
+                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                            )}
+                                                            {text.delete}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
-            </div>
-        </MainLayout>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
