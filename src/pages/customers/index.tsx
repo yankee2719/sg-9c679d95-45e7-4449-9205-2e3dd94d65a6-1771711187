@@ -140,6 +140,7 @@ export default function CustomersPage() {
                     .select("id, name, city, email, created_at")
                     .eq("manufacturer_org_id", orgId)
                     .eq("type", "customer")
+                    .neq("subscription_status", "deleted")
                     .order("created_at", { ascending: false });
 
                 if (customerError) throw customerError;
