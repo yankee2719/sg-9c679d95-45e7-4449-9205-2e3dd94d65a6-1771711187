@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [memberships, setMemberships] = useState < AuthMembership[] > ([]);
     const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
-    const loadRequestIdRef = useRef(0);
+    const requestIdRef = useRef(0);
 
     const resetContext = useCallback(() => {
         setProfile(null);
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const loadAuthContext = useCallback(async (currentUser: User) => {
-        const requestId = ++loadRequestIdRef.current;
+        const requestId = ++requestIdRef.current;
 
         const [
             { data: profileData, error: profileError },
@@ -190,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (profileError) throw profileError;
         if (adminError) throw adminError;
         if (membershipsError) throw membershipsError;
-        if (requestId !== loadRequestIdRef.current) return;
+        if (requestId !== requestIdRef.current) return;
 
         const normalizedProfile = normalizeProfile(profileData);
         const normalizedMemberships = ((membershipRows ?? []) as any[])
@@ -198,7 +198,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .filter(Boolean) as AuthMembership[];
 
         const defaultOrgId = normalizedProfile?.default_organization_id ?? null;
-
         const selectedMembership =
             normalizedMemberships.find((item) => item.organization_id === defaultOrgId) ??
             normalizedMemberships[0] ??
@@ -279,7 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             const { error } = await supabase
                 .from("profiles")
-                .update({ default_organization_id: orgId })
+                .update({ default_organization_id: orgId } as any)
                 .eq("id", user.id);
 
             if (error) throw error;
