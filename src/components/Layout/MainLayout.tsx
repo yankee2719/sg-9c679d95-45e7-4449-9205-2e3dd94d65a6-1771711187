@@ -28,7 +28,7 @@ import {
     Globe,
 } from "lucide-react";
 
-type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
+type UserRole = "owner" | "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
 type OrgType = "manufacturer" | "customer" | null;
 
 interface MainLayoutProps {
@@ -39,6 +39,7 @@ interface MainLayoutProps {
 interface NavItem {
     href: string;
     labelKey: string;
+    fallbackLabel: string;
     icon: React.ComponentType<{ className?: string }>;
     roles?: string[];
     orgTypes?: Array<"manufacturer" | "customer">;
@@ -55,6 +56,11 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [notificationCount, setNotificationCount] = useState(0);
+
+    const tx = (key: string, fallback: string) => {
+        const value = t(key);
+        return value === key ? fallback : value;
+    };
 
     const profileName =
         profile?.display_name?.trim() ||
@@ -77,7 +83,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             }
 
             try {
-                const unread = await notificationService.getUnreadCount();
+                const unread = await notificationService.getUnreadCount(user.id);
                 if (active) setNotificationCount(unread || 0);
             } catch (error) {
                 console.error("MainLayout notification sync error:", error);
@@ -131,53 +137,104 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     }, [profileName]);
 
     const navItems: NavItem[] = [
-        { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-        { href: "/equipment", labelKey: "nav.equipment", icon: Factory },
-        { href: "/maintenance", labelKey: "nav.maintenance", icon: Wrench },
-        { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
-        { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
-        { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
+        {
+            href: "/dashboard",
+            labelKey: "nav.dashboard",
+            fallbackLabel: "Dashboard",
+            icon: LayoutDashboard,
+        },
+        {
+            href: "/equipment",
+            labelKey: "nav.equipment",
+            fallbackLabel: "Macchine",
+            icon: Factory,
+        },
+        {
+            href: "/maintenance",
+            labelKey: "nav.maintenance",
+            fallbackLabel: "Maintenance",
+            icon: Wrench,
+        },
+        {
+            href: "/work-orders",
+            labelKey: "nav.workOrders",
+            fallbackLabel: "Work Orders",
+            icon: ClipboardList,
+        },
+        {
+            href: "/checklists/templates",
+            labelKey: "nav.checklists",
+            fallbackLabel: "Checklist",
+            icon: CheckSquare,
+        },
+        {
+            href: "/scanner",
+            labelKey: "nav.scanner",
+            fallbackLabel: "Scanner",
+            icon: QrCode,
+        },
         {
             href: "/analytics",
             labelKey: "nav.analytics",
+            fallbackLabel: "Analytics",
             icon: BarChart3,
-            roles: ["admin", "supervisor"],
+            roles: ["owner", "admin", "supervisor"],
         },
-        { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
-        { href: "/documents", labelKey: "nav.documents", icon: FileText },
+        {
+            href: "/compliance",
+            labelKey: "nav.compliance",
+            fallbackLabel: "Compliance",
+            icon: ShieldCheck,
+        },
+        {
+            href: "/documents",
+            labelKey: "nav.documents",
+            fallbackLabel: "Documenti",
+            icon: FileText,
+        },
         {
             href: "/plants",
             labelKey: "nav.plants",
+            fallbackLabel: "Stabilimenti",
             icon: Building2,
-            roles: ["admin", "supervisor"],
+            roles: ["owner", "admin", "supervisor"],
             orgTypes: ["customer"],
         },
         {
             href: "/users",
             labelKey: "nav.users",
+            fallbackLabel: "Utenti",
             icon: Users,
-            roles: ["admin", "supervisor"],
+            roles: ["owner", "admin", "supervisor"],
         },
         {
             href: "/customers",
             labelKey: "nav.customers",
+            fallbackLabel: "Clienti",
             icon: Building2,
-            roles: ["admin", "supervisor"],
+            roles: ["owner", "admin", "supervisor"],
             orgTypes: ["manufacturer"],
         },
         {
             href: "/assignments",
             labelKey: "nav.assignments",
+            fallbackLabel: "Assegnazioni",
             icon: Layers3,
-            roles: ["admin", "supervisor"],
+            roles: ["owner", "admin", "supervisor"],
             orgTypes: ["manufacturer"],
         },
         {
             href: "/settings/organization",
             labelKey: "nav.activeOrganization",
+            fallbackLabel: "Organizzazione attiva",
             icon: Package,
         },
-        { href: "/settings", labelKey: "nav.settings", icon: Settings },
+        {
+            href: "/settings",
+            labelKey: "nav.settings",
+            fallbackLabel: "Impostazioni",
+            icon: Settings,
+        },
     ];
 
     const filteredNavItems = navItems.filter((item) => {
@@ -219,29 +276,25 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         (href !== "/dashboard" && router.pathname.startsWith(href));
 
     const getOrgTypeLabel = () => {
-        if (orgType === "manufacturer") return t("org.manufacturer");
-        if (orgType === "customer") return t("org.customer");
-        return t("org.platform");
+        if (orgType === "manufacturer") return "Costruttore";
+        if (orgType === "customer") return "Cliente finale";
+        return "Contesto";
     };
 
-    const getHeaderContextLabel = () => {
-        if (orgType === "manufacturer") return t("org.manufacturer");
-        if (orgType === "customer") return t("org.customer");
-        return t("org.context");
-    };
-
-    const getCurrentPageKey = () => {
+    const getCurrentPageLabel = () => {
         const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
-        if (exactMatch) return exactMatch.labelKey;
+        if (exactMatch) return tx(exactMatch.labelKey, exactMatch.fallbackLabel);
 
         const startsWithMatch = filteredNavItems.find(
             (item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href)
         );
 
-        return startsWithMatch?.labelKey ?? "nav.dashboard";
+        return startsWithMatch
+            ? tx(startsWithMatch.labelKey, startsWithMatch.fallbackLabel)
+            : "Dashboard";
     };
 
-    const NavLink = ({ href, labelKey, icon: Icon }: NavItem) => (
+    const NavLink = ({ href, labelKey, fallbackLabel, icon: Icon }: NavItem) => (
         <Link
             href={href}
             onClick={() => setSidebarOpen(false)}
@@ -253,7 +306,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
-            <span className="truncate">{t(labelKey)}</span>
+            <span className="truncate">{tx(labelKey, fallbackLabel)}</span>
         </Link>
     );
 
@@ -291,7 +344,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 {managementItems.length > 0 && (
                     <div className="space-y-2">
                         <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            {t("common.management")}
+                            Gestione
                         </div>
                         {managementItems.map((item) => (
                             <NavLink key={item.href} {...item} />
@@ -302,7 +355,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 {settingsItems.length > 0 && (
                     <div className="space-y-2">
                         <div className="px-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            {t("common.system")}
+                            Sistema
                         </div>
                         {settingsItems.map((item) => (
                             <NavLink key={item.href} {...item} />
@@ -318,7 +371,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     type="button"
                 >
                     <LogOut className="h-5 w-5 shrink-0" />
-                    <span>{t("common.logout")}</span>
+                    <span>Logout</span>
                 </button>
             </div>
         </div>
@@ -347,10 +400,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
                                 <div>
                                     <div className="text-lg font-semibold">
-                                        {t(getCurrentPageKey())}
+                                        {getCurrentPageLabel()}
                                     </div>
                                     <div className="text-xs text-muted-foreground">
-                                        {orgName} · {getHeaderContextLabel()}
+                                        {orgName} · {getOrgTypeLabel()}
                                     </div>
                                 </div>
                             </div>
@@ -361,7 +414,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     <select
                                         value={language}
                                         onChange={(e) => setLanguage(e.target.value as Language)}
-                                        aria-label={t("common.language")}
+                                        aria-label="Lingua"
                                         className="rounded-md bg-card text-sm font-medium text-foreground outline-none"
                                     >
                                         <option value="it" className="bg-card text-foreground">
@@ -384,7 +437,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 <Link
                                     href="/notifications"
                                     className="relative rounded-2xl border border-border bg-card p-2.5 text-foreground shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)] transition hover:bg-muted"
-                                    aria-label={t("common.notifications")}
+                                    aria-label="Notifiche"
                                 >
                                     <Bell className="h-5 w-5" />
                                     {notificationCount > 0 && (
