@@ -1,92 +1,86 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
     ArrowLeft,
-    Save,
-    Loader2,
     Building2,
+    Loader2,
+    Save,
+    Shield,
     UserPlus,
-    Info,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-
-interface NewCustomerForm {
-    companyName: string;
-    city: string;
-    email: string;
-    phone: string;
-    supervisorName: string;
-    supervisorEmail: string;
-    supervisorPassword: string;
-}
-
-const initialForm: NewCustomerForm = {
-    companyName: "",
-    city: "",
-    email: "",
-    phone: "",
-    supervisorName: "",
-    supervisorEmail: "",
-    supervisorPassword: "",
-};
 
 export default function NewCustomerPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { loading: authLoading, isAuthenticated, organization, session } = useAuth();
+    const { organization, membership, session, loading: authLoading } = useAuth();
 
-    const [loading, setLoading] = useState(false);
-    const [form, setForm] = useState < NewCustomerForm > (initialForm);
+    const [saving, setSaving] = useState(false);
+
+    const [name, setName] = useState("");
+    const [city, setCity] = useState("");
+    const [country, setCountry] = useState("IT");
+    const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
+
+    const [createPrimaryUser, setCreatePrimaryUser] = useState(true);
+    const [primaryUserName, setPrimaryUserName] = useState("");
+    const [primaryUserEmail, setPrimaryUserEmail] = useState("");
+    const [primaryUserPassword, setPrimaryUserPassword] = useState("");
+    const [primaryUserRole, setPrimaryUserRole] = useState("admin");
 
     const orgType = organization?.type ?? null;
+    const userRole = membership?.role ?? "technician";
+    const canCreate = userRole === "owner" || userRole === "admin";
 
-    useEffect(() => {
-        if (authLoading) return;
+    const pageBlocked = useMemo(() => {
+        return authLoading || orgType !== "manufacturer" || !canCreate;
+    }, [authLoading, orgType, canCreate]);
 
-        if (!isAuthenticated) {
-            void router.replace("/login");
+    const getAccessToken = async () => {
+        const accessToken =
+            session?.access_token ??
+            (await supabase.auth.getSession()).data.session?.access_token;
+
+        if (!accessToken) throw new Error("Sessione scaduta");
+        return accessToken;
+    };
+
+    const handleCreate = async () => {
+        if (!name.trim()) {
+            toast({
+                title: "Errore",
+                description: "Inserisci il nome del cliente.",
+                variant: "destructive",
+            });
             return;
         }
 
-        if (orgType !== "manufacturer") {
-            void router.replace("/dashboard");
+        if (createPrimaryUser) {
+            if (!primaryUserName.trim() || !primaryUserEmail.trim() || !primaryUserPassword.trim()) {
+                toast({
+                    title: "Errore",
+                    description: "Compila i dati dell'utente principale.",
+                    variant: "destructive",
+                });
+                return;
+            }
         }
-    }, [authLoading, isAuthenticated, orgType, router]);
 
-    const updateField = (field: keyof NewCustomerForm, value: string) => {
-        setForm((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
-    };
-
-    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setLoading(true);
+        setSaving(true);
 
         try {
-            let accessToken = session?.access_token ?? null;
-
-            if (!accessToken) {
-                const {
-                    data: { session: freshSession },
-                } = await supabase.auth.getSession();
-
-                accessToken = freshSession?.access_token ?? null;
-            }
-
-            if (!accessToken) {
-                throw new Error("Sessione scaduta. Effettua di nuovo il login.");
-            }
+            const accessToken = await getAccessToken();
 
             const response = await fetch("/api/customers/create", {
                 method: "POST",
@@ -95,202 +89,241 @@ export default function NewCustomerPage() {
                     Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({
-                    companyName: form.companyName.trim(),
-                    city: form.city.trim() || null,
-                    email: form.email.trim() || null,
-                    phone: form.phone.trim() || null,
-                    supervisorName: form.supervisorName.trim(),
-                    supervisorEmail: form.supervisorEmail.trim(),
-                    supervisorPassword: form.supervisorPassword,
+                    name: name.trim(),
+                    city: city.trim() || null,
+                    country: country.trim() || "IT",
+                    email: email.trim().toLowerCase() || null,
+                    phone: phone.trim() || null,
+                    create_primary_user: createPrimaryUser,
+                    primary_user_name: createPrimaryUser ? primaryUserName.trim() : null,
+                    primary_user_email: createPrimaryUser
+                        ? primaryUserEmail.trim().toLowerCase()
+                        : null,
+                    primary_user_password: createPrimaryUser ? primaryUserPassword : null,
+                    primary_user_role: createPrimaryUser ? primaryUserRole : null,
                 }),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data?.error || "Errore nella creazione del cliente");
+                throw new Error(data?.error || "Errore creazione cliente");
             }
 
             toast({
                 title: "Cliente creato",
-                description: `"${form.companyName}" creato con account supervisor`,
+                description: name.trim(),
             });
 
-            void router.push("/customers");
+            void router.push(`/customers/${data.customer_id}`);
         } catch (err: any) {
+            console.error(err);
             toast({
                 title: "Errore",
-                description: err?.message || "Operazione non riuscita",
+                description: err?.message || "Errore creazione cliente",
                 variant: "destructive",
             });
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
-    if (authLoading) return null;
-    if (!isAuthenticated) return null;
-    if (orgType !== "manufacturer") return null;
+    if (pageBlocked) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title="Nuovo cliente - MACHINA" />
+                    <div className="mx-auto max-w-5xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-center text-muted-foreground">
+                                Questa pagina è disponibile solo per owner/admin lato costruttore.
+                            </CardContent>
+                        </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
+    }
 
     return (
-        <MainLayout>
-            <SEO title="Nuovo Cliente - MACHINA" />
-            <div className="max-w-2xl mx-auto space-y-6">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" onClick={() => router.back()}>
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Indietro
-                    </Button>
-                    <h1 className="text-2xl font-bold text-foreground">Nuovo Cliente</h1>
-                </div>
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title="Nuovo cliente - MACHINA" />
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <Card className="bg-card border-border">
+                <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+                    <div className="flex items-center gap-3">
+                        <Link href="/customers">
+                            <Button variant="outline" size="icon">
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                        </Link>
+                        <div>
+                            <h1 className="text-3xl font-bold">Nuovo cliente</h1>
+                            <p className="text-sm text-muted-foreground">
+                                Crea una nuova organizzazione cliente collegata al costruttore attivo.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Card className="rounded-2xl">
                         <CardHeader>
-                            <CardTitle className="text-foreground flex items-center gap-2">
-                                <Building2 className="w-5 h-5 text-blue-400" />
-                                Dati Azienda Cliente
+                            <CardTitle className="flex items-center gap-2">
+                                <Building2 className="h-5 w-5" />
+                                Anagrafica cliente
                             </CardTitle>
                         </CardHeader>
-
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Nome Azienda *</Label>
-                                    <Input
-                                        value={form.companyName}
-                                        onChange={(e) => updateField("companyName", e.target.value)}
-                                        required
-                                        placeholder="es. Acme Manufacturing Srl"
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Città</Label>
-                                    <Input
-                                        value={form.city}
-                                        onChange={(e) => updateField("city", e.target.value)}
-                                        placeholder="es. Milano"
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Email Azienda</Label>
-                                    <Input
-                                        type="email"
-                                        value={form.email}
-                                        onChange={(e) => updateField("email", e.target.value)}
-                                        placeholder="info@azienda.com"
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Telefono</Label>
-                                    <Input
-                                        value={form.phone}
-                                        onChange={(e) => updateField("phone", e.target.value)}
-                                        placeholder="+39..."
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="bg-card border-border">
-                        <CardHeader>
-                            <CardTitle className="text-foreground flex items-center gap-2">
-                                <UserPlus className="w-5 h-5 text-green-400" />
-                                Account Supervisor Cliente
-                            </CardTitle>
-                        </CardHeader>
-
-                        <CardContent className="space-y-4">
-                            <Alert className="bg-blue-100 dark:bg-blue-500/10 border-blue-500/30">
-                                <Info className="w-4 h-4 text-blue-400" />
-                                <AlertDescription className="text-blue-300 text-sm">
-                                    Il supervisor potrà accedere alla piattaforma, vedere le macchine
-                                    assegnate, gestire manutenzioni e creare utenti tecnici.
-                                </AlertDescription>
-                            </Alert>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Nome Supervisor *</Label>
-                                    <Input
-                                        value={form.supervisorName}
-                                        onChange={(e) => updateField("supervisorName", e.target.value)}
-                                        required
-                                        placeholder="Mario Rossi"
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-foreground">Email Supervisor *</Label>
-                                    <Input
-                                        type="email"
-                                        value={form.supervisorEmail}
-                                        onChange={(e) => updateField("supervisorEmail", e.target.value)}
-                                        required
-                                        placeholder="mario.rossi@cliente.com"
-                                        className="bg-muted border-border text-foreground"
-                                    />
-                                </div>
+                        <CardContent className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2 md:col-span-2">
+                                <Label>Nome cliente *</Label>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Es. Rimeco Srl"
+                                />
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="text-foreground">Password Temporanea *</Label>
+                                <Label>Città</Label>
                                 <Input
-                                    type="text"
-                                    value={form.supervisorPassword}
-                                    onChange={(e) => updateField("supervisorPassword", e.target.value)}
-                                    required
-                                    minLength={8}
-                                    placeholder="Minimo 8 caratteri"
-                                    className="bg-muted border-border text-foreground"
+                                    value={city}
+                                    onChange={(e) => setCity(e.target.value)}
+                                    placeholder="Es. Milano"
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Comunica questa password al supervisor. Potrà cambiarla dopo il
-                                    primo accesso.
-                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Country</Label>
+                                <Input
+                                    value={country}
+                                    onChange={(e) => setCountry(e.target.value)}
+                                    placeholder="IT"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Email azienda</Label>
+                                <Input
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="info@cliente.com"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Telefono</Label>
+                                <Input
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    placeholder="+39 ..."
+                                />
                             </div>
                         </CardContent>
                     </Card>
 
-                    <div className="flex gap-4">
-                        <Button
-                            type="submit"
-                            disabled={loading}
-                            className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Creazione...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Crea Cliente
-                                </>
-                            )}
-                        </Button>
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <UserPlus className="h-5 w-5" />
+                                Utente principale cliente
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <label className="flex items-center gap-3 rounded-xl border border-border p-4">
+                                <input
+                                    type="checkbox"
+                                    checked={createPrimaryUser}
+                                    onChange={(e) => setCreatePrimaryUser(e.target.checked)}
+                                />
+                                <div>
+                                    <div className="font-medium">Crea utente principale subito</div>
+                                    <div className="text-sm text-muted-foreground">
+                                        Se attivo, viene creato anche il primo utente del cliente.
+                                    </div>
+                                </div>
+                            </label>
 
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => router.back()}
-                            disabled={loading}
-                        >
-                            Annulla
+                            {createPrimaryUser && (
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2 md:col-span-2">
+                                        <Label>Nome completo *</Label>
+                                        <Input
+                                            value={primaryUserName}
+                                            onChange={(e) => setPrimaryUserName(e.target.value)}
+                                            placeholder="Es. Mario Rossi"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Email *</Label>
+                                        <Input
+                                            value={primaryUserEmail}
+                                            onChange={(e) => setPrimaryUserEmail(e.target.value)}
+                                            placeholder="m.rossi@cliente.com"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Password *</Label>
+                                        <Input
+                                            type="password"
+                                            value={primaryUserPassword}
+                                            onChange={(e) => setPrimaryUserPassword(e.target.value)}
+                                            placeholder="Password iniziale"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Ruolo iniziale</Label>
+                                        <select
+                                            value={primaryUserRole}
+                                            onChange={(e) => setPrimaryUserRole(e.target.value)}
+                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        >
+                                            <option value="admin">admin</option>
+                                            <option value="supervisor">supervisor</option>
+                                            <option value="technician">technician</option>
+                                            <option value="viewer">viewer</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                                        L'utente creato avrà come organizzazione di default il nuovo cliente.
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="h-5 w-5" />
+                                Controllo finale
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm text-muted-foreground">
+                            <div>Costruttore attivo: {organization?.name || "—"}</div>
+                            <div>Tipo organizzazione attiva: {organization?.type || "—"}</div>
+                            <div>Ruolo attivo: {membership?.role || "—"}</div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="flex justify-end gap-3">
+                        <Link href="/customers">
+                            <Button variant="outline">Annulla</Button>
+                        </Link>
+
+                        <Button onClick={handleCreate} disabled={saving}>
+                            {saving ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                            )}
+                            {saving ? "Creazione..." : "Crea cliente"}
                         </Button>
                     </div>
-                </form>
-            </div>
-        </MainLayout>
+                </div>
+            </MainLayout>
+        </OrgContextGuard>
     );
 }
