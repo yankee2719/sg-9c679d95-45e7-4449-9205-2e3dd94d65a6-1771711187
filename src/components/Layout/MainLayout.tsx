@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import OrganizationSwitcher from "@/components/organization/OrganizationSwitcher";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
+import GlobalSearchLauncher from "@/components/search/GlobalSearchLauncher";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { notificationService } from "@/services/notificationService";
@@ -409,6 +410,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                             </div>
 
                             <div className="flex items-center gap-3">
+                                <div className="hidden xl:block">
+                                    <GlobalSearchLauncher />
+                                </div>
+
                                 <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]">
                                     <Globe className="h-4 w-4 text-muted-foreground" />
                                     <select
@@ -461,6 +466,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="px-5 pb-4 xl:hidden lg:px-8">
+                            <GlobalSearchLauncher />
                         </div>
                     </header>
 
