@@ -5,190 +5,305 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
+type CustomerCreateBody = {
+    name?: string;
+    city?: string;
+    country?: string;
+    email?: string;
+    phone?: string;
+    create_primary_user?: boolean;
+    primary_user_name?: string;
+    primary_user_email?: string;
+    primary_user_password?: string;
+    primary_user_role?: string;
+    manufacturer_org_id?: string;
+};
+
+const ALLOWED_PRIMARY_ROLES = ["admin", "supervisor", "technician", "viewer"];
+
+function slugify(input: string): string {
+    return input
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
+}
+
+async function generateUniqueSlug(
+    serviceSupabase: ReturnType<typeof getServiceSupabase>,
+    baseName: string
+): Promise<string> {
+    const base = slugify(baseName) || "customer";
+
+    for (let i = 0; i < 50; i += 1) {
+        const candidate = i === 0 ? base : `${base}-${i + 1}`;
+
+        const { data, error } = await serviceSupabase
+            .from("organizations")
+            .select("id")
+            .eq("slug", candidate)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return candidate;
+    }
+
+    return `${base}-${Date.now()}`;
+}
+
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const {
-        companyName,
-        city,
-        email,
-        phone,
-        supervisorName,
-        supervisorEmail,
-        supervisorPassword,
-    } = req.body ?? {};
-
-    if (!companyName || !supervisorName || !supervisorEmail || !supervisorPassword) {
-        return res.status(400).json({ error: "Campi obbligatori mancanti" });
-    }
-
-    if (String(supervisorPassword).length < 8) {
-        return res.status(400).json({ error: "La password deve avere almeno 8 caratteri" });
-    }
-
-    const manufacturerOrgId = req.user.organizationId;
-    if (!manufacturerOrgId) {
-        return res.status(403).json({ error: "Organizzazione attiva non valida" });
-    }
-
-    const supabaseAdmin = getServiceSupabase();
-
-    let supervisorUserId: string | null = null;
-    let customerOrgId: string | null = null;
+    const body = (req.body ?? {}) as CustomerCreateBody;
 
     try {
-        const { data: mfrOrg, error: mfrOrgError } = await supabaseAdmin
+        const serviceSupabase = getServiceSupabase();
+
+        const customerName = String(body.name ?? "").trim();
+        const city = String(body.city ?? "").trim() || null;
+        const country = String(body.country ?? "").trim() || "IT";
+        const email = String(body.email ?? "").trim().toLowerCase() || null;
+        const phone = String(body.phone ?? "").trim() || null;
+        const createPrimaryUser = Boolean(body.create_primary_user);
+        const primaryUserName = String(body.primary_user_name ?? "").trim();
+        const primaryUserEmail = String(body.primary_user_email ?? "").trim().toLowerCase();
+        const primaryUserPassword = String(body.primary_user_password ?? "");
+        const primaryUserRole = String(body.primary_user_role ?? "admin");
+
+        if (!customerName) {
+            return res.status(400).json({ error: "Customer name is required" });
+        }
+
+        let manufacturerOrgId = req.user.organizationId ?? null;
+
+        if (req.user.isPlatformAdmin && body.manufacturer_org_id) {
+            manufacturerOrgId = body.manufacturer_org_id;
+        }
+
+        if (!manufacturerOrgId) {
+            return res.status(400).json({ error: "No active manufacturer organization context" });
+        }
+
+        const { data: manufacturerOrg, error: manufacturerOrgError } = await serviceSupabase
             .from("organizations")
-            .select("id, type")
+            .select("id, name, type, is_deleted")
             .eq("id", manufacturerOrgId)
             .maybeSingle();
 
-        if (mfrOrgError) {
-            return res.status(500).json({ error: mfrOrgError.message });
+        if (manufacturerOrgError) {
+            return res.status(500).json({ error: manufacturerOrgError.message });
         }
 
-        if (!mfrOrg || mfrOrg.type !== "manufacturer") {
-            return res.status(403).json({ error: "Organizzazione costruttore non valida" });
+        if (!manufacturerOrg) {
+            return res.status(404).json({ error: "Manufacturer organization not found" });
         }
 
-        let slug = String(companyName)
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "");
-
-        if (!slug) {
-            slug = `customer-${Date.now()}`;
+        if (manufacturerOrg.type !== "manufacturer") {
+            return res
+                .status(403)
+                .json({ error: "Active organization is not a manufacturer organization" });
         }
 
-        let slugCandidate = slug;
-        let counter = 0;
-
-        while (counter < 10) {
-            const { data: existing, error: existingError } = await supabaseAdmin
-                .from("organizations")
-                .select("id")
-                .eq("slug", slugCandidate)
-                .maybeSingle();
-
-            if (existingError) {
-                return res.status(500).json({ error: existingError.message });
-            }
-
-            if (!existing) break;
-            counter += 1;
-            slugCandidate = `${slug}-${counter}`;
+        if ((manufacturerOrg as any).is_deleted === true) {
+            return res.status(400).json({ error: "Manufacturer organization is deleted" });
         }
 
-        slug = slugCandidate;
-
-        const { data: org, error: orgError } = await supabaseAdmin
-            .from("organizations")
-            .insert({
-                name: companyName,
-                slug,
-                type: "customer",
-                manufacturer_org_id: manufacturerOrgId,
-                email: email || null,
-                phone: phone || null,
-                city: city || null,
-                subscription_status: "active",
-                subscription_plan: "professional",
-                max_users: 19,
-                max_plants: 10,
-                max_machines: 500,
-            })
-            .select("id")
-            .single();
-
-        if (orgError || !org) {
-            return res.status(500).json({ error: orgError?.message || "Errore nella creazione organizzazione" });
-        }
-
-        customerOrgId = org.id;
-
-        const firstName = String(supervisorName).split(" ")[0] || supervisorName;
-        const lastName = String(supervisorName).split(" ").slice(1).join(" ") || null;
-
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email: supervisorEmail,
-            password: supervisorPassword,
-            email_confirm: true,
-            user_metadata: {
-                display_name: supervisorName,
-                first_name: firstName,
-                last_name: lastName,
-            },
-        });
-
-        if (authError || !authData?.user) {
-            await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId);
-
-            if (authError?.message?.includes("already been registered")) {
-                return res.status(409).json({ error: "Email supervisor già registrata" });
-            }
-
-            return res.status(400).json({ error: authError?.message || "Errore nella creazione utente" });
-        }
-
-        supervisorUserId = authData.user.id;
-
-        const { error: membershipError } = await supabaseAdmin
-            .from("organization_memberships")
-            .insert({
-                organization_id: customerOrgId,
-                user_id: supervisorUserId,
-                role: "supervisor",
-                is_active: true,
-                invited_by: req.user.id,
-                invited_at: new Date().toISOString(),
-                accepted_at: new Date().toISOString(),
+        if (
+            !req.user.isPlatformAdmin &&
+            req.user.organizationId !== manufacturerOrgId
+        ) {
+            return res.status(403).json({
+                error: "You can only create customers under the active manufacturer organization",
             });
-
-        if (membershipError) {
-            await supabaseAdmin.auth.admin.deleteUser(supervisorUserId);
-            await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId);
-            return res.status(500).json({ error: "Errore nella creazione membership" });
         }
 
-        await supabaseAdmin
-            .from("profiles")
-            .update({
-                default_organization_id: customerOrgId,
-                first_name: firstName,
-                last_name: lastName,
-                display_name: supervisorName,
-            })
-            .eq("id", supervisorUserId);
+        if (createPrimaryUser) {
+            if (!primaryUserName || !primaryUserEmail || !primaryUserPassword) {
+                return res.status(400).json({
+                    error: "Primary user name, email and password are required",
+                });
+            }
 
-        return res.status(201).json({
-            message: "Cliente creato con successo",
-            customer: {
-                organization_id: customerOrgId,
-                name: companyName,
-                supervisor: {
-                    user_id: supervisorUserId,
-                    email: supervisorEmail,
-                    name: supervisorName,
-                },
-            },
+            if (!ALLOWED_PRIMARY_ROLES.includes(primaryUserRole)) {
+                return res.status(400).json({ error: "Invalid primary user role" });
+            }
+        }
+
+        const slug = await generateUniqueSlug(serviceSupabase, customerName);
+        const now = new Date().toISOString();
+
+        let createdCustomerId: string | null = null;
+        let createdPrimaryUserId: string | null = null;
+        let createdMembershipId: string | null = null;
+
+        try {
+            const { data: insertedCustomer, error: insertCustomerError } = await serviceSupabase
+                .from("organizations")
+                .insert({
+                    name: customerName,
+                    slug,
+                    type: "customer",
+                    manufacturer_org_id: manufacturerOrgId,
+                    city,
+                    country,
+                    email,
+                    phone,
+                    subscription_status: "trial",
+                    subscription_plan: "free",
+                    is_deleted: false,
+                    deleted_at: null,
+                    deleted_by: null,
+                    created_at: now,
+                    updated_at: now,
+                } as any)
+                .select("id, name, slug")
+                .single();
+
+            if (insertCustomerError || !insertedCustomer) {
+                return res.status(500).json({
+                    error: insertCustomerError?.message ?? "Failed to create customer organization",
+                });
+            }
+
+            createdCustomerId = insertedCustomer.id;
+
+            if (createPrimaryUser) {
+                const authRes = await serviceSupabase.auth.admin.createUser({
+                    email: primaryUserEmail,
+                    password: primaryUserPassword,
+                    email_confirm: true,
+                    user_metadata: {
+                        full_name: primaryUserName,
+                        display_name: primaryUserName,
+                    },
+                });
+
+                if (authRes.error || !authRes.data.user) {
+                    throw new Error(authRes.error?.message || "Failed to create primary user");
+                }
+
+                createdPrimaryUserId = authRes.data.user.id;
+
+                const parts = primaryUserName.split(" ").filter(Boolean);
+
+                const { error: profileError } = await serviceSupabase
+                    .from("profiles")
+                    .upsert(
+                        {
+                            id: createdPrimaryUserId,
+                            email: primaryUserEmail,
+                            display_name: primaryUserName,
+                            first_name: parts[0] ?? null,
+                            last_name: parts.length > 1 ? parts.slice(1).join(" ") : null,
+                            default_organization_id: createdCustomerId,
+                            updated_at: now,
+                        } as any,
+                        { onConflict: "id" }
+                    );
+
+                if (profileError) {
+                    throw new Error(profileError.message);
+                }
+
+                const { data: membershipRow, error: membershipError } = await serviceSupabase
+                    .from("organization_memberships")
+                    .insert({
+                        organization_id: createdCustomerId,
+                        user_id: createdPrimaryUserId,
+                        role: primaryUserRole,
+                        is_active: true,
+                        accepted_at: now,
+                        invited_by: req.user.id,
+                    } as any)
+                    .select("id")
+                    .single();
+
+                if (membershipError || !membershipRow) {
+                    throw new Error(membershipError?.message || "Failed to create primary membership");
+                }
+
+                createdMembershipId = membershipRow.id;
+            }
+
+            await serviceSupabase
+                .from("audit_logs")
+                .insert({
+                    organization_id: manufacturerOrgId,
+                    actor_user_id: req.user.id,
+                    entity_type: "organization",
+                    entity_id: createdCustomerId,
+                    action: "create",
+                    metadata: {
+                        trash_system_ready: true,
+                        customer_name: customerName,
+                        create_primary_user: createPrimaryUser,
+                        primary_user_email: createPrimaryUser ? primaryUserEmail : null,
+                    },
+                    new_data: {
+                        name: customerName,
+                        slug,
+                        type: "customer",
+                        manufacturer_org_id: manufacturerOrgId,
+                        city,
+                        country,
+                        email,
+                        phone,
+                    },
+                } as any)
+                .then(() => undefined)
+                .catch((err) => {
+                    console.error("Audit log insert failed:", err);
+                });
+
+            return res.status(200).json({
+                success: true,
+                customer_id: createdCustomerId,
+                customer_name: customerName,
+                primary_user_id: createdPrimaryUserId,
+                membership_id: createdMembershipId,
+            });
+        } catch (innerError: any) {
+            console.error("Customer create rollback path:", innerError);
+
+            if (createdMembershipId) {
+                await serviceSupabase
+                    .from("organization_memberships")
+                    .delete()
+                    .eq("id", createdMembershipId)
+                    .then(() => undefined)
+                    .catch((err) => console.error("Rollback membership delete error:", err));
+            }
+
+            if (createdPrimaryUserId) {
+                await serviceSupabase.auth.admin
+                    .deleteUser(createdPrimaryUserId)
+                    .then(() => undefined)
+                    .catch((err) => console.error("Rollback auth user delete error:", err));
+            }
+
+            if (createdCustomerId) {
+                await serviceSupabase
+                    .from("organizations")
+                    .delete()
+                    .eq("id", createdCustomerId)
+                    .then(() => undefined)
+                    .catch((err) => console.error("Rollback customer delete error:", err));
+            }
+
+            return res.status(500).json({
+                error: innerError?.message ?? "Failed to create customer",
+            });
+        }
+    } catch (error: any) {
+        console.error("Unexpected error in /api/customers/create:", error);
+        return res.status(500).json({
+            error: error?.message ?? "Internal server error",
         });
-    } catch (error) {
-        console.error("Create customer error:", error);
-
-        if (supervisorUserId) {
-            await supabaseAdmin.from("organization_memberships").delete().eq("user_id", supervisorUserId).catch(() => { });
-            await supabaseAdmin.auth.admin.deleteUser(supervisorUserId).catch(() => { });
-        }
-
-        if (customerOrgId) {
-            await supabaseAdmin.from("organizations").delete().eq("id", customerOrgId).catch(() => { });
-        }
-
-        return res.status(500).json({ error: "Errore interno" });
     }
 }
 
