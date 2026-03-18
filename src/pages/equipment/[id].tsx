@@ -8,19 +8,18 @@ import { SEO } from "@/components/SEO";
 import DocumentManager from "@/components/documents/DocumentManager";
 import { MachinePhotoUpload } from "@/components/Equipment/MachinePhotoUpload";
 import { MachineEventTimeline } from "@/components/MachineEventTimeline";
+import MachineSummaryHero from "@/components/Equipment/MachineSummaryHero";
+import MachineQuickActions from "@/components/Equipment/MachineQuickActions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
     ArrowLeft,
     Building2,
     FileText,
     Factory,
-    Wrench,
     History,
-    Camera,
-    Trash2,
     Loader2,
+    Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -57,6 +56,20 @@ interface LineRow {
     code?: string | null;
 }
 
+interface OrganizationRow {
+    id: string;
+    name: string | null;
+}
+
+interface ActiveAssignmentRow {
+    id: string;
+    customer_org_id: string | null;
+    organizations?: {
+        id: string;
+        name: string | null;
+    } | null;
+}
+
 export default function EquipmentDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
@@ -68,6 +81,8 @@ export default function EquipmentDetailPage() {
     const [machine, setMachine] = useState < MachineRow | null > (null);
     const [plant, setPlant] = useState < PlantRow | null > (null);
     const [line, setLine] = useState < LineRow | null > (null);
+    const [ownerOrganization, setOwnerOrganization] = useState < OrganizationRow | null > (null);
+    const [assignedCustomerName, setAssignedCustomerName] = useState < string | null > (null);
 
     const userRole = membership?.role ?? "technician";
     const orgId = organization?.id ?? null;
@@ -155,6 +170,7 @@ export default function EquipmentDetailPage() {
                     .maybeSingle();
 
                 if (machineError) throw machineError;
+
                 if (!machineRow) {
                     toast({
                         title: "Macchina non trovata",
@@ -201,29 +217,68 @@ export default function EquipmentDetailPage() {
                 if (!active) return;
                 setMachine(machineData);
 
-                if (machineData.plant_id) {
-                    const { data: plantRow } = await supabase
-                        .from("plants")
-                        .select("id, name, code")
-                        .eq("id", machineData.plant_id)
-                        .maybeSingle();
+                const asyncCalls: Promise<any>[] = [];
 
-                    if (active) setPlant((plantRow as PlantRow) ?? null);
+                if (machineData.plant_id) {
+                    asyncCalls.push(
+                        supabase
+                            .from("plants")
+                            .select("id, name, code")
+                            .eq("id", machineData.plant_id)
+                            .maybeSingle()
+                            .then(({ data }) => {
+                                if (active) setPlant((data as PlantRow) ?? null);
+                            })
+                    );
                 } else {
-                    if (active) setPlant(null);
+                    setPlant(null);
                 }
 
                 if (machineData.production_line_id) {
-                    const { data: lineRow } = await supabase
-                        .from("production_lines")
-                        .select("id, name, code")
-                        .eq("id", machineData.production_line_id)
-                        .maybeSingle();
-
-                    if (active) setLine((lineRow as LineRow) ?? null);
+                    asyncCalls.push(
+                        supabase
+                            .from("production_lines")
+                            .select("id, name, code")
+                            .eq("id", machineData.production_line_id)
+                            .maybeSingle()
+                            .then(({ data }) => {
+                                if (active) setLine((data as LineRow) ?? null);
+                            })
+                    );
                 } else {
-                    if (active) setLine(null);
+                    setLine(null);
                 }
+
+                if (machineData.organization_id) {
+                    asyncCalls.push(
+                        supabase
+                            .from("organizations")
+                            .select("id, name")
+                            .eq("id", machineData.organization_id)
+                            .maybeSingle()
+                            .then(({ data }) => {
+                                if (active) setOwnerOrganization((data as OrganizationRow) ?? null);
+                            })
+                    );
+                } else {
+                    setOwnerOrganization(null);
+                }
+
+                asyncCalls.push(
+                    supabase
+                        .from("machine_assignments")
+                        .select("id, customer_org_id, organizations:customer_org_id(id, name)")
+                        .eq("machine_id", machineData.id)
+                        .eq("is_active", true)
+                        .maybeSingle()
+                        .then(({ data }) => {
+                            const row = data as unknown as ActiveAssignmentRow | null;
+                            if (!active) return;
+                            setAssignedCustomerName(row?.organizations?.name ?? null);
+                        })
+                );
+
+                await Promise.all(asyncCalls);
             } catch (error: any) {
                 console.error(error);
                 toast({
@@ -248,8 +303,13 @@ export default function EquipmentDetailPage() {
             <OrgContextGuard>
                 <MainLayout userRole={userRole as any}>
                     <SEO title="Macchina - MACHINA" />
-                    <div className="container mx-auto max-w-7xl px-4 py-8">
-                        <div className="text-sm text-muted-foreground">Caricamento macchina...</div>
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="flex items-center gap-3 py-10 text-muted-foreground">
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                                Caricamento scheda macchina...
+                            </CardContent>
+                        </Card>
                     </div>
                 </MainLayout>
             </OrgContextGuard>
@@ -261,8 +321,12 @@ export default function EquipmentDetailPage() {
             <OrgContextGuard>
                 <MainLayout userRole={userRole as any}>
                     <SEO title="Macchina - MACHINA" />
-                    <div className="container mx-auto max-w-7xl px-4 py-8">
-                        <div className="text-sm text-muted-foreground">Macchina non trovata.</div>
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-muted-foreground">
+                                Macchina non trovata.
+                            </CardContent>
+                        </Card>
                     </div>
                 </MainLayout>
             </OrgContextGuard>
@@ -274,174 +338,222 @@ export default function EquipmentDetailPage() {
             <MainLayout userRole={userRole as any}>
                 <SEO title={`${machine.name ?? "Macchina"} - MACHINA`} />
 
-                <div className="container mx-auto max-w-7xl space-y-6 px-4 py-8">
-                    <div className="flex items-center justify-between gap-4">
-                        <Button variant="ghost" onClick={() => router.push("/equipment")}>
+                <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <Button variant="outline" onClick={() => router.push("/equipment")}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             Torna a Macchine
                         </Button>
 
-                        <div className="flex items-center gap-2">
-                            {canDeleteMachine && (
-                                <Button
-                                    variant="destructive"
-                                    onClick={handleDeleteMachine}
-                                    disabled={deleting}
-                                >
-                                    {deleting ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                    )}
-                                    Sposta nel cestino
-                                </Button>
-                            )}
-
-                            <Button variant="outline" asChild>
-                                <Link href={`/equipment/${machine.id}/maintenance`}>
-                                    <Wrench className="mr-2 h-4 w-4" />
-                                    Maintenance
-                                </Link>
+                        {canDeleteMachine && (
+                            <Button
+                                variant="destructive"
+                                onClick={handleDeleteMachine}
+                                disabled={deleting}
+                            >
+                                {deleting ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                )}
+                                Sposta nel cestino
                             </Button>
-                        </div>
+                        )}
                     </div>
 
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <CardTitle className="text-2xl">
-                                        {machine.name ?? "Macchina"}
-                                    </CardTitle>
+                    <MachineSummaryHero
+                        name={machine.name}
+                        internalCode={machine.internal_code}
+                        serialNumber={machine.serial_number}
+                        brand={machine.brand}
+                        model={machine.model}
+                        lifecycleState={machine.lifecycle_state}
+                        orgType={orgType}
+                        ownerOrganizationName={ownerOrganization?.name ?? organization?.name ?? null}
+                        assignedCustomerName={assignedCustomerName}
+                        plantName={plant?.name || plant?.code || null}
+                        lineName={line?.name || line?.code || null}
+                        createdAt={machine.created_at}
+                    />
+
+                    <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+                        <div className="space-y-6">
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle>Foto macchina</CardTitle>
                                     <CardDescription>
-                                        Dettaglio macchina, documentazione e cronologia eventi.
+                                        Immagine principale della macchina per identificazione rapida.
                                     </CardDescription>
-                                </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <MachinePhotoUpload
+                                        machineId={machine.id}
+                                        currentPhotoUrl={machine.photo_url ?? null}
+                                        onPhotoChange={(url) =>
+                                            setMachine((prev) =>
+                                                prev ? { ...prev, photo_url: url } : prev
+                                            )
+                                        }
+                                        readonly={!canEdit}
+                                    />
+                                </CardContent>
+                            </Card>
 
-                                <div className="flex flex-wrap gap-2">
-                                    {orgType === "manufacturer" ? (
-                                        <Badge className="gap-1">
-                                            <Factory className="h-3 w-3" />
-                                            Costruttore
-                                        </Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="gap-1">
-                                            <Building2 className="h-3 w-3" />
-                                            Cliente finale
-                                        </Badge>
-                                    )}
+                            <MachineQuickActions
+                                machineId={machine.id}
+                                canEdit={canEdit}
+                            />
 
-                                    {machine.lifecycle_state && (
-                                        <Badge variant="secondary">{machine.lifecycle_state}</Badge>
-                                    )}
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle>Informazioni rapide</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <InfoRow label="Codice interno" value={machine.internal_code} />
+                                    <InfoRow label="Matricola" value={machine.serial_number} />
+                                    <InfoRow label="Marca" value={machine.brand} />
+                                    <InfoRow label="Modello" value={machine.model} />
+                                    <InfoRow label="Stabilimento" value={plant?.name || plant?.code} />
+                                    <InfoRow label="Linea" value={line?.name || line?.code} />
+                                    <InfoRow label="Cliente assegnato" value={assignedCustomerName} />
+                                    <InfoRow
+                                        label="Proprietario"
+                                        value={ownerOrganization?.name || organization?.name}
+                                    />
+                                </CardContent>
+                            </Card>
+                        </div>
 
-                                    {machine.is_archived && (
-                                        <Badge variant="destructive">Archiviata</Badge>
-                                    )}
-                                </div>
-                            </div>
-                        </CardHeader>
+                        <div className="space-y-6">
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle>Note macchina</CardTitle>
+                                    <CardDescription>
+                                        Informazioni operative e note contestuali.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">
+                                        {machine.notes || "Nessuna nota disponibile."}
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                        <CardContent className="grid gap-6 xl:grid-cols-[360px_1fr]">
-                            <div className="space-y-4">
-                                <Card className="rounded-2xl border border-border shadow-none">
+                            <section id="machine-timeline">
+                                <Card className="rounded-2xl">
                                     <CardHeader>
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <Camera className="h-4 w-4" />
-                                            Foto macchina
+                                        <CardTitle className="flex items-center gap-2">
+                                            <History className="h-4 w-4" />
+                                            Timeline macchina
                                         </CardTitle>
+                                        <CardDescription>
+                                            Eventi, modifiche e cronologia operativa registrata.
+                                        </CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <MachinePhotoUpload
+                                        <MachineEventTimeline
                                             machineId={machine.id}
-                                            currentPhotoUrl={machine.photo_url ?? null}
-                                            onPhotoChange={(url) =>
-                                                setMachine((prev) =>
-                                                    prev ? { ...prev, photo_url: url } : prev
-                                                )
-                                            }
-                                            readonly={!canEdit}
+                                            limit={50}
+                                            showIntegrityCheck={true}
                                         />
                                     </CardContent>
                                 </Card>
-                            </div>
+                            </section>
 
-                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                <InfoCard label="Codice interno" value={machine.internal_code} />
-                                <InfoCard label="Matricola" value={machine.serial_number} />
-                                <InfoCard label="Modello" value={machine.model} />
-                                <InfoCard label="Marca" value={machine.brand} />
-                                <InfoCard label="Stabilimento" value={plant?.name || plant?.code} />
-                                <InfoCard label="Linea" value={line?.name || line?.code} />
-                                <InfoCard
-                                    label="Note"
-                                    value={machine.notes}
-                                    className="md:col-span-2 xl:col-span-3"
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
+                            <section id="machine-documents">
+                                <Card className="rounded-2xl">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <FileText className="h-4 w-4" />
+                                            Documentazione
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Archivio tecnico collegato alla macchina.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <DocumentManager
+                                            machineId={machine.id}
+                                            machineOwnerOrgId={machine.organization_id}
+                                            currentOrgId={orgId}
+                                            currentOrgType={orgType}
+                                            currentUserRole={userRole}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            </section>
 
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <History className="h-4 w-4" />
-                                Timeline macchina
-                            </CardTitle>
-                            <CardDescription>
-                                Eventi operativi e cronologia registrata sulla macchina.
-                            </CardDescription>
-                        </CardHeader>
-
-                        <CardContent>
-                            <MachineEventTimeline
-                                machineId={machine.id}
-                                limit={50}
-                                showIntegrityCheck={true}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <FileText className="h-4 w-4" />
-                                Documentazione
-                            </CardTitle>
-                            <CardDescription>
-                                Gestione documenti collegati alla macchina nel contesto attivo.
-                            </CardDescription>
-                        </CardHeader>
-
-                        <CardContent>
-                            <DocumentManager
-                                machineId={machine.id}
-                                machineOwnerOrgId={machine.organization_id}
-                                currentOrgId={orgId}
-                                currentOrgType={orgType}
-                                currentUserRole={userRole}
-                            />
-                        </CardContent>
-                    </Card>
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle>Contesto macchina</CardTitle>
+                                </CardHeader>
+                                <CardContent className="grid gap-4 md:grid-cols-2">
+                                    <ContextCard
+                                        icon={<Factory className="h-5 w-5" />}
+                                        title="Contesto proprietario"
+                                        value={ownerOrganization?.name || "—"}
+                                        tone="orange"
+                                    />
+                                    <ContextCard
+                                        icon={<Building2 className="h-5 w-5" />}
+                                        title="Contesto assegnazione"
+                                        value={assignedCustomerName || "Non assegnata"}
+                                        tone="blue"
+                                    />
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
                 </div>
             </MainLayout>
         </OrgContextGuard>
     );
 }
 
-function InfoCard({
+function InfoRow({
     label,
     value,
-    className = "",
 }: {
     label: string;
     value: string | null | undefined;
-    className?: string;
 }) {
     return (
-        <div className={`rounded-xl border border-border p-4 ${className}`}>
-            <div className="mb-1 text-xs text-muted-foreground">{label}</div>
-            <div className="whitespace-pre-wrap font-medium">{value || "—"}</div>
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
+            <div className="text-sm text-muted-foreground">{label}</div>
+            <div className="max-w-[60%] text-right text-sm font-medium text-foreground">
+                {value || "—"}
+            </div>
+        </div>
+    );
+}
+
+function ContextCard({
+    icon,
+    title,
+    value,
+    tone,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    value: string;
+    tone: "orange" | "blue";
+}) {
+    const toneClasses =
+        tone === "orange"
+            ? "bg-orange-500/10 text-orange-500"
+            : "bg-blue-500/10 text-blue-500";
+
+    return (
+        <div className="rounded-2xl border border-border p-4">
+            <div className="flex items-start gap-3">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClasses}`}>
+                    {icon}
+                </div>
+                <div>
+                    <div className="text-sm text-muted-foreground">{title}</div>
+                    <div className="mt-1 font-semibold text-foreground">{value}</div>
+                </div>
+            </div>
         </div>
     );
 }
