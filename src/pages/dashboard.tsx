@@ -15,10 +15,13 @@ import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import QuickActionsPanel from "@/components/dashboard/QuickActionsPanel";
-import UrgentIssuesPanel, { type UrgentIssue } from "@/components/dashboard/UrgentIssuesPanel";
+import UrgentIssuesPanel, {
+    type UrgentIssue,
+} from "@/components/dashboard/UrgentIssuesPanel";
+import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import EmptyState from "@/components/feedback/EmptyState";
 
 type OrgType = "manufacturer" | "customer" | null;
@@ -68,11 +71,8 @@ const copy = {
         activeDocuments: "Documenti attivi",
         recentMachines: "Macchine recenti",
         recentActivity: "Attività recente",
-        noRecentMachines: "Nessuna macchina recente",
-        noRecentActivity: "Nessuna attività recente",
         openEquipment: "Apri macchine",
         openCustomers: "Apri clienti",
-        details: "Dettagli",
         noMachinesTitle: "Nessuna macchina presente",
         noMachinesDescription:
             "Aggiungi la prima macchina per iniziare a costruire il digital passport operativo.",
@@ -96,11 +96,8 @@ const copy = {
         activeDocuments: "Active documents",
         recentMachines: "Recent machines",
         recentActivity: "Recent activity",
-        noRecentMachines: "No recent machines",
-        noRecentActivity: "No recent activity",
         openEquipment: "Open machines",
         openCustomers: "Open customers",
-        details: "Details",
         noMachinesTitle: "No machines found",
         noMachinesDescription:
             "Add your first machine to start building the operational digital passport.",
@@ -124,11 +121,8 @@ const copy = {
         activeDocuments: "Documents actifs",
         recentMachines: "Machines récentes",
         recentActivity: "Activité récente",
-        noRecentMachines: "Aucune machine récente",
-        noRecentActivity: "Aucune activité récente",
         openEquipment: "Ouvrir les machines",
         openCustomers: "Ouvrir les clients",
-        details: "Détails",
         noMachinesTitle: "Aucune machine présente",
         noMachinesDescription:
             "Ajoutez la première machine pour démarrer le passeport numérique opérationnel.",
@@ -152,11 +146,8 @@ const copy = {
         activeDocuments: "Documentos activos",
         recentMachines: "Máquinas recientes",
         recentActivity: "Actividad reciente",
-        noRecentMachines: "No hay máquinas recientes",
-        noRecentActivity: "No hay actividad reciente",
         openEquipment: "Abrir máquinas",
         openCustomers: "Abrir clientes",
-        details: "Detalles",
         noMachinesTitle: "No hay máquinas",
         noMachinesDescription:
             "Añade la primera máquina para empezar a construir el digital passport operativo.",
@@ -204,12 +195,15 @@ function activityLabel(row: RecentActivityRow) {
     if (entity === "machine" && action === "soft_delete") return "Macchina nel cestino";
     if (entity === "organization" && action === "create") return "Cliente creato";
     if (entity === "organization" && action === "restore") return "Cliente ripristinato";
-    if (entity === "organization" && action === "soft_delete") return "Cliente nel cestino";
+    if (entity === "organization" && action === "soft_delete")
+        return "Cliente nel cestino";
     if (entity === "document" && action === "create") return "Documento creato";
     if (entity === "document" && action === "restore") return "Documento ripristinato";
-    if (entity === "document" && action === "soft_delete") return "Documento nel cestino";
+    if (entity === "document" && action === "soft_delete")
+        return "Documento nel cestino";
     if (entity === "user_membership" && action === "create") return "Utente aggiunto";
-    if (entity === "user_membership" && action === "update") return "Utente aggiornato";
+    if (entity === "user_membership" && action === "update")
+        return "Utente aggiornato";
 
     return `${entity} · ${action}`;
 }
@@ -233,9 +227,10 @@ function KpiCard({
                 </div>
                 <div className="text-4xl font-bold text-foreground">{value}</div>
                 <div
-                    className={`mt-2 text-sm ${
-                        tone === "warning" ? "text-amber-600 dark:text-amber-300" : "text-muted-foreground"
-                    }`}
+                    className={`mt-2 text-sm ${tone === "warning"
+                            ? "text-amber-600 dark:text-amber-300"
+                            : "text-muted-foreground"
+                        }`}
                 >
                     {title}
                 </div>
@@ -246,12 +241,18 @@ function KpiCard({
 
 export default function DashboardPage() {
     const { language } = useLanguage();
-    const text = copy[language] ?? copy.en;
+    const text = copy[language as keyof typeof copy] ?? copy.en;
     const locale = getLocale(language);
-    const { loading: authLoading, organization, membership, shouldEnforceMfa } = useAuth();
+
+    const {
+        loading: authLoading,
+        organization,
+        membership,
+        shouldEnforceMfa,
+    } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState<DashboardKpis>({
+    const [kpis, setKpis] = useState < DashboardKpis > ({
         machineCount: 0,
         customerCount: 0,
         activeAssignments: 0,
@@ -260,15 +261,17 @@ export default function DashboardPage() {
         activeChecklists: 0,
         activeDocuments: 0,
     });
-    const [recentMachines, setRecentMachines] = useState<RecentMachineRow[]>([]);
-    const [recentActivity, setRecentActivity] = useState<RecentActivityRow[]>([]);
+    const [recentMachines, setRecentMachines] = useState < RecentMachineRow[] > ([]);
+    const [recentActivity, setRecentActivity] = useState < RecentActivityRow[] > ([]);
 
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
     const userRole = membership?.role ?? "technician";
 
     const canManage = ["owner", "admin", "supervisor"].includes(userRole);
-    const canOperate = ["owner", "admin", "supervisor", "technician"].includes(userRole);
+    const canOperate = ["owner", "admin", "supervisor", "technician"].includes(
+        userRole
+    );
 
     useEffect(() => {
         let active = true;
@@ -288,9 +291,10 @@ export default function DashboardPage() {
 
                 const machineBaseQuery = supabase
                     .from("machines")
-                    .select("id, name, internal_code, lifecycle_state, updated_at, photo_url", {
-                        count: "exact",
-                    })
+                    .select(
+                        "id, name, internal_code, lifecycle_state, updated_at, photo_url",
+                        { count: "exact" }
+                    )
                     .eq("is_archived", false)
                     .or("is_deleted.is.null,is_deleted.eq.false")
                     .order("updated_at", { ascending: false })
@@ -298,9 +302,10 @@ export default function DashboardPage() {
 
                 const assignmentsQuery = supabase
                     .from("machine_assignments")
-                    .select("machine_id, customer_org_id, manufacturer_org_id, is_active", {
-                        count: "exact",
-                    })
+                    .select(
+                        "machine_id, customer_org_id, manufacturer_org_id, is_active",
+                        { count: "exact" }
+                    )
                     .eq("is_active", true);
 
                 const checklistQuery = supabase
@@ -317,7 +322,9 @@ export default function DashboardPage() {
 
                 const auditQuery = supabase
                     .from("audit_logs")
-                    .select("id, entity_type, action, created_at, entity_id, machine_id, metadata")
+                    .select(
+                        "id, entity_type, action, created_at, entity_id, machine_id, metadata"
+                    )
                     .eq("organization_id", orgId)
                     .order("created_at", { ascending: false })
                     .limit(8);
@@ -361,16 +368,17 @@ export default function DashboardPage() {
                     if (workOrdersRes.error) throw workOrdersRes.error;
                     if (customerRes.error) throw customerRes.error;
 
-                    const overdueWorkOrders =
-                        (workOrdersRes.data ?? []).filter((row: any) => {
-                            const status = String(row.status ?? "").toLowerCase();
-                            const dueDate = row.due_date ? new Date(row.due_date).toISOString() : null;
-                            return (
-                                !!dueDate &&
-                                dueDate < nowIso &&
-                                !["completed", "closed", "cancelled"].includes(status)
-                            );
-                        }).length ?? 0;
+                    const overdueWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => {
+                        const status = String(row.status ?? "").toLowerCase();
+                        const dueDate = row.due_date
+                            ? new Date(row.due_date).toISOString()
+                            : null;
+                        return (
+                            !!dueDate &&
+                            dueDate < nowIso &&
+                            !["completed", "closed", "cancelled"].includes(status)
+                        );
+                    }).length;
 
                     if (!active) return;
 
@@ -378,11 +386,10 @@ export default function DashboardPage() {
                         machineCount: machineRes.count ?? 0,
                         customerCount: customerRes.count ?? 0,
                         activeAssignments: assignmentRes.count ?? 0,
-                        openWorkOrders:
-                            (workOrdersRes.data ?? []).filter((row: any) => {
-                                const status = String(row.status ?? "").toLowerCase();
-                                return !["completed", "closed", "cancelled"].includes(status);
-                            }).length ?? 0,
+                        openWorkOrders: (workOrdersRes.data ?? []).filter((row: any) => {
+                            const status = String(row.status ?? "").toLowerCase();
+                            return !["completed", "closed", "cancelled"].includes(status);
+                        }).length,
                         overdueWorkOrders,
                         activeChecklists: checklistRes.count ?? 0,
                         activeDocuments: documentsRes.count ?? 0,
@@ -415,14 +422,20 @@ export default function DashboardPage() {
                     if (workOrdersRes.error) throw workOrdersRes.error;
 
                     const assignedMachineIds = Array.from(
-                        new Set((assignmentsRes.data ?? []).map((x: any) => x.machine_id).filter(Boolean))
+                        new Set(
+                            (assignmentsRes.data ?? [])
+                                .map((x: any) => x.machine_id)
+                                .filter(Boolean)
+                        )
                     );
 
                     let assignedMachinesRows: any[] = [];
                     if (assignedMachineIds.length > 0) {
                         const assignedMachinesRes = await supabase
                             .from("machines")
-                            .select("id, name, internal_code, lifecycle_state, updated_at, photo_url")
+                            .select(
+                                "id, name, internal_code, lifecycle_state, updated_at, photo_url"
+                            )
                             .in("id", assignedMachineIds)
                             .eq("is_archived", false)
                             .or("is_deleted.is.null,is_deleted.eq.false")
@@ -432,26 +445,33 @@ export default function DashboardPage() {
                         assignedMachinesRows = assignedMachinesRes.data ?? [];
                     }
 
-                    const mergedMachinesMap = new Map<string, RecentMachineRow>();
-                    for (const row of ownMachinesRes.data ?? []) mergedMachinesMap.set(row.id, row as RecentMachineRow);
-                    for (const row of assignedMachinesRows) mergedMachinesMap.set(row.id, row as RecentMachineRow);
+                    const mergedMachinesMap = new Map < string, RecentMachineRow> ();
+                    for (const row of ownMachinesRes.data ?? []) {
+                        mergedMachinesMap.set(row.id, row as RecentMachineRow);
+                    }
+                    for (const row of assignedMachinesRows) {
+                        mergedMachinesMap.set(row.id, row as RecentMachineRow);
+                    }
 
-                    const mergedMachines = Array.from(mergedMachinesMap.values()).sort((a, b) => {
-                        const da = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                        const db = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                        return db - da;
-                    });
+                    const mergedMachines = Array.from(mergedMachinesMap.values()).sort(
+                        (a, b) => {
+                            const da = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+                            const db = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+                            return db - da;
+                        }
+                    );
 
-                    const overdueWorkOrders =
-                        (workOrdersRes.data ?? []).filter((row: any) => {
-                            const status = String(row.status ?? "").toLowerCase();
-                            const dueDate = row.due_date ? new Date(row.due_date).toISOString() : null;
-                            return (
-                                !!dueDate &&
-                                dueDate < nowIso &&
-                                !["completed", "closed", "cancelled"].includes(status)
-                            );
-                        }).length ?? 0;
+                    const overdueWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => {
+                        const status = String(row.status ?? "").toLowerCase();
+                        const dueDate = row.due_date
+                            ? new Date(row.due_date).toISOString()
+                            : null;
+                        return (
+                            !!dueDate &&
+                            dueDate < nowIso &&
+                            !["completed", "closed", "cancelled"].includes(status)
+                        );
+                    }).length;
 
                     if (!active) return;
 
@@ -459,11 +479,10 @@ export default function DashboardPage() {
                         machineCount: mergedMachines.length,
                         customerCount: 0,
                         activeAssignments: assignmentsRes.count ?? 0,
-                        openWorkOrders:
-                            (workOrdersRes.data ?? []).filter((row: any) => {
-                                const status = String(row.status ?? "").toLowerCase();
-                                return !["completed", "closed", "cancelled"].includes(status);
-                            }).length ?? 0,
+                        openWorkOrders: (workOrdersRes.data ?? []).filter((row: any) => {
+                            const status = String(row.status ?? "").toLowerCase();
+                            return !["completed", "closed", "cancelled"].includes(status);
+                        }).length,
                         overdueWorkOrders,
                         activeChecklists: checklistRes.count ?? 0,
                         activeDocuments: documentsRes.count ?? 0,
@@ -486,7 +505,7 @@ export default function DashboardPage() {
         };
     }, [authLoading, orgId, orgType]);
 
-    const issues = useMemo<UrgentIssue[]>(() => {
+    const issues = useMemo < UrgentIssue[] > (() => {
         const result: UrgentIssue[] = [];
 
         if (kpis.overdueWorkOrders > 0) {
@@ -565,7 +584,9 @@ export default function DashboardPage() {
     }, [kpis, orgType, canManage, shouldEnforceMfa]);
 
     const dashboardSubtitle =
-        orgType === "manufacturer" ? text.subtitleManufacturer : text.subtitleCustomer;
+        orgType === "manufacturer"
+            ? text.subtitleManufacturer
+            : text.subtitleCustomer;
 
     if (authLoading || loading) {
         return (
@@ -594,7 +615,9 @@ export default function DashboardPage() {
                         <h1 className="text-4xl font-bold tracking-tight text-foreground">
                             Dashboard
                         </h1>
-                        <p className="text-base text-muted-foreground">{dashboardSubtitle}</p>
+                        <p className="text-base text-muted-foreground">
+                            {dashboardSubtitle}
+                        </p>
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -658,22 +681,26 @@ export default function DashboardPage() {
                         canOperate={canOperate}
                     />
 
+                    <QuickExportPanel orgType={orgType} />
+
                     <UrgentIssuesPanel issues={issues} />
 
                     <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                         <Card className="rounded-2xl">
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <CardTitle>{text.recentMachines}</CardTitle>
+                            <CardContent className="p-6">
+                                <div className="mb-5 flex items-center justify-between">
+                                    <div className="text-xl font-semibold text-foreground">
+                                        {text.recentMachines}
+                                    </div>
 
-                                <Link
-                                    href={orgType === "manufacturer" ? "/equipment" : "/equipment"}
-                                    className="text-sm font-medium text-orange-500 hover:underline"
-                                >
-                                    {text.openEquipment}
-                                </Link>
-                            </CardHeader>
+                                    <Link
+                                        href="/equipment"
+                                        className="text-sm font-medium text-orange-500 hover:underline"
+                                    >
+                                        {text.openEquipment}
+                                    </Link>
+                                </div>
 
-                            <CardContent>
                                 {recentMachines.length === 0 ? (
                                     <EmptyState
                                         title={text.noMachinesTitle}
@@ -700,7 +727,11 @@ export default function DashboardPage() {
                                                                 {machine.internal_code || "—"}
                                                             </div>
                                                             <div className="mt-2 text-xs text-muted-foreground">
-                                                                Aggiornata: {formatDate(machine.updated_at, locale)}
+                                                                Aggiornata:{" "}
+                                                                {formatDate(
+                                                                    machine.updated_at,
+                                                                    locale
+                                                                )}
                                                             </div>
                                                         </div>
 
@@ -719,20 +750,22 @@ export default function DashboardPage() {
                         </Card>
 
                         <Card className="rounded-2xl">
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <CardTitle>{text.recentActivity}</CardTitle>
+                            <CardContent className="p-6">
+                                <div className="mb-5 flex items-center justify-between">
+                                    <div className="text-xl font-semibold text-foreground">
+                                        {text.recentActivity}
+                                    </div>
 
-                                {orgType === "manufacturer" ? (
-                                    <Link
-                                        href="/customers"
-                                        className="text-sm font-medium text-orange-500 hover:underline"
-                                    >
-                                        {text.openCustomers}
-                                    </Link>
-                                ) : null}
-                            </CardHeader>
+                                    {orgType === "manufacturer" ? (
+                                        <Link
+                                            href="/customers"
+                                            className="text-sm font-medium text-orange-500 hover:underline"
+                                        >
+                                            {text.openCustomers}
+                                        </Link>
+                                    ) : null}
+                                </div>
 
-                            <CardContent>
                                 {recentActivity.length === 0 ? (
                                     <EmptyState
                                         title={text.noActivityTitle}
@@ -752,7 +785,8 @@ export default function DashboardPage() {
                                                             {activityLabel(row)}
                                                         </div>
                                                         <div className="mt-1 text-xs text-muted-foreground">
-                                                            {row.entity_type || "entity"} · {row.action || "update"}
+                                                            {row.entity_type || "entity"} ·{" "}
+                                                            {row.action || "update"}
                                                         </div>
                                                     </div>
 
