@@ -1,108 +1,122 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+    AlertTriangle,
+    CheckCircle2,
+    ClipboardList,
+    Download,
+    Plus,
+    Search,
+    Wrench,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
-import {
-    ClipboardList,
-    ArrowRight,
-    Plus,
-    Search,
-    CalendarDays,
-    Wrench,
-    Filter,
-    AlertTriangle,
-} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/feedback/EmptyState";
+import WorkOrderStatusBadge from "@/components/work-orders/WorkOrderStatusBadge";
+import WorkOrderPriorityBadge from "@/components/work-orders/WorkOrderPriorityBadge";
 
 interface WorkOrderRow {
     id: string;
     title: string | null;
     description: string | null;
-    machine_id: string | null;
-    machine_name?: string | null;
     status: string | null;
     priority: string | null;
     due_date: string | null;
-    created_at?: string | null;
+    machine_id: string | null;
+    assigned_to: string | null;
+    organization_id: string | null;
+    created_at: string | null;
+    updated_at: string | null;
 }
 
-function CardShell({
-    children,
-    className = "",
-}: {
-    children: React.ReactNode;
-    className?: string;
-}) {
-    return <div className={`surface-panel ${className}`}>{children}</div>;
+interface MachineRow {
+    id: string;
+    name: string | null;
+    internal_code: string | null;
 }
 
-function normalizePriority(value: string | null | undefined) {
-    const v = (value || "").toLowerCase();
-    if (v.includes("alta") || v === "high") return "high";
-    if (v.includes("media") || v === "medium") return "medium";
-    return "low";
+interface ProfileRow {
+    id: string;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
 }
 
-function formatDate(value: string | null | undefined, locale: string) {
+function formatDate(value: string | null | undefined) {
     if (!value) return "—";
     try {
-        return new Date(value).toLocaleDateString(locale);
+        return new Date(value).toLocaleString("it-IT", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
     } catch {
         return value;
     }
 }
 
-function priorityStyles(priority: string | null | undefined, t: (key: string) => string) {
-    const normalized = normalizePriority(priority);
-
-    if (normalized === "high") {
-        return {
-            iconWrap: "bg-red-500/15 text-red-400",
-            badge: "bg-red-500/15 text-red-300 border border-red-500/30",
-            label: t("workOrders.priority.high"),
-        };
-    }
-
-    if (normalized === "medium") {
-        return {
-            iconWrap: "bg-amber-500/15 text-amber-400",
-            badge: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
-            label: t("workOrders.priority.medium"),
-        };
-    }
-
-    return {
-        iconWrap: "bg-emerald-500/15 text-emerald-400",
-        badge: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
-        label: t("workOrders.priority.low"),
-    };
+function isClosedStatus(status: string | null | undefined) {
+    const key = String(status || "").toLowerCase();
+    return ["completed", "closed", "cancelled"].includes(key);
 }
 
-function statusLabel(status: string | null | undefined, t: (key: string) => string) {
-    const value = (status || "").toLowerCase();
-    if (value.includes("open") || value.includes("apert")) {
-        return t("workOrders.status.open");
-    }
-    if (value.includes("progress") || value.includes("corso")) {
-        return t("workOrders.status.inProgress");
-    }
-    if (value.includes("closed") || value.includes("chius")) {
-        return t("workOrders.status.closed");
-    }
-    return status || "—";
+function isOverdue(row: WorkOrderRow) {
+    if (!row.due_date) return false;
+    if (isClosedStatus(row.status)) return false;
+    return new Date(row.due_date).getTime() < Date.now();
 }
 
-export default function WorkOrdersPage() {
-    const { t, language } = useLanguage();
+function KpiCard({
+    icon,
+    title,
+    value,
+    tone = "default",
+}: {
+    icon: React.ReactNode;
+    title: string;
+    value: number;
+    tone?: "default" | "warning" | "success";
+}) {
+    const toneClass =
+        tone === "warning"
+            ? "text-amber-500"
+            : tone === "success"
+                ? "text-green-500"
+                : "text-orange-500";
+
+    return (
+        <Card className="rounded-2xl">
+            <CardContent className="p-6">
+                <div
+                    className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-current/10 ${toneClass}`}
+                >
+                    {icon}
+                </div>
+                <div className="text-4xl font-bold text-foreground">{value}</div>
+                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default function WorkOrdersIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
 
-    const [rows, setRows] = useState < WorkOrderRow[] > ([]);
     const [loading, setLoading] = useState(true);
+    const [rows, setRows] = useState < WorkOrderRow[] > ([]);
+    const [machineMap, setMachineMap] = useState < Map < string, string>> (new Map());
+    const [assigneeMap, setAssigneeMap] = useState < Map < string, string>> (new Map());
 
     const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
     const [priorityFilter, setPriorityFilter] = useState("all");
 
     const orgId = organization?.id ?? null;
@@ -119,44 +133,75 @@ export default function WorkOrdersPage() {
                 return;
             }
 
-            try {
-                setLoading(true);
+            setLoading(true);
 
-                const { data: workOrders, error } = await supabase
+            try {
+                const { data, error } = await supabase
                     .from("work_orders")
                     .select(
-                        "id, title, description, machine_id, status, priority, due_date, created_at"
+                        "id, title, description, status, priority, due_date, machine_id, assigned_to, organization_id, created_at, updated_at"
                     )
                     .eq("organization_id", orgId)
                     .order("created_at", { ascending: false });
 
                 if (error) throw error;
 
-                const machineIds = (workOrders ?? [])
-                    .map((row: any) => row.machine_id)
-                    .filter(Boolean);
+                const workOrders = (data ?? []) as WorkOrderRow[];
 
-                const { data: machines } = machineIds.length
-                    ? await supabase.from("machines").select("id, name").in("id", machineIds)
-                    : ({ data: [] } as any);
+                const machineIds = Array.from(
+                    new Set(workOrders.map((row) => row.machine_id).filter(Boolean))
+                ) as string[];
 
-                const machineMap = new Map((machines ?? []).map((m: any) => [m.id, m.name]));
+                const assigneeIds = Array.from(
+                    new Set(workOrders.map((row) => row.assigned_to).filter(Boolean))
+                ) as string[];
+
+                let machines: MachineRow[] = [];
+                let profiles: ProfileRow[] = [];
+
+                if (machineIds.length > 0) {
+                    const { data: machineRows, error: machineError } = await supabase
+                        .from("machines")
+                        .select("id, name, internal_code")
+                        .in("id", machineIds);
+
+                    if (machineError) throw machineError;
+                    machines = (machineRows ?? []) as MachineRow[];
+                }
+
+                if (assigneeIds.length > 0) {
+                    const { data: profileRows, error: profileError } = await supabase
+                        .from("profiles")
+                        .select("id, display_name, first_name, last_name, email")
+                        .in("id", assigneeIds);
+
+                    if (profileError) throw profileError;
+                    profiles = (profileRows ?? []) as ProfileRow[];
+                }
+
+                const nextMachineMap = new Map < string, string> ();
+                for (const row of machines) {
+                    nextMachineMap.set(
+                        row.id,
+                        row.name || row.internal_code || row.id
+                    );
+                }
+
+                const nextAssigneeMap = new Map < string, string> ();
+                for (const row of profiles) {
+                    const label =
+                        row.display_name?.trim() ||
+                        `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() ||
+                        row.email ||
+                        row.id;
+                    nextAssigneeMap.set(row.id, label);
+                }
 
                 if (!active) return;
 
-                setRows(
-                    ((workOrders ?? []) as any[]).map((row) => ({
-                        id: row.id,
-                        title: row.title,
-                        description: row.description,
-                        machine_id: row.machine_id,
-                        machine_name: machineMap.get(row.machine_id) ?? null,
-                        status: row.status ?? null,
-                        priority: row.priority ?? null,
-                        due_date: row.due_date ?? null,
-                        created_at: row.created_at ?? null,
-                    }))
-                );
+                setRows(workOrders);
+                setMachineMap(nextMachineMap);
+                setAssigneeMap(nextAssigneeMap);
             } catch (error) {
                 console.error("Work orders load error:", error);
             } finally {
@@ -172,154 +217,182 @@ export default function WorkOrdersPage() {
     }, [authLoading, orgId]);
 
     const filteredRows = useMemo(() => {
-        return rows.filter((row) => {
-            const q = search.trim().toLowerCase();
+        const q = search.trim().toLowerCase();
 
+        return rows.filter((row) => {
             const matchesSearch =
                 !q ||
-                (row.title ?? "").toLowerCase().includes(q) ||
-                (row.machine_name ?? "").toLowerCase().includes(q) ||
-                (row.description ?? "").toLowerCase().includes(q);
+                [
+                    row.title,
+                    row.description,
+                    row.status,
+                    row.priority,
+                    row.machine_id ? machineMap.get(row.machine_id) : "",
+                    row.assigned_to ? assigneeMap.get(row.assigned_to) : "",
+                ]
+                    .filter(Boolean)
+                    .some((value) => String(value).toLowerCase().includes(q));
 
-            const normalized = normalizePriority(row.priority);
-            const matchesPriority = priorityFilter === "all" || normalized === priorityFilter;
+            const matchesStatus =
+                statusFilter === "all" ||
+                String(row.status || "").toLowerCase() === statusFilter;
 
-            return matchesSearch && matchesPriority;
+            const matchesPriority =
+                priorityFilter === "all" ||
+                String(row.priority || "").toLowerCase() === priorityFilter;
+
+            return matchesSearch && matchesStatus && matchesPriority;
         });
-    }, [rows, search, priorityFilter]);
+    }, [rows, search, statusFilter, priorityFilter, machineMap, assigneeMap]);
 
     const stats = useMemo(() => {
         return {
             total: rows.length,
-            open: rows.filter((r) => {
-                const s = (r.status || "").toLowerCase();
-                return s.includes("open") || s.includes("apert");
-            }).length,
-            urgent: rows.filter((r) => {
-                const p = (r.priority || "").toLowerCase();
-                return p.includes("alta") || p === "high";
-            }).length,
+            open: rows.filter((row) => !isClosedStatus(row.status)).length,
+            overdue: rows.filter((row) => isOverdue(row)).length,
+            completed: rows.filter((row) =>
+                ["completed", "closed"].includes(String(row.status || "").toLowerCase())
+            ).length,
         };
     }, [rows]);
 
-    const locale =
-        language === "it"
-            ? "it-IT"
-            : language === "fr"
-                ? "fr-FR"
-                : language === "es"
-                    ? "es-ES"
-                    : "en-GB";
+    if (authLoading || loading) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title="Work Orders - MACHINA" />
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-center text-muted-foreground">
+                                Caricamento work orders...
+                            </CardContent>
+                        </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
+    }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${t("workOrders.title")} - MACHINA`} />
+                <SEO title="Work Orders - MACHINA" />
 
-                <div className="px-5 py-6 lg:px-8 lg:py-8">
-                    <div className="mx-auto max-w-[1440px] space-y-8">
-                        <div className="flex flex-wrap items-center justify-between gap-4">
-                            <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                    {t("workOrders.title")}
-                                </h1>
-                                <p className="text-base text-muted-foreground">
-                                    {t("workOrders.subtitle")}
-                                </p>
-                            </div>
+                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-2">
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                Work Orders
+                            </h1>
+                            <p className="text-base text-muted-foreground">
+                                Registro operativo degli ordini di lavoro nel contesto attivo.
+                            </p>
+                        </div>
 
-                            <Link
-                                href="/work-orders/create"
-                                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
-                            >
-                                <Plus className="h-4 w-4" />
-                                {t("workOrders.new")}
+                        <div className="flex gap-3">
+                            <a href="/api/export/work-orders">
+                                <Button variant="outline">
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Export CSV
+                                </Button>
+                            </a>
+
+                            <Link href="/work-orders/create">
+                                <Button>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Nuovo work order
+                                </Button>
                             </Link>
                         </div>
+                    </div>
 
-                        <div className="grid gap-5 md:grid-cols-3">
-                            <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
-                                    <ClipboardList className="h-5 w-5" />
-                                </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
-                                    {stats.total}
-                                </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
-                                    {t("workOrders.total")}
-                                </div>
-                            </CardShell>
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <KpiCard
+                            icon={<ClipboardList className="h-5 w-5" />}
+                            title="Totali"
+                            value={stats.total}
+                        />
+                        <KpiCard
+                            icon={<Wrench className="h-5 w-5" />}
+                            title="Aperti"
+                            value={stats.open}
+                        />
+                        <KpiCard
+                            icon={<AlertTriangle className="h-5 w-5" />}
+                            title="In ritardo"
+                            value={stats.overdue}
+                            tone="warning"
+                        />
+                        <KpiCard
+                            icon={<CheckCircle2 className="h-5 w-5" />}
+                            title="Completati"
+                            value={stats.completed}
+                            tone="success"
+                        />
+                    </div>
 
-                            <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
-                                    <ClipboardList className="h-5 w-5" />
-                                </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
-                                    {stats.open}
-                                </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
-                                    {t("workOrders.open")}
-                                </div>
-                            </CardShell>
-
-                            <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/20 text-red-300">
-                                    <AlertTriangle className="h-5 w-5" />
-                                </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
-                                    {stats.urgent}
-                                </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
-                                    {t("workOrders.urgent")}
-                                </div>
-                            </CardShell>
-                        </div>
-
-                        <CardShell className="p-5">
-                            <div className="flex flex-col gap-4 xl:flex-row">
-                                <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                                    <input
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        placeholder={t("common.search")}
-                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
-                                    />
-                                </div>
-
-                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-foreground xl:w-[260px]">
-                                    <Filter className="h-5 w-5 text-muted-foreground" />
-                                    <select
-                                        value={priorityFilter}
-                                        onChange={(e) => setPriorityFilter(e.target.value)}
-                                        className="w-full bg-transparent outline-none"
-                                    >
-                                        <option value="all">{t("common.all")}</option>
-                                        <option value="high">{t("workOrders.priority.high")}</option>
-                                        <option value="medium">{t("workOrders.priority.medium")}</option>
-                                        <option value="low">{t("workOrders.priority.low")}</option>
-                                    </select>
-                                </div>
+                    <Card className="rounded-2xl">
+                        <CardContent className="grid gap-4 p-6 xl:grid-cols-[1.5fr_1fr_1fr]">
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Cerca titolo, macchina, assegnatario..."
+                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                                />
                             </div>
-                        </CardShell>
 
-                        <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-foreground">
-                                {t("workOrders.listTitle")}
-                            </h2>
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
+                            >
+                                <option value="all">Tutti gli stati</option>
+                                <option value="open">Open</option>
+                                <option value="in_progress">In progress</option>
+                                <option value="on_hold">On hold</option>
+                                <option value="completed">Completed</option>
+                                <option value="closed">Closed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
 
-                            {loading ? (
-                                <CardShell className="p-6 text-muted-foreground">
-                                    {t("workOrders.loading")}
-                                </CardShell>
-                            ) : filteredRows.length === 0 ? (
-                                <CardShell className="p-6 text-muted-foreground">
-                                    {t("workOrders.noResults")}
-                                </CardShell>
+                            <select
+                                value={priorityFilter}
+                                onChange={(e) => setPriorityFilter(e.target.value)}
+                                className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
+                            >
+                                <option value="all">Tutte le priorità</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl">
+                        <CardContent className="p-6">
+                            {filteredRows.length === 0 ? (
+                                <EmptyState
+                                    title="Nessun work order trovato"
+                                    description="Non ci sono ordini di lavoro oppure nessun elemento corrisponde ai filtri attivi."
+                                    icon={<ClipboardList className="h-10 w-10" />}
+                                    actionLabel="Crea work order"
+                                    actionHref="/work-orders/create"
+                                    secondaryActionLabel="Apri macchine"
+                                    secondaryActionHref="/equipment"
+                                />
                             ) : (
                                 <div className="space-y-4">
                                     {filteredRows.map((row) => {
-                                        const style = priorityStyles(row.priority, t);
+                                        const machineLabel = row.machine_id
+                                            ? machineMap.get(row.machine_id) || row.machine_id
+                                            : "—";
+
+                                        const assigneeLabel = row.assigned_to
+                                            ? assigneeMap.get(row.assigned_to) || row.assigned_to
+                                            : "Non assegnato";
 
                                         return (
                                             <Link
@@ -327,57 +400,45 @@ export default function WorkOrdersPage() {
                                                 href={`/work-orders/${row.id}`}
                                                 className="block"
                                             >
-                                                <CardShell className="p-5 transition hover:translate-y-[-2px]">
-                                                    <div className="flex items-center justify-between gap-4">
-                                                        <div className="flex min-w-0 items-center gap-4">
-                                                            <div
-                                                                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${style.iconWrap}`}
-                                                            >
-                                                                <ClipboardList className="h-5 w-5" />
+                                                <div className="rounded-2xl border border-border p-4 transition hover:bg-muted/30">
+                                                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                                        <div className="min-w-0 space-y-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <div className="truncate text-lg font-semibold text-foreground">
+                                                                    {row.title || "Work order"}
+                                                                </div>
+                                                                <WorkOrderStatusBadge status={row.status} />
+                                                                <WorkOrderPriorityBadge priority={row.priority} />
                                                             </div>
 
-                                                            <div className="min-w-0">
-                                                                <div className="truncate text-2xl font-bold text-foreground">
-                                                                    {row.title ??
-                                                                        t("workOrders.fallbackTitle")}
+                                                            {row.description && (
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    {row.description}
                                                                 </div>
+                                                            )}
 
-                                                                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-muted-foreground">
-                                                                    <span className="inline-flex items-center gap-1.5">
-                                                                        <Wrench className="h-4 w-4" />
-                                                                        {row.machine_name ??
-                                                                            t(
-                                                                                "workOrders.machineFallback"
-                                                                            )}
-                                                                    </span>
-                                                                    <span className="inline-flex items-center gap-1.5">
-                                                                        <CalendarDays className="h-4 w-4" />
-                                                                        {formatDate(row.due_date, locale)}
-                                                                    </span>
-                                                                    <span>
-                                                                        {statusLabel(row.status, t)}
-                                                                    </span>
-                                                                </div>
+                                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                                <span>Macchina: {machineLabel}</span>
+                                                                <span>Assegnato a: {assigneeLabel}</span>
+                                                                <span>Due: {formatDate(row.due_date)}</span>
+                                                                <span>Updated: {formatDate(row.updated_at)}</span>
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex shrink-0 items-center gap-6">
-                                                            <div
-                                                                className={`rounded-full px-4 py-1.5 text-lg font-semibold ${style.badge}`}
-                                                            >
-                                                                {style.label}
-                                                            </div>
-                                                            <ArrowRight className="h-6 w-6 text-muted-foreground" />
-                                                        </div>
+                                                        {isOverdue(row) && (
+                                                            <Badge className="border border-red-300 bg-red-100 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300">
+                                                                Overdue
+                                                            </Badge>
+                                                        )}
                                                     </div>
-                                                </CardShell>
+                                                </div>
                                             </Link>
                                         );
                                     })}
                                 </div>
                             )}
-                        </section>
-                    </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </MainLayout>
         </OrgContextGuard>
