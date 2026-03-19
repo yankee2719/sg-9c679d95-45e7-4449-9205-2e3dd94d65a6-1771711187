@@ -212,28 +212,33 @@ function KpiCard({
     icon,
     title,
     value,
-    tone = "default",
+    tone = "orange",
 }: {
     icon: React.ReactNode;
     title: string;
     value: number;
-    tone?: "default" | "warning";
+    tone?: "orange" | "blue" | "emerald" | "violet" | "amber" | "rose" | "slate";
 }) {
+    const toneMap = {
+        orange: "bg-orange-500/12 text-orange-500",
+        blue: "bg-blue-500/12 text-blue-500",
+        emerald: "bg-emerald-500/12 text-emerald-500",
+        violet: "bg-violet-500/12 text-violet-500",
+        amber: "bg-amber-500/12 text-amber-500",
+        rose: "bg-rose-500/12 text-rose-500",
+        slate: "bg-slate-500/12 text-slate-500",
+    } as const;
+
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
+                <div
+                    className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${toneMap[tone]}`}
+                >
                     {icon}
                 </div>
                 <div className="text-4xl font-bold text-foreground">{value}</div>
-                <div
-                    className={`mt-2 text-sm ${tone === "warning"
-                            ? "text-amber-600 dark:text-amber-300"
-                            : "text-muted-foreground"
-                        }`}
-                >
-                    {title}
-                </div>
+                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
             </CardContent>
         </Card>
     );
@@ -241,7 +246,7 @@ function KpiCard({
 
 export default function DashboardPage() {
     const { language } = useLanguage();
-    const text = copy[language as keyof typeof copy] ?? copy.en;
+    const text = copy[(language as keyof typeof copy) || "it"] ?? copy.it;
     const locale = getLocale(language);
 
     const {
@@ -625,6 +630,7 @@ export default function DashboardPage() {
                             icon={<Factory className="h-5 w-5" />}
                             title={text.machineCount}
                             value={kpis.machineCount}
+                            tone="violet"
                         />
 
                         {orgType === "manufacturer" ? (
@@ -632,12 +638,14 @@ export default function DashboardPage() {
                                 icon={<Building2 className="h-5 w-5" />}
                                 title={text.customerCount}
                                 value={kpis.customerCount}
+                                tone="blue"
                             />
                         ) : (
                             <KpiCard
                                 icon={<PackageCheck className="h-5 w-5" />}
                                 title={text.activeAssignments}
                                 value={kpis.activeAssignments}
+                                tone="blue"
                             />
                         )}
 
@@ -645,13 +653,14 @@ export default function DashboardPage() {
                             icon={<ClipboardList className="h-5 w-5" />}
                             title={text.openWorkOrders}
                             value={kpis.openWorkOrders}
+                            tone="emerald"
                         />
 
                         <KpiCard
                             icon={<Wrench className="h-5 w-5" />}
                             title={text.overdueWorkOrders}
                             value={kpis.overdueWorkOrders}
-                            tone={kpis.overdueWorkOrders > 0 ? "warning" : "default"}
+                            tone={kpis.overdueWorkOrders > 0 ? "amber" : "slate"}
                         />
                     </div>
 
@@ -660,18 +669,21 @@ export default function DashboardPage() {
                             icon={<PackageCheck className="h-5 w-5" />}
                             title={text.activeChecklists}
                             value={kpis.activeChecklists}
+                            tone="blue"
                         />
 
                         <KpiCard
                             icon={<FileText className="h-5 w-5" />}
                             title={text.activeDocuments}
                             value={kpis.activeDocuments}
+                            tone="rose"
                         />
 
                         <KpiCard
                             icon={<Activity className="h-5 w-5" />}
                             title={text.activeAssignments}
                             value={kpis.activeAssignments}
+                            tone="orange"
                         />
                     </div>
 
