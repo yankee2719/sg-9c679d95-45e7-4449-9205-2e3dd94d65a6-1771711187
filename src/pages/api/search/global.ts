@@ -52,19 +52,30 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const like = safeLike(q);
         const orgId = req.user.organizationId;
 
-        const role = req.user.role ?? "viewer";
-        const isManufacturerContext = !req.user.isPlatformAdmin && req.user.organizationType === "manufacturer";
+        const { data: activeOrg, error: activeOrgError } = await serviceSupabase
+            .from("organizations")
+            .select("id, type")
+            .eq("id", orgId)
+            .maybeSingle();
+
+        if (activeOrgError) {
+            return res.status(500).json({ error: activeOrgError.message });
+        }
+
+        if (!activeOrg) {
+            return res.status(404).json({ error: "Active organization not found" });
+        }
 
         const result = emptyResponse();
 
-        if (isManufacturerContext) {
+        if (activeOrg.type === "manufacturer") {
             const [machinesRes, customersRes, documentsRes, workOrdersRes] = await Promise.all([
                 serviceSupabase
                     .from("machines")
                     .select("id, name, internal_code, serial_number, model, brand")
                     .eq("organization_id", orgId)
                     .eq("is_archived", false)
-                    .eq("is_deleted", false)
+                    .or("is_deleted.is.null,is_deleted.eq.false")
                     .or(
                         `name.ilike.${like},internal_code.ilike.${like},serial_number.ilike.${like},model.ilike.${like},brand.ilike.${like}`
                     )
@@ -74,7 +85,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     .select("id, name, city, email")
                     .eq("manufacturer_org_id", orgId)
                     .eq("type", "customer")
-                    .eq("is_deleted", false)
+                    .or("is_deleted.is.null,is_deleted.eq.false")
                     .or(`name.ilike.${like},city.ilike.${like},email.ilike.${like}`)
                     .limit(6),
                 serviceSupabase
@@ -121,7 +132,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 subLabel: [row.category, row.language, row.machine_id ? `machine ${row.machine_id}` : null]
                     .filter(Boolean)
                     .join(" · "),
-                href: row.machine_id ? `/equipment/${row.machine_id}#machine-documents` : "/documents",
+                href: row.machine_id
+                    ? `/equipment/${row.machine_id}#machine-documents`
+                    : "/documents",
                 type: "document",
             }));
 
@@ -136,13 +149,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(200).json(result);
         }
 
-        const [ownMachinesRes, assignmentsRes, documentsRes, workOrdersRes] = await Promise.all([
+        const [ownMachinesRes, assignmentsRes, workOrdersRes, documentsRes] = await Promise.all([
             serviceSupabase
                 .from("machines")
                 .select("id, name, internal_code, serial_number, model, brand")
                 .eq("organization_id", orgId)
                 .eq("is_archived", false)
-                .eq("is_deleted", false)
+                .or("is_deleted.is.null,is_deleted.eq.false")
                 .or(
                     `name.ilike.${like},internal_code.ilike.${like},serial_number.ilike.${like},model.ilike.${like},brand.ilike.${like}`
                 )
@@ -182,7 +195,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 .select("id, name, internal_code, serial_number, model, brand")
                 .in("id", assignedIds)
                 .eq("is_archived", false)
-                .eq("is_deleted", false)
+                .or("is_deleted.is.null,is_deleted.eq.false")
                 .or(
                     `name.ilike.${like},internal_code.ilike.${like},serial_number.ilike.${like},model.ilike.${like},brand.ilike.${like}`
                 )
@@ -192,21 +205,23 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             assignedMachines = assignedMachinesRes.data ?? [];
         }
 
-        const machineMap = new Map < string, any> ();
+        const machineMap = new Map<string, any>();
         for (const row of ownMachinesRes.data ?? []) machineMap.set(row.id, row);
         for (const row of assignedMachines) machineMap.set(row.id, row);
 
         const accessibleMachineIds = new Set(Array.from(machineMap.keys()));
 
-        result.machines = Array.from(machineMap.values()).slice(0, 8).map((row: any) => ({
-            id: row.id,
-            label: row.name || "Macchina",
-            subLabel: [row.internal_code, row.serial_number, row.brand, row.model]
-                .filter(Boolean)
-                .join(" · "),
-            href: `/equipment/${row.id}`,
-            type: "machine",
-        }));
+        result.machines = Array.from(machineMap.values())
+            .slice(0, 8)
+            .map((row: any) => ({
+                id: row.id,
+                label: row.name || "Macchina",
+                subLabel: [row.internal_code, row.serial_number, row.brand, row.model]
+                    .filter(Boolean)
+                    .join(" · "),
+                href: `/equipment/${row.id}`,
+                type: "machine",
+            }));
 
         result.documents = (documentsRes.data ?? [])
             .filter((row: any) => row.machine_id && accessibleMachineIds.has(row.machine_id))
