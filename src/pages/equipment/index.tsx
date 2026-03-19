@@ -65,9 +65,9 @@ export default function EquipmentPage() {
     const { t } = useLanguage();
     const { loading: authLoading, organization, membership } = useAuth();
 
-    const [machines, setMachines] = useState < MachineRow[] > ([]);
-    const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
-    const [hiddenRows, setHiddenRows] = useState < HiddenRow[] > ([]);
+    const [machines, setMachines] = useState<MachineRow[]>([]);
+    const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+    const [hiddenRows, setHiddenRows] = useState<HiddenRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [showHidden, setShowHidden] = useState(false);
@@ -207,11 +207,11 @@ export default function EquipmentPage() {
                 <div className="px-5 py-6 lg:px-8 lg:py-8">
                     <div className="mx-auto max-w-[1440px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
-                            <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                            <div className="space-y-1.5">
+                                <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                                     {t("equipment.title")}
                                 </h1>
-                                <p className="text-base text-muted-foreground">{subtitle}</p>
+                                <p className="text-sm text-muted-foreground">{subtitle}</p>
                             </div>
 
                             <Link
@@ -225,38 +225,38 @@ export default function EquipmentPage() {
 
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                             <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-300">
+                                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-300">
                                     <Factory className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
+                                <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">
                                     {stats.total}
                                 </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">
                                     {t("equipment.kpi.visibleMachines")}
                                 </div>
                             </CardShell>
 
                             <CardShell className="p-6">
-                                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
                                     <Package className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
+                                <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">
                                     {stats.assigned}
                                 </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">
                                     {t("equipment.kpi.activeAssignments")}
                                 </div>
                             </CardShell>
 
                             {orgType === "customer" && (
                                 <CardShell className="p-6">
-                                    <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
+                                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
                                         <EyeOff className="h-5 w-5" />
                                     </div>
-                                    <div className="text-5xl font-bold leading-none text-foreground">
+                                    <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">
                                         {stats.hidden}
                                     </div>
-                                    <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                    <div className="mt-2 text-sm font-medium text-muted-foreground">
                                         {t("equipment.kpi.hiddenMachines")}
                                     </div>
                                 </CardShell>
@@ -298,16 +298,16 @@ export default function EquipmentPage() {
                         </CardShell>
 
                         <section className="space-y-4">
-                            <h2 className="text-[32px] font-bold text-foreground">
+                            <h2 className="text-2xl font-semibold text-foreground md:text-[28px]">
                                 {t("equipment.listTitle")}
                             </h2>
 
                             {loading ? (
-                                <CardShell className="p-6 text-muted-foreground">
+                                <CardShell className="p-6 text-sm text-muted-foreground">
                                     {t("equipment.loading")}
                                 </CardShell>
                             ) : visibleMachines.length === 0 ? (
-                                <CardShell className="p-6 text-muted-foreground">
+                                <CardShell className="p-6 text-sm text-muted-foreground">
                                     {t("equipment.noResults")}
                                 </CardShell>
                             ) : (
@@ -322,7 +322,7 @@ export default function EquipmentPage() {
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between gap-3">
                                                         <div className="min-w-0">
-                                                            <div className="truncate text-2xl font-bold text-foreground">
+                                                            <div className="truncate text-xl font-semibold text-foreground">
                                                                 {machine.name ?? t("equipment.fallbackName")}
                                                             </div>
                                                             <div className="truncate text-sm text-muted-foreground">
