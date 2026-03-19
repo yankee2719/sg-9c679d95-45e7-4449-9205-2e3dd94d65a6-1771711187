@@ -22,11 +22,24 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const serviceSupabase = getServiceSupabase();
         const orgId = req.user.organizationId;
-        const orgType = req.user.organizationType;
+
+        const { data: activeOrg, error: activeOrgError } = await serviceSupabase
+            .from("organizations")
+            .select("id, type")
+            .eq("id", orgId)
+            .maybeSingle();
+
+        if (activeOrgError) {
+            return res.status(500).json({ error: activeOrgError.message });
+        }
+
+        if (!activeOrg) {
+            return res.status(404).json({ error: "Active organization not found" });
+        }
 
         let machineRows: any[] = [];
 
-        if (orgType === "manufacturer") {
+        if (activeOrg.type === "manufacturer") {
             const { data, error } = await serviceSupabase
                 .from("machines")
                 .select(
@@ -88,7 +101,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 assignedMachines = data ?? [];
             }
 
-            const merged = new Map<string, any>();
+            const merged = new Map < string, any> ();
             for (const row of ownMachines ?? []) merged.set(row.id, row);
             for (const row of assignedMachines) merged.set(row.id, row);
 
