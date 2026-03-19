@@ -47,6 +47,8 @@ interface UserListRow {
     email: string | null;
 }
 
+type OrgType = "manufacturer" | "customer" | null;
+
 function formatDate(value: string | null | undefined) {
     if (!value) return "—";
     try {
@@ -111,6 +113,7 @@ export default function UsersIndexPage() {
 
     const orgId = organization?.id ?? null;
     const orgName = organization?.name ?? "Organizzazione";
+    const orgType = (organization?.type as OrgType | undefined) ?? null;
     const userRole = membership?.role ?? "technician";
 
     useEffect(() => {
@@ -200,11 +203,7 @@ export default function UsersIndexPage() {
         return rows.filter((row) => {
             const matchesSearch =
                 !q ||
-                [
-                    displayName(row),
-                    row.email,
-                    row.role,
-                ]
+                [displayName(row), row.email, row.role]
                     .filter(Boolean)
                     .some((value) => String(value).toLowerCase().includes(q));
 
@@ -235,6 +234,11 @@ export default function UsersIndexPage() {
             ).length,
         };
     }, [rows]);
+
+    const emptyPrimaryHref =
+        orgType === "manufacturer" ? "/customers" : "/dashboard";
+    const emptyPrimaryLabel =
+        orgType === "manufacturer" ? "Apri clienti" : "Apri dashboard";
 
     if (authLoading || loading) {
         return (
@@ -345,8 +349,8 @@ export default function UsersIndexPage() {
                                     title="Nessun utente trovato"
                                     description="Non ci sono utenti nel contesto attivo oppure nessun elemento corrisponde ai filtri correnti."
                                     icon={<Users className="h-10 w-10" />}
-                                    actionLabel="Apri clienti"
-                                    actionHref="/customers"
+                                    actionLabel={emptyPrimaryLabel}
+                                    actionHref={emptyPrimaryHref}
                                     secondaryActionLabel="Apri dashboard"
                                     secondaryActionHref="/dashboard"
                                 />
