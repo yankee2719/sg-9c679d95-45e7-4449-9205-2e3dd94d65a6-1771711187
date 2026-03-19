@@ -1,191 +1,450 @@
-// src/pages/assignments/index.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+    Building2,
+    Download,
+    Factory,
+    Search,
+    UserCheck,
+    Users,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { getUserContext } from "@/lib/supabaseHelpers";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { Package, ArrowRight, Factory, Building2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import EmptyState from "@/components/feedback/EmptyState";
+import { Badge } from "@/components/ui/badge";
+
+type OrgType = "manufacturer" | "customer" | null;
 
 interface AssignmentRow {
-  machine_id: string;
-  customer_org_id: string | null;
-  machine_name?: string | null;
-  customer_name?: string | null;
+    id: string;
+    machine_id: string;
+    customer_org_id: string | null;
+    manufacturer_org_id: string | null;
+    assigned_by: string | null;
+    assigned_at: string | null;
+    is_active: boolean;
 }
 
-function CardShell({
-  children,
-  className = "",
+interface MachineRow {
+    id: string;
+    name: string | null;
+    internal_code: string | null;
+    serial_number: string | null;
+    model: string | null;
+    brand: string | null;
+}
+
+interface CustomerRow {
+    id: string;
+    name: string | null;
+    city: string | null;
+    email: string | null;
+}
+
+interface ProfileRow {
+    id: string;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+}
+
+function formatDate(value: string | null | undefined) {
+    if (!value) return "—";
+    try {
+        return new Date(value).toLocaleString("it-IT", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    } catch {
+        return value;
+    }
+}
+
+function KpiCard({
+    icon,
+    title,
+    value,
 }: {
-  children: React.ReactNode;
-  className?: string;
+    icon: React.ReactNode;
+    title: string;
+    value: number;
 }) {
-  return (
-    <div
-      className={`rounded-[20px] border border-border bg-card shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] ${className}`}
-    >
-      {children}
-    </div>
-  );
+    return (
+        <Card className="rounded-2xl">
+            <CardContent className="p-6">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
+                    {icon}
+                </div>
+                <div className="text-4xl font-bold text-foreground">{value}</div>
+                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
+            </CardContent>
+        </Card>
+    );
 }
 
-export default function AssignmentsPage() {
-  const { t } = useLanguage();
+export default function AssignmentsIndexPage() {
+    const { loading: authLoading, organization, membership } = useAuth();
 
-  const [userRole, setUserRole] = useState("technician");
-  const [rows, setRows] = useState<AssignmentRow[]>([]);
-  const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [rows, setRows] = useState < AssignmentRow[] > ([]);
+    const [machineMap, setMachineMap] = useState < Map < string, MachineRow>> (new Map());
+    const [customerMap, setCustomerMap] = useState < Map < string, CustomerRow>> (new Map());
+    const [userMap, setUserMap] = useState < Map < string, ProfileRow>> (new Map());
+    const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const ctx = await getUserContext();
-        if (!ctx?.orgId) return;
+    const orgId = organization?.id ?? null;
+    const orgType = (organization?.type as OrgType | undefined) ?? null;
+    const userRole = membership?.role ?? "technician";
 
-        setUserRole(ctx.role ?? "technician");
+    useEffect(() => {
+        let active = true;
 
-        const { data: assignments, error } = await supabase
-          .from("machine_assignments")
-          .select("machine_id, customer_org_id")
-          .eq("manufacturer_org_id", ctx.orgId)
-          .eq("is_active", true);
+        const load = async () => {
+            if (authLoading) return;
 
-        if (error) throw error;
+            if (!orgId || orgType !== "manufacturer") {
+                if (active) setLoading(false);
+                return;
+            }
 
-        const machineIds = (assignments ?? [])
-          .map((x: any) => x.machine_id)
-          .filter(Boolean);
+            setLoading(true);
 
-        const customerIds = (assignments ?? [])
-          .map((x: any) => x.customer_org_id)
-          .filter(Boolean);
+            try {
+                const { data: assignments, error: assignmentsError } = await supabase
+                    .from("machine_assignments")
+                    .select(
+                        "id, machine_id, customer_org_id, manufacturer_org_id, assigned_by, assigned_at, is_active"
+                    )
+                    .eq("manufacturer_org_id", orgId)
+                    .eq("is_active", true)
+                    .order("assigned_at", { ascending: false });
 
-        const [machinesRes, customersRes] = await Promise.all([
-          machineIds.length
-            ? supabase.from("machines").select("id, name").in("id", machineIds)
-            : Promise.resolve({ data: [] } as any),
-          customerIds.length
-            ? supabase.from("organizations").select("id, name").in("id", customerIds)
-            : Promise.resolve({ data: [] } as any),
-        ]);
+                if (assignmentsError) throw assignmentsError;
 
-        const machineMap = new Map((machinesRes.data ?? []).map((m: any) => [m.id, m.name]));
-        const customerMap = new Map((customersRes.data ?? []).map((c: any) => [c.id, c.name]));
+                const assignmentRows = (assignments ?? []) as AssignmentRow[];
 
-        setRows(
-          (assignments ?? []).map((row: any) => ({
-            machine_id: row.machine_id,
-            customer_org_id: row.customer_org_id,
-            machine_name: machineMap.get(row.machine_id) ?? null,
-            customer_name: customerMap.get(row.customer_org_id) ?? null,
-          }))
+                const machineIds = Array.from(
+                    new Set(assignmentRows.map((row) => row.machine_id).filter(Boolean))
+                );
+
+                const customerIds = Array.from(
+                    new Set(assignmentRows.map((row) => row.customer_org_id).filter(Boolean))
+                ) as string[];
+
+                const userIds = Array.from(
+                    new Set(assignmentRows.map((row) => row.assigned_by).filter(Boolean))
+                ) as string[];
+
+                let nextMachineMap = new Map < string, MachineRow> ();
+                let nextCustomerMap = new Map < string, CustomerRow> ();
+                let nextUserMap = new Map < string, ProfileRow> ();
+
+                if (machineIds.length > 0) {
+                    const { data, error } = await supabase
+                        .from("machines")
+                        .select("id, name, internal_code, serial_number, model, brand")
+                        .in("id", machineIds);
+
+                    if (error) throw error;
+                    nextMachineMap = new Map(
+                        ((data ?? []) as MachineRow[]).map((row) => [row.id, row])
+                    );
+                }
+
+                if (customerIds.length > 0) {
+                    const { data, error } = await supabase
+                        .from("organizations")
+                        .select("id, name, city, email")
+                        .in("id", customerIds);
+
+                    if (error) throw error;
+                    nextCustomerMap = new Map(
+                        ((data ?? []) as CustomerRow[]).map((row) => [row.id, row])
+                    );
+                }
+
+                if (userIds.length > 0) {
+                    const { data, error } = await supabase
+                        .from("profiles")
+                        .select("id, display_name, first_name, last_name, email")
+                        .in("id", userIds);
+
+                    if (error) throw error;
+                    nextUserMap = new Map(
+                        ((data ?? []) as ProfileRow[]).map((row) => [row.id, row])
+                    );
+                }
+
+                if (!active) return;
+
+                setRows(assignmentRows);
+                setMachineMap(nextMachineMap);
+                setCustomerMap(nextCustomerMap);
+                setUserMap(nextUserMap);
+            } catch (error) {
+                console.error("Assignments load error:", error);
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        void load();
+
+        return () => {
+            active = false;
+        };
+    }, [authLoading, orgId, orgType]);
+
+    const filteredRows = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return rows;
+
+        return rows.filter((row) => {
+            const machine = machineMap.get(row.machine_id);
+            const customer = row.customer_org_id
+                ? customerMap.get(row.customer_org_id)
+                : null;
+            const user = row.assigned_by ? userMap.get(row.assigned_by) : null;
+
+            const assignedByLabel =
+                user?.display_name?.trim() ||
+                `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() ||
+                user?.email ||
+                "";
+
+            return [
+                machine?.name,
+                machine?.internal_code,
+                machine?.serial_number,
+                machine?.model,
+                machine?.brand,
+                customer?.name,
+                customer?.city,
+                customer?.email,
+                assignedByLabel,
+            ]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(q));
+        });
+    }, [rows, search, machineMap, customerMap, userMap]);
+
+    const stats = useMemo(() => {
+        const uniqueCustomers = new Set(
+            rows.map((row) => row.customer_org_id).filter(Boolean)
+        ).size;
+
+        const recent30d = rows.filter((row) => {
+            if (!row.assigned_at) return false;
+            return Date.now() - new Date(row.assigned_at).getTime() <= 30 * 24 * 60 * 60 * 1000;
+        }).length;
+
+        return {
+            total: rows.length,
+            customers: uniqueCustomers,
+            machines: new Set(rows.map((row) => row.machine_id)).size,
+            recent30d,
+        };
+    }, [rows]);
+
+    if (authLoading || loading) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title="Assegnazioni - MACHINA" />
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-center text-muted-foreground">
+                                Caricamento assegnazioni...
+                            </CardContent>
+                        </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
         );
-      } catch (error) {
-        console.error("Assignments load error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    }
 
-    load();
-  }, []);
+    if (!orgId || orgType !== "manufacturer") {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title="Assegnazioni - MACHINA" />
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-center text-muted-foreground">
+                                Il registro assegnazioni è disponibile nel contesto costruttore.
+                            </CardContent>
+                        </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
+    }
 
-  return (
-    <OrgContextGuard>
-      <MainLayout userRole={userRole}>
-        <SEO title={`${t("assignments.title")} - MACHINA`} />
+    return (
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title="Assegnazioni - MACHINA" />
 
-        <div className="px-5 py-6 lg:px-8 lg:py-8">
-          <div className="mx-auto max-w-[1220px] space-y-8">
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                {t("assignments.title")}
-              </h1>
-              <p className="text-base text-muted-foreground">
-                {t("assignments.subtitle")}
-              </p>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              <CardShell className="p-6">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div className="text-5xl font-bold leading-none text-foreground">
-                  {rows.length}
-                </div>
-                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
-                  {t("assignments.kpi.active")}
-                </div>
-              </CardShell>
-            </div>
-
-            <section className="space-y-4">
-              <h2 className="text-[32px] font-bold text-foreground">
-                {t("assignments.listTitle")}
-              </h2>
-
-              {loading ? (
-                <CardShell className="p-6 text-muted-foreground">
-                  {t("assignments.loading")}
-                </CardShell>
-              ) : rows.length === 0 ? (
-                <CardShell className="p-6 text-muted-foreground">
-                  {t("assignments.noResults")}
-                </CardShell>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {rows.map((row) => (
-                    <Link
-                      key={`${row.machine_id}-${row.customer_org_id}`}
-                      href={`/equipment/${row.machine_id}`}
-                      className="block"
-                    >
-                      <CardShell className="p-5 transition hover:translate-y-[-2px]">
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-300">
-                                <Factory className="h-5 w-5" />
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-lg font-semibold text-foreground">
-                                  {row.machine_name ?? t("assignments.machineFallback")}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {t("assignments.assignedMachine")}
-                                </div>
-                              </div>
-                            </div>
-                            <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-                          </div>
-
-                          <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-300">
-                              <Building2 className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-foreground">
-                                {row.customer_name ?? t("assignments.customerFallback")}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {t("assignments.destinationCustomer")}
-                              </div>
-                            </div>
-                          </div>
+                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-2">
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                Assegnazioni macchine
+                            </h1>
+                            <p className="text-base text-muted-foreground">
+                                Registro delle macchine assegnate ai clienti nel contesto costruttore attivo.
+                            </p>
                         </div>
-                      </CardShell>
-                    </Link>
-                  ))}
+
+                        <a href="/api/export/assignments">
+                            <Button variant="outline">
+                                <Download className="mr-2 h-4 w-4" />
+                                Export CSV
+                            </Button>
+                        </a>
+                    </div>
+
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <KpiCard
+                            icon={<Factory className="h-5 w-5" />}
+                            title="Assegnazioni attive"
+                            value={stats.total}
+                        />
+                        <KpiCard
+                            icon={<Building2 className="h-5 w-5" />}
+                            title="Clienti serviti"
+                            value={stats.customers}
+                        />
+                        <KpiCard
+                            icon={<Users className="h-5 w-5" />}
+                            title="Macchine assegnate"
+                            value={stats.machines}
+                        />
+                        <KpiCard
+                            icon={<UserCheck className="h-5 w-5" />}
+                            title="Ultimi 30 giorni"
+                            value={stats.recent30d}
+                        />
+                    </div>
+
+                    <Card className="rounded-2xl">
+                        <CardContent className="p-6">
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Cerca macchina, cliente, assegnatario..."
+                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl">
+                        <CardContent className="p-6">
+                            {filteredRows.length === 0 ? (
+                                <EmptyState
+                                    title="Nessuna assegnazione trovata"
+                                    description="Non ci sono assegnazioni attive oppure nessun elemento corrisponde alla ricerca."
+                                    icon={<Factory className="h-10 w-10" />}
+                                    actionLabel="Apri clienti"
+                                    actionHref="/customers"
+                                    secondaryActionLabel="Apri macchine"
+                                    secondaryActionHref="/equipment"
+                                />
+                            ) : (
+                                <div className="space-y-4">
+                                    {filteredRows.map((row) => {
+                                        const machine = machineMap.get(row.machine_id);
+                                        const customer = row.customer_org_id
+                                            ? customerMap.get(row.customer_org_id)
+                                            : null;
+                                        const user = row.assigned_by
+                                            ? userMap.get(row.assigned_by)
+                                            : null;
+
+                                        const assignedByLabel =
+                                            user?.display_name?.trim() ||
+                                            `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() ||
+                                            user?.email ||
+                                            "—";
+
+                                        return (
+                                            <div
+                                                key={row.id}
+                                                className="rounded-2xl border border-border p-4 transition hover:bg-muted/30"
+                                            >
+                                                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                                    <div className="min-w-0 space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <div className="text-lg font-semibold text-foreground">
+                                                                {machine?.name || "Macchina"}
+                                                            </div>
+
+                                                            <Badge variant="outline">
+                                                                {machine?.internal_code || "—"}
+                                                            </Badge>
+
+                                                            {machine?.serial_number && (
+                                                                <Badge variant="secondary">
+                                                                    {machine.serial_number}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="text-sm text-muted-foreground">
+                                                            Cliente: {customer?.name || "—"}
+                                                            {customer?.city ? ` · ${customer.city}` : ""}
+                                                            {customer?.email ? ` · ${customer.email}` : ""}
+                                                        </div>
+
+                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                            <span>
+                                                                Assegnato da: {assignedByLabel}
+                                                            </span>
+                                                            <span>
+                                                                Data assegnazione: {formatDate(row.assigned_at)}
+                                                            </span>
+                                                            {machine?.model && <span>Modello: {machine.model}</span>}
+                                                            {machine?.brand && <span>Marca: {machine.brand}</span>}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <Link href={`/equipment/${row.machine_id}`}>
+                                                            <Button variant="outline" size="sm">
+                                                                Apri macchina
+                                                            </Button>
+                                                        </Link>
+
+                                                        {row.customer_org_id && (
+                                                            <Link href={`/customers/${row.customer_org_id}`}>
+                                                                <Button variant="outline" size="sm">
+                                                                    Apri cliente
+                                                                </Button>
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
-              )}
-            </section>
-          </div>
-        </div>
-      </MainLayout>
-    </OrgContextGuard>
-  );
+            </MainLayout>
+        </OrgContextGuard>
+    );
 }
