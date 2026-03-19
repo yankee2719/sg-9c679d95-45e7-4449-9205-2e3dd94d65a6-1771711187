@@ -9,7 +9,6 @@ import {
     Loader2,
     Pencil,
     Plus,
-    Save,
     Wrench,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +20,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import EmptyState from "@/components/feedback/EmptyState";
 
 type OrgType = "manufacturer" | "customer" | null;
@@ -324,7 +322,7 @@ export default function PlantDetailPage() {
                                 {canEdit && (
                                     <div className="grid gap-4 rounded-2xl border border-border p-4 md:grid-cols-[1fr_1fr_auto]">
                                         <div className="space-y-2">
-                                            <Label>Nome linea</Label>
+                                            <FieldLabel>Nome linea</FieldLabel>
                                             <Input
                                                 value={lineName}
                                                 onChange={(e) => setLineName(e.target.value)}
@@ -333,7 +331,7 @@ export default function PlantDetailPage() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <Label>Codice linea</Label>
+                                            <FieldLabel>Codice linea</FieldLabel>
                                             <Input
                                                 value={lineCode}
                                                 onChange={(e) => setLineCode(e.target.value)}
@@ -458,6 +456,6 @@ export default function PlantDetailPage() {
     );
 }
 
-function Label({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children }: { children: React.ReactNode }) {
     return <div className="text-sm font-medium text-foreground">{children}</div>;
 }
