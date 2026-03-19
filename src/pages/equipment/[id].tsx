@@ -19,6 +19,7 @@ import {
     Factory,
     History,
     Loader2,
+    Pencil,
     Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -78,11 +79,11 @@ export default function EquipmentDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
-    const [machine, setMachine] = useState < MachineRow | null > (null);
-    const [plant, setPlant] = useState < PlantRow | null > (null);
-    const [line, setLine] = useState < LineRow | null > (null);
-    const [ownerOrganization, setOwnerOrganization] = useState < OrganizationRow | null > (null);
-    const [assignedCustomerName, setAssignedCustomerName] = useState < string | null > (null);
+    const [machine, setMachine] = useState<MachineRow | null>(null);
+    const [plant, setPlant] = useState<PlantRow | null>(null);
+    const [line, setLine] = useState<LineRow | null>(null);
+    const [ownerOrganization, setOwnerOrganization] = useState<OrganizationRow | null>(null);
+    const [assignedCustomerName, setAssignedCustomerName] = useState<string | null>(null);
 
     const userRole = membership?.role ?? "technician";
     const orgId = organization?.id ?? null;
@@ -94,10 +95,18 @@ export default function EquipmentDetailPage() {
         return typeof id === "string" ? id : null;
     }, [id]);
 
-    const canDeleteMachine = useMemo(() => {
+    const ownsMachine = useMemo(() => {
         if (!machine || !orgId) return false;
-        return canEdit && machine.organization_id === orgId;
-    }, [machine, orgId, canEdit]);
+        return machine.organization_id === orgId;
+    }, [machine, orgId]);
+
+    const canEditMachine = useMemo(() => {
+        return canEdit && ownsMachine;
+    }, [canEdit, ownsMachine]);
+
+    const canDeleteMachine = useMemo(() => {
+        return canEdit && ownsMachine;
+    }, [canEdit, ownsMachine]);
 
     const getAccessToken = async () => {
         const accessToken =
@@ -345,20 +354,31 @@ export default function EquipmentDetailPage() {
                             Torna a Macchine
                         </Button>
 
-                        {canDeleteMachine && (
-                            <Button
-                                variant="destructive"
-                                onClick={handleDeleteMachine}
-                                disabled={deleting}
-                            >
-                                {deleting ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                )}
-                                Sposta nel cestino
-                            </Button>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                            {canEditMachine && (
+                                <Link href={`/equipment/${machine.id}/edit`}>
+                                    <Button variant="outline">
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Modifica macchina
+                                    </Button>
+                                </Link>
+                            )}
+
+                            {canDeleteMachine && (
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleDeleteMachine}
+                                    disabled={deleting}
+                                >
+                                    {deleting ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                    )}
+                                    Sposta nel cestino
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     <MachineSummaryHero
@@ -394,14 +414,14 @@ export default function EquipmentDetailPage() {
                                                 prev ? { ...prev, photo_url: url } : prev
                                             )
                                         }
-                                        readonly={!canEdit}
+                                        readonly={!canEditMachine}
                                     />
                                 </CardContent>
                             </Card>
 
                             <MachineQuickActions
                                 machineId={machine.id}
-                                canEdit={canEdit}
+                                canEdit={canEditMachine}
                             />
 
                             <Card className="rounded-2xl">
