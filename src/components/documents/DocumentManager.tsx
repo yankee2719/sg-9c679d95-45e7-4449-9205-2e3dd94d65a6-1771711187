@@ -3,7 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
     createDocumentAndUploadV1,
     getSignedUrl,
+    listMachineDocuments,
     type DocumentCategory,
+    type DocumentVersionRow,
+    type DocumentWithVersions,
     uploadNewVersion,
 } from "@/services/documentService";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,34 +36,6 @@ import {
 } from "lucide-react";
 
 type OrgType = "manufacturer" | "customer";
-
-interface DocumentVersionRow {
-    id: string;
-    document_id: string;
-    version_number: number | null;
-    file_name: string | null;
-    file_path: string | null;
-    file_size: number | null;
-    change_summary: string | null;
-    created_at: string | null;
-}
-
-interface DocumentWithVersions {
-    id: string;
-    organization_id: string;
-    machine_id: string | null;
-    title: string;
-    description: string | null;
-    category: string | null;
-    language: string | null;
-    regulatory_reference: string | null;
-    current_version_id: string | null;
-    version_count: number | null;
-    file_size: number | null;
-    updated_at: string | null;
-    is_archived: boolean | null;
-    document_versions: DocumentVersionRow[];
-}
 
 interface DocumentManagerProps {
     machineId: string;
@@ -139,21 +114,21 @@ export default function DocumentManager({
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [documents, setDocuments] = useState < DocumentWithVersions[] > ([]);
+    const [documents, setDocuments] = useState<DocumentWithVersions[]>([]);
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [category, setCategory] = useState < DocumentCategory > ("technical_manual");
+    const [category, setCategory] = useState<DocumentCategory>("technical_manual");
     const [language, setLanguage] = useState("it");
     const [regulatoryReference, setRegulatoryReference] = useState("");
     const [changeSummary, setChangeSummary] = useState("");
-    const [selectedFile, setSelectedFile] = useState < File | null > (null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-    const [versionFiles, setVersionFiles] = useState < Record < string, File | null >> ({});
-    const [versionNotes, setVersionNotes] = useState < Record < string, string>> ({});
-    const [uploadingVersionId, setUploadingVersionId] = useState < string | null > (null);
-    const [deletingId, setDeletingId] = useState < string | null > (null);
-    const [downloadingId, setDownloadingId] = useState < string | null > (null);
+    const [versionFiles, setVersionFiles] = useState<Record<string, File | null>>({});
+    const [versionNotes, setVersionNotes] = useState<Record<string, string>>({});
+    const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     const ctxOrgId = currentOrgId ?? organization?.id ?? null;
     const ctxOrgType = (currentOrgType ?? organization?.type ?? null) as OrgType | null;
@@ -187,40 +162,8 @@ export default function DocumentManager({
     };
 
     const reloadDocuments = async () => {
-        const { data, error } = await supabase
-            .from("documents")
-            .select(`
-                id,
-                organization_id,
-                machine_id,
-                title,
-                description,
-                category,
-                language,
-                regulatory_reference,
-                current_version_id,
-                version_count,
-                file_size,
-                updated_at,
-                is_archived,
-                document_versions (
-                    id,
-                    document_id,
-                    version_number,
-                    file_name,
-                    file_path,
-                    file_size,
-                    change_summary,
-                    created_at
-                )
-            `)
-            .eq("machine_id", machineId)
-            .eq("is_archived", false)
-            .order("updated_at", { ascending: false });
-
-        if (error) throw error;
-
-        setDocuments((data ?? []) as unknown as DocumentWithVersions[]);
+        const data = await listMachineDocuments(machineId);
+        setDocuments(data);
     };
 
     useEffect(() => {
@@ -229,41 +172,9 @@ export default function DocumentManager({
         const init = async () => {
             setLoading(true);
             try {
-                const { data, error } = await supabase
-                    .from("documents")
-                    .select(`
-                        id,
-                        organization_id,
-                        machine_id,
-                        title,
-                        description,
-                        category,
-                        language,
-                        regulatory_reference,
-                        current_version_id,
-                        version_count,
-                        file_size,
-                        updated_at,
-                        is_archived,
-                        document_versions (
-                            id,
-                            document_id,
-                            version_number,
-                            file_name,
-                            file_path,
-                            file_size,
-                            change_summary,
-                            created_at
-                        )
-                    `)
-                    .eq("machine_id", machineId)
-                    .eq("is_archived", false)
-                    .order("updated_at", { ascending: false });
-
-                if (error) throw error;
+                const data = await listMachineDocuments(machineId);
                 if (!active) return;
-
-                setDocuments((data ?? []) as unknown as DocumentWithVersions[]);
+                setDocuments(data);
             } catch (e: any) {
                 console.error(e);
                 if (!active) return;
@@ -640,7 +551,9 @@ export default function DocumentManager({
 
                                                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                                     <span>Lingua: {doc.language || "—"}</span>
-                                                    <span>Size: {formatBytes(version?.file_size ?? doc.file_size)}</span>
+                                                    <span>
+                                                        Size: {formatBytes(version?.file_size ?? doc.file_size)}
+                                                    </span>
                                                     <span>Aggiornato: {formatDate(doc.updated_at)}</span>
                                                     <span>Versioni: {doc.version_count ?? 1}</span>
                                                 </div>
@@ -687,7 +600,7 @@ export default function DocumentManager({
                                                 </div>
 
                                                 <div className="space-y-2">
-                                                    {doc.document_versions
+                                                    {[...doc.document_versions]
                                                         .sort(
                                                             (a, b) =>
                                                                 (b.version_number ?? 0) -
@@ -700,8 +613,7 @@ export default function DocumentManager({
                                                             >
                                                                 <div className="min-w-0">
                                                                     <div className="font-medium">
-                                                                        v{ver.version_number} ·{" "}
-                                                                        {ver.file_name}
+                                                                        v{ver.version_number} · {ver.file_name}
                                                                     </div>
                                                                     <div className="text-xs text-muted-foreground">
                                                                         {formatDate(ver.created_at)}
