@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/services/apiClient";
 
 export async function logAudit(params: {
     organizationId: string;
@@ -8,23 +8,15 @@ export async function logAudit(params: {
     machineId?: string | null;
     documentId?: string | null;
     metadata?: any;
+    newData?: any;
+    oldData?: any;
 }) {
     try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-
-        if (!token) return;
-
-        await fetch("/api/audit-log", {
+        await apiFetch("/api/audit-log", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
             body: JSON.stringify(params),
         });
-    } catch (err) {
-        // ⚠️ NON bloccare mai la UI per audit
-        console.warn("Audit log failed (non-blocking)", err);
+    } catch (error) {
+        console.warn("Audit log failed (non-blocking):", error);
     }
 }
