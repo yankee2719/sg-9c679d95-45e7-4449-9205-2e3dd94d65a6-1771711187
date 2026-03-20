@@ -15,7 +15,14 @@ async function sha256(file: File): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+export async function getSignedUrl(filePath: string, expiresInSec = 600) {
+    const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(filePath, expiresInSec);
 
+    if (error) throw error;
+    return data.signedUrl;
+}
 export function normalizeMimeType(file: File) {
   if (file.type && file.type.trim()) return file.type;
   return "application/octet-stream";
