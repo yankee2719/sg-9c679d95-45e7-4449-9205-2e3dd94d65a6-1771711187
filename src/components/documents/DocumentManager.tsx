@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/services/auditClient";
 import {
     createDocumentAndUploadV1,
     getSignedUrl,
@@ -211,6 +212,31 @@ export default function DocumentManager({
                 regulatoryReference,
                 changeSummary,
                 createdBy: user?.id ?? null,
+            });
+
+            await logAudit({
+                organizationId: ctxOrgId,
+                entityType: "document",
+                entityId: null,
+                action: "create",
+                machineId: machineId,
+            });
+
+            await logAudit({
+                organizationId: ctxOrgId,
+                entityType: "document",
+                entityId: doc.id,
+                action: "new_version",
+                machineId: machineId,
+                documentId: doc.id,
+            });
+
+            await logAudit({
+                organizationId: ctxOrgId,
+                entityType: "document",
+                entityId: doc.id,
+                action: "delete",
+                machineId: machineId,
             });
 
             await loadDocuments();
