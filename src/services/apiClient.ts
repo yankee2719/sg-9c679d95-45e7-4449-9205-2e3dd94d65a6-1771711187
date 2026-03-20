@@ -1,25 +1,41 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export async function apiFetch(
+export async function apiFetch<T = any>(
     url: string,
-    options?: RequestInit
-) {
+    options: RequestInit = {}
+): Promise<T> {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
 
-    const res = await fetch(url, {
+    const response = await fetch(url, {
         ...options,
         headers: {
-            "Content-Type": "application/json",
-            ...(options?.headers || {}),
-            Authorization: `Bearer ${token}`,
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
     });
 
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "API error");
+    const contentType = response.headers.get("content-type") || "";
+
+    if (!response.ok) {
+        let message = "API error";
+        try {
+            if (contentType.includes("application/json")) {
+                const err = await response.json();
+                message = err?.error || err?.message || message;
+            } else {
+                message = await response.text();
+            }
+        } catch {
+            // ignore parse failure
+        }
+        throw new Error(message);
     }
 
-    return res.json();
+    if (contentType.includes("application/json")) {
+        return response.json();
+    }
+
+    return (await response.text()) as unknown as T;
 }
