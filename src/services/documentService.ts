@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { createAuditLog } from "@/services/auditService";
 
 const BUCKET = "documents";
 
@@ -136,13 +135,7 @@ export async function createDocumentAndUploadV1(params: {
     })
     .eq("id", documentId);
 
-  await createAuditLog({
-    organizationId,
-    actorUserId: createdBy ?? null,
-    entityType: "document",
-    entityId: documentId,
-    action: "create",
-  });
+
 
   return { document: doc, version };
 }
