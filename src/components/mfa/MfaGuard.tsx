@@ -20,7 +20,6 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
     const [verified, setVerified] = useState(false);
 
     const redirectingRef = useRef(false);
-    const startedRef = useRef(false);
 
     const shouldBypass = useMemo(() => {
         return MFA_BYPASS_ROUTES.some((route) => router.pathname.startsWith(route));
@@ -49,7 +48,6 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            startedRef.current = true;
             setChecking(true);
 
             timeoutId = setTimeout(() => {
@@ -81,7 +79,6 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
 
                 if (!active) return;
 
-                // fallback safe: non bloccare tutta l'app per sempre
                 setVerified(true);
                 setChecking(false);
             } finally {
