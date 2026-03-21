@@ -8,17 +8,19 @@ const MFA_BYPASS_ROUTES = [
     "/register",
     "/forgot-password",
     "/reset-password",
+    "/offline",
     "/settings/security",
-    "/mfa/setup",
 ];
 
 export function MfaGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
-    const { loading, user, shouldEnforceMfa } = useAuth();
+    const { loading: authLoading, user, shouldEnforceMfa } = useAuth();
 
     const [checking, setChecking] = useState(false);
     const [verified, setVerified] = useState(false);
+
     const redirectingRef = useRef(false);
+    const startedRef = useRef(false);
 
     const shouldBypass = useMemo(() => {
         return MFA_BYPASS_ROUTES.some((route) => router.pathname.startsWith(route));
@@ -26,19 +28,36 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         let active = true;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-        const checkMfa = async () => {
-            if (loading) return;
+        const run = async () => {
+            if (authLoading) return;
+
             if (!user) {
-                if (active) setVerified(true);
-                return;
-            }
-            if (!shouldEnforceMfa || shouldBypass) {
-                if (active) setVerified(true);
+                if (active) {
+                    setVerified(true);
+                    setChecking(false);
+                }
                 return;
             }
 
+            if (!shouldEnforceMfa || shouldBypass) {
+                if (active) {
+                    setVerified(true);
+                    setChecking(false);
+                }
+                return;
+            }
+
+            startedRef.current = true;
             setChecking(true);
+
+            timeoutId = setTimeout(() => {
+                if (!active) return;
+                console.warn("MfaGuard timeout fallback triggered");
+                setChecking(false);
+                setVerified(true);
+            }, 8000);
 
             try {
                 const { data, error } =
@@ -48,9 +67,10 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
 
                 const isAal2 = data?.currentLevel === "aal2";
 
-                if (active) {
-                    setVerified(isAal2);
-                }
+                if (!active) return;
+
+                setVerified(isAal2);
+                setChecking(false);
 
                 if (!isAal2 && !redirectingRef.current) {
                     redirectingRef.current = true;
@@ -58,24 +78,34 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
                 }
             } catch (error) {
                 console.error("MfaGuard error:", error);
-                if (active) {
-                    setVerified(true);
-                }
+
+                if (!active) return;
+
+                // fallback safe: non bloccare tutta l'app per sempre
+                setVerified(true);
+                setChecking(false);
             } finally {
-                if (active) {
-                    setChecking(false);
-                }
+                if (timeoutId) clearTimeout(timeoutId);
             }
         };
 
-        void checkMfa();
+        void run();
 
         return () => {
             active = false;
+            if (timeoutId) clearTimeout(timeoutId);
         };
-    }, [loading, user?.id, shouldEnforceMfa, shouldBypass, router]);
+    }, [authLoading, user?.id, shouldEnforceMfa, shouldBypass, router]);
 
-    if (loading || checking) {
+    if (authLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+                Verifica sessione...
+            </div>
+        );
+    }
+
+    if (checking) {
         return (
             <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
                 Verifica sicurezza...
