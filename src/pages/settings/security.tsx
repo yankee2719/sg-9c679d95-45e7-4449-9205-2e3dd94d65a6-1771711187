@@ -221,11 +221,15 @@ const copy = {
 
 export default function SecuritySettingsPage() {
     const { language } = useLanguage();
-    const text = useMemo(() => copy[language], [language]);
+    const text = useMemo(
+        () => copy[(language as keyof typeof copy) || "it"] ?? copy.it,
+        [language]
+    );
     const { toast } = useToast();
     const { loading: authLoading, membership } = useAuth();
 
-    const [userRole, setUserRole] = useState("technician");
+    const userRole = membership?.role ?? "technician";
+
     const [loading, setLoading] = useState(true);
     const [factors, setFactors] = useState < FactorRow[] > ([]);
     const [aal, setAal] = useState < string | null > (null);
@@ -243,10 +247,6 @@ export default function SecuritySettingsPage() {
     useEffect(() => {
         setFriendlyName((current) => (current.trim() ? current : text.defaultFactorName));
     }, [text.defaultFactorName]);
-
-    useEffect(() => {
-        setUserRole(membership?.role ?? "technician");
-    }, [membership?.role]);
 
     const loadAll = async () => {
         const [factorRows, status] = await Promise.all([listMfaFactors(), getMfaStatus()]);
