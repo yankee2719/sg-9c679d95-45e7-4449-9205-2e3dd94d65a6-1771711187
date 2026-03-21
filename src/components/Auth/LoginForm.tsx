@@ -23,8 +23,8 @@ const copy = {
         loading: "Accesso in corso...",
         noAccount: "Non hai un account?",
         register: "Registrati",
+        invalidCredentials: "Email o password non corretti.",
         genericError: "Errore durante il login",
-        mfaNotice: "Credenziali corrette. Completa ora la verifica a due fattori.",
     },
     en: {
         title: "Sign in to MACHINA",
@@ -37,8 +37,8 @@ const copy = {
         loading: "Signing in...",
         noAccount: "No account yet?",
         register: "Register",
+        invalidCredentials: "Incorrect email or password.",
         genericError: "Login error",
-        mfaNotice: "Credentials accepted. Complete two-factor verification now.",
     },
     fr: {
         title: "Connexion à MACHINA",
@@ -51,8 +51,8 @@ const copy = {
         loading: "Connexion en cours...",
         noAccount: "Pas encore de compte ?",
         register: "S’inscrire",
+        invalidCredentials: "Email ou mot de passe incorrect.",
         genericError: "Erreur de connexion",
-        mfaNotice: "Identifiants corrects. Terminez maintenant la vérification à deux facteurs.",
     },
     es: {
         title: "Acceso a MACHINA",
@@ -65,8 +65,8 @@ const copy = {
         loading: "Acceso en curso...",
         noAccount: "¿Aún no tienes cuenta?",
         register: "Regístrate",
+        invalidCredentials: "Email o contraseña incorrectos.",
         genericError: "Error durante el acceso",
-        mfaNotice: "Credenciales correctas. Completa ahora la verificación de dos factores.",
     },
 } as const;
 
@@ -74,6 +74,7 @@ export function LoginForm() {
     const router = useRouter();
     const { language } = useLanguage();
     const text = useMemo(() => copy[language], [language]);
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -81,22 +82,49 @@ export function LoginForm() {
 
     const handleLogin = async (event: React.FormEvent) => {
         event.preventDefault();
+
+        if (loading) return;
+
         setError("");
         setLoading(true);
 
         try {
-            const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-            if (signInError) throw signInError;
+            const { data, error: signInError } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
 
-            if (data.user) {
-                const status = await getMfaStatus().catch(() => null);
-                if (status?.needsMfaVerification) {
-                    setError(text.mfaNotice);
+            if (signInError) {
+                const msg = String(signInError.message || "").toLowerCase();
+                if (
+                    msg.includes("invalid login credentials") ||
+                    msg.includes("email not confirmed") ||
+                    msg.includes("invalid")
+                ) {
+                    setError(text.invalidCredentials);
+                } else {
+                    setError(signInError.message || text.genericError);
                 }
-                await router.push("/dashboard");
+                return;
             }
+
+            if (!data.user) {
+                setError(text.genericError);
+                return;
+            }
+
+            const status = await getMfaStatus().catch(() => null);
+
+            if (status?.needsMfaVerification) {
+                await router.replace("/settings/security");
+                return;
+            }
+
+            await router.replace("/dashboard");
         } catch (err: any) {
+            console.error(err);
             setError(err?.message || text.genericError);
+        } finally {
             setLoading(false);
         }
     };
@@ -111,9 +139,10 @@ export function LoginForm() {
                     <CardTitle className="text-2xl font-bold">{text.title}</CardTitle>
                     <CardDescription>{text.subtitle}</CardDescription>
                 </CardHeader>
+
                 <CardContent>
                     <form onSubmit={handleLogin} className="space-y-4">
-                        {error && (
+                        {!!error && !loading && (
                             <Alert variant="destructive">
                                 <AlertDescription>{error}</AlertDescription>
                             </Alert>
@@ -148,12 +177,20 @@ export function LoginForm() {
                                 <Shield className="h-3.5 w-3.5" />
                                 MFA ready
                             </div>
-                            <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+
+                            <Link
+                                href="/forgot-password"
+                                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
                                 {text.forgotPassword}
                             </Link>
                         </div>
 
-                        <Button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700" disabled={loading}>
+                        <Button
+                            type="submit"
+                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                            disabled={loading}
+                        >
                             {loading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -166,8 +203,11 @@ export function LoginForm() {
                     </form>
 
                     <div className="text-center pt-4 border-t mt-4 text-sm">
-                        {text.noAccount} {" "}
-                        <Link href="/register" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">
+                        {text.noAccount}{" "}
+                        <Link
+                            href="/register"
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold"
+                        >
                             {text.register}
                         </Link>
                     </div>
