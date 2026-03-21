@@ -8,7 +8,7 @@ import {
     Smartphone,
     Trash2,
 } from "lucide-react";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { Badge } from "@/components/ui/badge";
