@@ -1,31 +1,36 @@
-import { useEffect, type ReactNode } from "react";
+// src/components/Auth/OrgContextGuard.tsx
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { useAuth } from "@/hooks/useAuth";
+import { getUserContext } from "@/lib/supabaseHelpers";
 
 interface OrgContextGuardProps {
-    children: ReactNode;
+    children: React.ReactNode;
 }
 
 export default function OrgContextGuard({ children }: OrgContextGuardProps) {
     const router = useRouter();
-    const { loading, isAuthenticated, organization } = useAuth();
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
-        if (loading) return;
+        const check = async () => {
+            try {
+                const ctx = await getUserContext();
 
-        if (!isAuthenticated) {
-            void router.replace("/login");
-            return;
-        }
+                if (!ctx?.orgId || !ctx?.orgType) {
+                    router.replace("/settings/organization");
+                    return;
+                }
 
-        if (!organization?.id || !organization?.type) {
-            void router.replace("/settings/organization");
-        }
-    }, [loading, isAuthenticated, organization?.id, organization?.type, router]);
+                setReady(true);
+            } catch (error) {
+                console.error(error);
+                router.replace("/settings/organization");
+            }
+        };
 
-    if (loading) return null;
-    if (!isAuthenticated) return null;
-    if (!organization?.id || !organization?.type) return null;
+        check();
+    }, [router]);
 
+    if (!ready) return null;
     return <>{children}</>;
 }
