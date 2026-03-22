@@ -16,6 +16,7 @@ import {
     Wrench,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -34,28 +35,29 @@ export default function MainLayout({
 }: MainLayoutProps) {
     const router = useRouter();
     const { organization, membership, signOut, loading } = useAuth();
+    const { t } = useLanguage();
 
     const role = userRole ?? membership?.role ?? "viewer";
     const orgType = organization?.type ?? null;
 
     const navItems = useMemo < NavItem[] > (() => {
         const base: NavItem[] = [
-            { href: "/dashboard", label: "Dashboard", icon: <Home className="h-4 w-4" /> },
-            { href: "/equipment", label: "Macchine", icon: <Factory className="h-4 w-4" /> },
-            { href: "/documents", label: "Documenti", icon: <FileText className="h-4 w-4" /> },
-            { href: "/work-orders", label: "Work Orders", icon: <ClipboardList className="h-4 w-4" /> },
-            { href: "/users", label: "Utenti", icon: <Users className="h-4 w-4" /> },
+            { href: "/dashboard", label: t("nav.dashboard"), icon: <Home className="h-4 w-4" /> },
+            { href: "/equipment", label: t("nav.equipment"), icon: <Factory className="h-4 w-4" /> },
+            { href: "/documents", label: t("nav.documents"), icon: <FileText className="h-4 w-4" /> },
+            { href: "/work-orders", label: t("nav.workOrders"), icon: <ClipboardList className="h-4 w-4" /> },
+            { href: "/users", label: t("nav.users"), icon: <Users className="h-4 w-4" /> },
         ];
 
         if (orgType === "manufacturer") {
             base.splice(2, 0, {
                 href: "/customers",
-                label: "Clienti",
+                label: t("nav.customers"),
                 icon: <Building2 className="h-4 w-4" />,
             });
             base.push({
                 href: "/assignments",
-                label: "Assegnazioni",
+                label: t("nav.assignments"),
                 icon: <Layers3 className="h-4 w-4" />,
             });
         }
@@ -63,7 +65,7 @@ export default function MainLayout({
         if (orgType === "customer") {
             base.splice(2, 0, {
                 href: "/plants",
-                label: "Stabilimenti",
+                label: t("nav.plants"),
                 icon: <Building2 className="h-4 w-4" />,
             });
         }
@@ -71,23 +73,31 @@ export default function MainLayout({
         if (["owner", "admin", "supervisor"].includes(role)) {
             base.push({
                 href: "/settings",
-                label: "Impostazioni",
+                label: t("nav.settings"),
                 icon: <Settings className="h-4 w-4" />,
             });
             base.push({
                 href: "/settings/security",
-                label: "Sicurezza",
+                label: t("nav.security") || t("nav.settings"),
                 icon: <Shield className="h-4 w-4" />,
             });
         }
 
         return base;
-    }, [orgType, role]);
+    }, [orgType, role, t]);
+
+    // Traduci il tipo di organizzazione
+    const orgTypeLabel = useMemo(() => {
+        if (!orgType) return "—";
+        if (orgType === "manufacturer") return t("org.manufacturer");
+        if (orgType === "customer") return t("org.customer");
+        return orgType;
+    }, [orgType, t]);
 
     if (loading) {
         return (
             <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                Caricamento layout...
+                {t("common.loading")}
             </div>
         );
     }
@@ -100,10 +110,10 @@ export default function MainLayout({
                         <div className="border-b border-border px-5 py-5">
                             <div className="text-xl font-bold tracking-tight">MACHINA</div>
                             <div className="mt-2 text-sm text-muted-foreground">
-                                {organization?.name || "Nessuna organizzazione"}
+                                {organization?.name || t("activeOrg.fallbackOrganization")}
                             </div>
                             <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-                                {organization?.type || "—"} · {role}
+                                {orgTypeLabel} · {role}
                             </div>
                         </div>
 
@@ -119,8 +129,8 @@ export default function MainLayout({
                                         key={item.href}
                                         href={item.href}
                                         className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${active
-                                                ? "bg-orange-500/10 text-orange-500"
-                                                : "text-foreground hover:bg-muted"
+                                            ? "bg-orange-500/10 text-orange-500"
+                                            : "text-foreground hover:bg-muted"
                                             }`}
                                     >
                                         {item.icon}
@@ -137,7 +147,7 @@ export default function MainLayout({
                                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
                             >
                                 <LogOut className="h-4 w-4" />
-                                Esci
+                                {t("common.logout")}
                             </button>
                         </div>
                     </div>
@@ -151,13 +161,13 @@ export default function MainLayout({
                                     {organization?.name || "MACHINA"}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
-                                    {organization?.type || "—"} · {role}
+                                    {orgTypeLabel} · {role}
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <BarChart3 className="h-4 w-4" />
-                                Layout leggero
+                                {t("org.context")}
                             </div>
                         </div>
                     </header>
