@@ -131,3 +131,56 @@ export function formatChecklistDate(value: string | null | undefined, language?:
         day: "2-digit",
     });
 }
+
+export function canManageChecklists(role: string | null | undefined): boolean {
+    return ["owner", "admin", "supervisor"].includes(role ?? "");
+}
+
+const inputTypeLabels: Record<string, Record<string, string>> = {
+    it: {
+        checkbox: "Checkbox",
+        text: "Testo",
+        number: "Numero",
+        select: "Selezione",
+        photo: "Foto",
+        signature: "Firma",
+        date: "Data",
+        textarea: "Testo lungo",
+    },
+    en: {
+        checkbox: "Checkbox",
+        text: "Text",
+        number: "Number",
+        select: "Selection",
+        photo: "Photo",
+        signature: "Signature",
+        date: "Date",
+        textarea: "Long text",
+    },
+    fr: {
+        checkbox: "Case à cocher",
+        text: "Texte",
+        number: "Nombre",
+        select: "Sélection",
+        photo: "Photo",
+        signature: "Signature",
+        date: "Date",
+        textarea: "Texte long",
+    },
+    es: {
+        checkbox: "Casilla",
+        text: "Texto",
+        number: "Número",
+        select: "Selección",
+        photo: "Foto",
+        signature: "Firma",
+        date: "Fecha",
+        textarea: "Texto largo",
+    },
+};
+
+export function translateChecklistInputType(inputType: string | null | undefined, language?: string): string {
+    const lang = (language || "it") as ChecklistPageLanguage;
+    const labels = inputTypeLabels[lang] ?? inputTypeLabels.it;
+    return labels[inputType ?? ""] ?? (inputType || "—");
+}
