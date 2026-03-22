@@ -52,9 +52,11 @@ function getAalFromToken(token: string): "aal1" | "aal2" | null {
 export interface AuthenticatedRequest extends NextApiRequest {
     user: {
         id: string;
+        userId: string; // alias di id — usato da molte route
         email: string;
         role: AppRole;
         organizationId: string | null;
+        organizationType: string | null; // "manufacturer" | "customer" | null
         membershipId: string | null;
         isPlatformAdmin: boolean;
         aal: "aal1" | "aal2" | null;
@@ -80,9 +82,16 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
             .maybeSingle();
 
         if (defaultMembership && VALID_ROLES.has(defaultMembership.role)) {
+            const { data: org } = await serviceSupabase
+                .from("organizations")
+                .select("type")
+                .eq("id", defaultMembership.organization_id)
+                .maybeSingle();
+
             return {
                 membershipId: defaultMembership.id,
                 organizationId: defaultMembership.organization_id,
+                organizationType: (org?.type as string) ?? null,
                 role: defaultMembership.role as AppRole,
             };
         }
@@ -97,9 +106,16 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
         .maybeSingle();
 
     if (fallbackMembership && VALID_ROLES.has(fallbackMembership.role)) {
+        const { data: org } = await serviceSupabase
+            .from("organizations")
+            .select("type")
+            .eq("id", fallbackMembership.organization_id)
+            .maybeSingle();
+
         return {
             membershipId: fallbackMembership.id,
             organizationId: fallbackMembership.organization_id,
+            organizationType: (org?.type as string) ?? null,
             role: fallbackMembership.role as AppRole,
         };
     }
@@ -107,6 +123,7 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
     return {
         membershipId: null,
         organizationId: defaultOrganizationId,
+        organizationType: null,
         role: null,
     };
 }
@@ -150,9 +167,11 @@ export async function authenticateRequest(
         return {
             user: {
                 id: user.id,
+                userId: user.id,
                 email: user.email || "",
                 role: resolvedRole,
                 organizationId: membershipContext.organizationId,
+                organizationType: membershipContext.organizationType ?? null,
                 membershipId: membershipContext.membershipId,
                 isPlatformAdmin,
                 aal: getAalFromToken(token),
