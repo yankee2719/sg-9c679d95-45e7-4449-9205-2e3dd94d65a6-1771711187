@@ -29,6 +29,7 @@ export interface AuthMembership {
 }
 
 interface AuthContextValue {
+    mounted: boolean;
     loading: boolean;
     session: Session | null;
     user: User | null;
@@ -43,7 +44,7 @@ interface AuthContextValue {
 
 const ACTIVE_ORG_KEY = "machina_active_org_id";
 
-const AuthContext = createContext < AuthContextValue | undefined > (undefined);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 function shallowEqualMembership(a: AuthMembership | null, b: AuthMembership | null) {
     if (!a && !b) return true;
@@ -70,17 +71,19 @@ function shallowEqualOrganization(a: AuthOrganization | null, b: AuthOrganizatio
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+    const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [session, setSession] = useState < Session | null > (null);
-    const [user, setUser] = useState < User | null > (null);
-    const [organization, setOrganization] = useState < AuthOrganization | null > (null);
-    const [membership, setMembership] = useState < AuthMembership | null > (null);
-    const [memberships, setMemberships] = useState < AuthMembership[] > ([]);
+    const [session, setSession] = useState<Session | null>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const [organization, setOrganization] = useState<AuthOrganization | null>(null);
+    const [membership, setMembership] = useState<AuthMembership | null>(null);
+    const [memberships, setMemberships] = useState<AuthMembership[]>([]);
 
     const initializedRef = useRef(false);
-    const refreshInFlightRef = useRef < Promise < void> | null > (null);
+    const refreshInFlightRef = useRef<Promise<void> | null>(null);
 
     const refreshUserContext = useCallback(async () => {
+        if (typeof window === "undefined") return;
         if (refreshInFlightRef.current) {
             return refreshInFlightRef.current;
         }
@@ -107,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setOrganization(null);
                     setMembership(null);
                     setMemberships([]);
-                    localStorage.removeItem(ACTIVE_ORG_KEY);
+                    window.localStorage.removeItem(ACTIVE_ORG_KEY);
                     return;
                 }
 
@@ -125,17 +128,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (nextMemberships.length === 0) {
                     setOrganization(null);
                     setMembership(null);
-                    localStorage.removeItem(ACTIVE_ORG_KEY);
+                    window.localStorage.removeItem(ACTIVE_ORG_KEY);
                     return;
                 }
 
-                const storedOrgId = localStorage.getItem(ACTIVE_ORG_KEY);
+                const storedOrgId = window.localStorage.getItem(ACTIVE_ORG_KEY);
                 const chosenMembership =
                     nextMemberships.find((row) => row.organization_id === storedOrgId) ??
                     nextMemberships[0];
 
                 if (!storedOrgId || storedOrgId !== chosenMembership.organization_id) {
-                    localStorage.setItem(ACTIVE_ORG_KEY, chosenMembership.organization_id);
+                    window.localStorage.setItem(ACTIVE_ORG_KEY, chosenMembership.organization_id);
                 }
 
                 const { data: orgRow, error: orgError } = await supabase
@@ -168,7 +171,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const setActiveOrganization = useCallback(
         async (organizationId: string) => {
-            localStorage.setItem(ACTIVE_ORG_KEY, organizationId);
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(ACTIVE_ORG_KEY, organizationId);
+            }
             await refreshUserContext();
         },
         [refreshUserContext]
@@ -176,7 +181,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signOut = useCallback(async () => {
         await supabase.auth.signOut();
-        localStorage.removeItem(ACTIVE_ORG_KEY);
+        if (typeof window !== "undefined") {
+            window.localStorage.removeItem(ACTIVE_ORG_KEY);
+        }
         setSession(null);
         setUser(null);
         setOrganization(null);
@@ -185,6 +192,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!mounted) return;
         if (initializedRef.current) return;
         initializedRef.current = true;
 
@@ -212,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             subscription.unsubscribe();
             window.removeEventListener("storage", handleStorage);
         };
-    }, [refreshUserContext]);
+    }, [mounted, refreshUserContext]);
 
     const shouldEnforceMfa = useMemo(() => {
         if (!user) return false;
@@ -220,8 +232,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return ["owner", "admin", "supervisor"].includes(role);
     }, [user, membership?.role]);
 
-    const value = useMemo < AuthContextValue > (
+    const value = useMemo<AuthContextValue>(
         () => ({
+            mounted,
             loading,
             session,
             user,
@@ -234,6 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             signOut,
         }),
         [
+            mounted,
             loading,
             session,
             user,
