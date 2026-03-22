@@ -340,3 +340,11 @@ export function translateChecklistInputType(inputType: string | null | undefined
     const labels = inputTypeLabels[lang] ?? inputTypeLabels.it;
     return labels[inputType ?? ""] ?? (inputType || "—");
 }
+
+export function normalizeExecutionStatus(status: string | null | undefined): "completed" | "in_progress" | "failed" | "unknown" {
+    const s = (status ?? "").toLowerCase().trim();
+    if (["completed", "pass", "passed", "done", "ok"].includes(s)) return "completed";
+    if (["in_progress", "pending", "started", "partial", "in-progress"].includes(s)) return "in_progress";
+    if (["failed", "fail", "error", "rejected", "not_passed"].includes(s)) return "failed";
+    return "unknown";
+}
