@@ -1,152 +1,157 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Loader2, LogOut, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { MfaChallenge } from "@/components/mfa/MfaChallenge";
+import { mfaService } from "@/services/mfaService";
+import { MfaChallenge } from "./MfaChallenge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
-const MFA_BYPASS_ROUTES = [
-    "/login",
-    "/register",
-    "/forgot-password",
-    "/reset-password",
-    "/offline",
-    "/settings/security",
-];
+interface MfaGuardProps {
+    children: ReactNode;
+    excludePaths?: string[];
+    currentPath?: string;
+}
 
-export function MfaGuard({ children }: { children: React.ReactNode }) {
-    const router = useRouter();
-    const { mounted, loading: authLoading, user, shouldEnforceMfa, refreshUserContext } = useAuth();
+type GuardState =
+    | { status: "idle" | "loading" }
+    | { status: "allow" }
+    | { status: "needs-enrollment" }
+    | { status: "needs-verification" };
 
-    const [checking, setChecking] = useState(false);
-    const [verified, setVerified] = useState(false);
-    // ─── FIX: nuovo stato per mostrare il challenge invece di fare redirect ───
-    const [showChallenge, setShowChallenge] = useState(false);
+export function MfaGuard({
+    children,
+    excludePaths = [],
+    currentPath = "",
+}: MfaGuardProps) {
+    const {
+        isAuthenticated,
+        loading: authLoading,
+        shouldEnforceMfa,
+    } = useAuth();
 
-    const shouldBypass = useMemo(() => {
-        return MFA_BYPASS_ROUTES.some((route) => router.pathname.startsWith(route));
-    }, [router.pathname]);
+    const [guardState, setGuardState] = useState<GuardState>({ status: "idle" });
+
+    const isExcluded = useMemo(
+        () => excludePaths.some((path) => currentPath.startsWith(path)),
+        [excludePaths, currentPath]
+    );
 
     useEffect(() => {
-        let active = true;
+        let mounted = true;
 
-        const run = async () => {
-            if (!mounted) return;
+        const check = async () => {
             if (authLoading) return;
 
-            // Nessun utente loggato → lascia passare (vedrà login)
-            if (!user) {
-                if (active) {
-                    setVerified(true);
-                    setChecking(false);
-                    setShowChallenge(false);
-                }
+            if (!isAuthenticated || isExcluded || !shouldEnforceMfa) {
+                if (!mounted) return;
+                setGuardState({ status: "allow" });
                 return;
             }
-
-            // MFA non richiesto per questo ruolo, o siamo su una route bypass
-            if (!shouldEnforceMfa || shouldBypass) {
-                if (active) {
-                    setVerified(true);
-                    setChecking(false);
-                    setShowChallenge(false);
-                }
-                return;
-            }
-
-            setChecking(true);
 
             try {
-                const { data, error } =
-                    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+                setGuardState({ status: "loading" });
 
-                if (error) throw error;
+                const status = await mfaService.getStatus();
 
-                const isAal2 = data?.currentLevel === "aal2";
+                if (!mounted) return;
 
-                if (!active) return;
-
-                if (isAal2) {
-                    // Utente ha completato la verifica MFA
-                    setVerified(true);
-                    setChecking(false);
-                    setShowChallenge(false);
-                } else {
-                    // ─── FIX: mostra il challenge inline invece di fare redirect ───
-                    // Prima faceva router.replace("/settings/security") che creava un loop
-                    setVerified(false);
-                    setChecking(false);
-                    setShowChallenge(true);
+                if (!status.hasMfaEnabled) {
+                    setGuardState({ status: "needs-enrollment" });
+                    return;
                 }
+
+                if (status.needsMfaVerification) {
+                    setGuardState({ status: "needs-verification" });
+                    return;
+                }
+
+                setGuardState({ status: "allow" });
             } catch (error) {
-                console.error("MfaGuard error:", error);
+                console.error("MfaGuard check error:", error);
 
-                if (!active) return;
+                if (!mounted) return;
 
-                // In caso di errore, lascia passare per non bloccare l'utente
-                setVerified(true);
-                setChecking(false);
-                setShowChallenge(false);
+                // Fail-open qui è voluto per non bloccare tutta l'app
+                // in caso di errore temporaneo lato check MFA.
+                setGuardState({ status: "allow" });
             }
         };
 
-        void run();
+        setGuardState({ status: "idle" });
+        check();
 
         return () => {
-            active = false;
+            mounted = false;
         };
-    }, [mounted, authLoading, user?.id, shouldEnforceMfa, shouldBypass]);
+    }, [authLoading, isAuthenticated, isExcluded, shouldEnforceMfa, currentPath]);
 
-    // ─── FIX: quando l'utente completa il challenge TOTP ───
-    const handleMfaVerified = async () => {
-        setShowChallenge(false);
-        setVerified(true);
-        // Aggiorna il contesto auth per riflettere aal2
-        await refreshUserContext();
+    const handleSignOut = async () => {
+        await supabase.auth.signOut();
     };
 
-    const handleMfaCancel = () => {
-        // L'utente vuole uscire → logout e torna al login
-        setShowChallenge(false);
-        setVerified(false);
-        void router.replace("/login");
-    };
-
-    if (!mounted) {
+    if (authLoading || (isAuthenticated && !isExcluded && shouldEnforceMfa && (guardState.status === "idle" || guardState.status === "loading"))) {
         return (
-            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                Caricamento...
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
         );
     }
 
-    if (authLoading) {
+    if (guardState.status === "needs-enrollment") {
         return (
-            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                Verifica sessione...
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+                <Card className="w-full max-w-md">
+                    <CardHeader className="text-center">
+                        <div className="flex justify-center mb-4">
+                            <div className="rounded-full bg-primary/10 p-4">
+                                <ShieldAlert className="h-8 w-8 text-primary" />
+                            </div>
+                        </div>
+                        <CardTitle>Autenticazione a due fattori richiesta</CardTitle>
+                        <CardDescription>
+                            Il tuo account richiede la 2FA, ma non risulta ancora configurato
+                            alcun autenticatore verificato.
+                        </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4">
+                        <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+                            Per continuare devi aprire la pagina sicurezza e configurare
+                            un'app TOTP come Google Authenticator, Authy o 1Password.
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <Button asChild className="w-full">
+                                <Link href="/settings/security">
+                                    <ShieldCheck className="h-4 w-4 mr-2" />
+                                    Vai a Sicurezza account
+                                </Link>
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                onClick={handleSignOut}
+                                className="w-full"
+                            >
+                                <LogOut className="h-4 w-4 mr-2" />
+                                Esci
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
 
-    if (checking) {
-        return (
-            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-                Verifica sicurezza...
-            </div>
-        );
-    }
-
-    // ─── FIX: mostra il challenge TOTP inline ───
-    if (showChallenge) {
+    if (guardState.status === "needs-verification" && isAuthenticated && !isExcluded && shouldEnforceMfa) {
         return (
             <MfaChallenge
-                onVerified={handleMfaVerified}
-                onCancel={handleMfaCancel}
+                onVerified={() => setGuardState({ status: "allow" })}
+                onCancel={() => setGuardState({ status: "allow" })}
             />
         );
-    }
-
-    if (!verified && !shouldBypass) {
-        return null;
     }
 
     return <>{children}</>;
