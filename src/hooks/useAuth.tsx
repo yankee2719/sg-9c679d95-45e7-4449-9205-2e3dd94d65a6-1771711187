@@ -37,6 +37,7 @@ interface AuthContextValue {
     membership: AuthMembership | null;
     memberships: AuthMembership[];
     shouldEnforceMfa: boolean;
+    isAuthenticated: boolean;
     refreshUserContext: () => Promise<void>;
     setActiveOrganization: (organizationId: string) => Promise<void>;
     signOut: () => Promise<void>;
@@ -242,6 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             membership,
             memberships,
             shouldEnforceMfa,
+            isAuthenticated: !!user && !!session,
             refreshUserContext,
             setActiveOrganization,
             signOut,
