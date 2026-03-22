@@ -113,15 +113,15 @@ export default function DocumentManager({
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [documents, setDocuments] = useState<DocumentWithVersions[]>([]);
+    const [documents, setDocuments] = useState < DocumentWithVersions[] > ([]);
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [category, setCategory] = useState<DocumentCategory>("technical_manual");
+    const [category, setCategory] = useState < DocumentCategory > ("technical_manual");
     const [language, setLanguage] = useState("it");
     const [regulatoryReference, setRegulatoryReference] = useState("");
     const [changeSummary, setChangeSummary] = useState("");
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedFile, setSelectedFile] = useState < File | null > (null);
 
     const ctxOrgId = currentOrgId ?? organization?.id ?? null;
     const ctxOrgType = (currentOrgType ?? organization?.type ?? null) as OrgType | null;
@@ -201,7 +201,7 @@ export default function DocumentManager({
 
         setSaving(true);
         try {
-            await createDocumentAndUploadV1({
+            const result = await createDocumentAndUploadV1({
                 organizationId: ctxOrgId,
                 machineId,
                 title,
@@ -214,28 +214,13 @@ export default function DocumentManager({
                 createdBy: user?.id ?? null,
             });
 
+            const docId = result?.document?.id ?? null;
+
             await logAudit({
                 organizationId: ctxOrgId,
                 entityType: "document",
-                entityId: null,
+                entityId: docId,
                 action: "create",
-                machineId: machineId,
-            });
-
-            await logAudit({
-                organizationId: ctxOrgId,
-                entityType: "document",
-                entityId: doc.id,
-                action: "new_version",
-                machineId: machineId,
-                documentId: doc.id,
-            });
-
-            await logAudit({
-                organizationId: ctxOrgId,
-                entityType: "document",
-                entityId: doc.id,
-                action: "delete",
                 machineId: machineId,
             });
 
