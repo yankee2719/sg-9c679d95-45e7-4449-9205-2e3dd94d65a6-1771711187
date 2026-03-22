@@ -17,17 +17,21 @@ const PWAContext = createContext < PWAContextType > ({
 
 export const usePWA = () => useContext(PWAContext);
 
+// ─── FIX HYDRATION: legge navigator.onLine in modo sincrono ───
+// _app.tsx ha il mounted guard, quindi qui siamo già sul client.
+function getInitialOnline(): boolean {
+    if (typeof window === "undefined") return true;
+    return navigator.onLine;
+}
+
 export function PWAProvider({ children }: { children: React.ReactNode }) {
     const { toast } = useToast();
-    const [isOnline, setIsOnline] = useState(true);
+    const [isOnline, setIsOnline] = useState < boolean > (getInitialOnline);
     const [isInstallable, setIsInstallable] = useState(false);
     const [pendingSync, setPendingSync] = useState(0);
     const [deferredPrompt, setDeferredPrompt] = useState < any > (null);
 
     useEffect(() => {
-        // Set initial state
-        setIsOnline(navigator.onLine);
-
         // Register Service Worker
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker
@@ -35,7 +39,6 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
                 .then((registration) => {
                     console.log("[PWA] Service Worker registered:", registration.scope);
 
-                    // Listen for updates
                     registration.addEventListener("updatefound", () => {
                         const newWorker = registration.installing;
                         if (newWorker) {
@@ -54,7 +57,6 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
                     console.error("[PWA] SW registration failed:", err);
                 });
 
-            // Listen for sync complete messages from SW
             navigator.serviceWorker.addEventListener("message", (event) => {
                 if (event.data?.type === "SYNC_COMPLETE") {
                     toast({
@@ -74,7 +76,6 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
                 description: "Connessione ripristinata. Sincronizzazione in corso...",
             });
 
-            // Trigger sync of queued mutations
             if (navigator.serviceWorker.controller) {
                 navigator.serviceWorker.controller.postMessage({ type: "SYNC_OFFLINE" });
             }
