@@ -18,10 +18,6 @@ export interface ProfileData {
     email: string;
 }
 
-function sleep(ms: number) {
-    return new Promise((r) => setTimeout(r, ms));
-}
-
 type OrgType = "manufacturer" | "customer";
 
 type MembershipRow = {
@@ -113,7 +109,7 @@ async function loadProfileAndMemberships(userId: string) {
         orgIds.push(defaultOrgId);
     }
 
-    const orgMap = new Map < string, OrgRow> ();
+    const orgMap = new Map<string, OrgRow>();
 
     if (orgIds.length > 0) {
         const { data: orgRows, error: orgError } = await supabase
@@ -135,73 +131,61 @@ async function loadProfileAndMemberships(userId: string) {
     };
 }
 
+// ─── FIX: rimosso il retry loop da 8 tentativi. ───
+// L'AuthProvider gestisce già il lifecycle della sessione.
+// Se non c'è sessione, restituisci null immediatamente.
 export async function getUserContext(): Promise<UserContext | null> {
-    const maxAttempts = 8;
+    try {
+        const {
+            data: { session },
+            error: sessionError,
+        } = await supabase.auth.getSession();
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            const {
-                data: { session },
-                error: sessionError,
-            } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-            if (sessionError) throw sessionError;
+        const user = session?.user ?? null;
+        if (!user) return null;
 
-            const user = session?.user ?? null;
-            if (!user) {
-                if (attempt < maxAttempts) {
-                    await sleep(200);
-                    continue;
-                }
-                return null;
-            }
+        const { profile, selected } = await loadProfileAndMemberships(user.id);
 
-            const { profile, selected } = await loadProfileAndMemberships(user.id);
+        let resolvedOrgType = selected.orgType;
 
-            let resolvedOrgType = selected.orgType;
+        if (!resolvedOrgType && selected.orgId) {
+            const { data: orgRow, error: orgError } = await supabase
+                .from("organizations")
+                .select("type")
+                .eq("id", selected.orgId)
+                .maybeSingle();
 
-            if (!resolvedOrgType && selected.orgId) {
-                const { data: orgRow, error: orgError } = await supabase
-                    .from("organizations")
-                    .select("type")
-                    .eq("id", selected.orgId)
-                    .maybeSingle();
+            if (orgError) throw orgError;
 
-                if (orgError) throw orgError;
-
-                resolvedOrgType = normalizeOrgType((orgRow as any)?.type);
-            }
-
-            if (selected.orgId && !resolvedOrgType) {
-                throw new Error(
-                    "orgType non risolto: organizations.type mancante o non accessibile via RLS"
-                );
-            }
-
-            const displayName =
-                (profile as any)?.display_name ||
-                (profile as any)?.first_name ||
-                user.email?.split("@")[0] ||
-                "User";
-
-            return {
-                userId: user.id,
-                orgId: selected.orgId,
-                orgType: resolvedOrgType,
-                role: selected.role || "technician",
-                displayName,
-                email: (profile as any)?.email || user.email || "",
-            };
-        } catch (error) {
-            if (attempt < maxAttempts) {
-                await sleep(200);
-                continue;
-            }
-            throw error;
+            resolvedOrgType = normalizeOrgType((orgRow as any)?.type);
         }
-    }
 
-    return null;
+        if (selected.orgId && !resolvedOrgType) {
+            throw new Error(
+                "orgType non risolto: organizations.type mancante o non accessibile via RLS"
+            );
+        }
+
+        const displayName =
+            (profile as any)?.display_name ||
+            (profile as any)?.first_name ||
+            user.email?.split("@")[0] ||
+            "User";
+
+        return {
+            userId: user.id,
+            orgId: selected.orgId,
+            orgType: resolvedOrgType,
+            role: selected.role || "technician",
+            displayName,
+            email: (profile as any)?.email || user.email || "",
+        };
+    } catch (error) {
+        console.error("getUserContext error:", error);
+        return null;
+    }
 }
 
 export async function getProfileData(userId: string): Promise<ProfileData | null> {
