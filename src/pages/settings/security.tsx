@@ -60,10 +60,10 @@ const copy = {
         verificationPlaceholder: "000000",
         verifyAndActivate: "Verifica e attiva",
         cancel: "Annulla",
-        activeFactors: "Fattori attivi",
-        noFactors: "Nessun fattore verificato trovato.",
+        activeFactors: "Fattori registrati",
+        noFactors: "Nessun fattore trovato.",
         active: "Attivo",
-        pending: "Pending",
+        pending: "Non verificato",
         remove: "Rimuovi",
         removeConfirm: "Conferma rimozione",
         addedOn: "Aggiunto il",
@@ -105,10 +105,10 @@ const copy = {
         verificationPlaceholder: "000000",
         verifyAndActivate: "Verify and activate",
         cancel: "Cancel",
-        activeFactors: "Active factors",
-        noFactors: "No verified factors found.",
+        activeFactors: "Registered factors",
+        noFactors: "No factors found.",
         active: "Active",
-        pending: "Pending",
+        pending: "Unverified",
         remove: "Remove",
         removeConfirm: "Confirm removal",
         addedOn: "Added on",
@@ -150,10 +150,10 @@ const copy = {
         verificationPlaceholder: "000000",
         verifyAndActivate: "Vérifier et activer",
         cancel: "Annuler",
-        activeFactors: "Facteurs actifs",
-        noFactors: "Aucun facteur vérifié trouvé.",
+        activeFactors: "Facteurs enregistrés",
+        noFactors: "Aucun facteur trouvé.",
         active: "Actif",
-        pending: "En attente",
+        pending: "Non vérifié",
         remove: "Supprimer",
         removeConfirm: "Confirmer la suppression",
         addedOn: "Ajouté le",
@@ -195,10 +195,10 @@ const copy = {
         verificationPlaceholder: "000000",
         verifyAndActivate: "Verificar y activar",
         cancel: "Cancelar",
-        activeFactors: "Factores activos",
-        noFactors: "No se encontraron factores verificados.",
+        activeFactors: "Factores registrados",
+        noFactors: "No se encontraron factores.",
         active: "Activo",
-        pending: "Pendiente",
+        pending: "No verificado",
         remove: "Eliminar",
         removeConfirm: "Confirmar eliminación",
         addedOn: "Añadido el",
@@ -231,18 +231,18 @@ export default function SecuritySettingsPage() {
     const userRole = membership?.role ?? "technician";
 
     const [loading, setLoading] = useState(true);
-    const [factors, setFactors] = useState<FactorRow[]>([]);
-    const [aal, setAal] = useState<string | null>(null);
-    const [nextLevel, setNextLevel] = useState<string | null>(null);
+    const [factors, setFactors] = useState < FactorRow[] > ([]);
+    const [aal, setAal] = useState < string | null > (null);
+    const [nextLevel, setNextLevel] = useState < string | null > (null);
     const [friendlyName, setFriendlyName] = useState(text.defaultFactorName);
     const [code, setCode] = useState("");
     const [enrolling, setEnrolling] = useState(false);
     const [verifying, setVerifying] = useState(false);
-    const [removingFactorId, setRemovingFactorId] = useState<string | null>(null);
-    const [confirmingFactorId, setConfirmingFactorId] = useState<string | null>(null);
-    const [pendingFactorId, setPendingFactorId] = useState<string | null>(null);
-    const [pendingSecret, setPendingSecret] = useState<string | null>(null);
-    const [pendingUri, setPendingUri] = useState<string | null>(null);
+    const [removingFactorId, setRemovingFactorId] = useState < string | null > (null);
+    const [confirmingFactorId, setConfirmingFactorId] = useState < string | null > (null);
+    const [pendingFactorId, setPendingFactorId] = useState < string | null > (null);
+    const [pendingSecret, setPendingSecret] = useState < string | null > (null);
+    const [pendingUri, setPendingUri] = useState < string | null > (null);
 
     useEffect(() => {
         setFriendlyName((current) => (current.trim() ? current : text.defaultFactorName));
@@ -284,10 +284,11 @@ export default function SecuritySettingsPage() {
         };
     }, [authLoading, text.loadError, text.title, toast]);
 
-    const verifiedFactors = useMemo(
-        () => factors.filter((factor) => factor.status === "verified"),
-        [factors]
-    );
+    // ─── FIX: mostra TUTTI i fattori, non solo i verified ───
+    // Così l'utente può rimuovere fattori bloccati in stato "unverified"
+    // che impediscono di crearne di nuovi (errore "already exists").
+    const allFactors = factors;
+    const hasVerifiedFactor = factors.some((f) => f.status === "verified");
 
     const handleStartEnroll = async () => {
         setEnrolling(true);
@@ -500,6 +501,7 @@ export default function SecuritySettingsPage() {
                     </CardContent>
                 </Card>
 
+                {/* ─── FIX: mostra TUTTI i fattori, inclusi quelli non verificati ─── */}
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle>{text.activeFactors}</CardTitle>
@@ -509,13 +511,13 @@ export default function SecuritySettingsPage() {
                             <div className="flex items-center justify-center py-8">
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                             </div>
-                        ) : verifiedFactors.length === 0 ? (
+                        ) : allFactors.length === 0 ? (
                             <div className="text-sm text-muted-foreground">
                                 {text.noFactors}
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {verifiedFactors.map((factor) => (
+                                {allFactors.map((factor) => (
                                     <div
                                         key={factor.id}
                                         className="flex flex-col gap-4 rounded-xl border border-border p-4 md:flex-row md:items-center md:justify-between"
@@ -533,7 +535,13 @@ export default function SecuritySettingsPage() {
                                         </div>
 
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <Badge variant="secondary">
+                                            <Badge
+                                                variant={
+                                                    factor.status === "verified"
+                                                        ? "secondary"
+                                                        : "destructive"
+                                                }
+                                            >
                                                 {factor.status === "verified"
                                                     ? text.active
                                                     : text.pending}
