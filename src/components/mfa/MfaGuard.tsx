@@ -51,12 +51,16 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
 
             setChecking(true);
 
-            timeoutId = setTimeout(() => {
-                if (!active) return;
-                console.warn("MfaGuard timeout fallback triggered");
-                setChecking(false);
-                setVerified(true);
-            }, 8000);
+timeoutId = setTimeout(() => {
+    if (!active) return;
+    console.warn("MfaGuard timeout — redirecting to security");
+    setChecking(false);
+    setVerified(false); // NON true
+    if (!redirectingRef.current) {
+        redirectingRef.current = true;
+        void router.replace("/settings/security");
+    }
+}, 8000);
 
             try {
                 const { data, error } =
