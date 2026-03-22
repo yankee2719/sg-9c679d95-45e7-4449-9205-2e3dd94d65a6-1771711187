@@ -115,14 +115,21 @@ export default withAuth(
                     updated_at: new Date().toISOString(),
                 };
 
-                const { data, error } = await serviceSupabase
+                const { error: updateError } = await serviceSupabase
                     .from("machines")
                     .update(payload)
-                    .eq("id", machineId)
+                    .eq("id", machineId);
+
+                if (updateError) return res.status(500).json({ error: updateError.message });
+
+                // Fetch updated row separately to avoid FOR UPDATE + aggregate conflict
+                const { data, error: fetchError } = await serviceSupabase
+                    .from("machines")
                     .select("*")
+                    .eq("id", machineId)
                     .single();
 
-                if (error) return res.status(500).json({ error: error.message });
+                if (fetchError) return res.status(500).json({ error: fetchError.message });
 
                 await serviceSupabase.from("audit_logs").insert({
                     organization_id: organizationId,
