@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
 import type { AppProps } from "next/app";
 import Head from "next/head";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import "@/styles/globals.css";
 import { OfflineStatusBar } from "@/components/Offline/OfflineStatusBar";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,34 +11,48 @@ import { PWAProvider } from "@/contexts/PWAProvider";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { AuthProvider } from "@/hooks/useAuth";
 
-export default function App({ Component, pageProps }: AppProps) {
-    // ─── HYDRATION FIX ───
-    // Blocca il render dell'intero albero finché il client non è montato.
-    // Questo impedisce a ThemeProvider, LanguageProvider, PWAProvider e
-    // OfflineStatusBar di accedere a localStorage/navigator/indexedDB
-    // durante il render SSR, che causerebbe mismatch con il client.
+function AppShell({ Component, pageProps }: AppProps) {
+    const router = useRouter();
+
+    return (
+        <MfaGuard
+            currentPath={router.pathname}
+            excludePaths={[
+                "/login",
+                "/register",
+                "/forgot-password",
+                "/reset-password",
+                "/offline",
+                "/settings/security",
+            ]}
+        >
+            <OfflineStatusBar />
+            <Component {...pageProps} />
+        </MfaGuard>
+    );
+}
+
+export default function App(props: AppProps) {
     const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
-    if (!mounted) return null;
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     return (
         <>
             <Head>
-                <title>MACHINA</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
             </Head>
 
             <ThemeProvider>
                 <LanguageProvider>
-                    <PWAProvider>
-                        <AuthProvider>
-                            <MfaGuard>
-                                <OfflineStatusBar />
-                                <Component {...pageProps} />
-                                <Toaster />
-                            </MfaGuard>
-                        </AuthProvider>
-                    </PWAProvider>
+                    <AuthProvider>
+                        <PWAProvider>
+                            {mounted ? <AppShell {...props} /> : null}
+                            <Toaster />
+                        </PWAProvider>
+                    </AuthProvider>
                 </LanguageProvider>
             </ThemeProvider>
         </>
