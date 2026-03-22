@@ -183,4 +183,4 @@ export function translateChecklistInputType(inputType: string | null | undefined
     const lang = (language || "it") as ChecklistPageLanguage;
     const labels = inputTypeLabels[lang] ?? inputTypeLabels.it;
     return labels[inputType ?? ""] ?? (inputType || "—");
-}
+} 
