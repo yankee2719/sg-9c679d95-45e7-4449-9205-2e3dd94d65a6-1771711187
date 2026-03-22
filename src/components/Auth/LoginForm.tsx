@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Loader2, Shield, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { getMfaStatus } from "@/services/mfaService";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,7 +49,7 @@ const copy = {
         submit: "Se connecter",
         loading: "Connexion en cours...",
         noAccount: "Pas encore de compte ?",
-        register: "S’inscrire",
+        register: "S'inscrire",
         invalidCredentials: "Email ou mot de passe incorrect.",
         genericError: "Erreur de connexion",
     },
@@ -113,13 +112,11 @@ export function LoginForm() {
                 return;
             }
 
-            const status = await getMfaStatus().catch(() => null);
-
-            if (status?.needsMfaVerification) {
-                await router.replace("/settings/security");
-                return;
-            }
-
+            // ─── FIX: vai SEMPRE a /dashboard dopo il login ───
+            // Se l'utente ha MFA attivo, MfaGuard mostrerà automaticamente
+            // il challenge TOTP prima di rendere visibile la dashboard.
+            // NON fare più il check getMfaStatus() + redirect a /settings/security
+            // perché quello causava un loop.
             await router.replace("/dashboard");
         } catch (err: any) {
             console.error(err);
