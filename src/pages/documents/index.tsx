@@ -15,6 +15,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { downloadCsv } from "@/lib/downloadCsv";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -349,12 +350,10 @@ export default function DocumentsIndexPage() {
                         </div>
 
                         <div className="flex gap-3">
-                            <a href="/api/export/documents">
-                                <Button variant="outline">
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Export CSV
-                                </Button>
-                            </a>
+                            <Button variant="outline" onClick={() => downloadCsv("/api/export/documents", "documenti.csv")}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Export CSV
+                            </Button>
                         </div>
                     </div>
 
