@@ -1442,15 +1442,17 @@ const translations: Record<Language, Record<string, string>> = {
 
 const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState < Language > ("it");
+// ─── FIX HYDRATION: legge localStorage in modo sincrono ───
+// _app.tsx ha il mounted guard, quindi qui siamo già sul client.
+function getInitialLanguage(): Language {
+    if (typeof window === "undefined") return "it";
+    const stored = localStorage.getItem("app-language");
+    if (stored === "it" || stored === "en" || stored === "fr" || stored === "es") return stored;
+    return "it";
+}
 
-    useEffect(() => {
-        const stored = localStorage.getItem("app-language") as Language | null;
-        if (stored && ["it", "en", "fr", "es"].includes(stored)) {
-            setLanguageState(stored);
-        }
-    }, []);
+export function LanguageProvider({ children }: { children: ReactNode }) {
+    const [language, setLanguageState] = useState < Language > (getInitialLanguage);
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
