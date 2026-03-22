@@ -11,9 +11,15 @@ import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { AuthProvider } from "@/hooks/useAuth";
 
 export default function App({ Component, pageProps }: AppProps) {
+    // ─── HYDRATION FIX ───
+    // Blocca il render dell'intero albero finché il client non è montato.
+    // Questo impedisce a ThemeProvider, LanguageProvider, PWAProvider e
+    // OfflineStatusBar di accedere a localStorage/navigator/indexedDB
+    // durante il render SSR, che causerebbe mismatch con il client.
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
     if (!mounted) return null;
+
     return (
         <>
             <Head>
