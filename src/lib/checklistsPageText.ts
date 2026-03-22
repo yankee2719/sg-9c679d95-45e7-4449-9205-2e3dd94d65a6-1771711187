@@ -63,6 +63,44 @@ const texts = {
         assignments: {
             onlyManagers: "Solo admin e supervisor possono modificare i template checklist.",
         },
+        executions: {
+            title: "Esecuzioni checklist",
+            subtitleManufacturer: "Storico esecuzioni checklist nel contesto costruttore attivo.",
+            subtitleCustomer: "Storico esecuzioni checklist nel contesto cliente attivo.",
+            detailTitle: "Dettaglio esecuzione",
+            loadError: "Errore caricamento esecuzioni.",
+            total: "Totali",
+            completed: "Completate",
+            inProgress: "In corso",
+            failed: "Fallite",
+            searchPlaceholder: "Cerca template, macchina, work order...",
+            filters: "Filtri",
+            allStatuses: "Tutti gli stati",
+            allPlants: "Tutti gli stabilimenti",
+            results: "Risultati",
+            noResults: "Nessuna esecuzione trovata.",
+            detail: "Dettaglio",
+            status: "Stato",
+            executedAt: "Eseguita il",
+            workOrder: "Work order",
+            workOrderFallback: "Work order",
+            machineFallback: "Macchina",
+            templateFallback: "Template",
+            manufacturerView: "Vista costruttore",
+            customerView: "Vista cliente",
+            plant: "Stabilimento",
+            machine: "Macchina",
+            answers: "Risposte",
+            noAnswers: "Nessuna risposta registrata.",
+            notes: "Note",
+            value: "Valore",
+            ok: "OK",
+            ko: "KO",
+            accessRules: "Regole di accesso",
+            manufacturerRule: "Il costruttore vede tutte le esecuzioni delle macchine di sua proprietà.",
+            customerRule: "Il cliente vede le esecuzioni sulle macchine a lui assegnate.",
+            readonlyRule: "Le esecuzioni sono in sola lettura una volta completate.",
+        },
     },
     en: {
         common: {
@@ -125,6 +163,44 @@ const texts = {
         },
         assignments: {
             onlyManagers: "Only admins and supervisors can edit checklist templates.",
+        },
+        executions: {
+            title: "Checklist executions",
+            subtitleManufacturer: "Checklist execution history in the active manufacturer context.",
+            subtitleCustomer: "Checklist execution history in the active customer context.",
+            detailTitle: "Execution detail",
+            loadError: "Error loading executions.",
+            total: "Total",
+            completed: "Completed",
+            inProgress: "In progress",
+            failed: "Failed",
+            searchPlaceholder: "Search template, machine, work order...",
+            filters: "Filters",
+            allStatuses: "All statuses",
+            allPlants: "All plants",
+            results: "Results",
+            noResults: "No executions found.",
+            detail: "Detail",
+            status: "Status",
+            executedAt: "Executed on",
+            workOrder: "Work order",
+            workOrderFallback: "Work order",
+            machineFallback: "Machine",
+            templateFallback: "Template",
+            manufacturerView: "Manufacturer view",
+            customerView: "Customer view",
+            plant: "Plant",
+            machine: "Machine",
+            answers: "Answers",
+            noAnswers: "No answers recorded.",
+            notes: "Notes",
+            value: "Value",
+            ok: "OK",
+            ko: "KO",
+            accessRules: "Access rules",
+            manufacturerRule: "The manufacturer can see all executions on its own machines.",
+            customerRule: "The customer can see executions on machines assigned to them.",
+            readonlyRule: "Executions are read-only once completed.",
         },
     },
     fr: {
@@ -189,6 +265,44 @@ const texts = {
         assignments: {
             onlyManagers: "Seuls les admins et superviseurs peuvent modifier les modèles de checklist.",
         },
+        executions: {
+            title: "Exécutions de checklist",
+            subtitleManufacturer: "Historique des exécutions dans le contexte constructeur actif.",
+            subtitleCustomer: "Historique des exécutions dans le contexte client actif.",
+            detailTitle: "Détail de l'exécution",
+            loadError: "Erreur de chargement des exécutions.",
+            total: "Total",
+            completed: "Terminées",
+            inProgress: "En cours",
+            failed: "Échouées",
+            searchPlaceholder: "Rechercher modèle, machine, ordre de travail...",
+            filters: "Filtres",
+            allStatuses: "Tous les statuts",
+            allPlants: "Tous les sites",
+            results: "Résultats",
+            noResults: "Aucune exécution trouvée.",
+            detail: "Détail",
+            status: "Statut",
+            executedAt: "Exécutée le",
+            workOrder: "Ordre de travail",
+            workOrderFallback: "Ordre de travail",
+            machineFallback: "Machine",
+            templateFallback: "Modèle",
+            manufacturerView: "Vue constructeur",
+            customerView: "Vue client",
+            plant: "Site",
+            machine: "Machine",
+            answers: "Réponses",
+            noAnswers: "Aucune réponse enregistrée.",
+            notes: "Notes",
+            value: "Valeur",
+            ok: "OK",
+            ko: "KO",
+            accessRules: "Règles d'accès",
+            manufacturerRule: "Le constructeur peut voir toutes les exécutions sur ses machines.",
+            customerRule: "Le client peut voir les exécutions sur les machines qui lui sont affectées.",
+            readonlyRule: "Les exécutions sont en lecture seule une fois terminées.",
+        },
     },
     es: {
         common: {
@@ -252,6 +366,44 @@ const texts = {
         assignments: {
             onlyManagers: "Solo los administradores y supervisores pueden editar las plantillas de checklist.",
         },
+        executions: {
+            title: "Ejecuciones de checklist",
+            subtitleManufacturer: "Historial de ejecuciones en el contexto fabricante activo.",
+            subtitleCustomer: "Historial de ejecuciones en el contexto cliente activo.",
+            detailTitle: "Detalle de ejecución",
+            loadError: "Error al cargar ejecuciones.",
+            total: "Total",
+            completed: "Completadas",
+            inProgress: "En curso",
+            failed: "Fallidas",
+            searchPlaceholder: "Buscar plantilla, máquina, orden de trabajo...",
+            filters: "Filtros",
+            allStatuses: "Todos los estados",
+            allPlants: "Todas las plantas",
+            results: "Resultados",
+            noResults: "No se encontraron ejecuciones.",
+            detail: "Detalle",
+            status: "Estado",
+            executedAt: "Ejecutada el",
+            workOrder: "Orden de trabajo",
+            workOrderFallback: "Orden de trabajo",
+            machineFallback: "Máquina",
+            templateFallback: "Plantilla",
+            manufacturerView: "Vista fabricante",
+            customerView: "Vista cliente",
+            plant: "Planta",
+            machine: "Máquina",
+            answers: "Respuestas",
+            noAnswers: "No se registraron respuestas.",
+            notes: "Notas",
+            value: "Valor",
+            ok: "OK",
+            ko: "KO",
+            accessRules: "Reglas de acceso",
+            manufacturerRule: "El fabricante puede ver todas las ejecuciones de sus máquinas.",
+            customerRule: "El cliente puede ver las ejecuciones de las máquinas asignadas.",
+            readonlyRule: "Las ejecuciones son de solo lectura una vez completadas.",
+        },
     },
 } as const;
 
@@ -268,24 +420,11 @@ export function translateChecklistTarget(targetType: string | null | undefined, 
 
 export function formatChecklistDate(value: string | null | undefined, language?: string) {
     if (!value) return "—";
-
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-
     const locale =
-        language === "it"
-            ? "it-IT"
-            : language === "fr"
-                ? "fr-FR"
-                : language === "es"
-                    ? "es-ES"
-                    : "en-GB";
-
-    return date.toLocaleDateString(locale, {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-    });
+        language === "it" ? "it-IT" : language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : "en-GB";
+    return date.toLocaleDateString(locale, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 export function canManageChecklists(role: string | null | undefined): boolean {
@@ -293,46 +432,10 @@ export function canManageChecklists(role: string | null | undefined): boolean {
 }
 
 const inputTypeLabels: Record<string, Record<string, string>> = {
-    it: {
-        checkbox: "Checkbox",
-        text: "Testo",
-        number: "Numero",
-        select: "Selezione",
-        photo: "Foto",
-        signature: "Firma",
-        date: "Data",
-        textarea: "Testo lungo",
-    },
-    en: {
-        checkbox: "Checkbox",
-        text: "Text",
-        number: "Number",
-        select: "Selection",
-        photo: "Photo",
-        signature: "Signature",
-        date: "Date",
-        textarea: "Long text",
-    },
-    fr: {
-        checkbox: "Case à cocher",
-        text: "Texte",
-        number: "Nombre",
-        select: "Sélection",
-        photo: "Photo",
-        signature: "Signature",
-        date: "Date",
-        textarea: "Texte long",
-    },
-    es: {
-        checkbox: "Casilla",
-        text: "Texto",
-        number: "Número",
-        select: "Selección",
-        photo: "Foto",
-        signature: "Firma",
-        date: "Fecha",
-        textarea: "Texto largo",
-    },
+    it: { checkbox: "Checkbox", text: "Testo", number: "Numero", select: "Selezione", photo: "Foto", signature: "Firma", date: "Data", textarea: "Testo lungo" },
+    en: { checkbox: "Checkbox", text: "Text", number: "Number", select: "Selection", photo: "Photo", signature: "Signature", date: "Date", textarea: "Long text" },
+    fr: { checkbox: "Case à cocher", text: "Texte", number: "Nombre", select: "Sélection", photo: "Photo", signature: "Signature", date: "Date", textarea: "Texte long" },
+    es: { checkbox: "Casilla", text: "Texto", number: "Número", select: "Selección", photo: "Foto", signature: "Firma", date: "Fecha", textarea: "Texto largo" },
 };
 
 export function translateChecklistInputType(inputType: string | null | undefined, language?: string): string {
