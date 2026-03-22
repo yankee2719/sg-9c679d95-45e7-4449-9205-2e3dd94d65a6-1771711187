@@ -178,3 +178,6 @@ export default function MainLayout({
         </div>
     );
 }
+
+// ─── Named re-export: 27 file importano { MainLayout } invece di default ───
+export { MainLayout };
