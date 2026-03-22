@@ -1,275 +1,247 @@
-import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { hasMinimumRole, type OrgRole } from "@/services/organizationService";
 
-type OrganizationType = "manufacturer" | "customer" | null;
-
-export interface AuthOrganization {
-    id: string;
-    name: string | null;
-    type: OrganizationType;
-    manufacturer_org_id?: string | null;
-    slug?: string | null;
-}
-
-export interface AuthMembership {
-    id: string;
-    user_id: string;
-    organization_id: string;
-    role: string;
-    is_active: boolean;
-}
-
-interface AuthContextValue {
-    mounted: boolean;
-    loading: boolean;
-    session: Session | null;
+export interface AuthState {
     user: User | null;
-    organization: AuthOrganization | null;
-    membership: AuthMembership | null;
-    memberships: AuthMembership[];
-    shouldEnforceMfa: boolean;
+    session: Session | null;
+    loading: boolean;
+    profile: {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        display_name: string | null;
+        email: string | null;
+        avatar_url: string | null;
+        language: string;
+        default_organization_id: string | null;
+    } | null;
+    organization: {
+        id: string;
+        name: string;
+        slug: string;
+        type: string;
+        subscription_status: string;
+    } | null;
+    membership: {
+        id: string;
+        role: OrgRole;
+        is_active: boolean;
+    } | null;
+    isPlatformAdmin: boolean;
     isAuthenticated: boolean;
-    refreshUserContext: () => Promise<void>;
-    setActiveOrganization: (organizationId: string) => Promise<void>;
+    isOwner: boolean;
+    isAdmin: boolean;
+    shouldEnforceMfa: boolean;
+    canManageMembers: boolean;
+    canManagePlants: boolean;
+    canManageMachines: boolean;
+    canExecuteWorkOrders: boolean;
+    canViewOnly: boolean;
     signOut: () => Promise<void>;
+    switchOrganization: (orgId: string) => Promise<void>;
+    refresh: () => Promise<void>;
 }
 
-const ACTIVE_ORG_KEY = "machina_active_org_id";
+const AuthContext = createContext < AuthState | undefined > (undefined);
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+type ProfileRow = AuthState["profile"];
+type OrganizationRow = AuthState["organization"];
+type MembershipRow = AuthState["membership"];
 
-function shallowEqualMembership(a: AuthMembership | null, b: AuthMembership | null) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return (
-        a.id === b.id &&
-        a.user_id === b.user_id &&
-        a.organization_id === b.organization_id &&
-        a.role === b.role &&
-        a.is_active === b.is_active
-    );
-}
-
-function shallowEqualOrganization(a: AuthOrganization | null, b: AuthOrganization | null) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return (
-        a.id === b.id &&
-        a.name === b.name &&
-        a.type === b.type &&
-        a.manufacturer_org_id === b.manufacturer_org_id &&
-        a.slug === b.slug
-    );
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [mounted, setMounted] = useState(false);
+export function AuthProvider({ children }: { children: ReactNode }) {
+    const [user, setUser] = useState < User | null > (null);
+    const [session, setSession] = useState < Session | null > (null);
     const [loading, setLoading] = useState(true);
-    const [session, setSession] = useState<Session | null>(null);
-    const [user, setUser] = useState<User | null>(null);
-    const [organization, setOrganization] = useState<AuthOrganization | null>(null);
-    const [membership, setMembership] = useState<AuthMembership | null>(null);
-    const [memberships, setMemberships] = useState<AuthMembership[]>([]);
+    const [profile, setProfile] = useState < ProfileRow > (null);
+    const [organization, setOrganization] = useState < OrganizationRow > (null);
+    const [membership, setMembership] = useState < MembershipRow > (null);
+    const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+    const loadRequestIdRef = useRef(0);
 
-    const initializedRef = useRef(false);
-    const refreshInFlightRef = useRef<Promise<void> | null>(null);
-
-    const refreshUserContext = useCallback(async () => {
-        if (typeof window === "undefined") return;
-        if (refreshInFlightRef.current) {
-            return refreshInFlightRef.current;
-        }
-
-        refreshInFlightRef.current = (async () => {
-            try {
-                setLoading(true);
-
-                const {
-                    data: { session: currentSession },
-                    error: sessionError,
-                } = await supabase.auth.getSession();
-
-                if (sessionError) throw sessionError;
-
-                const currentUser = currentSession?.user ?? null;
-
-                setSession((prev) =>
-                    prev?.access_token === currentSession?.access_token ? prev : currentSession ?? null
-                );
-                setUser((prev) => (prev?.id === currentUser?.id ? prev : currentUser));
-
-                if (!currentUser) {
-                    setOrganization(null);
-                    setMembership(null);
-                    setMemberships([]);
-                    window.localStorage.removeItem(ACTIVE_ORG_KEY);
-                    return;
-                }
-
-                const { data: membershipRows, error: membershipError } = await supabase
-                    .from("organization_memberships")
-                    .select("id, user_id, organization_id, role, is_active")
-                    .eq("user_id", currentUser.id)
-                    .eq("is_active", true);
-
-                if (membershipError) throw membershipError;
-
-                const nextMemberships = (membershipRows ?? []) as AuthMembership[];
-                setMemberships(nextMemberships);
-
-                if (nextMemberships.length === 0) {
-                    setOrganization(null);
-                    setMembership(null);
-                    window.localStorage.removeItem(ACTIVE_ORG_KEY);
-                    return;
-                }
-
-                const storedOrgId = window.localStorage.getItem(ACTIVE_ORG_KEY);
-                const chosenMembership =
-                    nextMemberships.find((row) => row.organization_id === storedOrgId) ??
-                    nextMemberships[0];
-
-                if (!storedOrgId || storedOrgId !== chosenMembership.organization_id) {
-                    window.localStorage.setItem(ACTIVE_ORG_KEY, chosenMembership.organization_id);
-                }
-
-                const { data: orgRow, error: orgError } = await supabase
-                    .from("organizations")
-                    .select("id, name, type, manufacturer_org_id, slug")
-                    .eq("id", chosenMembership.organization_id)
-                    .maybeSingle();
-
-                if (orgError) throw orgError;
-
-                const nextOrganization = (orgRow as AuthOrganization | null) ?? null;
-
-                setMembership((prev) =>
-                    shallowEqualMembership(prev, chosenMembership) ? prev : chosenMembership
-                );
-
-                setOrganization((prev) =>
-                    shallowEqualOrganization(prev, nextOrganization) ? prev : nextOrganization
-                );
-            } catch (error) {
-                console.error("useAuth refreshUserContext error:", error);
-            } finally {
-                setLoading(false);
-                refreshInFlightRef.current = null;
-            }
-        })();
-
-        return refreshInFlightRef.current;
-    }, []);
-
-    const setActiveOrganization = useCallback(
-        async (organizationId: string) => {
-            if (typeof window !== "undefined") {
-                window.localStorage.setItem(ACTIVE_ORG_KEY, organizationId);
-            }
-            await refreshUserContext();
-        },
-        [refreshUserContext]
-    );
-
-    const signOut = useCallback(async () => {
-        await supabase.auth.signOut();
-        if (typeof window !== "undefined") {
-            window.localStorage.removeItem(ACTIVE_ORG_KEY);
-        }
-        setSession(null);
-        setUser(null);
+    const resetContext = useCallback(() => {
+        setProfile(null);
         setOrganization(null);
         setMembership(null);
-        setMemberships([]);
+        setIsPlatformAdmin(false);
+    }, []);
+
+    const loadAuthContext = useCallback(async (currentUser: User) => {
+        const requestId = ++loadRequestIdRef.current;
+
+        const [{ data: profileData, error: profileError }, { data: adminData, error: adminError }] = await Promise.all([
+            supabase
+                .from("profiles")
+                .select("id, first_name, last_name, display_name, email, avatar_url, language, default_organization_id")
+                .eq("id", currentUser.id)
+                .maybeSingle(),
+            supabase
+                .from("platform_admins")
+                .select("id")
+                .eq("user_id", currentUser.id)
+                .eq("is_active", true)
+                .maybeSingle(),
+        ]);
+
+        if (profileError) throw profileError;
+        if (adminError) throw adminError;
+        if (requestId !== loadRequestIdRef.current) return;
+
+        setProfile((profileData as ProfileRow) ?? null);
+        setIsPlatformAdmin(!!adminData);
+
+        let activeOrgId = profileData?.default_organization_id ?? null;
+
+        if (!activeOrgId) {
+            const { data: firstMembership, error: firstMembershipError } = await supabase
+                .from("organization_memberships")
+                .select("organization_id")
+                .eq("user_id", currentUser.id)
+                .eq("is_active", true)
+                .limit(1)
+                .maybeSingle();
+
+            if (firstMembershipError) throw firstMembershipError;
+            activeOrgId = firstMembership?.organization_id ?? null;
+        }
+
+        if (!activeOrgId) {
+            if (requestId !== loadRequestIdRef.current) return;
+            setOrganization(null);
+            setMembership(null);
+            return;
+        }
+
+        const [{ data: orgData, error: orgError }, { data: membershipData, error: membershipError }] = await Promise.all([
+            supabase
+                .from("organizations")
+                .select("id, name, slug, type, subscription_status")
+                .eq("id", activeOrgId)
+                .maybeSingle(),
+            supabase
+                .from("organization_memberships")
+                .select("id, role, is_active")
+                .eq("organization_id", activeOrgId)
+                .eq("user_id", currentUser.id)
+                .eq("is_active", true)
+                .maybeSingle(),
+        ]);
+
+        if (orgError) throw orgError;
+        if (membershipError) throw membershipError;
+        if (requestId !== loadRequestIdRef.current) return;
+
+        setOrganization((orgData as OrganizationRow) ?? null);
+        setMembership((membershipData as MembershipRow) ?? null);
     }, []);
 
     useEffect(() => {
-        setMounted(true);
-    }, []);
+        let mounted = true;
 
-    useEffect(() => {
-        if (!mounted) return;
-        if (initializedRef.current) return;
-        initializedRef.current = true;
+        const applySession = async (nextSession: Session | null) => {
+            if (!mounted) return;
 
-        void refreshUserContext();
+            setSession(nextSession);
+            setUser(nextSession?.user ?? null);
+
+            if (!nextSession?.user) {
+                resetContext();
+                if (mounted) setLoading(false);
+                return;
+            }
+
+            try {
+                await loadAuthContext(nextSession.user);
+            } catch (error) {
+                console.error("Error loading auth context:", error);
+                if (mounted) resetContext();
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+
+        supabase.auth.getSession().then(({ data }) => {
+            void applySession(data.session ?? null);
+        });
 
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-            setSession((prev) =>
-                prev?.access_token === nextSession?.access_token ? prev : nextSession ?? null
-            );
-            setUser((prev) => (prev?.id === nextSession?.user?.id ? prev : nextSession?.user ?? null));
-            void refreshUserContext();
+            void applySession(nextSession ?? null);
         });
 
-        const handleStorage = (e: StorageEvent) => {
-            if (e.key === ACTIVE_ORG_KEY) {
-                void refreshUserContext();
-            }
-        };
-
-        window.addEventListener("storage", handleStorage);
-
         return () => {
+            mounted = false;
             subscription.unsubscribe();
-            window.removeEventListener("storage", handleStorage);
         };
-    }, [mounted, refreshUserContext]);
+    }, [loadAuthContext, resetContext]);
 
-    const shouldEnforceMfa = useMemo(() => {
-        if (!user) return false;
-        const role = membership?.role ?? "";
-        return ["owner", "admin", "supervisor"].includes(role);
-    }, [user, membership?.role]);
+    const signOut = useCallback(async () => {
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        resetContext();
+    }, [resetContext]);
 
-    const value = useMemo<AuthContextValue>(
-        () => ({
-            mounted,
-            loading,
-            session,
-            user,
-            organization,
-            membership,
-            memberships,
-            shouldEnforceMfa,
-            isAuthenticated: !!user && !!session,
-            refreshUserContext,
-            setActiveOrganization,
-            signOut,
-        }),
-        [
-            mounted,
-            loading,
-            session,
-            user,
-            organization,
-            membership,
-            memberships,
-            shouldEnforceMfa,
-            refreshUserContext,
-            setActiveOrganization,
-            signOut,
-        ]
+    const switchOrganization = useCallback(
+        async (orgId: string) => {
+            if (!user) return;
+
+            const { error } = await supabase.from("profiles").update({ default_organization_id: orgId }).eq("id", user.id);
+            if (error) throw error;
+
+            await loadAuthContext(user);
+        },
+        [loadAuthContext, user]
     );
+
+    const refresh = useCallback(async () => {
+        if (!user) return;
+        await loadAuthContext(user);
+    }, [loadAuthContext, user]);
+
+    const role = (membership?.role as string | null) ?? null;
+    const isOwner = role === "owner";
+    const isAdmin = ["owner", "admin"].includes(role ?? "");
+    const shouldEnforceMfa = isPlatformAdmin || ["owner", "admin", "supervisor"].includes(role ?? "");
+    const canManageMembers = isAdmin || isPlatformAdmin;
+    const canManagePlants = isAdmin || isPlatformAdmin;
+    const canManageMachines = isAdmin || isPlatformAdmin;
+    const canExecuteWorkOrders =
+        ["owner", "admin", "supervisor", "technician"].includes(role ?? "") ||
+        (role ? hasMinimumRole(role as OrgRole, "technician") : false);
+    const canViewOnly = role === "viewer";
+
+    const value: AuthState = {
+        user,
+        session,
+        loading,
+        profile,
+        organization,
+        membership,
+        isPlatformAdmin,
+        isAuthenticated: !!user,
+        isOwner,
+        isAdmin,
+        shouldEnforceMfa,
+        canManageMembers,
+        canManagePlants,
+        canManageMachines,
+        canExecuteWorkOrders,
+        canViewOnly,
+        signOut,
+        switchOrganization,
+        refresh,
+    };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-    const ctx = useContext(AuthContext);
-    if (!ctx) {
-        throw new Error("useAuth must be used inside AuthProvider");
+export function useAuth(): AuthState {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error("useAuth must be used within an AuthProvider");
     }
-    return ctx;
+    return context;
 }
