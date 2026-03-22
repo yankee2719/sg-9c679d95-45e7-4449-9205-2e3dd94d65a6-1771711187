@@ -184,3 +184,4 @@ export function translateChecklistInputType(inputType: string | null | undefined
     const labels = inputTypeLabels[lang] ?? inputTypeLabels.it;
     return labels[inputType ?? ""] ?? (inputType || "—");
 }
+export { ChecklistTemplateEditor };
