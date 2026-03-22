@@ -1,4 +1,3 @@
-import { downloadCsv } from "@/lib/downloadCsv";
 import { useEffect, useMemo, useState } from "react";
 import {
     CheckCircle2,
@@ -13,6 +12,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { downloadCsv } from "@/lib/downloadCsv";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import EmptyState from "@/components/feedback/EmptyState";
@@ -274,12 +274,10 @@ export default function UsersIndexPage() {
                             </p>
                         </div>
 
-                        <a href="/api/export/users">
-                            <Button variant="outline">
-                                <Download className="mr-2 h-4 w-4" />
-                                Export CSV
-                            </Button>
-                        </a>
+                        <Button variant="outline" onClick={() => downloadCsv("/api/export/users", "utenti.csv")}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Export CSV
+                        </Button>
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
