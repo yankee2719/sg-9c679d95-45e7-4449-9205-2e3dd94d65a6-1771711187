@@ -14,7 +14,7 @@ const MFA_BYPASS_ROUTES = [
 
 export function MfaGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
-    const { loading: authLoading, user, shouldEnforceMfa } = useAuth();
+    const { mounted, loading: authLoading, user, shouldEnforceMfa } = useAuth();
 
     const [checking, setChecking] = useState(false);
     const [verified, setVerified] = useState(false);
@@ -30,6 +30,7 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
         const run = async () => {
+            if (!mounted) return;
             if (authLoading) return;
 
             if (!user) {
@@ -92,7 +93,15 @@ export function MfaGuard({ children }: { children: React.ReactNode }) {
             active = false;
             if (timeoutId) clearTimeout(timeoutId);
         };
-    }, [authLoading, user?.id, shouldEnforceMfa, shouldBypass, router]);
+    }, [mounted, authLoading, user?.id, shouldEnforceMfa, shouldBypass, router]);
+
+    if (!mounted) {
+        return (
+            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+                Caricamento...
+            </div>
+        );
+    }
 
     if (authLoading) {
         return (
