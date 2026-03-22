@@ -9,36 +9,37 @@ interface ThemeContextType {
 
 const ThemeContext = createContext < ThemeContextType | undefined > (undefined);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setTheme] = useState < Theme > ("dark");
+// ─── FIX HYDRATION: legge localStorage in modo sincrono nell'initializer di useState ───
+// Siccome _app.tsx ha il mounted guard (return null finché !mounted),
+// quando ThemeProvider viene montato siamo GIÀ sul client.
+// Quindi possiamo leggere localStorage direttamente nello useState initializer
+// invece di farlo in un useEffect asincrono che causa mismatch.
+function getInitialTheme(): Theme {
+    if (typeof window === "undefined") return "dark";
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark" || saved === "light") return saved;
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initial = prefersDark ? "dark" : "light";
+    localStorage.setItem("theme", initial);
+    return initial;
+}
 
+export function ThemeProvider({ children }: { children: ReactNode }) {
+    const [theme, setTheme] = useState < Theme > (getInitialTheme);
+
+    // Applica la classe dark/light al primo mount e ad ogni cambio
     useEffect(() => {
-        const savedTheme = localStorage.getItem("theme") as Theme | null;
-        let initialTheme: Theme;
-        if (savedTheme === "dark" || savedTheme === "light") {
-            initialTheme = savedTheme;
-        } else {
-            const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-            initialTheme = prefersDark ? "dark" : "light";
-            localStorage.setItem("theme", initialTheme);
-        }
-        setTheme(initialTheme);
-        if (initialTheme === "dark") {
+        if (theme === "dark") {
             document.documentElement.classList.add("dark");
         } else {
             document.documentElement.classList.remove("dark");
         }
-    }, []);
+    }, [theme]);
 
     const toggleTheme = () => {
         const newTheme = theme === "dark" ? "light" : "dark";
         setTheme(newTheme);
         localStorage.setItem("theme", newTheme);
-        if (newTheme === "dark") {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-        }
     };
 
     return (
