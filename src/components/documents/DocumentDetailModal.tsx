@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Download, FileText, Calendar, User, Tag, CheckCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { downloadAndSave } from '@/lib/documentApi';
 import { formatFileSize } from '@/lib/documentUtils';
 import { format } from 'date-fns';
