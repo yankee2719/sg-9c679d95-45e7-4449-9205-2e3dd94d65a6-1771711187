@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
     Activity,
@@ -54,6 +54,18 @@ interface RecentMachineRow {
     updated_at: string | null;
     photo_url?: string | null;
 }
+
+// ─── CACHE: evita di rifare 7 query se i dati hanno meno di 30 secondi ───
+interface DashboardCache {
+    kpis: DashboardKpis;
+    recentMachines: RecentMachineRow[];
+    recentActivity: RecentActivityRow[];
+    orgId: string;
+    orgType: OrgType;
+    timestamp: number;
+}
+
+const STALE_TIME = 30_000; // 30 secondi
 
 const copy = {
     it: {
@@ -127,9 +139,9 @@ const copy = {
         noMachinesDescription:
             "Ajoutez la première machine pour démarrer le passeport numérique opérationnel.",
         createMachine: "Créer une machine",
-        noActivityTitle: "Aucune activité pour l’instant",
+        noActivityTitle: "Aucune activité pour l'instant",
         noActivityDescription:
-            "L’activité récente apparaîtra ici lorsque les work orders, documents et checklists seront utilisés.",
+            "L'activité récente apparaîtra ici lorsque les work orders, documents et checklists seront utilisés.",
     },
     es: {
         seo: "Dashboard - MACHINA",
@@ -257,7 +269,7 @@ export default function DashboardPage() {
     } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState < DashboardKpis > ({
+    const [kpis, setKpis] = useState<DashboardKpis>({
         machineCount: 0,
         customerCount: 0,
         activeAssignments: 0,
@@ -266,8 +278,11 @@ export default function DashboardPage() {
         activeChecklists: 0,
         activeDocuments: 0,
     });
-    const [recentMachines, setRecentMachines] = useState < RecentMachineRow[] > ([]);
-    const [recentActivity, setRecentActivity] = useState < RecentActivityRow[] > ([]);
+    const [recentMachines, setRecentMachines] = useState<RecentMachineRow[]>([]);
+    const [recentActivity, setRecentActivity] = useState<RecentActivityRow[]>([]);
+
+    // ─── CACHE REF: sopravvive ai re-render senza trigger ───
+    const cacheRef = useRef<DashboardCache | null>(null);
 
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
@@ -286,6 +301,23 @@ export default function DashboardPage() {
 
             if (!orgId || !orgType) {
                 if (active) setLoading(false);
+                return;
+            }
+
+            // ─── CACHE CHECK: se i dati sono freschi (< 30s) e stessa org, usa la cache ───
+            const cached = cacheRef.current;
+            if (
+                cached &&
+                cached.orgId === orgId &&
+                cached.orgType === orgType &&
+                Date.now() - cached.timestamp < STALE_TIME
+            ) {
+                if (active) {
+                    setKpis(cached.kpis);
+                    setRecentMachines(cached.recentMachines);
+                    setRecentActivity(cached.recentActivity);
+                    setLoading(false);
+                }
                 return;
             }
 
@@ -341,6 +373,10 @@ export default function DashboardPage() {
                     .order("due_date", { ascending: true })
                     .limit(12);
 
+                let nextKpis: DashboardKpis;
+                let nextMachines: RecentMachineRow[];
+                let nextActivity: RecentActivityRow[];
+
                 if (orgType === "manufacturer") {
                     const [
                         machineRes,
@@ -387,7 +423,7 @@ export default function DashboardPage() {
 
                     if (!active) return;
 
-                    setKpis({
+                    nextKpis = {
                         machineCount: machineRes.count ?? 0,
                         customerCount: customerRes.count ?? 0,
                         activeAssignments: assignmentRes.count ?? 0,
@@ -398,10 +434,10 @@ export default function DashboardPage() {
                         overdueWorkOrders,
                         activeChecklists: checklistRes.count ?? 0,
                         activeDocuments: documentsRes.count ?? 0,
-                    });
+                    };
 
-                    setRecentMachines((machineRes.data ?? []) as RecentMachineRow[]);
-                    setRecentActivity((auditRes.data ?? []) as RecentActivityRow[]);
+                    nextMachines = (machineRes.data ?? []) as RecentMachineRow[];
+                    nextActivity = (auditRes.data ?? []) as RecentActivityRow[];
                 } else {
                     const [
                         ownMachinesRes,
@@ -450,7 +486,7 @@ export default function DashboardPage() {
                         assignedMachinesRows = assignedMachinesRes.data ?? [];
                     }
 
-                    const mergedMachinesMap = new Map < string, RecentMachineRow> ();
+                    const mergedMachinesMap = new Map<string, RecentMachineRow>();
                     for (const row of ownMachinesRes.data ?? []) {
                         mergedMachinesMap.set(row.id, row as RecentMachineRow);
                     }
@@ -480,7 +516,7 @@ export default function DashboardPage() {
 
                     if (!active) return;
 
-                    setKpis({
+                    nextKpis = {
                         machineCount: mergedMachines.length,
                         customerCount: 0,
                         activeAssignments: assignmentsRes.count ?? 0,
@@ -491,11 +527,25 @@ export default function DashboardPage() {
                         overdueWorkOrders,
                         activeChecklists: checklistRes.count ?? 0,
                         activeDocuments: documentsRes.count ?? 0,
-                    });
+                    };
 
-                    setRecentMachines(mergedMachines.slice(0, 6));
-                    setRecentActivity((auditRes.data ?? []) as RecentActivityRow[]);
+                    nextMachines = mergedMachines.slice(0, 6);
+                    nextActivity = (auditRes.data ?? []) as RecentActivityRow[];
                 }
+
+                // ─── SALVA IN CACHE + AGGIORNA STATO ───
+                setKpis(nextKpis);
+                setRecentMachines(nextMachines);
+                setRecentActivity(nextActivity);
+
+                cacheRef.current = {
+                    kpis: nextKpis,
+                    recentMachines: nextMachines,
+                    recentActivity: nextActivity,
+                    orgId,
+                    orgType,
+                    timestamp: Date.now(),
+                };
             } catch (error) {
                 console.error("Dashboard load error:", error);
             } finally {
@@ -510,7 +560,7 @@ export default function DashboardPage() {
         };
     }, [authLoading, orgId, orgType]);
 
-    const issues = useMemo < UrgentIssue[] > (() => {
+    const issues = useMemo<UrgentIssue[]>(() => {
         const result: UrgentIssue[] = [];
 
         if (kpis.overdueWorkOrders > 0) {
