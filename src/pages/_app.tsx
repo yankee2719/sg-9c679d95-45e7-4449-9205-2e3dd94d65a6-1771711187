@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import type { AppProps } from "next/app";
 import Head from "next/head";
 import "@/styles/globals.css";
@@ -10,6 +11,9 @@ import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { AuthProvider } from "@/hooks/useAuth";
 
 export default function App({ Component, pageProps }: AppProps) {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    if (!mounted) return null;
     return (
         <>
             <Head>
