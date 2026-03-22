@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { apiFetch } from "@/services/apiClient";
+import { downloadCsv } from "@/lib/downloadCsv";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
@@ -474,12 +475,10 @@ export default function AssignmentsIndexPage() {
                                     {text.newAssignment}
                                 </Button>
                             )}
-                            <a href="/api/export/assignments">
-                                <Button variant="outline">
-                                    <Download className="mr-2 h-4 w-4" />
-                                    {text.exportCsv}
-                                </Button>
-                            </a>
+                            <Button variant="outline" onClick={() => downloadCsv("/api/export/assignments", "assegnazioni.csv")}>
+                                <Download className="mr-2 h-4 w-4" />
+                                {text.exportCsv}
+                            </Button>
                         </div>
                     </div>
 
