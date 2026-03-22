@@ -65,8 +65,9 @@ interface DashboardCache {
     timestamp: number;
 }
 
-const STALE_TIME = 30_000; // 30 secondi
+const STALE_TIME = 30_000;
 
+// ─── i18n COMPLETO: UI + activity log + urgent issues ───
 const copy = {
     it: {
         seo: "Dashboard - MACHINA",
@@ -92,6 +93,44 @@ const copy = {
         noActivityTitle: "Ancora nessuna attività",
         noActivityDescription:
             "Le attività recenti compariranno qui quando inizierai a usare work orders, documenti e checklist.",
+        loadingDashboard: "Caricamento dashboard...",
+        updatedAt: "Aggiornata",
+        defaultMachineName: "Macchina",
+        activity_machine_create: "Macchina creata",
+        activity_machine_restore: "Macchina ripristinata",
+        activity_machine_soft_delete: "Macchina nel cestino",
+        activity_organization_create: "Cliente creato",
+        activity_organization_restore: "Cliente ripristinato",
+        activity_organization_soft_delete: "Cliente nel cestino",
+        activity_document_create: "Documento creato",
+        activity_document_restore: "Documento ripristinato",
+        activity_document_soft_delete: "Documento nel cestino",
+        activity_user_membership_create: "Utente aggiunto",
+        activity_user_membership_update: "Utente aggiornato",
+        urgentOverdueTitle: "work orders in ritardo",
+        urgentOverdueDesc:
+            "Ci sono ordini di lavoro oltre la scadenza. Questo è il primo punto da sistemare in demo e in uso reale.",
+        urgentOverdueCta: "Apri work orders",
+        urgentNoCustomersTitle: "Nessun cliente caricato",
+        urgentNoCustomersDesc:
+            "Se vuoi vendere MACHINA, senza clienti demo la piattaforma sembra ancora vuota.",
+        urgentNoCustomersCta: "Crea cliente",
+        urgentNoMachinesTitle: "Nessuna macchina presente",
+        urgentNoMachinesDesc:
+            "La scheda macchina è il cuore del prodotto. Va popolata subito con un dataset credibile.",
+        urgentNoMachinesCta: "Crea macchina",
+        urgentNoDocsTitle: "Archivio documentale vuoto",
+        urgentNoDocsDesc:
+            "Senza documenti la piattaforma perde subito credibilità in demo.",
+        urgentNoDocsCta: "Apri documenti",
+        urgentNoChecklistsTitle: "Nessun template checklist attivo",
+        urgentNoChecklistsDesc:
+            "Aggiungi almeno un template per mostrare operatività reale e controllo processi.",
+        urgentNoChecklistsCta: "Apri checklist",
+        urgentSecurityTitle: "Verifica il setup sicurezza degli utenti chiave",
+        urgentSecurityDesc:
+            "Per una demo forte, conviene mostrare MFA attiva almeno sugli account amministrativi.",
+        urgentSecurityCta: "Apri sicurezza",
     },
     en: {
         seo: "Dashboard - MACHINA",
@@ -117,6 +156,44 @@ const copy = {
         noActivityTitle: "No activity yet",
         noActivityDescription:
             "Recent activity will appear here when work orders, documents and checklists start moving.",
+        loadingDashboard: "Loading dashboard...",
+        updatedAt: "Updated",
+        defaultMachineName: "Machine",
+        activity_machine_create: "Machine created",
+        activity_machine_restore: "Machine restored",
+        activity_machine_soft_delete: "Machine trashed",
+        activity_organization_create: "Customer created",
+        activity_organization_restore: "Customer restored",
+        activity_organization_soft_delete: "Customer trashed",
+        activity_document_create: "Document created",
+        activity_document_restore: "Document restored",
+        activity_document_soft_delete: "Document trashed",
+        activity_user_membership_create: "User added",
+        activity_user_membership_update: "User updated",
+        urgentOverdueTitle: "overdue work orders",
+        urgentOverdueDesc:
+            "There are work orders past their due date. This should be the first thing to fix.",
+        urgentOverdueCta: "Open work orders",
+        urgentNoCustomersTitle: "No customers loaded",
+        urgentNoCustomersDesc:
+            "Without demo customers the platform looks empty.",
+        urgentNoCustomersCta: "Create customer",
+        urgentNoMachinesTitle: "No machines found",
+        urgentNoMachinesDesc:
+            "The machine card is the core of the product. It should be populated with credible data.",
+        urgentNoMachinesCta: "Create machine",
+        urgentNoDocsTitle: "Empty document archive",
+        urgentNoDocsDesc:
+            "Without documents the platform loses credibility in demos.",
+        urgentNoDocsCta: "Open documents",
+        urgentNoChecklistsTitle: "No active checklist templates",
+        urgentNoChecklistsDesc:
+            "Add at least one template to show real operational control.",
+        urgentNoChecklistsCta: "Open checklists",
+        urgentSecurityTitle: "Review security setup for key users",
+        urgentSecurityDesc:
+            "For a strong demo, MFA should be active on admin accounts.",
+        urgentSecurityCta: "Open security",
     },
     fr: {
         seo: "Tableau de bord - MACHINA",
@@ -142,6 +219,44 @@ const copy = {
         noActivityTitle: "Aucune activité pour l'instant",
         noActivityDescription:
             "L'activité récente apparaîtra ici lorsque les work orders, documents et checklists seront utilisés.",
+        loadingDashboard: "Chargement du tableau de bord...",
+        updatedAt: "Mise à jour",
+        defaultMachineName: "Machine",
+        activity_machine_create: "Machine créée",
+        activity_machine_restore: "Machine restaurée",
+        activity_machine_soft_delete: "Machine mise à la corbeille",
+        activity_organization_create: "Client créé",
+        activity_organization_restore: "Client restauré",
+        activity_organization_soft_delete: "Client mis à la corbeille",
+        activity_document_create: "Document créé",
+        activity_document_restore: "Document restauré",
+        activity_document_soft_delete: "Document mis à la corbeille",
+        activity_user_membership_create: "Utilisateur ajouté",
+        activity_user_membership_update: "Utilisateur mis à jour",
+        urgentOverdueTitle: "ordres de travail en retard",
+        urgentOverdueDesc:
+            "Il y a des ordres de travail au-delà de l'échéance.",
+        urgentOverdueCta: "Ouvrir les ordres",
+        urgentNoCustomersTitle: "Aucun client chargé",
+        urgentNoCustomersDesc:
+            "Sans clients démo, la plateforme semble encore vide.",
+        urgentNoCustomersCta: "Créer un client",
+        urgentNoMachinesTitle: "Aucune machine présente",
+        urgentNoMachinesDesc:
+            "La fiche machine est le cœur du produit.",
+        urgentNoMachinesCta: "Créer une machine",
+        urgentNoDocsTitle: "Archive documentaire vide",
+        urgentNoDocsDesc:
+            "Sans documents, la plateforme perd en crédibilité.",
+        urgentNoDocsCta: "Ouvrir les documents",
+        urgentNoChecklistsTitle: "Aucun modèle de checklist actif",
+        urgentNoChecklistsDesc:
+            "Ajoutez au moins un modèle pour montrer un contrôle opérationnel réel.",
+        urgentNoChecklistsCta: "Ouvrir les checklists",
+        urgentSecurityTitle: "Vérifiez la sécurité des utilisateurs clés",
+        urgentSecurityDesc:
+            "Pour une démo solide, le MFA doit être actif sur les comptes administrateurs.",
+        urgentSecurityCta: "Ouvrir la sécurité",
     },
     es: {
         seo: "Dashboard - MACHINA",
@@ -167,8 +282,48 @@ const copy = {
         noActivityTitle: "Todavía no hay actividad",
         noActivityDescription:
             "La actividad reciente aparecerá aquí cuando empieces a usar work orders, documentos y checklists.",
+        loadingDashboard: "Cargando dashboard...",
+        updatedAt: "Actualizada",
+        defaultMachineName: "Máquina",
+        activity_machine_create: "Máquina creada",
+        activity_machine_restore: "Máquina restaurada",
+        activity_machine_soft_delete: "Máquina en papelera",
+        activity_organization_create: "Cliente creado",
+        activity_organization_restore: "Cliente restaurado",
+        activity_organization_soft_delete: "Cliente en papelera",
+        activity_document_create: "Documento creado",
+        activity_document_restore: "Documento restaurado",
+        activity_document_soft_delete: "Documento en papelera",
+        activity_user_membership_create: "Usuario añadido",
+        activity_user_membership_update: "Usuario actualizado",
+        urgentOverdueTitle: "work orders atrasadas",
+        urgentOverdueDesc:
+            "Hay órdenes de trabajo fuera de plazo.",
+        urgentOverdueCta: "Abrir work orders",
+        urgentNoCustomersTitle: "Ningún cliente cargado",
+        urgentNoCustomersDesc:
+            "Sin clientes demo la plataforma parece vacía.",
+        urgentNoCustomersCta: "Crear cliente",
+        urgentNoMachinesTitle: "No hay máquinas",
+        urgentNoMachinesDesc:
+            "La ficha de máquina es el corazón del producto.",
+        urgentNoMachinesCta: "Crear máquina",
+        urgentNoDocsTitle: "Archivo documental vacío",
+        urgentNoDocsDesc:
+            "Sin documentos la plataforma pierde credibilidad.",
+        urgentNoDocsCta: "Abrir documentos",
+        urgentNoChecklistsTitle: "Ninguna plantilla checklist activa",
+        urgentNoChecklistsDesc:
+            "Añade al menos una plantilla para mostrar control operativo real.",
+        urgentNoChecklistsCta: "Abrir checklists",
+        urgentSecurityTitle: "Verifica la seguridad de los usuarios clave",
+        urgentSecurityDesc:
+            "Para una demo fuerte, el MFA debe estar activo en las cuentas de administrador.",
+        urgentSecurityCta: "Abrir seguridad",
     },
 } as const;
+
+type CopyLang = (typeof copy)[keyof typeof copy];
 
 function formatDate(value: string | null | undefined, locale: string) {
     if (!value) return "—";
@@ -198,24 +353,15 @@ function getLocale(language: string) {
     }
 }
 
-function activityLabel(row: RecentActivityRow) {
+// ─── FIX PUNTO 9: activityLabel usa le traduzioni invece di stringhe hardcoded ───
+function activityLabel(row: RecentActivityRow, text: CopyLang) {
     const entity = row.entity_type || "entity";
     const action = row.action || "update";
+    const key = `activity_${entity}_${action}` as keyof CopyLang;
 
-    if (entity === "machine" && action === "create") return "Macchina creata";
-    if (entity === "machine" && action === "restore") return "Macchina ripristinata";
-    if (entity === "machine" && action === "soft_delete") return "Macchina nel cestino";
-    if (entity === "organization" && action === "create") return "Cliente creato";
-    if (entity === "organization" && action === "restore") return "Cliente ripristinato";
-    if (entity === "organization" && action === "soft_delete")
-        return "Cliente nel cestino";
-    if (entity === "document" && action === "create") return "Documento creato";
-    if (entity === "document" && action === "restore") return "Documento ripristinato";
-    if (entity === "document" && action === "soft_delete")
-        return "Documento nel cestino";
-    if (entity === "user_membership" && action === "create") return "Utente aggiunto";
-    if (entity === "user_membership" && action === "update")
-        return "Utente aggiornato";
+    if (key in text) {
+        return text[key] as string;
+    }
 
     return `${entity} · ${action}`;
 }
@@ -269,7 +415,7 @@ export default function DashboardPage() {
     } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState<DashboardKpis>({
+    const [kpis, setKpis] = useState < DashboardKpis > ({
         machineCount: 0,
         customerCount: 0,
         activeAssignments: 0,
@@ -278,11 +424,10 @@ export default function DashboardPage() {
         activeChecklists: 0,
         activeDocuments: 0,
     });
-    const [recentMachines, setRecentMachines] = useState<RecentMachineRow[]>([]);
-    const [recentActivity, setRecentActivity] = useState<RecentActivityRow[]>([]);
+    const [recentMachines, setRecentMachines] = useState < RecentMachineRow[] > ([]);
+    const [recentActivity, setRecentActivity] = useState < RecentActivityRow[] > ([]);
 
-    // ─── CACHE REF: sopravvive ai re-render senza trigger ───
-    const cacheRef = useRef<DashboardCache | null>(null);
+    const cacheRef = useRef < DashboardCache | null > (null);
 
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
@@ -304,7 +449,7 @@ export default function DashboardPage() {
                 return;
             }
 
-            // ─── CACHE CHECK: se i dati sono freschi (< 30s) e stessa org, usa la cache ───
+            // ─── CACHE CHECK ───
             const cached = cacheRef.current;
             if (
                 cached &&
@@ -486,7 +631,7 @@ export default function DashboardPage() {
                         assignedMachinesRows = assignedMachinesRes.data ?? [];
                     }
 
-                    const mergedMachinesMap = new Map<string, RecentMachineRow>();
+                    const mergedMachinesMap = new Map < string, RecentMachineRow> ();
                     for (const row of ownMachinesRes.data ?? []) {
                         mergedMachinesMap.set(row.id, row as RecentMachineRow);
                     }
@@ -533,7 +678,6 @@ export default function DashboardPage() {
                     nextActivity = (auditRes.data ?? []) as RecentActivityRow[];
                 }
 
-                // ─── SALVA IN CACHE + AGGIORNA STATO ───
                 setKpis(nextKpis);
                 setRecentMachines(nextMachines);
                 setRecentActivity(nextActivity);
@@ -560,83 +704,77 @@ export default function DashboardPage() {
         };
     }, [authLoading, orgId, orgType]);
 
-    const issues = useMemo<UrgentIssue[]>(() => {
+    const issues = useMemo < UrgentIssue[] > (() => {
         const result: UrgentIssue[] = [];
 
         if (kpis.overdueWorkOrders > 0) {
             result.push({
                 id: "overdue-workorders",
-                title: `${kpis.overdueWorkOrders} work orders in ritardo`,
-                description:
-                    "Ci sono ordini di lavoro oltre la scadenza. Questo è il primo punto da sistemare in demo e in uso reale.",
+                title: `${kpis.overdueWorkOrders} ${text.urgentOverdueTitle}`,
+                description: text.urgentOverdueDesc,
                 href: "/work-orders",
                 tone: "high",
-                ctaLabel: "Apri work orders",
+                ctaLabel: text.urgentOverdueCta,
             });
         }
 
         if (orgType === "manufacturer" && kpis.customerCount === 0) {
             result.push({
                 id: "no-customers",
-                title: "Nessun cliente caricato",
-                description:
-                    "Se vuoi vendere MACHINA, senza clienti demo la piattaforma sembra ancora vuota.",
+                title: text.urgentNoCustomersTitle,
+                description: text.urgentNoCustomersDesc,
                 href: "/customers/new",
                 tone: "medium",
-                ctaLabel: "Crea cliente",
+                ctaLabel: text.urgentNoCustomersCta,
             });
         }
 
         if (kpis.machineCount === 0) {
             result.push({
                 id: "no-machines",
-                title: "Nessuna macchina presente",
-                description:
-                    "La scheda macchina è il cuore del prodotto. Va popolata subito con un dataset credibile.",
+                title: text.urgentNoMachinesTitle,
+                description: text.urgentNoMachinesDesc,
                 href: "/equipment/new",
                 tone: "high",
-                ctaLabel: "Crea macchina",
+                ctaLabel: text.urgentNoMachinesCta,
             });
         }
 
         if (kpis.activeDocuments === 0) {
             result.push({
                 id: "no-documents",
-                title: "Archivio documentale vuoto",
-                description:
-                    "Senza documenti la piattaforma perde subito credibilità in demo.",
+                title: text.urgentNoDocsTitle,
+                description: text.urgentNoDocsDesc,
                 href: "/documents",
                 tone: "info",
-                ctaLabel: "Apri documenti",
+                ctaLabel: text.urgentNoDocsCta,
             });
         }
 
         if (kpis.activeChecklists === 0) {
             result.push({
                 id: "no-checklists",
-                title: "Nessun template checklist attivo",
-                description:
-                    "Aggiungi almeno un template per mostrare operatività reale e controllo processi.",
+                title: text.urgentNoChecklistsTitle,
+                description: text.urgentNoChecklistsDesc,
                 href: "/checklists/templates",
                 tone: "info",
-                ctaLabel: "Apri checklist",
+                ctaLabel: text.urgentNoChecklistsCta,
             });
         }
 
         if (canManage && shouldEnforceMfa) {
             result.push({
                 id: "security-review",
-                title: "Verifica il setup sicurezza degli utenti chiave",
-                description:
-                    "Per una demo forte, conviene mostrare MFA attiva almeno sugli account amministrativi.",
+                title: text.urgentSecurityTitle,
+                description: text.urgentSecurityDesc,
                 href: "/settings/security",
                 tone: "info",
-                ctaLabel: "Apri sicurezza",
+                ctaLabel: text.urgentSecurityCta,
             });
         }
 
         return result.slice(0, 4);
-    }, [kpis, orgType, canManage, shouldEnforceMfa]);
+    }, [kpis, orgType, canManage, shouldEnforceMfa, text]);
 
     const dashboardSubtitle =
         orgType === "manufacturer"
@@ -651,7 +789,7 @@ export default function DashboardPage() {
                     <div className="mx-auto max-w-7xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                Caricamento dashboard...
+                                {text.loadingDashboard}
                             </CardContent>
                         </Card>
                     </div>
@@ -783,13 +921,13 @@ export default function DashboardPage() {
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <div className="truncate font-semibold text-foreground">
-                                                                {machine.name || "Macchina"}
+                                                                {machine.name || text.defaultMachineName}
                                                             </div>
                                                             <div className="text-sm text-muted-foreground">
                                                                 {machine.internal_code || "—"}
                                                             </div>
                                                             <div className="mt-2 text-xs text-muted-foreground">
-                                                                Aggiornata:{" "}
+                                                                {text.updatedAt}:{" "}
                                                                 {formatDate(
                                                                     machine.updated_at,
                                                                     locale
@@ -844,7 +982,7 @@ export default function DashboardPage() {
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-foreground">
-                                                            {activityLabel(row)}
+                                                            {activityLabel(row, text)}
                                                         </div>
                                                         <div className="mt-1 text-xs text-muted-foreground">
                                                             {row.entity_type || "entity"} ·{" "}
