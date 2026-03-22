@@ -49,6 +49,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.assignments": "Assegnazioni",
         "nav.activeOrganization": "Organizzazione attiva",
         "nav.settings": "Impostazioni",
+        "nav.security": "Sicurezza",
 
         "org.manufacturer": "Costruttore",
         "org.customer": "Utilizzatore finale",
@@ -405,6 +406,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.assignments": "Assignments",
         "nav.activeOrganization": "Active organization",
         "nav.settings": "Settings",
+        "nav.security": "Security",
 
         "org.manufacturer": "Manufacturer",
         "org.customer": "End user",
@@ -762,6 +764,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.assignments": "Affectations",
         "nav.activeOrganization": "Organisation active",
         "nav.settings": "Paramètres",
+        "nav.security": "Sécurité",
 
         "org.manufacturer": "Constructeur",
         "org.customer": "Utilisateur final",
@@ -1119,6 +1122,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.assignments": "Asignaciones",
         "nav.activeOrganization": "Organización activa",
         "nav.settings": "Configuración",
+        "nav.security": "Seguridad",
 
         "org.manufacturer": "Fabricante",
         "org.customer": "Usuario final",
