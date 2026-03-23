@@ -23,7 +23,6 @@ import UrgentIssuesPanel, {
 } from "@/components/dashboard/UrgentIssuesPanel";
 import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import EmptyState from "@/components/feedback/EmptyState";
-import DashboardCharts from "@/components/dashboard/DashboardCharts";
 
 type OrgType = "manufacturer" | "customer" | null;
 
@@ -90,8 +89,6 @@ const copy = {
         noMachinesTitle: "Nessuna macchina presente",
         noMachinesDescription:
             "Aggiungi la prima macchina per iniziare a costruire il digital passport operativo.",
-        chartOverview: "Panoramica",
-        chartDistribution: "Distribuzione operativa",
         createMachine: "Crea macchina",
         noActivityTitle: "Ancora nessuna attività",
         noActivityDescription:
@@ -155,8 +152,6 @@ const copy = {
         noMachinesTitle: "No machines found",
         noMachinesDescription:
             "Add your first machine to start building the operational digital passport.",
-        chartOverview: "Overview",
-        chartDistribution: "Operational distribution",
         createMachine: "Create machine",
         noActivityTitle: "No activity yet",
         noActivityDescription:
@@ -220,8 +215,6 @@ const copy = {
         noMachinesTitle: "Aucune machine présente",
         noMachinesDescription:
             "Ajoutez la première machine pour démarrer le passeport numérique opérationnel.",
-        chartOverview: "Aperçu",
-        chartDistribution: "Distribution opérationnelle",
         createMachine: "Créer une machine",
         noActivityTitle: "Aucune activité pour l'instant",
         noActivityDescription:
@@ -289,8 +282,6 @@ const copy = {
         noActivityTitle: "Todavía no hay actividad",
         noActivityDescription:
             "La actividad reciente aparecerá aquí cuando empieces a usar work orders, documentos y checklists.",
-        chartOverview: "Resumen",
-        chartDistribution: "Distribución operativa",
         loadingDashboard: "Cargando dashboard...",
         updatedAt: "Actualizada",
         defaultMachineName: "Máquina",
@@ -476,42 +467,26 @@ export default function DashboardPage() {
             }
 
             setLoading(true);
+            setLoading(true);
 
             try {
                 const nowIso = new Date().toISOString();
 
-                const machineBaseQuery = supabase
-                    .from("machines")
-                    .select(
-                        "id, name, internal_code, lifecycle_state, updated_at, photo_url",
-                        { count: "exact" }
-                    )
-                    .eq("is_archived", false)
-                    .or("is_deleted.is.null,is_deleted.eq.false")
-                    .order("updated_at", { ascending: false })
-                    .limit(6);
+                // ── Shared queries (independent per branch — no mutable builder reuse) ──
 
-                const assignmentsQuery = supabase
-                    .from("machine_assignments")
-                    .select(
-                        "machine_id, customer_org_id, manufacturer_org_id, is_active",
-                        { count: "exact" }
-                    )
-                    .eq("is_active", true);
-
-                const checklistQuery = supabase
+                const checklistRes = await supabase
                     .from("checklist_templates")
                     .select("id", { count: "exact", head: true })
                     .eq("organization_id", orgId)
                     .eq("is_active", true);
 
-                const documentsQuery = supabase
+                const documentsRes = await supabase
                     .from("documents")
                     .select("id", { count: "exact", head: true })
                     .eq("organization_id", orgId)
                     .eq("is_archived", false);
 
-                const auditQuery = supabase
+                const auditRes = await supabase
                     .from("audit_logs")
                     .select(
                         "id, entity_type, action, created_at, entity_id, machine_id, metadata"
@@ -520,101 +495,106 @@ export default function DashboardPage() {
                     .order("created_at", { ascending: false })
                     .limit(8);
 
-                const workOrdersQuery = supabase
+                const workOrdersRes = await supabase
                     .from("work_orders")
                     .select("id, title, status, due_date, machine_id", { count: "exact" })
                     .eq("organization_id", orgId)
                     .order("due_date", { ascending: true })
                     .limit(12);
 
+                if (checklistRes.error) throw checklistRes.error;
+                if (documentsRes.error) throw documentsRes.error;
+                if (auditRes.error) throw auditRes.error;
+                if (workOrdersRes.error) throw workOrdersRes.error;
+
+                const openWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => {
+                    const status = String(row.status ?? "").toLowerCase();
+                    return !["completed", "closed", "cancelled"].includes(status);
+                }).length;
+
+                const overdueWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => {
+                    const status = String(row.status ?? "").toLowerCase();
+                    const dueDate = row.due_date
+                        ? new Date(row.due_date).toISOString()
+                        : null;
+                    return (
+                        !!dueDate &&
+                        dueDate < nowIso &&
+                        !["completed", "closed", "cancelled"].includes(status)
+                    );
+                }).length;
+
                 let nextKpis: DashboardKpis;
                 let nextMachines: RecentMachineRow[];
-                let nextActivity: RecentActivityRow[];
+                let nextActivity: RecentActivityRow[] = (auditRes.data ?? []) as RecentActivityRow[];
 
                 if (orgType === "manufacturer") {
-                    const [
-                        machineRes,
-                        assignmentRes,
-                        checklistRes,
-                        documentsRes,
-                        auditRes,
-                        workOrdersRes,
-                        customerRes,
-                    ] = await Promise.all([
-                        machineBaseQuery.eq("organization_id", orgId),
-                        assignmentsQuery.eq("manufacturer_org_id", orgId),
-                        checklistQuery,
-                        documentsQuery,
-                        auditQuery,
-                        workOrdersQuery,
-                        supabase
-                            .from("organizations")
-                            .select("id", { count: "exact", head: true })
-                            .eq("manufacturer_org_id", orgId)
-                            .eq("type", "customer")
-                            .or("is_deleted.is.null,is_deleted.eq.false"),
-                    ]);
+                    // ── Manufacturer: own machines + customer count via assignments ──
+                    const machineRes = await supabase
+                        .from("machines")
+                        .select(
+                            "id, name, internal_code, lifecycle_state, updated_at, photo_url",
+                            { count: "exact" }
+                        )
+                        .eq("organization_id", orgId)
+                        .eq("is_archived", false)
+                        .or("is_deleted.is.null,is_deleted.eq.false")
+                        .order("updated_at", { ascending: false })
+                        .limit(6);
 
                     if (machineRes.error) throw machineRes.error;
-                    if (assignmentRes.error) throw assignmentRes.error;
-                    if (checklistRes.error) throw checklistRes.error;
-                    if (documentsRes.error) throw documentsRes.error;
-                    if (auditRes.error) throw auditRes.error;
-                    if (workOrdersRes.error) throw workOrdersRes.error;
-                    if (customerRes.error) throw customerRes.error;
 
-                    const overdueWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => {
-                        const status = String(row.status ?? "").toLowerCase();
-                        const dueDate = row.due_date
-                            ? new Date(row.due_date).toISOString()
-                            : null;
-                        return (
-                            !!dueDate &&
-                            dueDate < nowIso &&
-                            !["completed", "closed", "cancelled"].includes(status)
-                        );
-                    }).length;
+                    const assignmentRes = await supabase
+                        .from("machine_assignments")
+                        .select("machine_id, customer_org_id, manufacturer_org_id, is_active")
+                        .eq("manufacturer_org_id", orgId)
+                        .eq("is_active", true);
+
+                    if (assignmentRes.error) throw assignmentRes.error;
+
+                    // Count distinct customers from assignments
+                    const distinctCustomerIds = new Set(
+                        (assignmentRes.data ?? [])
+                            .map((row: any) => row.customer_org_id)
+                            .filter(Boolean)
+                    );
 
                     if (!active) return;
 
                     nextKpis = {
                         machineCount: machineRes.count ?? 0,
-                        customerCount: customerRes.count ?? 0,
-                        activeAssignments: assignmentRes.count ?? 0,
-                        openWorkOrders: (workOrdersRes.data ?? []).filter((row: any) => {
-                            const status = String(row.status ?? "").toLowerCase();
-                            return !["completed", "closed", "cancelled"].includes(status);
-                        }).length,
+                        customerCount: distinctCustomerIds.size,
+                        activeAssignments: (assignmentRes.data ?? []).length,
+                        openWorkOrders,
                         overdueWorkOrders,
                         activeChecklists: checklistRes.count ?? 0,
                         activeDocuments: documentsRes.count ?? 0,
                     };
 
                     nextMachines = (machineRes.data ?? []) as RecentMachineRow[];
-                    nextActivity = (auditRes.data ?? []) as RecentActivityRow[];
                 } else {
-                    const [
-                        ownMachinesRes,
-                        assignmentsRes,
-                        checklistRes,
-                        documentsRes,
-                        auditRes,
-                        workOrdersRes,
-                    ] = await Promise.all([
-                        machineBaseQuery.eq("organization_id", orgId),
-                        assignmentsQuery.eq("customer_org_id", orgId),
-                        checklistQuery,
-                        documentsQuery,
-                        auditQuery,
-                        workOrdersQuery,
-                    ]);
+                    // ── Customer: own machines + assigned machines ──
+                    const ownMachinesRes = await supabase
+                        .from("machines")
+                        .select(
+                            "id, name, internal_code, lifecycle_state, updated_at, photo_url",
+                            { count: "exact" }
+                        )
+                        .eq("organization_id", orgId)
+                        .eq("is_archived", false)
+                        .or("is_deleted.is.null,is_deleted.eq.false")
+                        .order("updated_at", { ascending: false })
+                        .limit(6);
 
                     if (ownMachinesRes.error) throw ownMachinesRes.error;
+
+                    const assignmentsRes = await supabase
+                        .from("machine_assignments")
+                        .select("machine_id, customer_org_id, manufacturer_org_id, is_active", { count: "exact" })
+                        .eq("customer_org_id", orgId)
+                        .eq("is_active", true);
+
                     if (assignmentsRes.error) throw assignmentsRes.error;
-                    if (checklistRes.error) throw checklistRes.error;
-                    if (documentsRes.error) throw documentsRes.error;
-                    if (auditRes.error) throw auditRes.error;
-                    if (workOrdersRes.error) throw workOrdersRes.error;
 
                     const assignedMachineIds = Array.from(
                         new Set(
@@ -656,35 +636,19 @@ export default function DashboardPage() {
                         }
                     );
 
-                    const overdueWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => {
-                        const status = String(row.status ?? "").toLowerCase();
-                        const dueDate = row.due_date
-                            ? new Date(row.due_date).toISOString()
-                            : null;
-                        return (
-                            !!dueDate &&
-                            dueDate < nowIso &&
-                            !["completed", "closed", "cancelled"].includes(status)
-                        );
-                    }).length;
-
                     if (!active) return;
 
                     nextKpis = {
                         machineCount: mergedMachines.length,
                         customerCount: 0,
                         activeAssignments: assignmentsRes.count ?? 0,
-                        openWorkOrders: (workOrdersRes.data ?? []).filter((row: any) => {
-                            const status = String(row.status ?? "").toLowerCase();
-                            return !["completed", "closed", "cancelled"].includes(status);
-                        }).length,
+                        openWorkOrders,
                         overdueWorkOrders,
                         activeChecklists: checklistRes.count ?? 0,
                         activeDocuments: documentsRes.count ?? 0,
                     };
 
                     nextMachines = mergedMachines.slice(0, 6);
-                    nextActivity = (auditRes.data ?? []) as RecentActivityRow[];
                 }
 
                 setKpis(nextKpis);
@@ -712,311 +676,302 @@ export default function DashboardPage() {
             active = false;
         };
     }, [authLoading, orgId, orgType]);
-
-    const issues = useMemo < UrgentIssue[] > (() => {
-        const result: UrgentIssue[] = [];
-
-        if (kpis.overdueWorkOrders > 0) {
-            result.push({
-                id: "overdue-workorders",
-                title: `${kpis.overdueWorkOrders} ${text.urgentOverdueTitle}`,
-                description: text.urgentOverdueDesc,
-                href: "/work-orders",
-                tone: "high",
-                ctaLabel: text.urgentOverdueCta,
-            });
-        }
-
-        if (orgType === "manufacturer" && kpis.customerCount === 0) {
-            result.push({
-                id: "no-customers",
-                title: text.urgentNoCustomersTitle,
-                description: text.urgentNoCustomersDesc,
-                href: "/customers/new",
-                tone: "medium",
-                ctaLabel: text.urgentNoCustomersCta,
-            });
-        }
-
-        if (kpis.machineCount === 0) {
-            result.push({
-                id: "no-machines",
-                title: text.urgentNoMachinesTitle,
-                description: text.urgentNoMachinesDesc,
-                href: "/equipment/new",
-                tone: "high",
-                ctaLabel: text.urgentNoMachinesCta,
-            });
-        }
-
-        if (kpis.activeDocuments === 0) {
-            result.push({
-                id: "no-documents",
-                title: text.urgentNoDocsTitle,
-                description: text.urgentNoDocsDesc,
-                href: "/documents",
-                tone: "info",
-                ctaLabel: text.urgentNoDocsCta,
-            });
-        }
-
-        if (kpis.activeChecklists === 0) {
-            result.push({
-                id: "no-checklists",
-                title: text.urgentNoChecklistsTitle,
-                description: text.urgentNoChecklistsDesc,
-                href: "/checklists/templates",
-                tone: "info",
-                ctaLabel: text.urgentNoChecklistsCta,
-            });
-        }
-
-        if (canManage && shouldEnforceMfa) {
-            result.push({
-                id: "security-review",
-                title: text.urgentSecurityTitle,
-                description: text.urgentSecurityDesc,
-                href: "/settings/security",
-                tone: "info",
-                ctaLabel: text.urgentSecurityCta,
-            });
-        }
-
-        return result.slice(0, 4);
-    }, [kpis, orgType, canManage, shouldEnforceMfa, text]);
-
-    const dashboardSubtitle =
-        orgType === "manufacturer"
-            ? text.subtitleManufacturer
-            : text.subtitleCustomer;
-
-    if (authLoading || loading) {
-        return (
-            <OrgContextGuard>
-                <MainLayout userRole={userRole}>
-                    <SEO title={text.seo} />
-                    <div className="mx-auto max-w-7xl px-4 py-8">
-                        <Card className="rounded-2xl">
-                            <CardContent className="py-10 text-center text-muted-foreground">
-                                {text.loadingDashboard}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </MainLayout>
-            </OrgContextGuard>
-        );
+    if (kpis.overdueWorkOrders > 0) {
+        result.push({
+            id: "overdue-workorders",
+            title: `${kpis.overdueWorkOrders} ${text.urgentOverdueTitle}`,
+            description: text.urgentOverdueDesc,
+            href: "/work-orders",
+            tone: "high",
+            ctaLabel: text.urgentOverdueCta,
+        });
     }
 
+    if (orgType === "manufacturer" && kpis.customerCount === 0) {
+        result.push({
+            id: "no-customers",
+            title: text.urgentNoCustomersTitle,
+            description: text.urgentNoCustomersDesc,
+            href: "/customers/new",
+            tone: "medium",
+            ctaLabel: text.urgentNoCustomersCta,
+        });
+    }
+
+    if (kpis.machineCount === 0) {
+        result.push({
+            id: "no-machines",
+            title: text.urgentNoMachinesTitle,
+            description: text.urgentNoMachinesDesc,
+            href: "/equipment/new",
+            tone: "high",
+            ctaLabel: text.urgentNoMachinesCta,
+        });
+    }
+
+    if (kpis.activeDocuments === 0) {
+        result.push({
+            id: "no-documents",
+            title: text.urgentNoDocsTitle,
+            description: text.urgentNoDocsDesc,
+            href: "/documents",
+            tone: "info",
+            ctaLabel: text.urgentNoDocsCta,
+        });
+    }
+
+    if (kpis.activeChecklists === 0) {
+        result.push({
+            id: "no-checklists",
+            title: text.urgentNoChecklistsTitle,
+            description: text.urgentNoChecklistsDesc,
+            href: "/checklists/templates",
+            tone: "info",
+            ctaLabel: text.urgentNoChecklistsCta,
+        });
+    }
+
+    if (canManage && shouldEnforceMfa) {
+        result.push({
+            id: "security-review",
+            title: text.urgentSecurityTitle,
+            description: text.urgentSecurityDesc,
+            href: "/settings/security",
+            tone: "info",
+            ctaLabel: text.urgentSecurityCta,
+        });
+    }
+
+    return result.slice(0, 4);
+}, [kpis, orgType, canManage, shouldEnforceMfa, text]);
+
+const dashboardSubtitle =
+    orgType === "manufacturer"
+        ? text.subtitleManufacturer
+        : text.subtitleCustomer;
+
+if (authLoading || loading) {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
                 <SEO title={text.seo} />
-
-                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
-                    <div className="space-y-2">
-                        <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                            Dashboard
-                        </h1>
-                        <p className="text-base text-muted-foreground">
-                            {dashboardSubtitle}
-                        </p>
-                    </div>
-
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard
-                            icon={<Factory className="h-5 w-5" />}
-                            title={text.machineCount}
-                            value={kpis.machineCount}
-                            tone="violet"
-                        />
-
-                        {orgType === "manufacturer" ? (
-                            <KpiCard
-                                icon={<Building2 className="h-5 w-5" />}
-                                title={text.customerCount}
-                                value={kpis.customerCount}
-                                tone="blue"
-                            />
-                        ) : (
-                            <KpiCard
-                                icon={<PackageCheck className="h-5 w-5" />}
-                                title={text.activeAssignments}
-                                value={kpis.activeAssignments}
-                                tone="blue"
-                            />
-                        )}
-
-                        <KpiCard
-                            icon={<ClipboardList className="h-5 w-5" />}
-                            title={text.openWorkOrders}
-                            value={kpis.openWorkOrders}
-                            tone="emerald"
-                        />
-
-                        <KpiCard
-                            icon={<Wrench className="h-5 w-5" />}
-                            title={text.overdueWorkOrders}
-                            value={kpis.overdueWorkOrders}
-                            tone={kpis.overdueWorkOrders > 0 ? "amber" : "slate"}
-                        />
-                    </div>
-
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                        <KpiCard
-                            icon={<PackageCheck className="h-5 w-5" />}
-                            title={text.activeChecklists}
-                            value={kpis.activeChecklists}
-                            tone="blue"
-                        />
-
-                        <KpiCard
-                            icon={<FileText className="h-5 w-5" />}
-                            title={text.activeDocuments}
-                            value={kpis.activeDocuments}
-                            tone="rose"
-                        />
-
-                        <KpiCard
-                            icon={<Activity className="h-5 w-5" />}
-                            title={text.activeAssignments}
-                            value={kpis.activeAssignments}
-                            tone="orange"
-                        />
-                    </div>
-                    <DashboardCharts
-                        kpis={kpis}
-                        orgType={orgType}
-                        text={text}
-                    />
-
-                    <QuickActionsPanel
-                        orgType={orgType}
-                        canManage={canManage}
-                        canOperate={canOperate}
-                    />
-
-                    <QuickExportPanel orgType={orgType} />
-
-                    <UrgentIssuesPanel issues={issues} />
-
-                    <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                        <Card className="rounded-2xl">
-                            <CardContent className="p-6">
-                                <div className="mb-5 flex items-center justify-between">
-                                    <div className="text-xl font-semibold text-foreground">
-                                        {text.recentMachines}
-                                    </div>
-
-                                    <Link
-                                        href="/equipment"
-                                        className="text-sm font-medium text-orange-500 hover:underline"
-                                    >
-                                        {text.openEquipment}
-                                    </Link>
-                                </div>
-
-                                {recentMachines.length === 0 ? (
-                                    <EmptyState
-                                        title={text.noMachinesTitle}
-                                        description={text.noMachinesDescription}
-                                        icon={<Factory className="h-10 w-10" />}
-                                        actionLabel={text.createMachine}
-                                        actionHref="/equipment/new"
-                                    />
-                                ) : (
-                                    <div className="space-y-3">
-                                        {recentMachines.map((machine) => (
-                                            <Link
-                                                key={machine.id}
-                                                href={`/equipment/${machine.id}`}
-                                                className="block"
-                                            >
-                                                <div className="rounded-2xl border border-border p-4 transition hover:bg-muted/40">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <div className="truncate font-semibold text-foreground">
-                                                                {machine.name || text.defaultMachineName}
-                                                            </div>
-                                                            <div className="text-sm text-muted-foreground">
-                                                                {machine.internal_code || "—"}
-                                                            </div>
-                                                            <div className="mt-2 text-xs text-muted-foreground">
-                                                                {text.updatedAt}:{" "}
-                                                                {formatDate(
-                                                                    machine.updated_at,
-                                                                    locale
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {machine.lifecycle_state && (
-                                                            <Badge variant="outline">
-                                                                {machine.lifecycle_state}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </Link>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <Card className="rounded-2xl">
-                            <CardContent className="p-6">
-                                <div className="mb-5 flex items-center justify-between">
-                                    <div className="text-xl font-semibold text-foreground">
-                                        {text.recentActivity}
-                                    </div>
-
-                                    {orgType === "manufacturer" ? (
-                                        <Link
-                                            href="/customers"
-                                            className="text-sm font-medium text-orange-500 hover:underline"
-                                        >
-                                            {text.openCustomers}
-                                        </Link>
-                                    ) : null}
-                                </div>
-
-                                {recentActivity.length === 0 ? (
-                                    <EmptyState
-                                        title={text.noActivityTitle}
-                                        description={text.noActivityDescription}
-                                        icon={<Activity className="h-10 w-10" />}
-                                    />
-                                ) : (
-                                    <div className="space-y-3">
-                                        {recentActivity.map((row) => (
-                                            <div
-                                                key={row.id}
-                                                className="rounded-2xl border border-border p-4"
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="min-w-0">
-                                                        <div className="font-semibold text-foreground">
-                                                            {activityLabel(row, text)}
-                                                        </div>
-                                                        <div className="mt-1 text-xs text-muted-foreground">
-                                                            {row.entity_type || "entity"} ·{" "}
-                                                            {row.action || "update"}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="shrink-0 text-xs text-muted-foreground">
-                                                        {formatDate(row.created_at, locale)}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
+                <div className="mx-auto max-w-7xl px-4 py-8">
+                    <Card className="rounded-2xl">
+                        <CardContent className="py-10 text-center text-muted-foreground">
+                            {text.loadingDashboard}
+                        </CardContent>
+                    </Card>
                 </div>
             </MainLayout>
         </OrgContextGuard>
     );
+}
+
+return (
+    <OrgContextGuard>
+        <MainLayout userRole={userRole}>
+            <SEO title={text.seo} />
+
+            <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+                <div className="space-y-2">
+                    <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                        Dashboard
+                    </h1>
+                    <p className="text-base text-muted-foreground">
+                        {dashboardSubtitle}
+                    </p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                    <KpiCard
+                        icon={<Factory className="h-5 w-5" />}
+                        title={text.machineCount}
+                        value={kpis.machineCount}
+                        tone="violet"
+                    />
+
+                    {orgType === "manufacturer" ? (
+                        <KpiCard
+                            icon={<Building2 className="h-5 w-5" />}
+                            title={text.customerCount}
+                            value={kpis.customerCount}
+                            tone="blue"
+                        />
+                    ) : (
+                        <KpiCard
+                            icon={<PackageCheck className="h-5 w-5" />}
+                            title={text.activeAssignments}
+                            value={kpis.activeAssignments}
+                            tone="blue"
+                        />
+                    )}
+
+                    <KpiCard
+                        icon={<ClipboardList className="h-5 w-5" />}
+                        title={text.openWorkOrders}
+                        value={kpis.openWorkOrders}
+                        tone="emerald"
+                    />
+
+                    <KpiCard
+                        icon={<Wrench className="h-5 w-5" />}
+                        title={text.overdueWorkOrders}
+                        value={kpis.overdueWorkOrders}
+                        tone={kpis.overdueWorkOrders > 0 ? "amber" : "slate"}
+                    />
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    <KpiCard
+                        icon={<PackageCheck className="h-5 w-5" />}
+                        title={text.activeChecklists}
+                        value={kpis.activeChecklists}
+                        tone="blue"
+                    />
+
+                    <KpiCard
+                        icon={<FileText className="h-5 w-5" />}
+                        title={text.activeDocuments}
+                        value={kpis.activeDocuments}
+                        tone="rose"
+                    />
+
+                    <KpiCard
+                        icon={<Activity className="h-5 w-5" />}
+                        title={text.activeAssignments}
+                        value={kpis.activeAssignments}
+                        tone="orange"
+                    />
+                </div>
+
+                <QuickActionsPanel
+                    orgType={orgType}
+                    canManage={canManage}
+                    canOperate={canOperate}
+                />
+
+                <QuickExportPanel orgType={orgType} />
+
+                <UrgentIssuesPanel issues={issues} />
+
+                <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                    <Card className="rounded-2xl">
+                        <CardContent className="p-6">
+                            <div className="mb-5 flex items-center justify-between">
+                                <div className="text-xl font-semibold text-foreground">
+                                    {text.recentMachines}
+                                </div>
+
+                                <Link
+                                    href="/equipment"
+                                    className="text-sm font-medium text-orange-500 hover:underline"
+                                >
+                                    {text.openEquipment}
+                                </Link>
+                            </div>
+
+                            {recentMachines.length === 0 ? (
+                                <EmptyState
+                                    title={text.noMachinesTitle}
+                                    description={text.noMachinesDescription}
+                                    icon={<Factory className="h-10 w-10" />}
+                                    actionLabel={text.createMachine}
+                                    actionHref="/equipment/new"
+                                />
+                            ) : (
+                                <div className="space-y-3">
+                                    {recentMachines.map((machine) => (
+                                        <Link
+                                            key={machine.id}
+                                            href={`/equipment/${machine.id}`}
+                                            className="block"
+                                        >
+                                            <div className="rounded-2xl border border-border p-4 transition hover:bg-muted/40">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="truncate font-semibold text-foreground">
+                                                            {machine.name || text.defaultMachineName}
+                                                        </div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {machine.internal_code || "—"}
+                                                        </div>
+                                                        <div className="mt-2 text-xs text-muted-foreground">
+                                                            {text.updatedAt}:{" "}
+                                                            {formatDate(
+                                                                machine.updated_at,
+                                                                locale
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {machine.lifecycle_state && (
+                                                        <Badge variant="outline">
+                                                            {machine.lifecycle_state}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl">
+                        <CardContent className="p-6">
+                            <div className="mb-5 flex items-center justify-between">
+                                <div className="text-xl font-semibold text-foreground">
+                                    {text.recentActivity}
+                                </div>
+
+                                {orgType === "manufacturer" ? (
+                                    <Link
+                                        href="/customers"
+                                        className="text-sm font-medium text-orange-500 hover:underline"
+                                    >
+                                        {text.openCustomers}
+                                    </Link>
+                                ) : null}
+                            </div>
+
+                            {recentActivity.length === 0 ? (
+                                <EmptyState
+                                    title={text.noActivityTitle}
+                                    description={text.noActivityDescription}
+                                    icon={<Activity className="h-10 w-10" />}
+                                />
+                            ) : (
+                                <div className="space-y-3">
+                                    {recentActivity.map((row) => (
+                                        <div
+                                            key={row.id}
+                                            className="rounded-2xl border border-border p-4"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-foreground">
+                                                        {activityLabel(row, text)}
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-muted-foreground">
+                                                        {row.entity_type || "entity"} ·{" "}
+                                                        {row.action || "update"}
+                                                    </div>
+                                                </div>
+
+                                                <div className="shrink-0 text-xs text-muted-foreground">
+                                                    {formatDate(row.created_at, locale)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </MainLayout>
+    </OrgContextGuard>
+);
 }
