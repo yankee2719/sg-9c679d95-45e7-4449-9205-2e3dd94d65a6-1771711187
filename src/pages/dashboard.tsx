@@ -90,6 +90,8 @@ const copy = {
         noMachinesTitle: "Nessuna macchina presente",
         noMachinesDescription:
             "Aggiungi la prima macchina per iniziare a costruire il digital passport operativo.",
+        chartOverview: "Panoramica",
+        chartDistribution: "Distribuzione operativa",
         createMachine: "Crea macchina",
         noActivityTitle: "Ancora nessuna attività",
         noActivityDescription:
@@ -153,6 +155,8 @@ const copy = {
         noMachinesTitle: "No machines found",
         noMachinesDescription:
             "Add your first machine to start building the operational digital passport.",
+        chartOverview: "Overview",
+        chartDistribution: "Operational distribution",
         createMachine: "Create machine",
         noActivityTitle: "No activity yet",
         noActivityDescription:
@@ -216,6 +220,8 @@ const copy = {
         noMachinesTitle: "Aucune machine présente",
         noMachinesDescription:
             "Ajoutez la première machine pour démarrer le passeport numérique opérationnel.",
+        chartOverview: "Aperçu",
+        chartDistribution: "Distribution opérationnelle",
         createMachine: "Créer une machine",
         noActivityTitle: "Aucune activité pour l'instant",
         noActivityDescription:
@@ -283,6 +289,8 @@ const copy = {
         noActivityTitle: "Todavía no hay actividad",
         noActivityDescription:
             "La actividad reciente aparecerá aquí cuando empieces a usar work orders, documentos y checklists.",
+        chartOverview: "Resumen",
+        chartDistribution: "Distribución operativa",
         loadingDashboard: "Cargando dashboard...",
         updatedAt: "Actualizada",
         defaultMachineName: "Máquina",
