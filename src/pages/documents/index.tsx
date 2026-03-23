@@ -15,6 +15,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { downloadCsv } from "@/lib/downloadCsv";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,10 +46,11 @@ interface MachineLabelRow {
     internal_code: string | null;
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
-        return new Date(value).toLocaleString("it-IT", {
+        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        return new Date(value).toLocaleString(locale, {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
@@ -74,25 +76,17 @@ function formatBytes(value: number | null | undefined) {
     return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function categoryLabel(value: string | null | undefined) {
-    if (!value) return "Altro";
+function useCategoryLabel() {
+    const { t } = useLanguage();
 
-    const map: Record<string, string> = {
-        technical_manual: "Manuale tecnico",
-        risk_assessment: "Valutazione rischi",
-        ce_declaration: "Dichiarazione CE",
-        electrical_schema: "Schema elettrico",
-        maintenance_manual: "Manuale manutenzione",
-        spare_parts_catalog: "Catalogo ricambi",
-        training_material: "Materiale formazione",
-        inspection_report: "Rapporto ispezione",
-        certificate: "Certificato",
-        photo: "Foto",
-        video: "Video",
-        other: "Altro",
+    return (value: string | null | undefined) => {
+        if (!value) return t("documents.catOther") || "Altro";
+
+        const key = `documents.cat_${value}`;
+        const translated = t(key);
+        // If key not found, t() returns the key itself — fallback to value
+        return translated !== key ? translated : value;
     };
-
-    return map[value] ?? value;
 }
 
 function KpiCard({
@@ -119,6 +113,8 @@ function KpiCard({
 
 export default function DocumentsIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
+    const { t, language } = useLanguage();
+    const categoryLabel = useCategoryLabel();
 
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState < DocumentRow[] > ([]);
@@ -320,11 +316,11 @@ export default function DocumentsIndexPage() {
         return (
             <OrgContextGuard>
                 <MainLayout userRole={userRole}>
-                    <SEO title="Documenti - MACHINA" />
+                    <SEO title={`${t("documents.title")} - MACHINA`} />
                     <div className="mx-auto max-w-7xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                Caricamento archivio documentale...
+                                {t("documents.loading")}
                             </CardContent>
                         </Card>
                     </div>
@@ -336,16 +332,16 @@ export default function DocumentsIndexPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Documenti - MACHINA" />
+                <SEO title={`${t("documents.title")} - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
                             <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                Archivio documentale
+                                {t("documents.title")}
                             </h1>
                             <p className="text-base text-muted-foreground">
-                                Vista globale dei documenti tecnici, normativi e operativi nel contesto attivo.
+                                {t("documents.subtitle")}
                             </p>
                         </div>
 
@@ -360,22 +356,22 @@ export default function DocumentsIndexPage() {
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                         <KpiCard
                             icon={<FileText className="h-5 w-5" />}
-                            title="Documenti attivi"
+                            title={t("documents.kpiActive") || "Documenti attivi"}
                             value={stats.total}
                         />
                         <KpiCard
                             icon={<Factory className="h-5 w-5" />}
-                            title="Collegati a macchina"
+                            title={t("documents.kpiLinked") || "Collegati a macchina"}
                             value={stats.linkedToMachines}
                         />
                         <KpiCard
                             icon={<Languages className="h-5 w-5" />}
-                            title="Lingue presenti"
+                            title={t("documents.kpiLanguages") || "Lingue presenti"}
                             value={stats.multilingual}
                         />
                         <KpiCard
                             icon={<ShieldCheck className="h-5 w-5" />}
-                            title="Aggiornati ultimi 30 gg"
+                            title={t("documents.kpiRecent") || "Aggiornati ultimi 30 gg"}
                             value={stats.updatedLast30d}
                         />
                     </div>
@@ -384,7 +380,7 @@ export default function DocumentsIndexPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Filter className="h-5 w-5" />
-                                Filtri archivio
+                                {t("documents.filters") || "Filtri archivio"}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-4 xl:grid-cols-[1.5fr_1fr_1fr]">
@@ -393,7 +389,7 @@ export default function DocumentsIndexPage() {
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Cerca titolo, categoria, norma, macchina..."
+                                    placeholder={t("documents.search")}
                                     className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                                 />
                             </div>
@@ -403,7 +399,7 @@ export default function DocumentsIndexPage() {
                                 onChange={(e) => setCategoryFilter(e.target.value)}
                                 className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
                             >
-                                <option value="all">Tutte le categorie</option>
+                                <option value="all">{t("documents.allCategories") || "Tutte le categorie"}</option>
                                 {categories.map((category) => (
                                     <option key={category} value={category}>
                                         {categoryLabel(category)}
@@ -416,7 +412,7 @@ export default function DocumentsIndexPage() {
                                 onChange={(e) => setLanguageFilter(e.target.value)}
                                 className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
                             >
-                                <option value="all">Tutte le lingue</option>
+                                <option value="all">{t("documents.allLanguages") || "Tutte le lingue"}</option>
                                 {languages.map((lang) => (
                                     <option key={lang} value={lang}>
                                         {lang}
@@ -428,17 +424,17 @@ export default function DocumentsIndexPage() {
 
                     <Card className="rounded-2xl">
                         <CardHeader>
-                            <CardTitle>Registro documenti</CardTitle>
+                            <CardTitle>{t("documents.registry") || "Registro documenti"}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             {filteredDocuments.length === 0 ? (
                                 <EmptyState
-                                    title="Nessun documento trovato"
-                                    description="L’archivio documentale è vuoto oppure nessun elemento corrisponde ai filtri correnti."
+                                    title={t("documents.noResults")}
+                                    description={t("documents.noResultsDesc") || t("documents.noResults")}
                                     icon={<FileBadge2 className="h-10 w-10" />}
-                                    actionLabel="Apri macchine"
+                                    actionLabel={t("nav.equipment")}
                                     actionHref="/equipment"
-                                    secondaryActionLabel="Vai a work orders"
+                                    secondaryActionLabel={t("workOrders.title")}
                                     secondaryActionHref="/work-orders"
                                 />
                             ) : (
@@ -457,7 +453,7 @@ export default function DocumentsIndexPage() {
                                                     <div className="min-w-0 space-y-2">
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <div className="truncate text-lg font-semibold text-foreground">
-                                                                {row.title || "Documento"}
+                                                                {row.title || t("documents.title")}
                                                             </div>
 
                                                             <Badge variant="outline">
@@ -479,21 +475,21 @@ export default function DocumentsIndexPage() {
 
                                                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                                             <span>
-                                                                Versioni: {row.version_count ?? 1}
+                                                                {t("documents.versions")}: {row.version_count ?? 1}
                                                             </span>
                                                             <span>
                                                                 Size: {formatBytes(row.file_size)}
                                                             </span>
                                                             <span>
-                                                                Aggiornato: {formatDate(row.updated_at)}
+                                                                {t("documents.updatedAt") || "Aggiornato"}: {formatDate(row.updated_at, language)}
                                                             </span>
                                                             {row.regulatory_reference && (
                                                                 <span>
-                                                                    Norma: {row.regulatory_reference}
+                                                                    {t("documents.standard") || "Norma"}: {row.regulatory_reference}
                                                                 </span>
                                                             )}
                                                             {machineLabel && (
-                                                                <span>Macchina: {machineLabel}</span>
+                                                                <span>{t("machines.title")}: {machineLabel}</span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -504,13 +500,13 @@ export default function DocumentsIndexPage() {
                                                                 <Link
                                                                     href={`/equipment/${row.machine_id}#machine-documents`}
                                                                 >
-                                                                    Apri macchina
+                                                                    {t("nav.equipment")}
                                                                 </Link>
                                                             </Button>
                                                         ) : (
                                                             <Button variant="outline" asChild>
                                                                 <Link href="/equipment">
-                                                                    Vai a macchine
+                                                                    {t("nav.equipment")}
                                                                 </Link>
                                                             </Button>
                                                         )}
