@@ -1,234 +1,328 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, Factory, Mail, Phone, Plus, Search, Users } from "lucide-react";
-import { listCustomers } from "@/services/customerApi";
+import { useRouter } from "next/router";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import EmptyState from "@/components/feedback/EmptyState";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    ArrowLeft,
+    Building2,
+    Loader2,
+    Save,
+    Shield,
+    UserPlus,
+} from "lucide-react";
 
-interface CustomerRow {
-    id: string;
-    name: string | null;
-    slug: string | null;
-    city: string | null;
-    country: string | null;
-    email: string | null;
-    phone: string | null;
-    subscription_status: string | null;
-    subscription_plan: string | null;
-    created_at: string | null;
-}
-
-function KpiCard({
-    icon,
-    title,
-    value,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    value: number;
-}) {
-    return (
-        <Card className="rounded-2xl">
-            <CardContent className="p-6">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
-                    {icon}
-                </div>
-                <div className="text-4xl font-bold text-foreground">{value}</div>
-                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
-            </CardContent>
-        </Card>
-    );
-}
-
-export default function CustomersIndexPage() {
-    const { loading: authLoading, organization, membership } = useAuth();
+export default function NewCustomerPage() {
+    const router = useRouter();
+    const { toast } = useToast();
+    const { organization, membership, session, loading: authLoading } = useAuth();
     const { t } = useLanguage();
 
-    const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState < CustomerRow[] > ([]);
-    const [search, setSearch] = useState("");
+    const [saving, setSaving] = useState(false);
 
-    const userRole = membership?.role ?? "viewer";
+    const [name, setName] = useState("");
+    const [city, setCity] = useState("");
+    const [country, setCountry] = useState("IT");
+    const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
+
+    const [createPrimaryUser, setCreatePrimaryUser] = useState(true);
+    const [primaryUserName, setPrimaryUserName] = useState("");
+    const [primaryUserEmail, setPrimaryUserEmail] = useState("");
+    const [primaryUserPassword, setPrimaryUserPassword] = useState("");
+    const [primaryUserRole, setPrimaryUserRole] = useState("admin");
+
     const orgType = organization?.type ?? null;
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const userRole = membership?.role ?? "technician";
+    const canCreate = userRole === "owner" || userRole === "admin";
 
-    useEffect(() => {
-        let active = true;
+    const pageBlocked = useMemo(() => {
+        return authLoading || orgType !== "manufacturer" || !canCreate;
+    }, [authLoading, orgType, canCreate]);
 
-        const load = async () => {
-            try {
-                const data = await listCustomers();
-                if (!active) return;
-                setRows(data as CustomerRow[]);
-            } catch (error) {
-                console.error("Customers load error:", error);
-            } finally {
-                if (active) setLoading(false);
-            }
-        };
+    const getAccessToken = async () => {
+        const accessToken =
+            session?.access_token ??
+            (await supabase.auth.getSession()).data.session?.access_token;
 
-        if (!authLoading && orgType === "manufacturer") {
-            void load();
-        } else if (!authLoading) {
-            setLoading(false);
+        if (!accessToken) throw new Error("Session expired");
+        return accessToken;
+    };
+
+    const handleCreate = async () => {
+        if (!name.trim()) {
+            toast({
+                title: t("common.error") || "Errore",
+                description: t("customers.errorNameRequired"),
+                variant: "destructive",
+            });
+            return;
         }
 
-        return () => {
-            active = false;
-        };
-    }, [authLoading, orgType]);
+        if (createPrimaryUser) {
+            if (!primaryUserName.trim() || !primaryUserEmail.trim() || !primaryUserPassword.trim()) {
+                toast({
+                    title: t("common.error") || "Errore",
+                    description: t("customers.errorPrimaryUserRequired"),
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
 
-    const filteredRows = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return rows;
+        setSaving(true);
 
-        return rows.filter((row) =>
-            [row.name, row.slug, row.city, row.country, row.email]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q))
-        );
-    }, [rows, search]);
+        try {
+            const accessToken = await getAccessToken();
 
-    if (authLoading || loading) {
+            const response = await fetch("/api/customers/create", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    city: city.trim() || null,
+                    country: country.trim() || "IT",
+                    email: email.trim().toLowerCase() || null,
+                    phone: phone.trim() || null,
+                    create_primary_user: createPrimaryUser,
+                    primary_user_name: createPrimaryUser ? primaryUserName.trim() : null,
+                    primary_user_email: createPrimaryUser
+                        ? primaryUserEmail.trim().toLowerCase()
+                        : null,
+                    primary_user_password: createPrimaryUser ? primaryUserPassword : null,
+                    primary_user_role: createPrimaryUser ? primaryUserRole : null,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.error || t("customers.errorCreate"));
+            }
+
+            toast({
+                title: t("customers.created"),
+                description: name.trim(),
+            });
+
+            void router.push(`/customers/${data.customer_id}`);
+        } catch (err: any) {
+            console.error(err);
+            toast({
+                title: t("common.error") || "Errore",
+                description: err?.message || t("customers.errorCreate"),
+                variant: "destructive",
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (pageBlocked) {
         return (
-            <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div>
-            </MainLayout>
-        );
-    }
-
-    if (orgType !== "manufacturer") {
-        return (
-            <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">
-                    {t("customers.manufacturerOnly")}
-                </div>
-            </MainLayout>
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title={`${t("customers.newTitle")} - MACHINA`} />
+                    <div className="mx-auto max-w-5xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-center text-muted-foreground">
+                                {t("customers.ownerAdminOnly")}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
         );
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${t("customers.title")} - MACHINA`} />
+                <SEO title={`${t("customers.newTitle")} - MACHINA`} />
 
-                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                {t("customers.title")}
-                            </h1>
-                            <p className="text-base text-muted-foreground">
-                                {t("customers.subtitle")}
+                <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+                    <div className="flex items-center gap-3">
+                        <Link href="/customers">
+                            <Button variant="outline" size="icon">
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                        </Link>
+                        <div>
+                            <h1 className="text-3xl font-bold">{t("customers.newTitle")}</h1>
+                            <p className="text-sm text-muted-foreground">
+                                {t("customers.newSubtitle")}
                             </p>
                         </div>
-
-                        {canEdit && (
-                            <Link href="/customers/new">
-                                <Button>
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    {t("customers.new")}
-                                </Button>
-                            </Link>
-                        )}
-                    </div>
-
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Building2 className="h-5 w-5" />} title={t("customers.kpi.total")} value={rows.length} />
-                        <KpiCard
-                            icon={<Factory className="h-5 w-5" />}
-                            title={t("customers.kpi.activePlans")}
-                            value={rows.filter((r) => !!r.subscription_plan).length}
-                        />
-                        <KpiCard
-                            icon={<Users className="h-5 w-5" />}
-                            title={t("customers.kpi.withEmail")}
-                            value={rows.filter((r) => !!r.email).length}
-                        />
-                        <KpiCard
-                            icon={<Mail className="h-5 w-5" />}
-                            title={t("customers.kpi.withPhone")}
-                            value={rows.filter((r) => !!r.phone).length}
-                        />
                     </div>
 
                     <Card className="rounded-2xl">
-                        <CardContent className="p-6">
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <input
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={t("customers.search")}
-                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Building2 className="h-5 w-5" />
+                                {t("customers.registry")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2 md:col-span-2">
+                                <Label>{t("customers.nameLabel")}</Label>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder={t("customers.namePlaceholder")}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{t("customers.cityLabel")}</Label>
+                                <Input
+                                    value={city}
+                                    onChange={(e) => setCity(e.target.value)}
+                                    placeholder={t("customers.cityPlaceholder")}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{t("customers.countryLabel")}</Label>
+                                <Input
+                                    value={country}
+                                    onChange={(e) => setCountry(e.target.value)}
+                                    placeholder="IT"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{t("customers.companyEmail")}</Label>
+                                <Input
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="info@cliente.com"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{t("customers.phoneLabel")}</Label>
+                                <Input
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    placeholder="+39 ..."
                                 />
                             </div>
                         </CardContent>
                     </Card>
 
                     <Card className="rounded-2xl">
-                        <CardContent className="p-6">
-                            {filteredRows.length === 0 ? (
-                                <EmptyState
-                                    title={t("customers.notFoundEmpty")}
-                                    description={t("customers.notFoundDesc")}
-                                    icon={<Building2 className="h-10 w-10" />}
-                                    actionLabel={canEdit ? t("customers.createCustomer") : undefined}
-                                    actionHref={canEdit ? "/customers/new" : undefined}
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <UserPlus className="h-5 w-5" />
+                                {t("customers.primaryUser")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <label className="flex items-center gap-3 rounded-xl border border-border p-4">
+                                <input
+                                    type="checkbox"
+                                    checked={createPrimaryUser}
+                                    onChange={(e) => setCreatePrimaryUser(e.target.checked)}
                                 />
-                            ) : (
-                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    {filteredRows.map((row) => (
-                                        <Link key={row.id} href={`/customers/${row.id}`} className="block">
-                                            <div className="rounded-2xl border border-border p-5 transition hover:bg-muted/30">
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <div className="text-xl font-semibold text-foreground">
-                                                            {row.name || t("customers.fallbackTitle")}
-                                                        </div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {row.slug || "—"}
-                                                        </div>
-                                                    </div>
+                                <div>
+                                    <div className="font-medium">{t("customers.createPrimaryUserNow")}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                        {t("customers.createPrimaryUserDesc")}
+                                    </div>
+                                </div>
+                            </label>
 
-                                                    <div className="space-y-1 text-sm text-muted-foreground">
-                                                        <div>{row.city || "—"} {row.country ? `· ${row.country}` : ""}</div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Mail className="h-4 w-4" />
-                                                            {row.email || "—"}
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Phone className="h-4 w-4" />
-                                                            {row.phone || "—"}
-                                                        </div>
-                                                    </div>
+                            {createPrimaryUser && (
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2 md:col-span-2">
+                                        <Label>{t("customers.fullName")}</Label>
+                                        <Input
+                                            value={primaryUserName}
+                                            onChange={(e) => setPrimaryUserName(e.target.value)}
+                                            placeholder="Es. Mario Rossi"
+                                        />
+                                    </div>
 
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {row.subscription_plan && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                                                                {row.subscription_plan}
-                                                            </span>
-                                                        )}
-                                                        {row.subscription_status && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                                                                {row.subscription_status}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ))}
+                                    <div className="space-y-2">
+                                        <Label>Email *</Label>
+                                        <Input
+                                            value={primaryUserEmail}
+                                            onChange={(e) => setPrimaryUserEmail(e.target.value)}
+                                            placeholder="m.rossi@cliente.com"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>{t("customers.initialPassword")}</Label>
+                                        <Input
+                                            type="password"
+                                            value={primaryUserPassword}
+                                            onChange={(e) => setPrimaryUserPassword(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>{t("customers.initialRole")}</Label>
+                                        <select
+                                            value={primaryUserRole}
+                                            onChange={(e) => setPrimaryUserRole(e.target.value)}
+                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        >
+                                            <option value="admin">admin</option>
+                                            <option value="supervisor">supervisor</option>
+                                            <option value="technician">technician</option>
+                                            <option value="viewer">viewer</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                                        {t("customers.primaryUserOrgNote")}
+                                    </div>
                                 </div>
                             )}
                         </CardContent>
                     </Card>
+
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Shield className="h-5 w-5" />
+                                {t("customers.finalCheck")}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm text-muted-foreground">
+                            <div>{t("customers.activeManufacturer")}: {organization?.name || "—"}</div>
+                            <div>{t("customers.activeOrgType")}: {organization?.type || "—"}</div>
+                            <div>{t("customers.activeRole")}: {membership?.role || "—"}</div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="flex justify-end gap-3">
+                        <Link href="/customers">
+                            <Button variant="outline">{t("common.cancel")}</Button>
+                        </Link>
+
+                        <Button onClick={handleCreate} disabled={saving}>
+                            {saving ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                            )}
+                            {saving ? t("customers.creating") : t("customers.createCustomer")}
+                        </Button>
+                    </div>
                 </div>
             </MainLayout>
         </OrgContextGuard>
