@@ -6,6 +6,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/feedback/EmptyState";
@@ -26,10 +27,11 @@ interface WorkOrderRow {
     updated_at: string | null;
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
-        return new Date(value).toLocaleString("it-IT", {
+        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        return new Date(value).toLocaleString(locale, {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
@@ -67,8 +69,8 @@ function KpiCard({
         tone === "warning"
             ? "text-amber-500"
             : tone === "success"
-            ? "text-green-500"
-            : "text-orange-500";
+                ? "text-green-500"
+                : "text-orange-500";
 
     return (
         <Card className="rounded-2xl">
@@ -85,10 +87,11 @@ function KpiCard({
 
 export default function WorkOrdersIndexPage() {
     const { loading: authLoading, membership } = useAuth();
+    const { t, language } = useLanguage();
     const userRole = membership?.role ?? "viewer";
 
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState<WorkOrderRow[]>([]);
+    const [rows, setRows] = useState < WorkOrderRow[] > ([]);
     const [search, setSearch] = useState("");
 
     useEffect(() => {
@@ -138,7 +141,7 @@ export default function WorkOrdersIndexPage() {
     if (authLoading || loading) {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">Caricamento work orders...</div>
+                <div className="p-8 text-sm text-muted-foreground">{t("workOrders.loading")}</div>
             </MainLayout>
         );
     }
@@ -146,32 +149,32 @@ export default function WorkOrdersIndexPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Work Orders - MACHINA" />
+                <SEO title={`${t("workOrders.title")} - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
                             <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                Work Orders
+                                {t("workOrders.title")}
                             </h1>
                             <p className="text-base text-muted-foreground">
-                                Registro operativo degli ordini di lavoro.
+                                {t("workOrders.subtitle")}
                             </p>
                         </div>
 
                         <Link href="/work-orders/create">
                             <Button>
                                 <Plus className="mr-2 h-4 w-4" />
-                                Nuovo work order
+                                {t("workOrders.new")}
                             </Button>
                         </Link>
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<ClipboardList className="h-5 w-5" />} title="Totali" value={stats.total} />
-                        <KpiCard icon={<Wrench className="h-5 w-5" />} title="Aperti" value={stats.open} />
-                        <KpiCard icon={<AlertTriangle className="h-5 w-5" />} title="In ritardo" value={stats.overdue} tone="warning" />
-                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title="Completati" value={stats.completed} tone="success" />
+                        <KpiCard icon={<ClipboardList className="h-5 w-5" />} title={t("common.all")} value={stats.total} />
+                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("workOrders.statusOpen")} value={stats.open} />
+                        <KpiCard icon={<AlertTriangle className="h-5 w-5" />} title={t("workOrders.overdue") || "In ritardo"} value={stats.overdue} tone="warning" />
+                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={t("workOrders.statusCompleted")} value={stats.completed} tone="success" />
                     </div>
 
                     <Card className="rounded-2xl">
@@ -181,7 +184,7 @@ export default function WorkOrdersIndexPage() {
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Cerca titolo, stato, priorità..."
+                                    placeholder={t("workOrders.search")}
                                     className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                                 />
                             </div>
@@ -192,10 +195,10 @@ export default function WorkOrdersIndexPage() {
                         <CardContent className="p-6">
                             {filteredRows.length === 0 ? (
                                 <EmptyState
-                                    title="Nessun work order trovato"
-                                    description="Non ci sono ordini di lavoro oppure nessun elemento corrisponde alla ricerca."
+                                    title={t("workOrders.noResults")}
+                                    description={t("workOrders.noResults")}
                                     icon={<ClipboardList className="h-10 w-10" />}
-                                    actionLabel="Crea work order"
+                                    actionLabel={t("workOrders.new")}
                                     actionHref="/work-orders/create"
                                 />
                             ) : (
@@ -220,8 +223,8 @@ export default function WorkOrdersIndexPage() {
                                                         )}
 
                                                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                            <span>Due: {formatDate(row.due_date)}</span>
-                                                            <span>Updated: {formatDate(row.updated_at)}</span>
+                                                            <span>Due: {formatDate(row.due_date, language)}</span>
+                                                            <span>Updated: {formatDate(row.updated_at, language)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
