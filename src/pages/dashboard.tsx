@@ -887,6 +887,8 @@ export default function DashboardPage() {
                         kpis={kpis}
                         orgType={orgType}
                         text={text}
+                    />
+
                     <QuickActionsPanel
                         orgType={orgType}
                         canManage={canManage}
