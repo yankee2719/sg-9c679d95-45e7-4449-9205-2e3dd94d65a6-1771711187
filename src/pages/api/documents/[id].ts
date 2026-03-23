@@ -1,122 +1,73 @@
 // ============================================================================
-// API: GET /api/documents/[id]
+// API: GET/PATCH/DELETE /api/documents/[id]
 // ============================================================================
-// File: pages/api/documents/[id].ts
-// Get, Update, Delete documento
-// ============================================================================
+import type { NextApiResponse } from "next";
+import {
+    withAuth,
+    ALL_APP_ROLES,
+    type AuthenticatedRequest,
+    getServiceSupabase,
+} from "@/lib/apiAuth";
+import { getDocumentService } from "@/services/documentService";
 
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDocumentService } from '@/services/documentService';
-import { createClient } from '@supabase/supabase-js';
-
-// Helper per estrarre token
-function getAuthToken(req: NextApiRequest): string | null {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-        return authHeader.substring(7);
-    }
-
-    const cookies = req.headers.cookie?.split(';') || [];
-    for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'sb-access-token' || name.includes('auth-token')) {
-            return value;
-        }
-    }
-
-    return null;
-}
-
-// Helper per verificare auth
-async function verifyAuth(req: NextApiRequest) {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const token = getAuthToken(req);
-    if (!token) {
-        return { user: null, error: 'No auth token' };
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return { user, error };
-}
-
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { id } = req.query;
 
-    if (!id || typeof id !== 'string') {
-        return res.status(400).json({ error: 'Document ID is required' });
-    }
-
-    // Auth check
-    const { user, error: authError } = await verifyAuth(req);
-
-    if (authError || !user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+    if (!id || typeof id !== "string") {
+        return res.status(400).json({ error: "Document ID is required" });
     }
 
     const docService = getDocumentService();
 
     try {
-        // ========================================================================
+        // ====================================================================
         // GET: Retrieve document
-        // ========================================================================
-        if (req.method === 'GET') {
-            // Check permission
+        // ====================================================================
+        if (req.method === "GET") {
             const hasPermission = await docService.checkUserPermission(
-                user.id,
+                req.user.userId,
                 id,
-                'view'
+                "view"
             );
 
             if (!hasPermission) {
-                return res.status(403).json({ error: 'Access denied' });
+                return res.status(403).json({ error: "Access denied" });
             }
 
-            // Get document
             const document = await docService.getDocumentById(id);
 
             if (!document) {
-                return res.status(404).json({ error: 'Document not found' });
+                return res.status(404).json({ error: "Document not found" });
             }
 
-            // Log view action
             await docService.logDocumentAction(
                 id,
-                'viewed',
-                user.id,
-                'Viewed via API'
+                "viewed",
+                req.user.userId,
+                "Viewed via API"
             );
 
-            return res.status(200).json({
-                success: true,
-                document
-            });
+            return res.status(200).json({ success: true, document });
         }
 
-        // ========================================================================
+        // ====================================================================
         // PATCH: Update metadata
-        // ========================================================================
-        else if (req.method === 'PATCH') {
-            // Check manage permission
+        // ====================================================================
+        else if (req.method === "PATCH") {
             const hasPermission = await docService.checkUserPermission(
-                user.id,
+                req.user.userId,
                 id,
-                'manage'
+                "manage"
             );
 
             if (!hasPermission) {
-                return res.status(403).json({ error: 'Access denied - Manage permission required' });
+                return res.status(403).json({
+                    error: "Access denied - Manage permission required",
+                });
             }
 
             const body = req.body;
 
-            // Update metadata
             const updatedDocument = await docService.updateDocumentMetadata(
                 {
                     documentId: id,
@@ -126,61 +77,47 @@ export default async function handler(
                     tags: body.tags,
                     metadata: body.metadata,
                 },
-                user.id
+                req.user.userId
             );
 
             return res.status(200).json({
                 success: true,
-                message: 'Document updated successfully',
-                document: updatedDocument
+                message: "Document updated successfully",
+                document: updatedDocument,
             });
         }
 
-        // ========================================================================
-        // DELETE: Delete document (admin only)
-        // ========================================================================
-        else if (req.method === 'DELETE') {
-            // Check if user is admin
-            const supabase = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-            );
-
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-
-            if (profile?.role !== 'admin') {
-                return res.status(403).json({
-                    error: 'Access denied - Admin only'
-                });
+        // ====================================================================
+        // DELETE: Delete document (admin/owner only)
+        // ====================================================================
+        else if (req.method === "DELETE") {
+            if (!["admin", "owner"].includes(req.user.role)) {
+                return res
+                    .status(403)
+                    .json({ error: "Access denied - Admin only" });
             }
 
-            // Delete document
             await docService.deleteDocument(id);
 
             return res.status(200).json({
                 success: true,
-                message: 'Document deleted successfully'
+                message: "Document deleted successfully",
             });
         }
 
-        // ========================================================================
-        // Method not allowed
-        // ========================================================================
+        // ====================================================================
         else {
-            return res.status(405).json({ error: 'Method not allowed' });
+            return res.status(405).json({ error: "Method not allowed" });
         }
-
     } catch (error) {
-        console.error('Document API Error:', error);
-
+        console.error("Document API Error:", error);
         return res.status(500).json({
             success: false,
-            error: 'Operation failed',
-            message: error instanceof Error ? error.message : 'Unknown error',
+            error: "Operation failed",
+            message: error instanceof Error ? error.message : "Unknown error",
         });
     }
 }
+
+export default withAuth(ALL_APP_ROLES, handler);
+
