@@ -6,6 +6,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/feedback/EmptyState";
@@ -47,6 +48,7 @@ function KpiCard({
 
 export default function CustomersIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
+    const { t } = useLanguage();
 
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState < CustomerRow[] > ([]);
@@ -96,7 +98,7 @@ export default function CustomersIndexPage() {
     if (authLoading || loading) {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">Caricamento clienti...</div>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div>
             </MainLayout>
         );
     }
@@ -105,7 +107,7 @@ export default function CustomersIndexPage() {
         return (
             <MainLayout userRole={userRole}>
                 <div className="p-8 text-sm text-muted-foreground">
-                    Il registro clienti è disponibile nel contesto costruttore.
+                    {t("customers.manufacturerOnly")}
                 </div>
             </MainLayout>
         );
@@ -114,16 +116,16 @@ export default function CustomersIndexPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Clienti - MACHINA" />
+                <SEO title={`${t("customers.title")} - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
                             <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                Clienti
+                                {t("customers.title")}
                             </h1>
                             <p className="text-base text-muted-foreground">
-                                Gestione clienti del costruttore attivo.
+                                {t("customers.subtitle")}
                             </p>
                         </div>
 
@@ -131,27 +133,27 @@ export default function CustomersIndexPage() {
                             <Link href="/customers/new">
                                 <Button>
                                     <Plus className="mr-2 h-4 w-4" />
-                                    Nuovo cliente
+                                    {t("customers.new")}
                                 </Button>
                             </Link>
                         )}
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Building2 className="h-5 w-5" />} title="Clienti" value={rows.length} />
+                        <KpiCard icon={<Building2 className="h-5 w-5" />} title={t("customers.kpi.total")} value={rows.length} />
                         <KpiCard
                             icon={<Factory className="h-5 w-5" />}
-                            title="Piani attivi"
+                            title={t("customers.kpi.activePlans")}
                             value={rows.filter((r) => !!r.subscription_plan).length}
                         />
                         <KpiCard
                             icon={<Users className="h-5 w-5" />}
-                            title="Con email"
+                            title={t("customers.kpi.withEmail")}
                             value={rows.filter((r) => !!r.email).length}
                         />
                         <KpiCard
                             icon={<Mail className="h-5 w-5" />}
-                            title="Con telefono"
+                            title={t("customers.kpi.withPhone")}
                             value={rows.filter((r) => !!r.phone).length}
                         />
                     </div>
@@ -163,7 +165,7 @@ export default function CustomersIndexPage() {
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Cerca cliente, città, email..."
+                                    placeholder={t("customers.search")}
                                     className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                                 />
                             </div>
@@ -174,10 +176,10 @@ export default function CustomersIndexPage() {
                         <CardContent className="p-6">
                             {filteredRows.length === 0 ? (
                                 <EmptyState
-                                    title="Nessun cliente trovato"
-                                    description="Non ci sono clienti oppure nessun elemento corrisponde alla ricerca."
+                                    title={t("customers.notFoundEmpty")}
+                                    description={t("customers.notFoundDesc")}
                                     icon={<Building2 className="h-10 w-10" />}
-                                    actionLabel={canEdit ? "Crea cliente" : undefined}
+                                    actionLabel={canEdit ? t("customers.createCustomer") : undefined}
                                     actionHref={canEdit ? "/customers/new" : undefined}
                                 />
                             ) : (
@@ -188,7 +190,7 @@ export default function CustomersIndexPage() {
                                                 <div className="space-y-3">
                                                     <div>
                                                         <div className="text-xl font-semibold text-foreground">
-                                                            {row.name || "Cliente"}
+                                                            {row.name || t("customers.fallbackTitle")}
                                                         </div>
                                                         <div className="text-sm text-muted-foreground">
                                                             {row.slug || "—"}
