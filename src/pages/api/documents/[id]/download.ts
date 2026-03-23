@@ -1,123 +1,69 @@
 // ============================================================================
 // API: GET/POST /api/documents/[id]/download
 // ============================================================================
-// File: pages/api/documents/[id]/download.ts
-// GET: Download diretto del file
-// POST: Ottieni signed URL temporaneo
-// ============================================================================
+import type { NextApiResponse } from "next";
+import {
+    withAuth,
+    ALL_APP_ROLES,
+    type AuthenticatedRequest,
+} from "@/lib/apiAuth";
+import { getDocumentService } from "@/services/documentService";
 
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDocumentService } from '@/services/documentService';
-import { createClient } from '@supabase/supabase-js';
-
-// Helper per estrarre token
-function getAuthToken(req: NextApiRequest): string | null {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-        return authHeader.substring(7);
-    }
-
-    const cookies = req.headers.cookie?.split(';') || [];
-    for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'sb-access-token' || name.includes('auth-token')) {
-            return value;
-        }
-    }
-
-    return null;
-}
-
-// Helper per verificare auth
-async function verifyAuth(req: NextApiRequest) {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const token = getAuthToken(req);
-    if (!token) {
-        return { user: null, error: 'No auth token' };
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return { user, error };
-}
-
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { id } = req.query;
 
-    if (!id || typeof id !== 'string') {
-        return res.status(400).json({ error: 'Document ID is required' });
-    }
-
-    // Auth check
-    const { user, error: authError } = await verifyAuth(req);
-
-    if (authError || !user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+    if (!id || typeof id !== "string") {
+        return res.status(400).json({ error: "Document ID is required" });
     }
 
     const docService = getDocumentService();
 
     try {
-        // Check download permission
         const hasPermission = await docService.checkUserPermission(
-            user.id,
+            req.user.userId,
             id,
-            'download'
+            "download"
         );
 
         if (!hasPermission) {
             return res.status(403).json({
-                error: 'Access denied - Download permission required'
+                error: "Access denied - Download permission required",
             });
         }
 
-        // ========================================================================
+        // ====================================================================
         // GET: Download diretto
-        // ========================================================================
-        if (req.method === 'GET') {
-            // Download document (includes automatic audit log)
-            const { blob, filename, mimeType } = await docService.downloadDocument(
-                id,
-                user.id
-            );
+        // ====================================================================
+        if (req.method === "GET") {
+            const { blob, filename, mimeType } =
+                await docService.downloadDocument(id, req.user.userId);
 
-            // Convert blob to buffer
             const buffer = Buffer.from(await blob.arrayBuffer());
 
-            // Set headers per download
-            res.setHeader('Content-Type', mimeType);
+            res.setHeader("Content-Type", mimeType);
             res.setHeader(
-                'Content-Disposition',
+                "Content-Disposition",
                 `attachment; filename="${encodeURIComponent(filename)}"`
             );
-            res.setHeader('Content-Length', buffer.length.toString());
+            res.setHeader("Content-Length", buffer.length.toString());
 
-            // Send file
             return res.status(200).send(buffer);
         }
 
-        // ========================================================================
-        // POST: Get signed URL (per download client-side)
-        // ========================================================================
-        else if (req.method === 'POST') {
+        // ====================================================================
+        // POST: Get signed URL
+        // ====================================================================
+        else if (req.method === "POST") {
             const body = req.body;
-            const expiresIn = body.expiresIn || 3600; // Default 1 hour
+            const expiresIn = body.expiresIn || 3600;
 
-            // Get signed URL
             const signedUrl = await docService.getSignedUrl(id, expiresIn);
 
-            // Log download intent
             await docService.logDocumentAction(
                 id,
-                'downloaded',
-                user.id,
-                'Generated signed URL for download',
+                "downloaded",
+                req.user.userId,
+                "Generated signed URL for download",
                 { expiresIn }
             );
 
@@ -125,24 +71,25 @@ export default async function handler(
                 success: true,
                 signedUrl,
                 expiresIn,
-                expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+                expiresAt: new Date(
+                    Date.now() + expiresIn * 1000
+                ).toISOString(),
             });
         }
 
-        // ========================================================================
-        // Method not allowed
-        // ========================================================================
+        // ====================================================================
         else {
-            return res.status(405).json({ error: 'Method not allowed' });
+            return res.status(405).json({ error: "Method not allowed" });
         }
-
     } catch (error) {
-        console.error('Download API Error:', error);
-
+        console.error("Download API Error:", error);
         return res.status(500).json({
             success: false,
-            error: 'Download failed',
-            message: error instanceof Error ? error.message : 'Unknown error',
+            error: "Download failed",
+            message: error instanceof Error ? error.message : "Unknown error",
         });
     }
 }
+
+export default withAuth(ALL_APP_ROLES, handler);
+
