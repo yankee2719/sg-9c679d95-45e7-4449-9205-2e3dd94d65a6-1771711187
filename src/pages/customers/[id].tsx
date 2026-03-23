@@ -19,6 +19,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -37,10 +38,11 @@ interface CustomerRow {
     created_at: string | null;
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
-        return new Date(value).toLocaleString("it-IT", {
+        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        return new Date(value).toLocaleString(locale, {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
@@ -76,6 +78,7 @@ export default function CustomerDetailPage() {
     const router = useRouter();
     const { id } = router.query;
     const { loading: authLoading, membership, organization } = useAuth();
+    const { t, language } = useLanguage();
 
     const [loading, setLoading] = useState(true);
     const [customer, setCustomer] = useState < CustomerRow | null > (null);
@@ -130,7 +133,7 @@ export default function CustomerDetailPage() {
     if (authLoading || loading) {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">Caricamento cliente...</div>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div>
             </MainLayout>
         );
     }
@@ -138,7 +141,7 @@ export default function CustomerDetailPage() {
     if (orgType !== "manufacturer" || !customer) {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">Cliente non trovato.</div>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.noResults")}</div>
             </MainLayout>
         );
     }
@@ -146,7 +149,7 @@ export default function CustomerDetailPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${customer.name || "Cliente"} - MACHINA`} />
+                <SEO title={`${customer.name || t("customers.fallbackTitle")} - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
                     <div className="flex items-center gap-3">
@@ -156,17 +159,19 @@ export default function CustomerDetailPage() {
                             </Button>
                         </Link>
                         <div>
-                            <h1 className="text-3xl font-bold">{customer.name || "Cliente"}</h1>
+                            <h1 className="text-3xl font-bold">
+                                {customer.name || t("customers.fallbackTitle")}
+                            </h1>
                             <p className="text-sm text-muted-foreground">
-                                Dettaglio cliente nel contesto attivo.
+                                {t("customers.detailTitle")}
                             </p>
                         </div>
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Users className="h-5 w-5" />} title="Utenti" value={membersCount} />
-                        <KpiCard icon={<Shield className="h-5 w-5" />} title="Piano" value={customer.subscription_plan || "—"} />
-                        <KpiCard icon={<Wrench className="h-5 w-5" />} title="Macchine assegnate" value={assignedMachines} />
+                        <KpiCard icon={<Users className="h-5 w-5" />} title={t("nav.users")} value={membersCount} />
+                        <KpiCard icon={<Shield className="h-5 w-5" />} title={t("customers.kpi.activePlans")} value={customer.subscription_plan || "—"} />
+                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("customers.machines")} value={assignedMachines} />
                         <KpiCard icon={<Factory className="h-5 w-5" />} title="Status" value={customer.subscription_status || "—"} />
                     </div>
 
@@ -175,17 +180,17 @@ export default function CustomerDetailPage() {
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Building2 className="h-5 w-5" />
-                                    Anagrafica cliente
+                                    {t("customers.registry")}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <InfoRow label="Nome" value={customer.name} />
+                                <InfoRow label={t("customers.nameLabel").replace(" *", "")} value={customer.name} />
                                 <InfoRow label="Slug" value={customer.slug} />
-                                <InfoRow label="Città" value={customer.city} />
-                                <InfoRow label="Paese" value={customer.country} />
+                                <InfoRow label={t("customers.cityLabel")} value={customer.city} />
+                                <InfoRow label={t("customers.countryLabel")} value={customer.country} />
                                 <InfoRow label="Email" value={customer.email} />
-                                <InfoRow label="Telefono" value={customer.phone} />
-                                <InfoRow label="Creato il" value={formatDate(customer.created_at)} />
+                                <InfoRow label={t("customers.phoneLabel")} value={customer.phone} />
+                                <InfoRow label={t("documents.uploadedAt")} value={formatDate(customer.created_at, language)} />
 
                                 <div className="grid gap-3 pt-2 md:grid-cols-2">
                                     {customer.email && (
@@ -194,7 +199,7 @@ export default function CustomerDetailPage() {
                                             className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
                                         >
                                             <Mail className="h-4 w-4" />
-                                            Scrivi email
+                                            Email
                                         </a>
                                     )}
 
@@ -204,7 +209,7 @@ export default function CustomerDetailPage() {
                                             className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
                                         >
                                             <Phone className="h-4 w-4" />
-                                            Chiama
+                                            {t("customers.phoneLabel")}
                                         </a>
                                     )}
                                 </div>
@@ -215,26 +220,26 @@ export default function CustomerDetailPage() {
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <MapPin className="h-5 w-5" />
-                                    Azioni rapide
+                                    {t("customers.quickActions") || "Azioni rapide"}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 <Link href="/customers">
                                     <Button variant="outline" className="w-full justify-start">
                                         <Building2 className="mr-2 h-4 w-4" />
-                                        Torna al registro clienti
+                                        {t("customers.title")}
                                     </Button>
                                 </Link>
                                 <Link href="/assignments">
                                     <Button variant="outline" className="w-full justify-start">
                                         <Wrench className="mr-2 h-4 w-4" />
-                                        Apri assegnazioni
+                                        {t("nav.assignments")}
                                     </Button>
                                 </Link>
                                 <Link href="/equipment">
                                     <Button variant="outline" className="w-full justify-start">
                                         <Factory className="mr-2 h-4 w-4" />
-                                        Apri macchine
+                                        {t("nav.equipment")}
                                     </Button>
                                 </Link>
                             </CardContent>
