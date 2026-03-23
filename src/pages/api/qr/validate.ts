@@ -1,64 +1,36 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-import { getQrTokenService } from '@/services/offlineAndQrService';
+// ============================================================================
+// API: POST /api/qr/validate
+// ============================================================================
+import type { NextApiResponse } from "next";
+import {
+    withAuth,
+    ALL_APP_ROLES,
+    type AuthenticatedRequest,
+} from "@/lib/apiAuth";
+import { getQrTokenService } from "@/services/offlineAndQrService";
 
-function getAuthToken(req: NextApiRequest): string | null {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) return authHeader.substring(7);
-
-    const cookies = req.headers.cookie?.split(';') || [];
-    for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'sb-access-token' || name.includes('auth-token')) return value;
-    }
-
-    return null;
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+    if (req.method !== "POST") {
+        return res.status(405).json({ error: "Method not allowed" });
     }
 
     const { token } = req.body || {};
-    if (!token || typeof token !== 'string') {
-        return res.status(400).json({ error: 'token is required' });
+    if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "token is required" });
     }
 
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    let userId: string | undefined;
-    let userRole: string | undefined;
-
     try {
-        const authToken = getAuthToken(req);
-
-        if (authToken) {
-            const { data: { user } } = await supabase.auth.getUser(authToken);
-
-            if (user) {
-                userId = user.id;
-
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', user.id)
-                    .maybeSingle();
-
-                userRole = profile?.role || undefined;
-            }
-        }
-
         const qrService = getQrTokenService();
-        const result = await qrService.validateToken(token, userId, userRole);
+        const result = await qrService.validateToken(
+            token,
+            req.user.userId,
+            req.user.role
+        );
 
         if (!result?.is_valid || !result.equipment_id) {
             return res.status(403).json({
                 success: false,
-                denial_reason: result?.denial_reason || 'access_denied',
+                denial_reason: result?.denial_reason || "access_denied",
             });
         }
 
@@ -69,7 +41,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             max_permission_level: result.max_permission_level || null,
         });
     } catch (error) {
-        console.error('QR Validate Error:', error);
-        return res.status(500).json({ error: 'Failed to validate QR token' });
+        console.error("QR Validate Error:", error);
+        return res
+            .status(500)
+            .json({ error: "Failed to validate QR token" });
     }
 }
+
+export default withAuth(ALL_APP_ROLES, handler);
+
