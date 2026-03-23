@@ -127,4 +127,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(ALL_APP_ROLES, handler);
-
