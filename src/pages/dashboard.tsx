@@ -883,7 +883,10 @@ export default function DashboardPage() {
                             tone="orange"
                         />
                     </div>
-
+                    <DashboardCharts
+                        kpis={kpis}
+                        orgType={orgType}
+                        text={text}
                     <QuickActionsPanel
                         orgType={orgType}
                         canManage={canManage}
