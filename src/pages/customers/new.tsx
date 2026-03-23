@@ -1,327 +1,234 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/router";
+import { Building2, Factory, Mail, Phone, Plus, Search, Users } from "lucide-react";
+import { listCustomers } from "@/services/customerApi";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    ArrowLeft,
-    Building2,
-    Loader2,
-    Save,
-    Shield,
-    UserPlus,
-} from "lucide-react";
+import EmptyState from "@/components/feedback/EmptyState";
 
-export default function NewCustomerPage() {
-    const router = useRouter();
-    const { toast } = useToast();
-    const { organization, membership, session, loading: authLoading } = useAuth();
+interface CustomerRow {
+    id: string;
+    name: string | null;
+    slug: string | null;
+    city: string | null;
+    country: string | null;
+    email: string | null;
+    phone: string | null;
+    subscription_status: string | null;
+    subscription_plan: string | null;
+    created_at: string | null;
+}
 
-    const [saving, setSaving] = useState(false);
+function KpiCard({
+    icon,
+    title,
+    value,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    value: number;
+}) {
+    return (
+        <Card className="rounded-2xl">
+            <CardContent className="p-6">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
+                    {icon}
+                </div>
+                <div className="text-4xl font-bold text-foreground">{value}</div>
+                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
+            </CardContent>
+        </Card>
+    );
+}
 
-    const [name, setName] = useState("");
-    const [city, setCity] = useState("");
-    const [country, setCountry] = useState("IT");
-    const [email, setEmail] = useState("");
-    const [phone, setPhone] = useState("");
+export default function CustomersIndexPage() {
+    const { loading: authLoading, organization, membership } = useAuth();
+    const { t } = useLanguage();
 
-    const [createPrimaryUser, setCreatePrimaryUser] = useState(true);
-    const [primaryUserName, setPrimaryUserName] = useState("");
-    const [primaryUserEmail, setPrimaryUserEmail] = useState("");
-    const [primaryUserPassword, setPrimaryUserPassword] = useState("");
-    const [primaryUserRole, setPrimaryUserRole] = useState("admin");
+    const [loading, setLoading] = useState(true);
+    const [rows, setRows] = useState < CustomerRow[] > ([]);
+    const [search, setSearch] = useState("");
 
+    const userRole = membership?.role ?? "viewer";
     const orgType = organization?.type ?? null;
-    const userRole = membership?.role ?? "technician";
-    const canCreate = userRole === "owner" || userRole === "admin";
+    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
 
-    const pageBlocked = useMemo(() => {
-        return authLoading || orgType !== "manufacturer" || !canCreate;
-    }, [authLoading, orgType, canCreate]);
+    useEffect(() => {
+        let active = true;
 
-    const getAccessToken = async () => {
-        const accessToken =
-            session?.access_token ??
-            (await supabase.auth.getSession()).data.session?.access_token;
-
-        if (!accessToken) throw new Error("Sessione scaduta");
-        return accessToken;
-    };
-
-    const handleCreate = async () => {
-        if (!name.trim()) {
-            toast({
-                title: "Errore",
-                description: "Inserisci il nome del cliente.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        if (createPrimaryUser) {
-            if (!primaryUserName.trim() || !primaryUserEmail.trim() || !primaryUserPassword.trim()) {
-                toast({
-                    title: "Errore",
-                    description: "Compila i dati dell'utente principale.",
-                    variant: "destructive",
-                });
-                return;
+        const load = async () => {
+            try {
+                const data = await listCustomers();
+                if (!active) return;
+                setRows(data as CustomerRow[]);
+            } catch (error) {
+                console.error("Customers load error:", error);
+            } finally {
+                if (active) setLoading(false);
             }
+        };
+
+        if (!authLoading && orgType === "manufacturer") {
+            void load();
+        } else if (!authLoading) {
+            setLoading(false);
         }
 
-        setSaving(true);
+        return () => {
+            active = false;
+        };
+    }, [authLoading, orgType]);
 
-        try {
-            const accessToken = await getAccessToken();
+    const filteredRows = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return rows;
 
-            const response = await fetch("/api/customers/create", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({
-                    name: name.trim(),
-                    city: city.trim() || null,
-                    country: country.trim() || "IT",
-                    email: email.trim().toLowerCase() || null,
-                    phone: phone.trim() || null,
-                    create_primary_user: createPrimaryUser,
-                    primary_user_name: createPrimaryUser ? primaryUserName.trim() : null,
-                    primary_user_email: createPrimaryUser
-                        ? primaryUserEmail.trim().toLowerCase()
-                        : null,
-                    primary_user_password: createPrimaryUser ? primaryUserPassword : null,
-                    primary_user_role: createPrimaryUser ? primaryUserRole : null,
-                }),
-            });
+        return rows.filter((row) =>
+            [row.name, row.slug, row.city, row.country, row.email]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(q))
+        );
+    }, [rows, search]);
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data?.error || "Errore creazione cliente");
-            }
-
-            toast({
-                title: "Cliente creato",
-                description: name.trim(),
-            });
-
-            void router.push(`/customers/${data.customer_id}`);
-        } catch (err: any) {
-            console.error(err);
-            toast({
-                title: "Errore",
-                description: err?.message || "Errore creazione cliente",
-                variant: "destructive",
-            });
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (pageBlocked) {
+    if (authLoading || loading) {
         return (
-            <OrgContextGuard>
-                <MainLayout userRole={userRole}>
-                    <SEO title="Nuovo cliente - MACHINA" />
-                    <div className="mx-auto max-w-5xl px-4 py-8">
-                        <Card className="rounded-2xl">
-                            <CardContent className="py-10 text-center text-muted-foreground">
-                                Questa pagina è disponibile solo per owner/admin lato costruttore.
-                            </CardContent>
-                        </Card>
-                    </div>
-                </MainLayout>
-            </OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div>
+            </MainLayout>
+        );
+    }
+
+    if (orgType !== "manufacturer") {
+        return (
+            <MainLayout userRole={userRole}>
+                <div className="p-8 text-sm text-muted-foreground">
+                    {t("customers.manufacturerOnly")}
+                </div>
+            </MainLayout>
         );
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Nuovo cliente - MACHINA" />
+                <SEO title={`${t("customers.title")} - MACHINA`} />
 
-                <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-                    <div className="flex items-center gap-3">
-                        <Link href="/customers">
-                            <Button variant="outline" size="icon">
-                                <ArrowLeft className="h-4 w-4" />
-                            </Button>
-                        </Link>
-                        <div>
-                            <h1 className="text-3xl font-bold">Nuovo cliente</h1>
-                            <p className="text-sm text-muted-foreground">
-                                Crea una nuova organizzazione cliente collegata al costruttore attivo.
+                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-2">
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                {t("customers.title")}
+                            </h1>
+                            <p className="text-base text-muted-foreground">
+                                {t("customers.subtitle")}
                             </p>
                         </div>
+
+                        {canEdit && (
+                            <Link href="/customers/new">
+                                <Button>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    {t("customers.new")}
+                                </Button>
+                            </Link>
+                        )}
+                    </div>
+
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <KpiCard icon={<Building2 className="h-5 w-5" />} title={t("customers.kpi.total")} value={rows.length} />
+                        <KpiCard
+                            icon={<Factory className="h-5 w-5" />}
+                            title={t("customers.kpi.activePlans")}
+                            value={rows.filter((r) => !!r.subscription_plan).length}
+                        />
+                        <KpiCard
+                            icon={<Users className="h-5 w-5" />}
+                            title={t("customers.kpi.withEmail")}
+                            value={rows.filter((r) => !!r.email).length}
+                        />
+                        <KpiCard
+                            icon={<Mail className="h-5 w-5" />}
+                            title={t("customers.kpi.withPhone")}
+                            value={rows.filter((r) => !!r.phone).length}
+                        />
                     </div>
 
                     <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Building2 className="h-5 w-5" />
-                                Anagrafica cliente
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2 md:col-span-2">
-                                <Label>Nome cliente *</Label>
-                                <Input
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="Es. Rimeco Srl"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Città</Label>
-                                <Input
-                                    value={city}
-                                    onChange={(e) => setCity(e.target.value)}
-                                    placeholder="Es. Milano"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Country</Label>
-                                <Input
-                                    value={country}
-                                    onChange={(e) => setCountry(e.target.value)}
-                                    placeholder="IT"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Email azienda</Label>
-                                <Input
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="info@cliente.com"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Telefono</Label>
-                                <Input
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    placeholder="+39 ..."
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <UserPlus className="h-5 w-5" />
-                                Utente principale cliente
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <label className="flex items-center gap-3 rounded-xl border border-border p-4">
+                        <CardContent className="p-6">
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                 <input
-                                    type="checkbox"
-                                    checked={createPrimaryUser}
-                                    onChange={(e) => setCreatePrimaryUser(e.target.checked)}
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder={t("customers.search")}
+                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                                 />
-                                <div>
-                                    <div className="font-medium">Crea utente principale subito</div>
-                                    <div className="text-sm text-muted-foreground">
-                                        Se attivo, viene creato anche il primo utente del cliente.
-                                    </div>
-                                </div>
-                            </label>
-
-                            {createPrimaryUser && (
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2 md:col-span-2">
-                                        <Label>Nome completo *</Label>
-                                        <Input
-                                            value={primaryUserName}
-                                            onChange={(e) => setPrimaryUserName(e.target.value)}
-                                            placeholder="Es. Mario Rossi"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Email *</Label>
-                                        <Input
-                                            value={primaryUserEmail}
-                                            onChange={(e) => setPrimaryUserEmail(e.target.value)}
-                                            placeholder="m.rossi@cliente.com"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Password *</Label>
-                                        <Input
-                                            type="password"
-                                            value={primaryUserPassword}
-                                            onChange={(e) => setPrimaryUserPassword(e.target.value)}
-                                            placeholder="Password iniziale"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Ruolo iniziale</Label>
-                                        <select
-                                            value={primaryUserRole}
-                                            onChange={(e) => setPrimaryUserRole(e.target.value)}
-                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        >
-                                            <option value="admin">admin</option>
-                                            <option value="supervisor">supervisor</option>
-                                            <option value="technician">technician</option>
-                                            <option value="viewer">viewer</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                                        L'utente creato avrà come organizzazione di default il nuovo cliente.
-                                    </div>
-                                </div>
-                            )}
+                            </div>
                         </CardContent>
                     </Card>
 
                     <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Shield className="h-5 w-5" />
-                                Controllo finale
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3 text-sm text-muted-foreground">
-                            <div>Costruttore attivo: {organization?.name || "—"}</div>
-                            <div>Tipo organizzazione attiva: {organization?.type || "—"}</div>
-                            <div>Ruolo attivo: {membership?.role || "—"}</div>
+                        <CardContent className="p-6">
+                            {filteredRows.length === 0 ? (
+                                <EmptyState
+                                    title={t("customers.notFoundEmpty")}
+                                    description={t("customers.notFoundDesc")}
+                                    icon={<Building2 className="h-10 w-10" />}
+                                    actionLabel={canEdit ? t("customers.createCustomer") : undefined}
+                                    actionHref={canEdit ? "/customers/new" : undefined}
+                                />
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    {filteredRows.map((row) => (
+                                        <Link key={row.id} href={`/customers/${row.id}`} className="block">
+                                            <div className="rounded-2xl border border-border p-5 transition hover:bg-muted/30">
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <div className="text-xl font-semibold text-foreground">
+                                                            {row.name || t("customers.fallbackTitle")}
+                                                        </div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {row.slug || "—"}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1 text-sm text-muted-foreground">
+                                                        <div>{row.city || "—"} {row.country ? `· ${row.country}` : ""}</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Mail className="h-4 w-4" />
+                                                            {row.email || "—"}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Phone className="h-4 w-4" />
+                                                            {row.phone || "—"}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {row.subscription_plan && (
+                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                                                {row.subscription_plan}
+                                                            </span>
+                                                        )}
+                                                        {row.subscription_status && (
+                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
+                                                                {row.subscription_status}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
-
-                    <div className="flex justify-end gap-3">
-                        <Link href="/customers">
-                            <Button variant="outline">Annulla</Button>
-                        </Link>
-
-                        <Button onClick={handleCreate} disabled={saving}>
-                            {saving ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Save className="mr-2 h-4 w-4" />
-                            )}
-                            {saving ? "Creazione..." : "Crea cliente"}
-                        </Button>
-                    </div>
                 </div>
             </MainLayout>
         </OrgContextGuard>
