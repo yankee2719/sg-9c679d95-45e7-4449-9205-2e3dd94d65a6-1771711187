@@ -23,6 +23,7 @@ import UrgentIssuesPanel, {
 } from "@/components/dashboard/UrgentIssuesPanel";
 import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import EmptyState from "@/components/feedback/EmptyState";
+import DashboardCharts from "@/components/dashboard/DashboardCharts";
 
 type OrgType = "manufacturer" | "customer" | null;
 
