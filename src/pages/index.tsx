@@ -9,8 +9,14 @@ export default function HomeRedirectPage() {
 
     useEffect(() => {
         if (loading) return;
-        void router.replace(isAuthenticated ? "/dashboard" : "/login");
+        void router.replace(isAuthenticated ? "/dashboard" : "/landing");
     }, [isAuthenticated, loading, router]);
 
-    return <PageLoader title="MACHINA" description="Preparing your workspace and redirecting you to the correct entry point." fullscreen />;
+    return (
+        <PageLoader
+            title="MACHINA"
+            description="Preparing your workspace and redirecting you to the correct entry point."
+            fullscreen
+        />
+    );
 }
