@@ -1,48 +1,58 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+// ============================================================================
+// API: POST /api/stripe/create-portal
+// ============================================================================
+import type { NextApiResponse } from "next";
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
+import {
+    withAuth,
+    type AuthenticatedRequest,
+    type AppRole,
+    getServiceSupabase,
+} from "@/lib/apiAuth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: "2024-12-18.acacia",
 });
 
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const ALLOWED_ROLES: AppRole[] = ["owner", "admin"];
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
 
     try {
-        const { tenantId } = req.body;
-
-        if (!tenantId) {
-            return res.status(400).json({ error: "Tenant ID required" });
+        if (!req.user.organizationId) {
+            return res
+                .status(400)
+                .json({ error: "No active organization" });
         }
 
-        // Get tenant's Stripe customer ID
-        const { data: tenant, error: tenantError } = await supabaseAdmin
-            .from("tenants")
+        const serviceSupabase = getServiceSupabase();
+
+        const { data: org, error: orgError } = await serviceSupabase
+            .from("organizations")
             .select("stripe_customer_id, name")
-            .eq("id", tenantId)
+            .eq("id", req.user.organizationId)
             .single();
 
-        if (tenantError || !tenant) {
-            return res.status(404).json({ error: "Tenant not found" });
+        if (orgError || !org) {
+            return res
+                .status(404)
+                .json({ error: "Organization not found" });
         }
 
-        if (!tenant.stripe_customer_id) {
-            return res.status(400).json({ error: "No active subscription found" });
+        if (!org.stripe_customer_id) {
+            return res
+                .status(400)
+                .json({ error: "No active subscription found" });
         }
 
-        // Create Stripe Customer Portal session
-        const portalSession = await stripe.billingPortal.sessions.create({
-            customer: tenant.stripe_customer_id,
-            return_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
-        });
+        const portalSession =
+            await stripe.billingPortal.sessions.create({
+                customer: org.stripe_customer_id,
+                return_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/settings/billing`,
+            });
 
         return res.status(200).json({ url: portalSession.url });
     } catch (error: any) {
@@ -50,3 +60,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: error.message });
     }
 }
+
+export default withAuth(ALLOWED_ROLES, handler);
