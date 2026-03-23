@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Lock, Loader2 } from "lucide-react";
 
@@ -12,7 +18,7 @@ interface SubscriptionGuardProps {
     feature?: "users" | "equipment" | "api" | "reports";
 }
 
-interface TenantLimits {
+interface OrganizationLimits {
     subscription_plan: string;
     subscription_status: string;
     max_users: number;
@@ -31,73 +37,99 @@ const FEATURE_REQUIREMENTS: Record<string, string> = {
     reports: "professional",
 };
 
-export function SubscriptionGuard({ children, requiredPlan, feature }: SubscriptionGuardProps) {
+export function SubscriptionGuard({
+    children,
+    requiredPlan,
+    feature,
+}: SubscriptionGuardProps) {
     const router = useRouter();
-    const { user } = useAuth();
+    const { organization } = useAuth();
     const [loading, setLoading] = useState(true);
-    const [tenant, setTenant] = useState < TenantLimits | null > (null);
+    const [orgLimits, setOrgLimits] = useState<OrganizationLimits | null>(
+        null
+    );
     const [hasAccess, setHasAccess] = useState(false);
-    const [reason, setReason] = useState < string > ("");
+    const [reason, setReason] = useState<string>("");
 
     useEffect(() => {
-        if (user?.tenantId) {
+        if (organization?.id) {
             checkAccess();
         }
-    }, [user?.tenantId, requiredPlan, feature]);
+    }, [organization?.id, requiredPlan, feature]);
 
     const checkAccess = async () => {
         try {
             const { data, error } = await supabase
-                .from("tenants")
-                .select("subscription_plan, subscription_status, max_users, max_equipment, trial_ends_at")
-                .eq("id", user!.tenantId)
+                .from("organizations")
+                .select(
+                    "subscription_plan, subscription_status, max_users, max_equipment, trial_ends_at"
+                )
+                .eq("id", organization!.id)
                 .single();
 
             if (error) throw error;
-            setTenant(data);
+            setOrgLimits(data);
 
             // Check subscription status
             if (data.subscription_status === "canceled") {
                 setHasAccess(false);
-                setReason("Il tuo abbonamento è stato cancellato. Riattivalo per continuare.");
+                setReason(
+                    "Il tuo abbonamento è stato cancellato. Riattivalo per continuare."
+                );
                 return;
             }
 
             if (data.subscription_status === "past_due") {
                 setHasAccess(false);
-                setReason("Il pagamento è in ritardo. Aggiorna il metodo di pagamento per continuare.");
+                setReason(
+                    "Il pagamento è in ritardo. Aggiorna il metodo di pagamento per continuare."
+                );
                 return;
             }
 
             // Check trial expiration
-            if (data.subscription_status === "trialing" && data.trial_ends_at) {
+            if (
+                data.subscription_status === "trialing" &&
+                data.trial_ends_at
+            ) {
                 const trialEnd = new Date(data.trial_ends_at);
                 if (trialEnd < new Date()) {
                     setHasAccess(false);
-                    setReason("Il periodo di prova è terminato. Scegli un piano per continuare.");
+                    setReason(
+                        "Il periodo di prova è terminato. Scegli un piano per continuare."
+                    );
                     return;
                 }
             }
 
             // Check plan requirements
             if (requiredPlan) {
-                const currentLevel = PLAN_HIERARCHY[data.subscription_plan] || 0;
-                const requiredLevel = PLAN_HIERARCHY[requiredPlan] || 0;
+                const currentLevel =
+                    PLAN_HIERARCHY[data.subscription_plan] || 0;
+                const requiredLevel =
+                    PLAN_HIERARCHY[requiredPlan] || 0;
                 if (currentLevel < requiredLevel) {
                     setHasAccess(false);
-                    setReason(`Questa funzionalità richiede il piano ${requiredPlan}. Effettua l'upgrade per accedere.`);
+                    setReason(
+                        `Questa funzionalità richiede il piano ${requiredPlan}. Effettua l'upgrade per accedere.`
+                    );
                     return;
                 }
             }
 
             // Check feature requirements
             if (feature && FEATURE_REQUIREMENTS[feature]) {
-                const requiredForFeature = FEATURE_REQUIREMENTS[feature];
-                const currentLevel = PLAN_HIERARCHY[data.subscription_plan] || 0;
-                const requiredLevel = PLAN_HIERARCHY[requiredForFeature] || 0;
+                const requiredForFeature =
+                    FEATURE_REQUIREMENTS[feature];
+                const currentLevel =
+                    PLAN_HIERARCHY[data.subscription_plan] || 0;
+                const requiredLevel =
+                    PLAN_HIERARCHY[requiredForFeature] || 0;
                 if (currentLevel < requiredLevel) {
                     setHasAccess(false);
-                    setReason(`Questa funzionalità richiede il piano ${requiredForFeature}. Effettua l'upgrade per accedere.`);
+                    setReason(
+                        `Questa funzionalità richiede il piano ${requiredForFeature}. Effettua l'upgrade per accedere.`
+                    );
                     return;
                 }
             }
@@ -126,7 +158,8 @@ export function SubscriptionGuard({ children, requiredPlan, feature }: Subscript
                 <Card className="max-w-md">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            {tenant?.subscription_status === "past_due" ? (
+                            {orgLimits?.subscription_status ===
+                            "past_due" ? (
                                 <AlertTriangle className="h-5 w-5 text-yellow-500" />
                             ) : (
                                 <Lock className="h-5 w-5 text-muted-foreground" />
@@ -136,10 +169,19 @@ export function SubscriptionGuard({ children, requiredPlan, feature }: Subscript
                         <CardDescription>{reason}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        <Button onClick={() => router.push("/settings/billing")} className="w-full">
+                        <Button
+                            onClick={() =>
+                                router.push("/settings/billing")
+                            }
+                            className="w-full"
+                        >
                             Gestisci abbonamento
                         </Button>
-                        <Button onClick={() => router.back()} variant="outline" className="w-full">
+                        <Button
+                            onClick={() => router.back()}
+                            variant="outline"
+                            className="w-full"
+                        >
                             Torna indietro
                         </Button>
                     </CardContent>
@@ -153,34 +195,39 @@ export function SubscriptionGuard({ children, requiredPlan, feature }: Subscript
 
 // Hook per controllare i limiti
 export function useSubscriptionLimits() {
-    const { user } = useAuth();
-    const [limits, setLimits] = useState < TenantLimits | null > (null);
+    const { organization } = useAuth();
+    const [limits, setLimits] = useState<OrganizationLimits | null>(null);
     const [usage, setUsage] = useState({ users: 0, equipment: 0 });
 
     useEffect(() => {
-        if (user?.tenantId) {
+        if (organization?.id) {
             loadLimits();
         }
-    }, [user?.tenantId]);
+    }, [organization?.id]);
 
     const loadLimits = async () => {
-        const { data: tenantData } = await supabase
-            .from("tenants")
-            .select("subscription_plan, subscription_status, max_users, max_equipment, trial_ends_at")
-            .eq("id", user!.tenantId)
+        const { data: orgData } = await supabase
+            .from("organizations")
+            .select(
+                "subscription_plan, subscription_status, max_users, max_equipment, trial_ends_at"
+            )
+            .eq("id", organization!.id)
             .single();
 
-        if (tenantData) setLimits(tenantData);
+        if (orgData) setLimits(orgData);
 
+        // Count users in this organization via memberships
         const { count: usersCount } = await supabase
-            .from("profiles")
+            .from("organization_memberships")
             .select("*", { count: "exact", head: true })
-            .eq("tenant_id", user!.tenantId);
+            .eq("organization_id", organization!.id)
+            .eq("is_active", true);
 
+        // Count equipment (machines) in this organization
         const { count: equipmentCount } = await supabase
-            .from("equipment")
+            .from("machines")
             .select("*", { count: "exact", head: true })
-            .eq("tenant_id", user!.tenantId);
+            .eq("organization_id", organization!.id);
 
         setUsage({
             users: usersCount || 0,
@@ -189,10 +236,14 @@ export function useSubscriptionLimits() {
     };
 
     const canAddUser = () => limits && usage.users < limits.max_users;
-    const canAddEquipment = () => limits && usage.equipment < limits.max_equipment;
+    const canAddEquipment = () =>
+        limits && usage.equipment < limits.max_equipment;
     const isPlanAtLeast = (plan: string) => {
         if (!limits) return false;
-        return (PLAN_HIERARCHY[limits.subscription_plan] || 0) >= (PLAN_HIERARCHY[plan] || 0);
+        return (
+            (PLAN_HIERARCHY[limits.subscription_plan] || 0) >=
+            (PLAN_HIERARCHY[plan] || 0)
+        );
     };
 
     return {
@@ -201,6 +252,8 @@ export function useSubscriptionLimits() {
         canAddUser,
         canAddEquipment,
         isPlanAtLeast,
-        isActive: limits?.subscription_status === "active" || limits?.subscription_status === "trialing",
+        isActive:
+            limits?.subscription_status === "active" ||
+            limits?.subscription_status === "trialing",
     };
 }
