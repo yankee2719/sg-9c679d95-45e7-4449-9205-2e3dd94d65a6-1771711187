@@ -1,5 +1,5 @@
 // ============================================================================
-// API: POST /api/stripe/create-portal
+// API: POST /api/stripe/create-portal-session
 // ============================================================================
 import type { NextApiResponse } from "next";
 import Stripe from "stripe";
@@ -22,6 +22,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     try {
+        const { returnUrl } = req.body;
+
         if (!req.user.organizationId) {
             return res
                 .status(400)
@@ -32,7 +34,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const { data: org, error: orgError } = await serviceSupabase
             .from("organizations")
-            .select("stripe_customer_id, name")
+            .select("stripe_customer_id")
             .eq("id", req.user.organizationId)
             .single();
 
@@ -43,20 +45,24 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
 
         if (!org.stripe_customer_id) {
-            return res
-                .status(400)
-                .json({ error: "No active subscription found" });
+            return res.status(400).json({
+                error: "No Stripe customer found. Please subscribe first.",
+            });
         }
 
-        const portalSession =
-            await stripe.billingPortal.sessions.create({
-                customer: org.stripe_customer_id,
-                return_url: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/settings/billing`,
-            });
+        const baseUrl =
+            returnUrl ||
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            "http://localhost:3000";
 
-        return res.status(200).json({ url: portalSession.url });
+        const session = await stripe.billingPortal.sessions.create({
+            customer: org.stripe_customer_id,
+            return_url: `${baseUrl}/settings/billing`,
+        });
+
+        return res.status(200).json({ url: session.url });
     } catch (error: any) {
-        console.error("Create portal error:", error);
+        console.error("Stripe portal error:", error);
         return res.status(500).json({ error: error.message });
     }
 }
