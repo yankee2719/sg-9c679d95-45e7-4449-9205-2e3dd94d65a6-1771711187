@@ -8,10 +8,23 @@
  * - tenere questo file solo come protezione temporanea contro import vecchi
  */
 
+import type { NextApiRequest, NextApiResponse } from "next";
+
 function deprecated(functionName: string): never {
     throw new Error(
         `[legacyApi] "${functionName}" non è più supportata. Usa Supabase diretto o gli helper di dominio in src/lib/domain/*.`
     );
+}
+
+/**
+ * Returns 410 Gone for deprecated API routes.
+ * Used as handler for routes that have been migrated to Supabase direct / RLS.
+ */
+export function legacyGone(_req: NextApiRequest, res: NextApiResponse) {
+    return res.status(410).json({
+        error: "Gone",
+        message: "This API endpoint has been deprecated. Use Supabase direct access instead.",
+    });
 }
 
 export async function getEquipmentList() {
@@ -63,3 +76,4 @@ const legacyApi = {
 };
 
 export default legacyApi;
+
