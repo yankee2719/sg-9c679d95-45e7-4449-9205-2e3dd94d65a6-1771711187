@@ -14,6 +14,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,10 +35,11 @@ interface WorkOrderRow {
     updated_at: string | null;
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
-        return new Date(value).toLocaleString("it-IT");
+        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        return new Date(value).toLocaleString(locale);
     } catch {
         return value;
     }
@@ -48,6 +50,7 @@ export default function WorkOrderDetailPage() {
     const { id } = router.query;
     const { toast } = useToast();
     const { loading: authLoading, membership } = useAuth();
+    const { t, language } = useLanguage();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -93,14 +96,14 @@ export default function WorkOrderDetailPage() {
             });
             setRow(updated);
             toast({
-                title: "Work order aggiornato",
-                description: `Nuovo stato: ${status}`,
+                title: t("workOrders.updated"),
+                description: `${t("workOrders.status") || "Status"}: ${status}`,
             });
         } catch (error: any) {
             console.error(error);
             toast({
-                title: "Errore",
-                description: error?.message || "Errore aggiornamento work order",
+                title: t("common.error") || "Errore",
+                description: error?.message || t("workOrders.errorUpdate") || "Errore aggiornamento",
                 variant: "destructive",
             });
         } finally {
@@ -111,7 +114,7 @@ export default function WorkOrderDetailPage() {
     if (authLoading || loading) {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">Caricamento work order...</div>
+                <div className="p-8 text-sm text-muted-foreground">{t("workOrders.loading")}</div>
             </MainLayout>
         );
     }
@@ -119,7 +122,7 @@ export default function WorkOrderDetailPage() {
     if (!row) {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">Work order non trovato.</div>
+                <div className="p-8 text-sm text-muted-foreground">{t("workOrders.noResults")}</div>
             </MainLayout>
         );
     }
@@ -134,7 +137,7 @@ export default function WorkOrderDetailPage() {
                         <Link href="/work-orders">
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
-                                Torna a Work Orders
+                                {t("workOrders.title")}
                             </Button>
                         </Link>
 
@@ -145,14 +148,14 @@ export default function WorkOrderDetailPage() {
                                     onClick={() => void handleQuickStatus("in_progress")}
                                     disabled={saving}
                                 >
-                                    In progress
+                                    {t("workOrders.statusInProgress")}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     onClick={() => void handleQuickStatus("completed")}
                                     disabled={saving}
                                 >
-                                    Completa
+                                    {t("workOrders.statusCompleted")}
                                 </Button>
                             </div>
                         )}
@@ -172,30 +175,30 @@ export default function WorkOrderDetailPage() {
                                     </h1>
 
                                     <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-                                        {row.description || "Nessuna descrizione disponibile."}
+                                        {row.description || t("workOrders.noDescription") || "Nessuna descrizione disponibile."}
                                     </p>
                                 </div>
 
                                 <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[440px]">
                                     <InfoPill
                                         icon={<CalendarDays className="h-4 w-4" />}
-                                        label="Due date"
-                                        value={formatDate(row.due_date)}
+                                        label={t("workOrders.dueDate") || "Due date"}
+                                        value={formatDate(row.due_date, language)}
                                     />
                                     <InfoPill
                                         icon={<CalendarDays className="h-4 w-4" />}
-                                        label="Updated"
-                                        value={formatDate(row.updated_at)}
+                                        label={t("workOrders.updatedAt") || "Updated"}
+                                        value={formatDate(row.updated_at, language)}
                                     />
                                     <InfoPill
                                         icon={<User className="h-4 w-4" />}
-                                        label="Assigned to"
-                                        value={row.assigned_to || "Non assegnato"}
+                                        label={t("workOrders.assignedTo") || "Assigned to"}
+                                        value={row.assigned_to || t("workOrders.unassigned") || "Non assegnato"}
                                     />
                                     <InfoPill
                                         icon={<ClipboardList className="h-4 w-4" />}
-                                        label="Creato il"
-                                        value={formatDate(row.created_at)}
+                                        label={t("workOrders.createdAt") || "Creato il"}
+                                        value={formatDate(row.created_at, language)}
                                     />
                                 </div>
                             </div>
@@ -204,14 +207,14 @@ export default function WorkOrderDetailPage() {
 
                     <Card className="rounded-2xl">
                         <CardHeader>
-                            <CardTitle>Dettaglio operativo</CardTitle>
+                            <CardTitle>{t("workOrders.detail")}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <DetailRow label="Status" value={row.status || "—"} />
-                            <DetailRow label="Priority" value={row.priority || "—"} />
-                            <DetailRow label="Machine ID" value={row.machine_id || "—"} />
-                            <DetailRow label="Assigned to" value={row.assigned_to || "—"} />
-                            <DetailRow label="Updated at" value={formatDate(row.updated_at)} />
+                            <DetailRow label={t("workOrders.priorityLabel")} value={row.priority || "—"} />
+                            <DetailRow label={t("workOrders.machineId") || "Machine ID"} value={row.machine_id || "—"} />
+                            <DetailRow label={t("workOrders.assignedTo") || "Assigned to"} value={row.assigned_to || "—"} />
+                            <DetailRow label={t("workOrders.updatedAt") || "Updated at"} value={formatDate(row.updated_at, language)} />
                         </CardContent>
                     </Card>
 
@@ -219,7 +222,7 @@ export default function WorkOrderDetailPage() {
                         <Link href={`/equipment/${row.machine_id}`}>
                             <Button variant="outline">
                                 <Wrench className="mr-2 h-4 w-4" />
-                                Apri macchina
+                                {t("nav.equipment")}
                             </Button>
                         </Link>
                     )}
