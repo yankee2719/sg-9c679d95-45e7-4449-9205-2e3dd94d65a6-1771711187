@@ -1,79 +1,57 @@
 // src/pages/analytics/index.tsx
-import Link from "next/link";
+
+import { useEffect, useState, useMemo } from "react";
+import MainLayout from "@/components/Layout/MainLayout";
+import { SEO } from "@/components/SEO";
+import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import ProtectedPage from "@/components/app/ProtectedPage";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import {
-    BarChart3,
-    CheckSquare,
-    ClipboardList,
-    ChevronRight,
-} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-export default function AnalyticsHomePage() {
-    const { t } = useLanguage();
+import { Card, CardContent } from "@/components/ui/card";
+import DashboardCharts from "@/components/dashboard/DashboardCharts";
+import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
+import UrgentIssuesPanel, { UrgentIssue } from "@/components/dashboard/UrgentIssuesPanel";
 
-    const items = [
-        {
-            href: "/checklists/executions",
-            title: t("analytics.item.checklists.title"),
-            description: t("analytics.item.checklists.description"),
-            icon: CheckSquare,
-        },
-        {
-            href: "/work-orders",
-            title: t("analytics.item.workOrders.title"),
-            description: t("analytics.item.workOrders.description"),
-            icon: ClipboardList,
-        },
-    ];
-
-    return (
-        <ProtectedPage title={`${t("analytics.title")} - MACHINA`}>
-            <div className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
-                <div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-                            <BarChart3 className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-semibold">{t("analytics.title")}</h1>
-                            <p className="text-sm text-muted-foreground">
-                                {t("analytics.subtitle")}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                    {items.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <Link key={item.href} href={item.href} className="block">
-                                <Card className="rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-sm">
-                                    <CardHeader>
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                                                <Icon className="h-5 w-5 text-muted-foreground" />
-                                            </div>
-                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                        </div>
-                                        <CardTitle className="text-base">{item.title}</CardTitle>
-                                        <CardDescription>{item.description}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent />
-                                </Card>
-                            </Link>
-                        );
-                    })}
-                </div>
-            </div>
-        </ProtectedPage>
-    );
+interface DashboardKpis {
+    machineCount: number;
+    customerCount: number;
+    activeAssignments: number;
+    openWorkOrders: number;
+    overdueWorkOrders: number;
+    activeChecklists: number;
+    activeDocuments: number;
 }
+
+export default function AnalyticsPage() {
+    const { language } = useLanguage();
+    const { organization, membership } = useAuth();
+
+    const orgId = organization?.id;
+    const orgType = organization?.type;
+    const userRole = membership?.role ?? "technician";
+
+    const [loading, setLoading] = useState(true);
+    const [kpis, setKpis] = useState < DashboardKpis > ({
+        machineCount: 0,
+        customerCount: 0,
+        activeAssignments: 0,
+        openWorkOrders: 0,
+        overdueWorkOrders: 0,
+        activeChecklists: 0,
+        activeDocuments: 0,
+    });
+
+    useEffect(() => {
+        const load = async () => {
+            if (!orgId) return;
+
+            try {
+                const [
+                    machines,
+                    workOrders,
+                    documents,
+                    checklists,
+                    assignments,
+                ] = await Promise.all([
+                    supabase.from("machines").select("id").eq("organization_id", orgId),
+                    supabase.from("work_orders").
