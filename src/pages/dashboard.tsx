@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-    Activity,
-    Building2,
-    ClipboardList,
-    Factory,
-    FileText,
-    PackageCheck,
-    Wrench,
+    Activity, Building2, ClipboardList, Factory, FileText, PackageCheck, Wrench,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
@@ -18,9 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import QuickActionsPanel from "@/components/dashboard/QuickActionsPanel";
-import UrgentIssuesPanel, {
-    type UrgentIssue,
-} from "@/components/dashboard/UrgentIssuesPanel";
+import UrgentIssuesPanel, { type UrgentIssue } from "@/components/dashboard/UrgentIssuesPanel";
 import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import DashboardCharts from "@/components/dashboard/DashboardCharts";
 import EmptyState from "@/components/feedback/EmptyState";
@@ -37,33 +29,10 @@ interface DashboardKpis {
     activeDocuments: number;
 }
 
-interface RecentActivityRow {
-    id: string;
-    entity_type: string | null;
-    action: string | null;
-    created_at: string;
-    entity_id: string | null;
-    machine_id: string | null;
-    metadata?: any;
-}
+interface RecentActivityRow { id: string; entity_type: string | null; action: string | null; created_at: string; entity_id: string | null; machine_id: string | null; metadata?: any; }
+interface RecentMachineRow { id: string; name: string | null; internal_code: string | null; lifecycle_state: string | null; updated_at: string | null; photo_url?: string | null; organization_id?: string | null; }
 
-interface RecentMachineRow {
-    id: string;
-    name: string | null;
-    internal_code: string | null;
-    lifecycle_state: string | null;
-    updated_at: string | null;
-    photo_url?: string | null;
-}
-
-interface DashboardCache {
-    kpis: DashboardKpis;
-    recentMachines: RecentMachineRow[];
-    recentActivity: RecentActivityRow[];
-    orgId: string;
-    orgType: OrgType;
-    timestamp: number;
-}
+interface DashboardCache { kpis: DashboardKpis; recentMachines: RecentMachineRow[]; recentActivity: RecentActivityRow[]; orgId: string; orgType: OrgType; timestamp: number; }
 
 const STALE_TIME = 30_000;
 
@@ -91,22 +60,22 @@ const copy = {
         activity_document_soft_delete: "Documento nel cestino", activity_user_membership_create: "Utente aggiunto",
         activity_user_membership_update: "Utente aggiornato",
         urgentOverdueTitle: "work orders in ritardo",
-        urgentOverdueDesc: "Ci sono ordini di lavoro oltre la scadenza. Questo è il primo punto da sistemare in demo e in uso reale.",
+        urgentOverdueDesc: "Ci sono ordini di lavoro oltre la scadenza.",
         urgentOverdueCta: "Apri work orders",
         urgentNoCustomersTitle: "Nessun cliente caricato",
-        urgentNoCustomersDesc: "Se vuoi vendere MACHINA, senza clienti demo la piattaforma sembra ancora vuota.",
+        urgentNoCustomersDesc: "Senza clienti demo la piattaforma sembra vuota.",
         urgentNoCustomersCta: "Crea cliente",
         urgentNoMachinesTitle: "Nessuna macchina presente",
-        urgentNoMachinesDesc: "La scheda macchina è il cuore del prodotto. Va popolata subito con un dataset credibile.",
+        urgentNoMachinesDesc: "La scheda macchina è il cuore del prodotto.",
         urgentNoMachinesCta: "Crea macchina",
         urgentNoDocsTitle: "Archivio documentale vuoto",
-        urgentNoDocsDesc: "Senza documenti la piattaforma perde subito credibilità in demo.",
+        urgentNoDocsDesc: "Senza documenti la piattaforma perde credibilità in demo.",
         urgentNoDocsCta: "Apri documenti",
         urgentNoChecklistsTitle: "Nessun template checklist attivo",
-        urgentNoChecklistsDesc: "Aggiungi almeno un template per mostrare operatività reale e controllo processi.",
+        urgentNoChecklistsDesc: "Aggiungi almeno un template per mostrare operatività reale.",
         urgentNoChecklistsCta: "Apri checklist",
-        urgentSecurityTitle: "Verifica il setup sicurezza degli utenti chiave",
-        urgentSecurityDesc: "Per una demo forte, conviene mostrare MFA attiva almeno sugli account amministrativi.",
+        urgentSecurityTitle: "Verifica il setup sicurezza",
+        urgentSecurityDesc: "MFA attiva almeno sugli account amministrativi.",
         urgentSecurityCta: "Apri sicurezza",
     },
     en: {
@@ -132,105 +101,83 @@ const copy = {
         activity_document_soft_delete: "Document trashed", activity_user_membership_create: "User added",
         activity_user_membership_update: "User updated",
         urgentOverdueTitle: "overdue work orders",
-        urgentOverdueDesc: "There are work orders past their due date. This should be the first thing to fix.",
+        urgentOverdueDesc: "There are work orders past their due date.",
         urgentOverdueCta: "Open work orders",
         urgentNoCustomersTitle: "No customers loaded",
         urgentNoCustomersDesc: "Without demo customers the platform looks empty.",
         urgentNoCustomersCta: "Create customer",
         urgentNoMachinesTitle: "No machines found",
-        urgentNoMachinesDesc: "The machine card is the core of the product. It should be populated with credible data.",
+        urgentNoMachinesDesc: "The machine card is the core of the product.",
         urgentNoMachinesCta: "Create machine",
         urgentNoDocsTitle: "Empty document archive",
-        urgentNoDocsDesc: "Without documents the platform loses credibility in demos.",
+        urgentNoDocsDesc: "Without documents the platform loses credibility.",
         urgentNoDocsCta: "Open documents",
         urgentNoChecklistsTitle: "No active checklist templates",
         urgentNoChecklistsDesc: "Add at least one template to show real operational control.",
         urgentNoChecklistsCta: "Open checklists",
-        urgentSecurityTitle: "Review security setup for key users",
-        urgentSecurityDesc: "For a strong demo, MFA should be active on admin accounts.",
+        urgentSecurityTitle: "Review security setup",
+        urgentSecurityDesc: "MFA should be active on admin accounts.",
         urgentSecurityCta: "Open security",
     },
     fr: {
         seo: "Tableau de bord - MACHINA",
-        subtitleManufacturer: "Vue opérationnelle du constructeur : clients, machines, affectations et activité récente.",
-        subtitleCustomer: "Vue opérationnelle du client final : machines, documents, maintenance et activité récente.",
+        subtitleManufacturer: "Vue opérationnelle du constructeur.",
+        subtitleCustomer: "Vue opérationnelle du client final.",
         machineCount: "Machines", customerCount: "Clients", activeAssignments: "Affectations actives",
-        openWorkOrders: "Ordres de travail ouverts", overdueWorkOrders: "Ordres en retard",
-        activeChecklists: "Modèles de checklist actifs", activeDocuments: "Documents actifs",
+        openWorkOrders: "Ordres ouverts", overdueWorkOrders: "Ordres en retard",
+        activeChecklists: "Modèles checklist actifs", activeDocuments: "Documents actifs",
         recentMachines: "Machines récentes", recentActivity: "Activité récente",
-        openEquipment: "Ouvrir les machines", openCustomers: "Ouvrir les clients",
-        noMachinesTitle: "Aucune machine présente",
-        noMachinesDescription: "Ajoutez la première machine pour démarrer le passeport numérique opérationnel.",
-        createMachine: "Créer une machine",
-        noActivityTitle: "Aucune activité pour l'instant",
-        noActivityDescription: "L'activité récente apparaîtra ici lorsque les work orders, documents et checklists seront utilisés.",
-        loadingDashboard: "Chargement du tableau de bord...", updatedAt: "Mise à jour", defaultMachineName: "Machine",
+        openEquipment: "Ouvrir machines", openCustomers: "Ouvrir clients",
+        noMachinesTitle: "Aucune machine", noMachinesDescription: "Ajoutez la première machine.",
+        createMachine: "Créer machine", noActivityTitle: "Aucune activité",
+        noActivityDescription: "L'activité apparaîtra ici.", loadingDashboard: "Chargement...",
+        updatedAt: "Mise à jour", defaultMachineName: "Machine",
         chartOverview: "Aperçu", chartDistribution: "Distribution opérationnelle",
         activity_machine_create: "Machine créée", activity_machine_restore: "Machine restaurée",
-        activity_machine_soft_delete: "Machine mise à la corbeille", activity_organization_create: "Client créé",
-        activity_organization_restore: "Client restauré", activity_organization_soft_delete: "Client mis à la corbeille",
+        activity_machine_soft_delete: "Machine corbeille", activity_organization_create: "Client créé",
+        activity_organization_restore: "Client restauré", activity_organization_soft_delete: "Client corbeille",
         activity_document_create: "Document créé", activity_document_restore: "Document restauré",
-        activity_document_soft_delete: "Document mis à la corbeille", activity_user_membership_create: "Utilisateur ajouté",
+        activity_document_soft_delete: "Document corbeille", activity_user_membership_create: "Utilisateur ajouté",
         activity_user_membership_update: "Utilisateur mis à jour",
-        urgentOverdueTitle: "ordres de travail en retard",
-        urgentOverdueDesc: "Il y a des ordres de travail au-delà de l'échéance.",
-        urgentOverdueCta: "Ouvrir les ordres",
-        urgentNoCustomersTitle: "Aucun client chargé",
-        urgentNoCustomersDesc: "Sans clients démo, la plateforme semble encore vide.",
-        urgentNoCustomersCta: "Créer un client",
-        urgentNoMachinesTitle: "Aucune machine présente",
-        urgentNoMachinesDesc: "La fiche machine est le cœur du produit.",
-        urgentNoMachinesCta: "Créer une machine",
-        urgentNoDocsTitle: "Archive documentaire vide",
-        urgentNoDocsDesc: "Sans documents, la plateforme perd en crédibilité.",
-        urgentNoDocsCta: "Ouvrir les documents",
-        urgentNoChecklistsTitle: "Aucun modèle de checklist actif",
-        urgentNoChecklistsDesc: "Ajoutez au moins un modèle pour montrer un contrôle opérationnel réel.",
-        urgentNoChecklistsCta: "Ouvrir les checklists",
-        urgentSecurityTitle: "Vérifiez la sécurité des utilisateurs clés",
-        urgentSecurityDesc: "Pour une démo solide, le MFA doit être actif sur les comptes administrateurs.",
-        urgentSecurityCta: "Ouvrir la sécurité",
+        urgentOverdueTitle: "ordres en retard", urgentOverdueDesc: "Ordres au-delà de l'échéance.",
+        urgentOverdueCta: "Ouvrir ordres", urgentNoCustomersTitle: "Aucun client",
+        urgentNoCustomersDesc: "Sans clients la plateforme semble vide.", urgentNoCustomersCta: "Créer client",
+        urgentNoMachinesTitle: "Aucune machine", urgentNoMachinesDesc: "La fiche machine est le cœur du produit.",
+        urgentNoMachinesCta: "Créer machine", urgentNoDocsTitle: "Archive vide",
+        urgentNoDocsDesc: "Sans documents, pas de crédibilité.", urgentNoDocsCta: "Ouvrir documents",
+        urgentNoChecklistsTitle: "Aucun modèle checklist", urgentNoChecklistsDesc: "Ajoutez un modèle.",
+        urgentNoChecklistsCta: "Ouvrir checklists", urgentSecurityTitle: "Vérifiez la sécurité",
+        urgentSecurityDesc: "MFA sur les comptes admin.", urgentSecurityCta: "Ouvrir sécurité",
     },
     es: {
         seo: "Dashboard - MACHINA",
-        subtitleManufacturer: "Resumen operativo del fabricante: clientes, máquinas, asignaciones y actividad reciente.",
-        subtitleCustomer: "Resumen operativo del cliente final: máquinas, documentos, mantenimiento y actividad reciente.",
+        subtitleManufacturer: "Resumen operativo del fabricante.",
+        subtitleCustomer: "Resumen operativo del cliente final.",
         machineCount: "Máquinas", customerCount: "Clientes", activeAssignments: "Asignaciones activas",
         openWorkOrders: "Work orders abiertas", overdueWorkOrders: "Work orders atrasadas",
         activeChecklists: "Plantillas checklist activas", activeDocuments: "Documentos activos",
         recentMachines: "Máquinas recientes", recentActivity: "Actividad reciente",
         openEquipment: "Abrir máquinas", openCustomers: "Abrir clientes",
-        noMachinesTitle: "No hay máquinas",
-        noMachinesDescription: "Añade la primera máquina para empezar a construir el digital passport operativo.",
-        createMachine: "Crear máquina",
-        noActivityTitle: "Todavía no hay actividad",
-        noActivityDescription: "La actividad reciente aparecerá aquí cuando empieces a usar work orders, documentos y checklists.",
-        loadingDashboard: "Cargando dashboard...", updatedAt: "Actualizada", defaultMachineName: "Máquina",
+        noMachinesTitle: "No hay máquinas", noMachinesDescription: "Añade la primera máquina.",
+        createMachine: "Crear máquina", noActivityTitle: "Sin actividad",
+        noActivityDescription: "La actividad aparecerá aquí.", loadingDashboard: "Cargando...",
+        updatedAt: "Actualizada", defaultMachineName: "Máquina",
         chartOverview: "Resumen", chartDistribution: "Distribución operativa",
         activity_machine_create: "Máquina creada", activity_machine_restore: "Máquina restaurada",
-        activity_machine_soft_delete: "Máquina en papelera", activity_organization_create: "Cliente creado",
-        activity_organization_restore: "Cliente restaurado", activity_organization_soft_delete: "Cliente en papelera",
+        activity_machine_soft_delete: "Máquina papelera", activity_organization_create: "Cliente creado",
+        activity_organization_restore: "Cliente restaurado", activity_organization_soft_delete: "Cliente papelera",
         activity_document_create: "Documento creado", activity_document_restore: "Documento restaurado",
-        activity_document_soft_delete: "Documento en papelera", activity_user_membership_create: "Usuario añadido",
+        activity_document_soft_delete: "Documento papelera", activity_user_membership_create: "Usuario añadido",
         activity_user_membership_update: "Usuario actualizado",
-        urgentOverdueTitle: "work orders atrasadas",
-        urgentOverdueDesc: "Hay órdenes de trabajo fuera de plazo.",
-        urgentOverdueCta: "Abrir work orders",
-        urgentNoCustomersTitle: "Ningún cliente cargado",
-        urgentNoCustomersDesc: "Sin clientes demo la plataforma parece vacía.",
-        urgentNoCustomersCta: "Crear cliente",
-        urgentNoMachinesTitle: "No hay máquinas",
-        urgentNoMachinesDesc: "La ficha de máquina es el corazón del producto.",
-        urgentNoMachinesCta: "Crear máquina",
-        urgentNoDocsTitle: "Archivo documental vacío",
-        urgentNoDocsDesc: "Sin documentos la plataforma pierde credibilidad.",
-        urgentNoDocsCta: "Abrir documentos",
-        urgentNoChecklistsTitle: "Ninguna plantilla checklist activa",
-        urgentNoChecklistsDesc: "Añade al menos una plantilla para mostrar control operativo real.",
-        urgentNoChecklistsCta: "Abrir checklists",
-        urgentSecurityTitle: "Verifica la seguridad de los usuarios clave",
-        urgentSecurityDesc: "Para una demo fuerte, el MFA debe estar activo en las cuentas de administrador.",
-        urgentSecurityCta: "Abrir seguridad",
+        urgentOverdueTitle: "work orders atrasadas", urgentOverdueDesc: "Órdenes fuera de plazo.",
+        urgentOverdueCta: "Abrir work orders", urgentNoCustomersTitle: "Ningún cliente",
+        urgentNoCustomersDesc: "Sin clientes la plataforma parece vacía.", urgentNoCustomersCta: "Crear cliente",
+        urgentNoMachinesTitle: "No hay máquinas", urgentNoMachinesDesc: "La ficha es el corazón del producto.",
+        urgentNoMachinesCta: "Crear máquina", urgentNoDocsTitle: "Archivo vacío",
+        urgentNoDocsDesc: "Sin documentos pierde credibilidad.", urgentNoDocsCta: "Abrir documentos",
+        urgentNoChecklistsTitle: "Ninguna plantilla checklist", urgentNoChecklistsDesc: "Añade una plantilla.",
+        urgentNoChecklistsCta: "Abrir checklists", urgentSecurityTitle: "Verifica seguridad",
+        urgentSecurityDesc: "MFA en cuentas admin.", urgentSecurityCta: "Abrir seguridad",
     },
 } as const;
 
@@ -257,13 +204,11 @@ function activityLabel(row: RecentActivityRow, text: CopyLang) {
 function KpiCard({ icon, title, value, tone = "orange" }: { icon: React.ReactNode; title: string; value: number; tone?: "orange" | "blue" | "emerald" | "violet" | "amber" | "rose" | "slate"; }) {
     const toneMap = { orange: "bg-orange-500/12 text-orange-500", blue: "bg-blue-500/12 text-blue-500", emerald: "bg-emerald-500/12 text-emerald-500", violet: "bg-violet-500/12 text-violet-500", amber: "bg-amber-500/12 text-amber-500", rose: "bg-rose-500/12 text-rose-500", slate: "bg-slate-500/12 text-slate-500" } as const;
     return (
-        <Card className="rounded-2xl">
-            <CardContent className="p-6">
-                <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${toneMap[tone]}`}>{icon}</div>
-                <div className="text-4xl font-bold text-foreground">{value}</div>
-                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
-            </CardContent>
-        </Card>
+        <Card className="rounded-2xl"><CardContent className="p-6">
+            <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${toneMap[tone]}`}>{icon}</div>
+            <div className="text-4xl font-bold text-foreground">{value}</div>
+            <div className="mt-2 text-sm text-muted-foreground">{title}</div>
+        </CardContent></Card>
     );
 }
 
@@ -275,10 +220,10 @@ export default function DashboardPage() {
     const { loading: authLoading, organization, membership, shouldEnforceMfa } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState < DashboardKpis > ({ machineCount: 0, customerCount: 0, activeAssignments: 0, openWorkOrders: 0, overdueWorkOrders: 0, activeChecklists: 0, activeDocuments: 0 });
-    const [recentMachines, setRecentMachines] = useState < RecentMachineRow[] > ([]);
-    const [recentActivity, setRecentActivity] = useState < RecentActivityRow[] > ([]);
-    const cacheRef = useRef < DashboardCache | null > (null);
+    const [kpis, setKpis] = useState<DashboardKpis>({ machineCount: 0, customerCount: 0, activeAssignments: 0, openWorkOrders: 0, overdueWorkOrders: 0, activeChecklists: 0, activeDocuments: 0 });
+    const [recentMachines, setRecentMachines] = useState<RecentMachineRow[]>([]);
+    const [recentActivity, setRecentActivity] = useState<RecentActivityRow[]>([]);
+    const cacheRef = useRef<DashboardCache | null>(null);
 
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
@@ -304,87 +249,123 @@ export default function DashboardPage() {
             try {
                 const nowIso = new Date().toISOString();
 
-                const checklistRes = await supabase.from("checklist_templates").select("id", { count: "exact", head: true }).eq("organization_id", orgId).eq("is_active", true);
-                const documentsRes = await supabase.from("documents").select("id", { count: "exact", head: true }).eq("organization_id", orgId).eq("is_archived", false);
-                const auditRes = await supabase.from("audit_logs").select("id, entity_type, action, created_at, entity_id, machine_id, metadata").eq("organization_id", orgId).order("created_at", { ascending: false }).limit(8);
-                const workOrdersRes = await supabase.from("work_orders").select("id, title, status, due_date, machine_id", { count: "exact" }).eq("organization_id", orgId).order("due_date", { ascending: true }).limit(12);
+                // ── Load ALL data (RLS handles visibility), filter client-side ──
+                const [machinesRes, assignmentsRes, checklistRes, documentsRes, auditRes, workOrdersRes] = await Promise.all([
+                    supabase.from("machines")
+                        .select("id, name, internal_code, lifecycle_state, updated_at, photo_url, organization_id")
+                        .eq("is_archived", false)
+                        .or("is_deleted.is.null,is_deleted.eq.false")
+                        .order("updated_at", { ascending: false }),
+                    supabase.from("machine_assignments")
+                        .select("machine_id, customer_org_id, manufacturer_org_id, is_active")
+                        .eq("is_active", true),
+                    supabase.from("checklist_templates")
+                        .select("id, organization_id")
+                        .eq("is_active", true),
+                    supabase.from("documents")
+                        .select("id, organization_id")
+                        .eq("is_archived", false),
+                    supabase.from("audit_logs")
+                        .select("id, entity_type, action, created_at, entity_id, machine_id, metadata, organization_id")
+                        .order("created_at", { ascending: false })
+                        .limit(50),
+                    supabase.from("work_orders")
+                        .select("id, title, status, due_date, machine_id, organization_id")
+                        .order("due_date", { ascending: true })
+                        .limit(50),
+                ]);
 
+                if (machinesRes.error) throw machinesRes.error;
+                if (assignmentsRes.error) throw assignmentsRes.error;
                 if (checklistRes.error) throw checklistRes.error;
                 if (documentsRes.error) throw documentsRes.error;
                 if (auditRes.error) throw auditRes.error;
                 if (workOrdersRes.error) throw workOrdersRes.error;
 
-                const openWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => { const s = String(row.status ?? "").toLowerCase(); return !["completed", "closed", "cancelled"].includes(s); }).length;
-                const overdueWorkOrders = (workOrdersRes.data ?? []).filter((row: any) => { const s = String(row.status ?? "").toLowerCase(); const d = row.due_date ? new Date(row.due_date).toISOString() : null; return !!d && d < nowIso && !["completed", "closed", "cancelled"].includes(s); }).length;
+                if (!active) return;
 
-                let nextKpis: DashboardKpis;
-                let nextMachines: RecentMachineRow[];
-                const nextActivity: RecentActivityRow[] = (auditRes.data ?? []) as RecentActivityRow[];
+                const allMachines = (machinesRes.data ?? []) as RecentMachineRow[];
+                const allAssignments = (assignmentsRes.data ?? []) as any[];
+
+                // ── Client-side filtering per org context ──
+                let myMachines: RecentMachineRow[];
+                let myCustomerCount = 0;
+                let myAssignmentCount = 0;
 
                 if (orgType === "manufacturer") {
-                    const machineRes = await supabase.from("machines").select("id, name, internal_code, lifecycle_state, updated_at, photo_url", { count: "exact" }).eq("organization_id", orgId).eq("is_archived", false).or("is_deleted.is.null,is_deleted.eq.false").order("updated_at", { ascending: false }).limit(6);
-                    if (machineRes.error) throw machineRes.error;
+                    // Manufacturer sees own machines
+                    myMachines = allMachines.filter((m) => m.organization_id === orgId);
 
-                    const assignmentRes = await supabase.from("machine_assignments").select("machine_id, customer_org_id, manufacturer_org_id, is_active").eq("manufacturer_org_id", orgId).eq("is_active", true);
-                    if (assignmentRes.error) throw assignmentRes.error;
-
-                    const distinctCustomerIds = new Set((assignmentRes.data ?? []).map((row: any) => row.customer_org_id).filter(Boolean));
-
-                    if (!active) return;
-
-                    nextKpis = {
-                        machineCount: machineRes.count ?? 0,
-                        customerCount: distinctCustomerIds.size,
-                        activeAssignments: (assignmentRes.data ?? []).length,
-                        openWorkOrders, overdueWorkOrders,
-                        activeChecklists: checklistRes.count ?? 0,
-                        activeDocuments: documentsRes.count ?? 0,
-                    };
-                    nextMachines = (machineRes.data ?? []) as RecentMachineRow[];
+                    // Customers = distinct customer_org_id from assignments where manufacturer is me
+                    const myAssignments = allAssignments.filter((a: any) => a.manufacturer_org_id === orgId);
+                    myAssignmentCount = myAssignments.length;
+                    myCustomerCount = new Set(myAssignments.map((a: any) => a.customer_org_id).filter(Boolean)).size;
                 } else {
-                    const ownMachinesRes = await supabase.from("machines").select("id, name, internal_code, lifecycle_state, updated_at, photo_url", { count: "exact" }).eq("organization_id", orgId).eq("is_archived", false).or("is_deleted.is.null,is_deleted.eq.false").order("updated_at", { ascending: false }).limit(6);
-                    if (ownMachinesRes.error) throw ownMachinesRes.error;
+                    // Customer sees own + assigned machines
+                    const assignedToMe = allAssignments.filter((a: any) => a.customer_org_id === orgId);
+                    const assignedMachineIds = new Set(assignedToMe.map((a: any) => a.machine_id).filter(Boolean));
+                    myAssignmentCount = assignedToMe.length;
 
-                    const assignmentsRes = await supabase.from("machine_assignments").select("machine_id, customer_org_id, manufacturer_org_id, is_active", { count: "exact" }).eq("customer_org_id", orgId).eq("is_active", true);
-                    if (assignmentsRes.error) throw assignmentsRes.error;
-
-                    const assignedMachineIds = Array.from(new Set((assignmentsRes.data ?? []).map((x: any) => x.machine_id).filter(Boolean)));
-                    let assignedMachinesRows: any[] = [];
-                    if (assignedMachineIds.length > 0) {
-                        const r = await supabase.from("machines").select("id, name, internal_code, lifecycle_state, updated_at, photo_url").in("id", assignedMachineIds).eq("is_archived", false).or("is_deleted.is.null,is_deleted.eq.false").order("updated_at", { ascending: false });
-                        if (r.error) throw r.error;
-                        assignedMachinesRows = r.data ?? [];
+                    const mergedMap = new Map<string, RecentMachineRow>();
+                    for (const m of allMachines) {
+                        if (m.organization_id === orgId || assignedMachineIds.has(m.id)) {
+                            mergedMap.set(m.id, m);
+                        }
                     }
-
-                    const mergedMap = new Map < string, RecentMachineRow> ();
-                    for (const row of ownMachinesRes.data ?? []) mergedMap.set(row.id, row as RecentMachineRow);
-                    for (const row of assignedMachinesRows) mergedMap.set(row.id, row as RecentMachineRow);
-                    const mergedMachines = Array.from(mergedMap.values()).sort((a, b) => { const da = a.updated_at ? new Date(a.updated_at).getTime() : 0; const db = b.updated_at ? new Date(b.updated_at).getTime() : 0; return db - da; });
-
-                    if (!active) return;
-
-                    nextKpis = {
-                        machineCount: mergedMachines.length,
-                        customerCount: 0,
-                        activeAssignments: assignmentsRes.count ?? 0,
-                        openWorkOrders, overdueWorkOrders,
-                        activeChecklists: checklistRes.count ?? 0,
-                        activeDocuments: documentsRes.count ?? 0,
-                    };
-                    nextMachines = mergedMachines.slice(0, 6);
+                    myMachines = Array.from(mergedMap.values()).sort((a, b) => {
+                        const da = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+                        const db = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+                        return db - da;
+                    });
                 }
 
-                setKpis(nextKpis); setRecentMachines(nextMachines); setRecentActivity(nextActivity);
+                // Filter other entities by organization_id client-side
+                const myChecklists = (checklistRes.data ?? []).filter((r: any) => r.organization_id === orgId);
+                const myDocuments = (documentsRes.data ?? []).filter((r: any) => r.organization_id === orgId);
+                const myAuditLogs = (auditRes.data ?? []).filter((r: any) => r.organization_id === orgId).slice(0, 8);
+                const myWorkOrders = (workOrdersRes.data ?? []).filter((r: any) => r.organization_id === orgId);
+
+                const openWorkOrders = myWorkOrders.filter((row: any) => {
+                    const s = String(row.status ?? "").toLowerCase();
+                    return !["completed", "closed", "cancelled"].includes(s);
+                }).length;
+
+                const overdueWorkOrders = myWorkOrders.filter((row: any) => {
+                    const s = String(row.status ?? "").toLowerCase();
+                    const d = row.due_date ? new Date(row.due_date).toISOString() : null;
+                    return !!d && d < nowIso && !["completed", "closed", "cancelled"].includes(s);
+                }).length;
+
+                const nextKpis: DashboardKpis = {
+                    machineCount: myMachines.length,
+                    customerCount: myCustomerCount,
+                    activeAssignments: myAssignmentCount,
+                    openWorkOrders,
+                    overdueWorkOrders,
+                    activeChecklists: myChecklists.length,
+                    activeDocuments: myDocuments.length,
+                };
+
+                const nextMachines = myMachines.slice(0, 6);
+                const nextActivity = myAuditLogs as RecentActivityRow[];
+
+                setKpis(nextKpis);
+                setRecentMachines(nextMachines);
+                setRecentActivity(nextActivity);
+
                 cacheRef.current = { kpis: nextKpis, recentMachines: nextMachines, recentActivity: nextActivity, orgId, orgType, timestamp: Date.now() };
-            } catch (error) { console.error("Dashboard load error:", error); }
-            finally { if (active) setLoading(false); }
+            } catch (error) {
+                console.error("Dashboard load error:", error);
+            } finally {
+                if (active) setLoading(false);
+            }
         };
 
         void loadDashboard();
         return () => { active = false; };
     }, [authLoading, orgId, orgType]);
 
-    const issues = useMemo < UrgentIssue[] > (() => {
+    const issues = useMemo<UrgentIssue[]>(() => {
         const result: UrgentIssue[] = [];
 
         if (kpis.overdueWorkOrders > 0) {
@@ -412,18 +393,13 @@ export default function DashboardPage() {
     const dashboardSubtitle = orgType === "manufacturer" ? text.subtitleManufacturer : text.subtitleCustomer;
 
     if (authLoading || loading) {
-        return (
-            <OrgContextGuard><MainLayout userRole={userRole}><SEO title={text.seo} />
-                <div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{text.loadingDashboard}</CardContent></Card></div>
-            </MainLayout></OrgContextGuard>
-        );
+        return (<OrgContextGuard><MainLayout userRole={userRole}><SEO title={text.seo} /><div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{text.loadingDashboard}</CardContent></Card></div></MainLayout></OrgContextGuard>);
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
                 <SEO title={text.seo} />
-
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="space-y-2">
                         <h1 className="text-4xl font-bold tracking-tight text-foreground">Dashboard</h1>
@@ -514,3 +490,4 @@ export default function DashboardPage() {
         </OrgContextGuard>
     );
 }
+
