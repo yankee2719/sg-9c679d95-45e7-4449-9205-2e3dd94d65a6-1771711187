@@ -2,45 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
     Building2,
-    Factory,
     GitBranch,
+    Loader2,
     Plus,
     Search,
     Wrench,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { listPlants, type PlantSummary } from "@/services/plantService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/feedback/EmptyState";
+import { Input } from "@/components/ui/input";
 
 type OrgType = "manufacturer" | "customer" | null;
-
-interface PlantRow {
-    id: string;
-    name: string | null;
-    code: string | null;
-    organization_id: string;
-}
-
-interface LineRow {
-    id: string;
-    name: string | null;
-    code: string | null;
-    plant_id: string | null;
-}
-
-interface MachineRow {
-    id: string;
-    name: string | null;
-    internal_code: string | null;
-    plant_id: string | null;
-    production_line_id: string | null;
-}
 
 function KpiCard({
     icon,
@@ -69,14 +48,11 @@ export default function PlantsIndexPage() {
     const { t } = useLanguage();
 
     const [loading, setLoading] = useState(true);
-    const [plants, setPlants] = useState < PlantRow[] > ([]);
-    const [lines, setLines] = useState < LineRow[] > ([]);
-    const [machines, setMachines] = useState < MachineRow[] > ([]);
+    const [plants, setPlants] = useState < PlantSummary[] > ([]);
     const [search, setSearch] = useState("");
 
-    const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
-    const userRole = membership?.role ?? "technician";
+    const userRole = membership?.role ?? "viewer";
     const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
 
     useEffect(() => {
@@ -84,45 +60,17 @@ export default function PlantsIndexPage() {
 
         const load = async () => {
             if (authLoading) return;
-
-            if (!orgId || orgType !== "customer") {
+            if (orgType !== "customer") {
                 if (active) setLoading(false);
                 return;
             }
 
-            setLoading(true);
-
             try {
-                const [plantsRes, linesRes, machinesRes] = await Promise.all([
-                    supabase
-                        .from("plants")
-                        .select("id, name, code, organization_id")
-                        .eq("organization_id", orgId)
-                        .order("name"),
-                    supabase
-                        .from("production_lines")
-                        .select("id, name, code, plant_id")
-                        .eq("organization_id", orgId)
-                        .order("name"),
-                    supabase
-                        .from("machines")
-                        .select("id, name, internal_code, plant_id, production_line_id")
-                        .eq("organization_id", orgId)
-                        .eq("is_archived", false)
-                        .or("is_deleted.is.null,is_deleted.eq.false"),
-                ]);
-
-                if (plantsRes.error) throw plantsRes.error;
-                if (linesRes.error) throw linesRes.error;
-                if (machinesRes.error) throw machinesRes.error;
-
+                const data = await listPlants();
                 if (!active) return;
-
-                setPlants((plantsRes.data ?? []) as PlantRow[]);
-                setLines((linesRes.data ?? []) as LineRow[]);
-                setMachines((machinesRes.data ?? []) as MachineRow[]);
+                setPlants(data);
             } catch (error) {
-                console.error("Plants load error:", error);
+                console.error("Plants page load error:", error);
             } finally {
                 if (active) setLoading(false);
             }
@@ -133,30 +81,38 @@ export default function PlantsIndexPage() {
         return () => {
             active = false;
         };
-    }, [authLoading, orgId, orgType]);
+    }, [authLoading, orgType]);
 
     const filteredPlants = useMemo(() => {
-        const q = search.trim().toLowerCase();
+        const query = search.trim().toLowerCase();
+        if (!query) return plants;
 
         return plants.filter((plant) => {
-            if (!q) return true;
+            const values = [
+                plant.name,
+                plant.code,
+                ...plant.lines.map((line) => line.name),
+                ...plant.lines.map((line) => line.code),
+            ];
 
-            return [plant.name, plant.code]
+            return values
                 .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q));
+                .some((value) => String(value).toLowerCase().includes(query));
         });
     }, [plants, search]);
 
     const stats = useMemo(() => {
-        return {
-            plants: plants.length,
-            lines: lines.length,
-            machinesOnPlants: machines.filter((m) => !!m.plant_id).length,
-            plantsWithMachines: new Set(
-                machines.map((m) => m.plant_id).filter(Boolean)
-            ).size,
-        };
-    }, [plants, lines, machines]);
+        return plants.reduce(
+            (acc, plant) => {
+                acc.plants += 1;
+                acc.lines += plant.lines_count;
+                acc.machines += plant.machines_count;
+                if (plant.machines_count > 0) acc.plantsWithMachines += 1;
+                return acc;
+            },
+            { plants: 0, lines: 0, machines: 0, plantsWithMachines: 0 }
+        );
+    }, [plants]);
 
     if (authLoading || loading) {
         return (
@@ -165,7 +121,8 @@ export default function PlantsIndexPage() {
                     <SEO title={`${t("plants.title")} - MACHINA`} />
                     <div className="mx-auto max-w-7xl px-4 py-8">
                         <Card className="rounded-2xl">
-                            <CardContent className="py-10 text-center text-muted-foreground">
+                            <CardContent className="flex items-center gap-3 py-10 text-muted-foreground">
+                                <Loader2 className="h-5 w-5 animate-spin" />
                                 {t("plants.loading")}
                             </CardContent>
                         </Card>
@@ -175,7 +132,7 @@ export default function PlantsIndexPage() {
         );
     }
 
-    if (!orgId || orgType !== "customer") {
+    if (orgType !== "customer") {
         return (
             <OrgContextGuard>
                 <MainLayout userRole={userRole}>
@@ -183,7 +140,8 @@ export default function PlantsIndexPage() {
                     <div className="mx-auto max-w-7xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                {t("plants.customerOnly") || "La gestione stabilimenti è disponibile nel contesto cliente finale."}
+                                {t("plants.customerOnly") ||
+                                    "La gestione stabilimenti è disponibile nel contesto cliente finale."}
                             </CardContent>
                         </Card>
                     </div>
@@ -212,7 +170,7 @@ export default function PlantsIndexPage() {
                             <Link href="/plants/new">
                                 <Button>
                                     <Plus className="mr-2 h-4 w-4" />
-                                    {t("plants.new")}
+                                    {t("plants.new") || "Nuovo stabilimento"}
                                 </Button>
                             </Link>
                         )}
@@ -231,97 +189,125 @@ export default function PlantsIndexPage() {
                         />
                         <KpiCard
                             icon={<Wrench className="h-5 w-5" />}
-                            title={t("plants.machinesPlaced") || "Macchine posizionate"}
-                            value={stats.machinesOnPlants}
+                            title={t("machines.title") || "Macchine"}
+                            value={stats.machines}
                         />
                         <KpiCard
-                            icon={<Factory className="h-5 w-5" />}
-                            title={t("plants.plantsWithMachines") || "Stabilimenti con macchine"}
+                            icon={<Building2 className="h-5 w-5" />}
+                            title={t("plants.withMachines") || "Stabilimenti con macchine"}
                             value={stats.plantsWithMachines}
                         />
                     </div>
 
                     <Card className="rounded-2xl">
-                        <CardContent className="p-6">
+                        <CardContent className="p-5">
                             <div className="relative">
-                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <input
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
                                     value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={t("plants.search")}
-                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    placeholder={
+                                        t("plants.search") || "Cerca stabilimento, codice o linea..."
+                                    }
+                                    className="pl-10"
                                 />
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="rounded-2xl">
-                        <CardContent className="p-6">
-                            {filteredPlants.length === 0 ? (
-                                <EmptyState
-                                    title={t("plants.noResults")}
-                                    description={t("plants.noResults")}
-                                    icon={<Building2 className="h-10 w-10" />}
-                                    actionLabel={canEdit ? t("plants.new") : undefined}
-                                    actionHref={canEdit ? "/plants/new" : undefined}
-                                    secondaryActionLabel={t("nav.equipment")}
-                                    secondaryActionHref="/equipment"
-                                />
-                            ) : (
-                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    {filteredPlants.map((plant) => {
-                                        const lineCount = lines.filter(
-                                            (line) => line.plant_id === plant.id
-                                        ).length;
-                                        const machineCount = machines.filter(
-                                            (machine) => machine.plant_id === plant.id
-                                        ).length;
+                    {filteredPlants.length === 0 ? (
+                        <EmptyState
+                            title={t("plants.noResults") || "Nessuno stabilimento trovato."}
+                            description={
+                                canEdit
+                                    ? t("plants.emptyDescription") ||
+                                    "Crea il primo stabilimento per iniziare a posizionare macchine e linee."
+                                    : t("plants.emptyDescriptionReadOnly") ||
+                                    "Non ci sono stabilimenti nel contesto attivo."
+                            }
+                            icon={<Building2 className="h-10 w-10" />}
+                            actionLabel={
+                                canEdit ? t("plants.new") || "Nuovo stabilimento" : undefined
+                            }
+                            actionHref={canEdit ? "/plants/new" : undefined}
+                        />
+                    ) : (
+                        <div className="grid gap-5 xl:grid-cols-2">
+                            {filteredPlants.map((plant) => (
+                                <Link key={plant.id} href={`/plants/${plant.id}`} className="block">
+                                    <Card className="h-full rounded-2xl transition hover:border-orange-500/30 hover:bg-muted/20">
+                                        <CardContent className="space-y-5 p-6">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <h2 className="truncate text-xl font-semibold text-foreground">
+                                                        {plant.name || t("plants.fallbackPlant") || "Stabilimento"}
+                                                    </h2>
+                                                    <p className="mt-1 text-sm text-muted-foreground">
+                                                        {plant.code || "—"}
+                                                    </p>
+                                                </div>
 
-                                        return (
-                                            <Link
-                                                key={plant.id}
-                                                href={`/plants/${plant.id}`}
-                                                className="block"
-                                            >
-                                                <div className="rounded-2xl border border-border p-5 transition hover:bg-muted/30">
-                                                    <div className="space-y-4">
-                                                        <div>
-                                                            <div className="text-xl font-semibold text-foreground">
-                                                                {plant.name || t("plants.title")}
-                                                            </div>
-                                                            <div className="text-sm text-muted-foreground">
-                                                                {plant.code || "—"}
-                                                            </div>
-                                                        </div>
+                                                <div className="rounded-xl border border-border bg-muted px-3 py-2 text-xs font-medium text-foreground">
+                                                    {plant.machines_count}{" "}
+                                                    {t("machines.title")?.toLowerCase() || "macchine"}
+                                                </div>
+                                            </div>
 
-                                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                                            <div className="rounded-xl bg-muted p-3">
-                                                                <div className="text-muted-foreground">
-                                                                    {t("plants.lines") || "Linee"}
-                                                                </div>
-                                                                <div className="font-medium text-foreground">
-                                                                    {lineCount}
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="rounded-xl bg-muted p-3">
-                                                                <div className="text-muted-foreground">
-                                                                    {t("machines.title")}
-                                                                </div>
-                                                                <div className="font-medium text-foreground">
-                                                                    {machineCount}
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <div className="rounded-2xl border border-border p-4">
+                                                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                        {t("plants.lines") || "Linee"}
+                                                    </div>
+                                                    <div className="mt-2 text-2xl font-bold text-foreground">
+                                                        {plant.lines_count}
                                                     </div>
                                                 </div>
-                                            </Link>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+
+                                                <div className="rounded-2xl border border-border p-4">
+                                                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                        {t("machines.title") || "Macchine"}
+                                                    </div>
+                                                    <div className="mt-2 text-2xl font-bold text-foreground">
+                                                        {plant.machines_count}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-sm font-medium text-foreground">
+                                                    {t("plants.linkedLines") || "Linee collegate"}
+                                                </div>
+
+                                                {plant.lines.length === 0 ? (
+                                                    <div className="rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                                                        {t("plants.noLinkedLines") ||
+                                                            "Nessuna linea collegata"}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {plant.lines.slice(0, 6).map((line) => (
+                                                            <span
+                                                                key={line.id}
+                                                                className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground"
+                                                            >
+                                                                {line.name || t("plants.fallbackLine") || "Linea"}
+                                                            </span>
+                                                        ))}
+
+                                                        {plant.lines.length > 6 && (
+                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                                                                +{plant.lines.length - 6}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </MainLayout>
         </OrgContextGuard>
