@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, ClipboardList, Plus, Search, Wrench } from "lucide-react";
-import { listWorkOrders } from "@/services/workOrderApi";
+import {
+    AlertTriangle,
+    CheckCircle2,
+    ClipboardList,
+    Plus,
+    Search,
+    Wrench,
+} from "lucide-react";
+import { listWorkOrders, updateWorkOrder } from "@/services/workOrderApi";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
@@ -30,7 +37,8 @@ interface WorkOrderRow {
 function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
-        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        const locale =
+            lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
         return new Date(value).toLocaleString(locale, {
             year: "numeric",
             month: "2-digit",
@@ -75,7 +83,9 @@ function KpiCard({
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
-                <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-current/10 ${toneClass}`}>
+                <div
+                    className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-current/10 ${toneClass}`}
+                >
                     {icon}
                 </div>
                 <div className="text-4xl font-bold text-foreground">{value}</div>
@@ -89,6 +99,7 @@ export default function WorkOrdersIndexPage() {
     const { loading: authLoading, membership } = useAuth();
     const { t, language } = useLanguage();
     const userRole = membership?.role ?? "viewer";
+    const canEdit = ["owner", "admin", "supervisor", "technician"].includes(userRole);
 
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState < WorkOrderRow[] > ([]);
@@ -116,6 +127,19 @@ export default function WorkOrdersIndexPage() {
         };
     }, [authLoading]);
 
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            try {
+                const data = await listWorkOrders();
+                setRows(data as WorkOrderRow[]);
+            } catch (error) {
+                console.error("Work orders refresh error:", error);
+            }
+        }, 10000);
+
+        return () => clearInterval(interval);
+    }, []);
+
     const filteredRows = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return rows;
@@ -137,6 +161,18 @@ export default function WorkOrdersIndexPage() {
             ).length,
         };
     }, [rows]);
+
+    const handleQuickStart = async (row: WorkOrderRow, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        try {
+            const updated = await updateWorkOrder(row.id, { ...row, status: "in_progress" });
+            setRows((prev) => prev.map((item) => (item.id === row.id ? updated : item)));
+        } catch (error) {
+            console.error("Quick start failed:", error);
+        }
+    };
 
     if (authLoading || loading) {
         return (
@@ -171,10 +207,28 @@ export default function WorkOrdersIndexPage() {
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<ClipboardList className="h-5 w-5" />} title={t("common.all")} value={stats.total} />
-                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("workOrders.statusOpen")} value={stats.open} />
-                        <KpiCard icon={<AlertTriangle className="h-5 w-5" />} title={t("workOrders.overdue") || "In ritardo"} value={stats.overdue} tone="warning" />
-                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={t("workOrders.statusCompleted")} value={stats.completed} tone="success" />
+                        <KpiCard
+                            icon={<ClipboardList className="h-5 w-5" />}
+                            title={t("common.all")}
+                            value={stats.total}
+                        />
+                        <KpiCard
+                            icon={<Wrench className="h-5 w-5" />}
+                            title={t("workOrders.statusOpen")}
+                            value={stats.open}
+                        />
+                        <KpiCard
+                            icon={<AlertTriangle className="h-5 w-5" />}
+                            title={t("workOrders.overdue") || "In ritardo"}
+                            value={stats.overdue}
+                            tone="warning"
+                        />
+                        <KpiCard
+                            icon={<CheckCircle2 className="h-5 w-5" />}
+                            title={t("workOrders.statusCompleted")}
+                            value={stats.completed}
+                            tone="success"
+                        />
                     </div>
 
                     <Card className="rounded-2xl">
@@ -227,6 +281,18 @@ export default function WorkOrdersIndexPage() {
                                                             <span>Updated: {formatDate(row.updated_at, language)}</span>
                                                         </div>
                                                     </div>
+
+                                                    {canEdit && !isClosedStatus(row.status) ? (
+                                                        <div className="flex shrink-0 gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => void handleQuickStart(row, e)}
+                                                            >
+                                                                Start
+                                                            </Button>
+                                                        </div>
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         </Link>
