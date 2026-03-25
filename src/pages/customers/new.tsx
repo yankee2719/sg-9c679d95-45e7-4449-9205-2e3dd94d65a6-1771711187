@@ -6,7 +6,7 @@ import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/integrations/supabase/client";
+import { createCustomer } from "@/services/customerApi";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,111 +18,68 @@ import {
     Loader2,
     Save,
     Shield,
-    UserPlus,
 } from "lucide-react";
 
 export default function NewCustomerPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { organization, membership, session, loading: authLoading } = useAuth();
+    const { organization, membership, loading: authLoading } = useAuth();
     const { t } = useLanguage();
 
     const [saving, setSaving] = useState(false);
 
     const [name, setName] = useState("");
+    const [slug, setSlug] = useState("");
     const [city, setCity] = useState("");
     const [country, setCountry] = useState("IT");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
-
-    const [createPrimaryUser, setCreatePrimaryUser] = useState(true);
-    const [primaryUserName, setPrimaryUserName] = useState("");
-    const [primaryUserEmail, setPrimaryUserEmail] = useState("");
-    const [primaryUserPassword, setPrimaryUserPassword] = useState("");
-    const [primaryUserRole, setPrimaryUserRole] = useState("admin");
+    const [subscriptionStatus, setSubscriptionStatus] = useState("trial");
+    const [subscriptionPlan, setSubscriptionPlan] = useState("free");
 
     const orgType = organization?.type ?? null;
     const userRole = membership?.role ?? "technician";
-    const canCreate = userRole === "owner" || userRole === "admin";
+    const canCreate = userRole === "owner" || userRole === "admin" || userRole === "supervisor";
 
     const pageBlocked = useMemo(() => {
         return authLoading || orgType !== "manufacturer" || !canCreate;
     }, [authLoading, orgType, canCreate]);
 
-    const getAccessToken = async () => {
-        const accessToken =
-            session?.access_token ??
-            (await supabase.auth.getSession()).data.session?.access_token;
-
-        if (!accessToken) throw new Error("Session expired");
-        return accessToken;
-    };
-
     const handleCreate = async () => {
         if (!name.trim()) {
             toast({
                 title: t("common.error") || "Errore",
-                description: t("customers.errorNameRequired"),
+                description: t("customers.errorNameRequired") || "Il nome cliente è obbligatorio.",
                 variant: "destructive",
             });
             return;
         }
 
-        if (createPrimaryUser) {
-            if (!primaryUserName.trim() || !primaryUserEmail.trim() || !primaryUserPassword.trim()) {
-                toast({
-                    title: t("common.error") || "Errore",
-                    description: t("customers.errorPrimaryUserRequired"),
-                    variant: "destructive",
-                });
-                return;
-            }
-        }
-
         setSaving(true);
 
         try {
-            const accessToken = await getAccessToken();
-
-            const response = await fetch("/api/customers/create", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({
-                    name: name.trim(),
-                    city: city.trim() || null,
-                    country: country.trim() || "IT",
-                    email: email.trim().toLowerCase() || null,
-                    phone: phone.trim() || null,
-                    create_primary_user: createPrimaryUser,
-                    primary_user_name: createPrimaryUser ? primaryUserName.trim() : null,
-                    primary_user_email: createPrimaryUser
-                        ? primaryUserEmail.trim().toLowerCase()
-                        : null,
-                    primary_user_password: createPrimaryUser ? primaryUserPassword : null,
-                    primary_user_role: createPrimaryUser ? primaryUserRole : null,
-                }),
+            const data = await createCustomer({
+                name: name.trim(),
+                slug: slug.trim() || null,
+                city: city.trim() || null,
+                country: country.trim() || "IT",
+                email: email.trim().toLowerCase() || null,
+                phone: phone.trim() || null,
+                subscription_status: subscriptionStatus,
+                subscription_plan: subscriptionPlan,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data?.error || t("customers.errorCreate"));
-            }
-
             toast({
-                title: t("customers.created"),
+                title: t("customers.created") || "Cliente creato",
                 description: name.trim(),
             });
 
-            void router.push(`/customers/${data.customer_id}`);
+            void router.push(`/customers/${data.id}`);
         } catch (err: any) {
             console.error(err);
             toast({
                 title: t("common.error") || "Errore",
-                description: err?.message || t("customers.errorCreate"),
+                description: err?.message || t("customers.errorCreate") || "Errore creazione cliente",
                 variant: "destructive",
             });
         } finally {
@@ -138,7 +95,7 @@ export default function NewCustomerPage() {
                     <div className="mx-auto max-w-5xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                {t("customers.ownerAdminOnly")}
+                                {t("customers.ownerAdminOnly") || "Solo owner, admin e supervisor possono creare clienti."}
                             </CardContent>
                         </Card>
                     </div>
@@ -160,9 +117,9 @@ export default function NewCustomerPage() {
                             </Button>
                         </Link>
                         <div>
-                            <h1 className="text-3xl font-bold">{t("customers.newTitle")}</h1>
+                            <h1 className="text-3xl font-bold">{t("customers.newTitle") || "Nuovo cliente"}</h1>
                             <p className="text-sm text-muted-foreground">
-                                {t("customers.newSubtitle")}
+                                {t("customers.newSubtitle") || "Crea un nuovo cliente nel contesto del costruttore attivo."}
                             </p>
                         </div>
                     </div>
@@ -171,30 +128,39 @@ export default function NewCustomerPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Building2 className="h-5 w-5" />
-                                {t("customers.registry")}
+                                {t("customers.registry") || "Anagrafica cliente"}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2 md:col-span-2">
-                                <Label>{t("customers.nameLabel")}</Label>
+                                <Label>{t("customers.nameLabel") || "Nome cliente"} *</Label>
                                 <Input
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
-                                    placeholder={t("customers.namePlaceholder")}
+                                    placeholder={t("customers.namePlaceholder") || "Es. Rossi Impianti"}
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label>{t("customers.cityLabel")}</Label>
+                                <Label>Slug</Label>
+                                <Input
+                                    value={slug}
+                                    onChange={(e) => setSlug(e.target.value)}
+                                    placeholder="es. rossi-impianti"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{t("customers.cityLabel") || "Città"}</Label>
                                 <Input
                                     value={city}
                                     onChange={(e) => setCity(e.target.value)}
-                                    placeholder={t("customers.cityPlaceholder")}
+                                    placeholder={t("customers.cityPlaceholder") || "Es. Vicenza"}
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <Label>{t("customers.countryLabel")}</Label>
+                                <Label>{t("customers.countryLabel") || "Paese"}</Label>
                                 <Input
                                     value={country}
                                     onChange={(e) => setCountry(e.target.value)}
@@ -203,7 +169,7 @@ export default function NewCustomerPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label>{t("customers.companyEmail")}</Label>
+                                <Label>{t("customers.companyEmail") || "Email aziendale"}</Label>
                                 <Input
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -212,12 +178,39 @@ export default function NewCustomerPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label>{t("customers.phoneLabel")}</Label>
+                                <Label>{t("customers.phoneLabel") || "Telefono"}</Label>
                                 <Input
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
                                     placeholder="+39 ..."
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>{t("customers.kpi.activePlans") || "Piano"}</Label>
+                                <select
+                                    value={subscriptionPlan}
+                                    onChange={(e) => setSubscriptionPlan(e.target.value)}
+                                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option value="free">free</option>
+                                    <option value="starter">starter</option>
+                                    <option value="professional">professional</option>
+                                    <option value="enterprise">enterprise</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Status</Label>
+                                <select
+                                    value={subscriptionStatus}
+                                    onChange={(e) => setSubscriptionStatus(e.target.value)}
+                                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option value="trial">trial</option>
+                                    <option value="active">active</option>
+                                    <option value="suspended">suspended</option>
+                                </select>
                             </div>
                         </CardContent>
                     </Card>
@@ -225,93 +218,20 @@ export default function NewCustomerPage() {
                     <Card className="rounded-2xl">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <UserPlus className="h-5 w-5" />
-                                {t("customers.primaryUser")}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <label className="flex items-center gap-3 rounded-xl border border-border p-4">
-                                <input
-                                    type="checkbox"
-                                    checked={createPrimaryUser}
-                                    onChange={(e) => setCreatePrimaryUser(e.target.checked)}
-                                />
-                                <div>
-                                    <div className="font-medium">{t("customers.createPrimaryUserNow")}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                        {t("customers.createPrimaryUserDesc")}
-                                    </div>
-                                </div>
-                            </label>
-
-                            {createPrimaryUser && (
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2 md:col-span-2">
-                                        <Label>{t("customers.fullName")}</Label>
-                                        <Input
-                                            value={primaryUserName}
-                                            onChange={(e) => setPrimaryUserName(e.target.value)}
-                                            placeholder="Es. Mario Rossi"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Email *</Label>
-                                        <Input
-                                            value={primaryUserEmail}
-                                            onChange={(e) => setPrimaryUserEmail(e.target.value)}
-                                            placeholder="m.rossi@cliente.com"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>{t("customers.initialPassword")}</Label>
-                                        <Input
-                                            type="password"
-                                            value={primaryUserPassword}
-                                            onChange={(e) => setPrimaryUserPassword(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>{t("customers.initialRole")}</Label>
-                                        <select
-                                            value={primaryUserRole}
-                                            onChange={(e) => setPrimaryUserRole(e.target.value)}
-                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        >
-                                            <option value="admin">admin</option>
-                                            <option value="supervisor">supervisor</option>
-                                            <option value="technician">technician</option>
-                                            <option value="viewer">viewer</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                                        {t("customers.primaryUserOrgNote")}
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
                                 <Shield className="h-5 w-5" />
-                                {t("customers.finalCheck")}
+                                {t("customers.finalCheck") || "Controllo finale"}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm text-muted-foreground">
-                            <div>{t("customers.activeManufacturer")}: {organization?.name || "—"}</div>
-                            <div>{t("customers.activeOrgType")}: {organization?.type || "—"}</div>
-                            <div>{t("customers.activeRole")}: {membership?.role || "—"}</div>
+                            <div>{t("customers.activeManufacturer") || "Costruttore attivo"}: {organization?.name || "—"}</div>
+                            <div>{t("customers.activeOrgType") || "Tipo organizzazione"}: {organization?.type || "—"}</div>
+                            <div>{t("customers.activeRole") || "Ruolo attivo"}: {membership?.role || "—"}</div>
                         </CardContent>
                     </Card>
 
                     <div className="flex justify-end gap-3">
                         <Link href="/customers">
-                            <Button variant="outline">{t("common.cancel")}</Button>
+                            <Button variant="outline">{t("common.cancel") || "Annulla"}</Button>
                         </Link>
 
                         <Button onClick={handleCreate} disabled={saving}>
@@ -320,7 +240,9 @@ export default function NewCustomerPage() {
                             ) : (
                                 <Save className="mr-2 h-4 w-4" />
                             )}
-                            {saving ? t("customers.creating") : t("customers.createCustomer")}
+                            {saving
+                                ? t("customers.creating") || "Creazione..."
+                                : t("customers.createCustomer") || "Crea cliente"}
                         </Button>
                     </div>
                 </div>
