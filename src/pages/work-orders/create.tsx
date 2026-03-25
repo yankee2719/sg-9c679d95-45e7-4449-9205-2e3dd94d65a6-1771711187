@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Save, Loader2, Wrench, User, CalendarDays } from "lucide-react";
 import { PageLoader } from "@/components/feedback/PageLoader";
+import { createWorkOrder } from "@/services/workOrderApi";
 
 type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
 type WorkStatus =
@@ -96,7 +97,7 @@ export default function WorkOrderCreatePage() {
     const orgId = organization?.id ?? null;
     const orgType = organization?.type ?? null;
     const role = membership?.role ?? "technician";
-    const canCreate = role === "owner" || role === "admin" || role === "supervisor";
+    const canCreate = ["owner", "admin", "supervisor", "technician"].includes(role);
 
     useEffect(() => {
         setWorkType(workTypeFromQuery);
@@ -228,7 +229,9 @@ export default function WorkOrderCreatePage() {
         if (!canCreate) {
             toast({
                 title: t("workOrders.permissionDenied") || "Permesso negato",
-                description: t("workOrders.onlyAdminCreate") || "Solo Owner, Admin e Supervisor possono creare work order.",
+                description:
+                    t("workOrders.onlyAdminCreate") ||
+                    "Solo Owner, Admin, Supervisor e Technician possono creare work order.",
                 variant: "destructive",
             });
             return;
@@ -274,7 +277,9 @@ export default function WorkOrderCreatePage() {
         if (!selectedMachine.plant_id) {
             toast({
                 title: t("common.error") || "Errore",
-                description: t("workOrders.errorNoPlant") || "La macchina selezionata non ha uno stabilimento associato.",
+                description:
+                    t("workOrders.errorNoPlant") ||
+                    "La macchina selezionata non ha uno stabilimento associato.",
                 variant: "destructive",
             });
             return;
@@ -282,27 +287,18 @@ export default function WorkOrderCreatePage() {
 
         setSaving(true);
         try {
-            const payload: any = {
-                organization_id: orgId,
-                machine_id: selectedMachine.id,
-                plant_id: selectedMachine.plant_id,
+            const data = await createWorkOrder({
                 title: title.trim(),
                 description: description.trim() || null,
                 work_type: workType,
                 status,
                 priority,
                 due_date: dueDate ? new Date(dueDate).toISOString() : null,
+                machine_id: selectedMachine.id,
+                plant_id: selectedMachine.plant_id,
                 assigned_to: assignedTo === "none" ? null : assignedTo,
                 created_by: user?.id ?? null,
-            };
-
-            const { data, error } = await supabase
-                .from("work_orders")
-                .insert(payload)
-                .select("id")
-                .single();
-
-            if (error) throw error;
+            });
 
             toast({
                 title: "OK",
@@ -325,11 +321,14 @@ export default function WorkOrderCreatePage() {
     if (authLoading || loading) {
         return (
             <OrgContextGuard>
-                <MainLayout userRole={role as any}>
+                <MainLayout userRole={role}>
                     <SEO title={`${t("workOrders.createTitle")} - MACHINA`} />
                     <PageLoader
                         title={t("workOrders.createTitle")}
-                        description={t("workOrders.createLoading") || "Stiamo preparando il contesto operativo..."}
+                        description={
+                            t("workOrders.createLoading") ||
+                            "Stiamo preparando il contesto operativo..."
+                        }
                     />
                 </MainLayout>
             </OrgContextGuard>
@@ -338,7 +337,7 @@ export default function WorkOrderCreatePage() {
 
     return (
         <OrgContextGuard>
-            <MainLayout userRole={role as any}>
+            <MainLayout userRole={role}>
                 <SEO title={`${t("workOrders.createTitle")} - MACHINA`} />
 
                 <div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
@@ -351,7 +350,8 @@ export default function WorkOrderCreatePage() {
                         <CardHeader>
                             <CardTitle>{t("workOrders.createTitle")}</CardTitle>
                             <CardDescription>
-                                {t("workOrders.createDesc") || "Il work order appartiene sempre all'organizzazione attiva."}
+                                {t("workOrders.createDesc") ||
+                                    "Il work order appartiene sempre all'organizzazione attiva."}
                             </CardDescription>
                         </CardHeader>
 
@@ -362,7 +362,10 @@ export default function WorkOrderCreatePage() {
                                     <Input
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
-                                        placeholder={t("workOrders.titlePlaceholder") || "es. Sostituzione cuscinetto lato motore"}
+                                        placeholder={
+                                            t("workOrders.titlePlaceholder") ||
+                                            "es. Sostituzione cuscinetto lato motore"
+                                        }
                                     />
                                 </div>
 
@@ -373,14 +376,23 @@ export default function WorkOrderCreatePage() {
                                     </Label>
                                     <Select value={machineId} onValueChange={setMachineId}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder={t("workOrders.selectMachine") || "Seleziona macchina..."} />
+                                            <SelectValue
+                                                placeholder={
+                                                    t("workOrders.selectMachine") ||
+                                                    "Seleziona macchina..."
+                                                }
+                                            />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none">{t("workOrders.selectMachine") || "Seleziona macchina"}</SelectItem>
+                                            <SelectItem value="none">
+                                                {t("workOrders.selectMachine") || "Seleziona macchina"}
+                                            </SelectItem>
                                             {machines.map((machine) => (
                                                 <SelectItem key={machine.id} value={machine.id}>
                                                     {machine.name}
-                                                    {machine.internal_code ? ` · ${machine.internal_code}` : ""}
+                                                    {machine.internal_code
+                                                        ? ` · ${machine.internal_code}`
+                                                        : ""}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -394,10 +406,16 @@ export default function WorkOrderCreatePage() {
                                     </Label>
                                     <Select value={assignedTo} onValueChange={setAssignedTo}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder={t("workOrders.unassigned") || "Non assegnato"} />
+                                            <SelectValue
+                                                placeholder={
+                                                    t("workOrders.unassigned") || "Non assegnato"
+                                                }
+                                            />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none">{t("workOrders.unassigned") || "Non assegnato"}</SelectItem>
+                                            <SelectItem value="none">
+                                                {t("workOrders.unassigned") || "Non assegnato"}
+                                            </SelectItem>
                                             {assignees.map((profile) => (
                                                 <SelectItem key={profile.id} value={profile.id}>
                                                     {formatName(profile)}
@@ -417,11 +435,21 @@ export default function WorkOrderCreatePage() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="preventive">{t("workOrders.typePreventive")}</SelectItem>
-                                            <SelectItem value="corrective">{t("workOrders.typeCorrective")}</SelectItem>
-                                            <SelectItem value="predictive">{t("workOrders.typePredictive")}</SelectItem>
-                                            <SelectItem value="inspection">{t("workOrders.typeInspection")}</SelectItem>
-                                            <SelectItem value="emergency">{t("workOrders.typeEmergency") || "Emergency"}</SelectItem>
+                                            <SelectItem value="preventive">
+                                                {t("workOrders.typePreventive")}
+                                            </SelectItem>
+                                            <SelectItem value="corrective">
+                                                {t("workOrders.typeCorrective")}
+                                            </SelectItem>
+                                            <SelectItem value="predictive">
+                                                {t("workOrders.typePredictive")}
+                                            </SelectItem>
+                                            <SelectItem value="inspection">
+                                                {t("workOrders.typeInspection")}
+                                            </SelectItem>
+                                            <SelectItem value="emergency">
+                                                {t("workOrders.typeEmergency") || "Emergency"}
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -436,12 +464,24 @@ export default function WorkOrderCreatePage() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="draft">{t("workOrders.statusDraft") || "Bozza"}</SelectItem>
-                                            <SelectItem value="scheduled">{t("workOrders.statusScheduled") || "Pianificato"}</SelectItem>
-                                            <SelectItem value="in_progress">{t("workOrders.statusInProgress")}</SelectItem>
-                                            <SelectItem value="pending_review">{t("workOrders.statusPendingReview") || "In revisione"}</SelectItem>
-                                            <SelectItem value="completed">{t("workOrders.statusCompleted")}</SelectItem>
-                                            <SelectItem value="cancelled">{t("workOrders.statusCancelled") || "Annullato"}</SelectItem>
+                                            <SelectItem value="draft">
+                                                {t("workOrders.statusDraft") || "Bozza"}
+                                            </SelectItem>
+                                            <SelectItem value="scheduled">
+                                                {t("workOrders.statusScheduled") || "Pianificato"}
+                                            </SelectItem>
+                                            <SelectItem value="in_progress">
+                                                {t("workOrders.statusInProgress")}
+                                            </SelectItem>
+                                            <SelectItem value="pending_review">
+                                                {t("workOrders.statusPendingReview") || "In revisione"}
+                                            </SelectItem>
+                                            <SelectItem value="completed">
+                                                {t("workOrders.statusCompleted")}
+                                            </SelectItem>
+                                            <SelectItem value="cancelled">
+                                                {t("workOrders.statusCancelled") || "Annullato"}
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -456,10 +496,18 @@ export default function WorkOrderCreatePage() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="low">{t("workOrders.priorityLow")}</SelectItem>
-                                            <SelectItem value="medium">{t("workOrders.priorityMedium")}</SelectItem>
-                                            <SelectItem value="high">{t("workOrders.priorityHigh")}</SelectItem>
-                                            <SelectItem value="critical">{t("workOrders.priorityCritical")}</SelectItem>
+                                            <SelectItem value="low">
+                                                {t("workOrders.priorityLow")}
+                                            </SelectItem>
+                                            <SelectItem value="medium">
+                                                {t("workOrders.priorityMedium")}
+                                            </SelectItem>
+                                            <SelectItem value="high">
+                                                {t("workOrders.priorityHigh")}
+                                            </SelectItem>
+                                            <SelectItem value="critical">
+                                                {t("workOrders.priorityCritical")}
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -482,7 +530,10 @@ export default function WorkOrderCreatePage() {
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
                                         rows={5}
-                                        placeholder={t("workOrders.descriptionPlaceholder") || "Descrizione intervento, sintomi, note operative..."}
+                                        placeholder={
+                                            t("workOrders.descriptionPlaceholder") ||
+                                            "Descrizione intervento, sintomi, note operative..."
+                                        }
                                     />
                                 </div>
                             </div>
@@ -498,7 +549,9 @@ export default function WorkOrderCreatePage() {
                                     ) : (
                                         <Save className="mr-2 h-4 w-4" />
                                     )}
-                                    {saving ? t("common.saving") || "Salvataggio..." : t("workOrders.saveWorkOrder") || "Salva work order"}
+                                    {saving
+                                        ? t("common.saving") || "Salvataggio..."
+                                        : t("workOrders.saveWorkOrder") || "Salva work order"}
                                 </Button>
                             </div>
                         </CardContent>
