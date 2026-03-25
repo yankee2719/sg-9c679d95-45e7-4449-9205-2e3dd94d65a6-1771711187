@@ -5,6 +5,40 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
+function slugify(value: string) {
+    return value
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80);
+}
+
+async function buildUniqueSlug(
+    serviceSupabase: ReturnType<typeof getServiceSupabase>,
+    baseName: string
+) {
+    const base = slugify(baseName) || `customer-${Date.now()}`;
+    let candidate = base;
+    let counter = 1;
+
+    while (true) {
+        const { data, error } = await serviceSupabase
+            .from("organizations")
+            .select("id")
+            .eq("slug", candidate)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return candidate;
+
+        counter += 1;
+        candidate = `${base}-${counter}`;
+    }
+}
+
 export default withAuth(
     ["owner", "admin", "supervisor", "viewer"],
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -34,6 +68,13 @@ export default withAuth(
                         country,
                         email,
                         phone,
+                        address_line1,
+                        address_line2,
+                        province,
+                        postal_code,
+                        vat_number,
+                        fiscal_code,
+                        website,
                         subscription_status,
                         subscription_plan,
                         created_at,
@@ -60,6 +101,13 @@ export default withAuth(
                     country,
                     email,
                     phone,
+                    address_line1,
+                    address_line2,
+                    province,
+                    postal_code,
+                    vat_number,
+                    fiscal_code,
+                    website,
                     subscription_status,
                     subscription_plan,
                 } = req.body ?? {};
@@ -68,17 +116,28 @@ export default withAuth(
                     return res.status(400).json({ error: "Customer name is required" });
                 }
 
+                const finalSlug = slug?.trim()
+                    ? slugify(slug.trim())
+                    : await buildUniqueSlug(serviceSupabase, name.trim());
+
                 const { data, error } = await serviceSupabase
                     .from("organizations")
                     .insert({
                         name: name.trim(),
-                        slug: slug?.trim() || null,
+                        slug: finalSlug,
                         type: "customer",
                         manufacturer_org_id: organizationId,
                         city: city?.trim() || null,
-                        country: country?.trim() || null,
-                        email: email?.trim() || null,
+                        country: country?.trim() || "IT",
+                        email: email?.trim().toLowerCase() || null,
                         phone: phone?.trim() || null,
+                        address_line1: address_line1?.trim() || null,
+                        address_line2: address_line2?.trim() || null,
+                        province: province?.trim() || null,
+                        postal_code: postal_code?.trim() || null,
+                        vat_number: vat_number?.trim() || null,
+                        fiscal_code: fiscal_code?.trim() || null,
+                        website: website?.trim() || null,
                         subscription_status: subscription_status || "trial",
                         subscription_plan: subscription_plan || "free",
                     })
@@ -95,7 +154,12 @@ export default withAuth(
                     action: "create",
                     new_data: {
                         name: data.name,
+                        slug: data.slug,
                         type: data.type,
+                        city: data.city,
+                        country: data.country,
+                        subscription_status: data.subscription_status,
+                        subscription_plan: data.subscription_plan,
                     },
                 });
 
