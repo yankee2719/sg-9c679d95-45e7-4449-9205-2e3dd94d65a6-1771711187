@@ -84,6 +84,21 @@ export default function CustomersIndexPage() {
         };
     }, [authLoading, orgType]);
 
+    useEffect(() => {
+        const onFocus = async () => {
+            if (orgType !== "manufacturer") return;
+            try {
+                const data = await listCustomers();
+                setRows(data as CustomerRow[]);
+            } catch (error) {
+                console.error("Customers refresh error:", error);
+            }
+        };
+
+        window.addEventListener("focus", onFocus);
+        return () => window.removeEventListener("focus", onFocus);
+    }, [orgType]);
+
     const filteredRows = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return rows;
