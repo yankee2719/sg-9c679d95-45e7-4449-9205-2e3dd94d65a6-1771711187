@@ -5,6 +5,31 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
+const ALLOWED_STATUSES = [
+    "draft",
+    "scheduled",
+    "in_progress",
+    "pending_review",
+    "completed",
+    "cancelled",
+] as const;
+
+const ALLOWED_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+
+function normalizeStatus(value: unknown) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return ALLOWED_STATUSES.includes(normalized as (typeof ALLOWED_STATUSES)[number])
+        ? normalized
+        : "draft";
+}
+
+function normalizePriority(value: unknown) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return ALLOWED_PRIORITIES.includes(normalized as (typeof ALLOWED_PRIORITIES)[number])
+        ? normalized
+        : "medium";
+}
+
 export default withAuth(
     ["owner", "admin", "supervisor", "technician", "viewer"],
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -52,24 +77,36 @@ export default withAuth(
                     due_date,
                     machine_id,
                     assigned_to,
+                    plant_id,
+                    work_type,
+                    created_by,
                 } = req.body ?? {};
 
                 if (!title?.trim()) {
                     return res.status(400).json({ error: "Title is required" });
                 }
 
+                if (!machine_id) {
+                    return res.status(400).json({ error: "Machine is required" });
+                }
+
+                const payload = {
+                    organization_id: organizationId,
+                    title: title.trim(),
+                    description: description?.trim() || null,
+                    status: normalizeStatus(status),
+                    priority: normalizePriority(priority),
+                    due_date: due_date || null,
+                    machine_id,
+                    assigned_to: assigned_to || null,
+                    plant_id: plant_id || null,
+                    work_type: work_type || "preventive",
+                    created_by: created_by || req.user.userId,
+                };
+
                 const { data, error } = await serviceSupabase
                     .from("work_orders")
-                    .insert({
-                        organization_id: organizationId,
-                        title: title.trim(),
-                        description: description?.trim() || null,
-                        status: status || "open",
-                        priority: priority || "medium",
-                        due_date: due_date || null,
-                        machine_id: machine_id || null,
-                        assigned_to: assigned_to || null,
-                    })
+                    .insert(payload)
                     .select("*")
                     .single();
 
@@ -86,6 +123,8 @@ export default withAuth(
                         title: data.title,
                         status: data.status,
                         priority: data.priority,
+                        due_date: data.due_date,
+                        assigned_to: data.assigned_to,
                     },
                 });
 
