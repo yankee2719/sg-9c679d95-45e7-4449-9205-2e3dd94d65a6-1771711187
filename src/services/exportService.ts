@@ -9,38 +9,47 @@ export type ExportEntity =
     | "assignments";
 
 export async function exportEntity(entity: ExportEntity) {
-    const response = await fetch(`/api/export/${entity}`, {
-        headers: await buildAuthHeaders(),
-    });
+    try {
+        const response = await fetch(`/api/export/${entity}`, {
+            headers: await buildAuthHeaders(),
+        });
 
-    if (!response.ok) {
-        let message = "Export failed";
-        try {
-            const err = await response.json();
-            message = err?.error || message;
-        } catch {
-            // ignore
+        if (!response.ok) {
+            let message = "Export failed";
+            try {
+                const err = await response.json();
+                message = err?.error || message;
+            } catch {}
+            throw new Error(message);
         }
-        throw new Error(message);
-    }
 
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${entity}_${Date.now()}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.URL.revokeObjectURL(url);
+        const blob = await response.blob();
+
+        // 👉 naming serio (non timestamp random)
+        const date = new Date().toISOString().slice(0, 10);
+        const filename = `${entity}_${date}.csv`;
+
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(url);
+
+        return true;
+    } catch (error) {
+        console.error("Export error:", error);
+        throw error;
+    }
 }
 
 async function buildAuthHeaders() {
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
 
-    return {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
+    return data.session?.access_token
+        ? { Authorization: `Bearer ${data.session.access_token}` }
+        : {};
 }
