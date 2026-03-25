@@ -3,12 +3,7 @@ import MachineEditorPage from "@/components/Equipment/MachineEditorPage";
 
 export default function EditEquipmentPage() {
     const router = useRouter();
-    const { id } = router.query;
+    const machineId = typeof router.query.id === "string" ? router.query.id : null;
 
-    return (
-        <MachineEditorPage
-            mode="edit"
-            machineId={typeof id === "string" ? id : null}
-        />
-    );
+    return <MachineEditorPage mode="edit" machineId={machineId} />;
 }
