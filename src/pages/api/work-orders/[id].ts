@@ -5,6 +5,31 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
+const ALLOWED_STATUSES = [
+    "draft",
+    "scheduled",
+    "in_progress",
+    "pending_review",
+    "completed",
+    "cancelled",
+] as const;
+
+const ALLOWED_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+
+function normalizeStatus(value: unknown, fallback: string) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return ALLOWED_STATUSES.includes(normalized as (typeof ALLOWED_STATUSES)[number])
+        ? normalized
+        : fallback;
+}
+
+function normalizePriority(value: unknown, fallback: string) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return ALLOWED_PRIORITIES.includes(normalized as (typeof ALLOWED_PRIORITIES)[number])
+        ? normalized
+        : fallback;
+}
+
 export default withAuth(
     ["owner", "admin", "supervisor", "technician", "viewer"],
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -56,8 +81,8 @@ export default withAuth(
                         description !== undefined
                             ? description?.trim() || null
                             : row.description,
-                    status: status || row.status,
-                    priority: priority || row.priority,
+                    status: normalizeStatus(status, row.status || "draft"),
+                    priority: normalizePriority(priority, row.priority || "medium"),
                     due_date: due_date !== undefined ? due_date || null : row.due_date,
                     machine_id: machine_id !== undefined ? machine_id || null : row.machine_id,
                     assigned_to:
@@ -83,12 +108,18 @@ export default withAuth(
                     action: "update",
                     machine_id: data.machine_id ?? null,
                     old_data: {
+                        title: row.title,
                         status: row.status,
                         priority: row.priority,
+                        due_date: row.due_date,
+                        assigned_to: row.assigned_to,
                     },
                     new_data: {
+                        title: data.title,
                         status: data.status,
                         priority: data.priority,
+                        due_date: data.due_date,
+                        assigned_to: data.assigned_to,
                     },
                 });
 
