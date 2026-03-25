@@ -5,6 +5,17 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
+function slugify(value: string) {
+    return value
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80);
+}
+
 export default withAuth(
     ["owner", "admin", "supervisor", "viewer"],
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -22,7 +33,6 @@ export default withAuth(
         }
 
         try {
-            // Verify customer belongs to this manufacturer
             const { data: customer, error: customerError } = await serviceSupabase
                 .from("organizations")
                 .select("*")
@@ -34,12 +44,10 @@ export default withAuth(
             if (customerError) return res.status(500).json({ error: customerError.message });
             if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-            // GET: return customer
             if (req.method === "GET") {
                 return res.status(200).json(customer);
             }
 
-            // PUT: update customer
             if (req.method === "PUT") {
                 if (!["owner", "admin", "supervisor"].includes(req.user.role)) {
                     return res.status(403).json({ error: "Not allowed" });
@@ -59,15 +67,17 @@ export default withAuth(
                     vat_number,
                     fiscal_code,
                     website,
+                    subscription_status,
+                    subscription_plan,
                 } = req.body ?? {};
 
                 const payload: Record<string, any> = {};
 
                 if (name !== undefined) payload.name = name?.trim() || customer.name;
-                if (slug !== undefined) payload.slug = slug?.trim() || null;
+                if (slug !== undefined) payload.slug = slug?.trim() ? slugify(slug.trim()) : null;
                 if (city !== undefined) payload.city = city?.trim() || null;
                 if (country !== undefined) payload.country = country?.trim() || null;
-                if (email !== undefined) payload.email = email?.trim() || null;
+                if (email !== undefined) payload.email = email?.trim().toLowerCase() || null;
                 if (phone !== undefined) payload.phone = phone?.trim() || null;
                 if (address_line1 !== undefined) payload.address_line1 = address_line1?.trim() || null;
                 if (address_line2 !== undefined) payload.address_line2 = address_line2?.trim() || null;
@@ -76,6 +86,8 @@ export default withAuth(
                 if (vat_number !== undefined) payload.vat_number = vat_number?.trim() || null;
                 if (fiscal_code !== undefined) payload.fiscal_code = fiscal_code?.trim() || null;
                 if (website !== undefined) payload.website = website?.trim() || null;
+                if (subscription_status !== undefined) payload.subscription_status = subscription_status?.trim() || null;
+                if (subscription_plan !== undefined) payload.subscription_plan = subscription_plan?.trim() || null;
 
                 const { data, error } = await serviceSupabase
                     .from("organizations")
