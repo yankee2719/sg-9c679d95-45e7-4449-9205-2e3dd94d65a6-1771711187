@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -86,6 +86,8 @@ const copy = {
         loading: "Caricamento dati macchina...",
         forbidden:
             "Questa pagina è disponibile solo nel contesto corretto della macchina attiva.",
+        errorTitle: "Errore",
+        requiredName: "Il nome macchina è obbligatorio.",
         mainData: "Dati principali",
         organizationContext: "Contesto organizzativo",
         locationContext: "Posizionamento impianto",
@@ -109,11 +111,17 @@ const copy = {
         createSuccess: "Macchina creata",
         updateSuccess: "Macchina aggiornata",
         genericError: "Errore durante il salvataggio della macchina",
-        lifecycleActive: "active",
-        lifecycleInactive: "inactive",
-        lifecycleMaintenance: "under_maintenance",
-        lifecycleCommissioning: "commissioning",
-        lifecycleDecommissioned: "decommissioned",
+        placeholderName: "Es. HMS 140",
+        placeholderInternalCode: "Es. HM-001",
+        placeholderSerial: "Es. SN-2026-001",
+        placeholderBrand: "Es. ITR",
+        placeholderModel: "Es. TSS 180",
+        placeholderNotes: "Note operative, configurazione, contesto...",
+        lifecycleActive: "Attiva",
+        lifecycleInactive: "Inattiva",
+        lifecycleMaintenance: "In manutenzione",
+        lifecycleCommissioning: "In commissioning",
+        lifecycleDecommissioned: "Dismessa",
     },
     en: {
         createTitle: "New machine",
@@ -128,6 +136,8 @@ const copy = {
         loading: "Loading machine data...",
         forbidden:
             "This page is only available in the correct active machine context.",
+        errorTitle: "Error",
+        requiredName: "Machine name is required.",
         mainData: "Main data",
         organizationContext: "Organizational context",
         locationContext: "Plant location",
@@ -139,46 +149,54 @@ const copy = {
         lifecycle: "Machine status",
         notes: "Notes",
         manufacturerContext: "Manufacturer context",
-        customerContext: "Final customer context",
+        customerContext: "End-customer context",
         ownerOrg: "Active organization",
         plant: "Plant",
         line: "Line (optional)",
         noPlant: "None",
         noLine: "None",
         noPlantsAvailable:
-            "No plants found in the active context. You can still save the machine without plant assignment.",
+            "No plants found in the active context. You can still save the machine without a plant assignment.",
         createPlantsCta: "Open plants",
         createSuccess: "Machine created",
         updateSuccess: "Machine updated",
         genericError: "Error while saving machine",
-        lifecycleActive: "active",
-        lifecycleInactive: "inactive",
-        lifecycleMaintenance: "under_maintenance",
-        lifecycleCommissioning: "commissioning",
-        lifecycleDecommissioned: "decommissioned",
+        placeholderName: "e.g. HMS 140",
+        placeholderInternalCode: "e.g. HM-001",
+        placeholderSerial: "e.g. SN-2026-001",
+        placeholderBrand: "e.g. ITR",
+        placeholderModel: "e.g. TSS 180",
+        placeholderNotes: "Operational notes, configuration, context...",
+        lifecycleActive: "Active",
+        lifecycleInactive: "Inactive",
+        lifecycleMaintenance: "Under maintenance",
+        lifecycleCommissioning: "Commissioning",
+        lifecycleDecommissioned: "Decommissioned",
     },
     fr: {
         createTitle: "Nouvelle machine",
-        editTitle: "Modifier machine",
+        editTitle: "Modifier la machine",
         createSubtitle:
             "Saisissez les données principales de la machine dans le contexte actif.",
         editSubtitle:
             "Mettez à jour les données principales de la machine dans le contexte actif.",
         back: "Retour aux machines",
         saveCreate: "Créer la machine",
-        saveEdit: "Enregistrer",
-        loading: "Chargement des données machine...",
+        saveEdit: "Enregistrer les modifications",
+        loading: "Chargement des données de la machine...",
         forbidden:
-            "Cette page est disponible uniquement dans le bon contexte actif.",
+            "Cette page est disponible uniquement dans le bon contexte actif de la machine.",
+        errorTitle: "Erreur",
+        requiredName: "Le nom de la machine est obligatoire.",
         mainData: "Données principales",
         organizationContext: "Contexte organisationnel",
-        locationContext: "Positionnement usine",
-        name: "Nom machine *",
+        locationContext: "Emplacement usine",
+        name: "Nom de la machine *",
         internalCode: "Code interne",
         serialNumber: "Numéro de série",
         brand: "Marque",
         model: "Modèle",
-        lifecycle: "État machine",
+        lifecycle: "État de la machine",
         notes: "Notes",
         manufacturerContext: "Contexte constructeur",
         customerContext: "Contexte client final",
@@ -189,57 +207,71 @@ const copy = {
         noLine: "Aucune",
         noPlantsAvailable:
             "Aucune usine trouvée dans le contexte actif. Vous pouvez tout de même enregistrer la machine sans affectation.",
-        createPlantsCta: "Ouvrir usines",
+        createPlantsCta: "Ouvrir les usines",
         createSuccess: "Machine créée",
         updateSuccess: "Machine mise à jour",
-        genericError: "Erreur lors de l’enregistrement",
-        lifecycleActive: "active",
-        lifecycleInactive: "inactive",
-        lifecycleMaintenance: "under_maintenance",
-        lifecycleCommissioning: "commissioning",
-        lifecycleDecommissioned: "decommissioned",
+        genericError: "Erreur lors de l’enregistrement de la machine",
+        placeholderName: "Ex. HMS 140",
+        placeholderInternalCode: "Ex. HM-001",
+        placeholderSerial: "Ex. SN-2026-001",
+        placeholderBrand: "Ex. ITR",
+        placeholderModel: "Ex. TSS 180",
+        placeholderNotes: "Notes opérationnelles, configuration, contexte...",
+        lifecycleActive: "Active",
+        lifecycleInactive: "Inactive",
+        lifecycleMaintenance: "En maintenance",
+        lifecycleCommissioning: "En mise en service",
+        lifecycleDecommissioned: "Mise hors service",
     },
     es: {
         createTitle: "Nueva máquina",
         editTitle: "Editar máquina",
         createSubtitle:
-            "Introduce los datos principales de la máquina en el contexto activo.",
+            "Introduce los datos principales de la máquina en el contexto organizativo activo.",
         editSubtitle:
-            "Actualiza los datos principales de la máquina en el contexto activo.",
+            "Actualiza los datos principales de la máquina en el contexto organizativo activo.",
         back: "Volver a Máquinas",
         saveCreate: "Crear máquina",
         saveEdit: "Guardar cambios",
         loading: "Cargando datos de la máquina...",
         forbidden:
             "Esta página solo está disponible en el contexto correcto de la máquina activa.",
+        errorTitle: "Error",
+        requiredName: "El nombre de la máquina es obligatorio.",
         mainData: "Datos principales",
         organizationContext: "Contexto organizativo",
         locationContext: "Ubicación en planta",
-        name: "Nombre máquina *",
+        name: "Nombre de la máquina *",
         internalCode: "Código interno",
         serialNumber: "Número de serie",
         brand: "Marca",
         model: "Modelo",
-        lifecycle: "Estado máquina",
+        lifecycle: "Estado de la máquina",
         notes: "Notas",
-        manufacturerContext: "Contexto fabricante",
-        customerContext: "Contexto cliente final",
+        manufacturerContext: "Contexto del fabricante",
+        customerContext: "Contexto del cliente final",
         ownerOrg: "Organización activa",
         plant: "Planta",
         line: "Línea (opcional)",
         noPlant: "Ninguna",
         noLine: "Ninguna",
         noPlantsAvailable:
-            "No hay plantas en el contexto activo. Puedes guardar igualmente la máquina sin asignación.",
+            "No se encontraron plantas en el contexto activo. Aun así puedes guardar la máquina sin asignarla a una planta.",
         createPlantsCta: "Abrir plantas",
         createSuccess: "Máquina creada",
         updateSuccess: "Máquina actualizada",
         genericError: "Error al guardar la máquina",
-        lifecycleActive: "active",
-        lifecycleInactive: "inactive",
-        lifecycleMaintenance: "under_maintenance",
-        lifecycleCommissioning: "commissioning",
-        lifecycleDecommissioned: "decommissioned",
+        placeholderName: "Ej. HMS 140",
+        placeholderInternalCode: "Ej. HM-001",
+        placeholderSerial: "Ej. SN-2026-001",
+        placeholderBrand: "Ej. ITR",
+        placeholderModel: "Ej. TSS 180",
+        placeholderNotes: "Notas operativas, configuración, contexto...",
+        lifecycleActive: "Activa",
+        lifecycleInactive: "Inactiva",
+        lifecycleMaintenance: "En mantenimiento",
+        lifecycleCommissioning: "En puesta en marcha",
+        lifecycleDecommissioned: "Retirada",
     },
 } as const;
 
@@ -260,9 +292,9 @@ export default function MachineEditorPage({
 
     const [loading, setLoading] = useState(mode === "edit");
     const [saving, setSaving] = useState(false);
-    const [plants, setPlants] = useState < PlantRow[] > ([]);
-    const [lines, setLines] = useState < LineRow[] > ([]);
-    const [form, setForm] = useState < FormState > ({
+    const [plants, setPlants] = useState<PlantRow[]>([]);
+    const [lines, setLines] = useState<LineRow[]>([]);
+    const [form, setForm] = useState<FormState>({
         name: "",
         internal_code: "",
         serial_number: "",
@@ -285,12 +317,7 @@ export default function MachineEditorPage({
         mode === "create" ? text.createSubtitle : text.editSubtitle;
 
     const loadLines = async (plantId: string) => {
-        if (!orgId || orgType !== "customer") {
-            setLines([]);
-            return;
-        }
-
-        if (!plantId) {
+        if (!orgId || orgType !== "customer" || !plantId) {
             setLines([]);
             return;
         }
@@ -302,7 +329,10 @@ export default function MachineEditorPage({
             .eq("plant_id", plantId)
             .order("name");
 
-        if (error) throw error;
+        if (error) {
+            throw error;
+        }
+
         setLines((data ?? []) as LineRow[]);
     };
 
@@ -327,11 +357,9 @@ export default function MachineEditorPage({
 
                     if (plantsError) throw plantsError;
                     if (active) setPlants((plantsData ?? []) as PlantRow[]);
-                } else {
-                    if (active) {
-                        setPlants([]);
-                        setLines([]);
-                    }
+                } else if (active) {
+                    setPlants([]);
+                    setLines([]);
                 }
 
                 if (mode === "edit" && machineId) {
@@ -394,6 +422,7 @@ export default function MachineEditorPage({
             plant_id: plantId,
             production_line_id: "",
         }));
+
         try {
             await loadLines(plantId);
         } catch (error) {
@@ -407,8 +436,8 @@ export default function MachineEditorPage({
 
         if (!form.name.trim()) {
             toast({
-                title: "Errore",
-                description: text.name,
+                title: text.errorTitle,
+                description: text.requiredName,
                 variant: "destructive",
             });
             return;
@@ -426,12 +455,11 @@ export default function MachineEditorPage({
                 brand: form.brand.trim() || null,
                 lifecycle_state: form.lifecycle_state || "active",
                 notes: form.notes.trim() || null,
-                plant_id:
-                    orgType === "customer" ? form.plant_id || null : null,
+                plant_id: orgType === "customer" ? form.plant_id || null : null,
                 production_line_id:
                     orgType === "customer" ? form.production_line_id || null : null,
                 updated_at: new Date().toISOString(),
-            } as any;
+            };
 
             if (mode === "create") {
                 const { data, error } = await supabase
@@ -467,7 +495,7 @@ export default function MachineEditorPage({
         } catch (error: any) {
             console.error("Machine save error:", error);
             toast({
-                title: "Errore",
+                title: text.errorTitle,
                 description: error?.message || text.genericError,
                 variant: "destructive",
             });
@@ -542,7 +570,7 @@ export default function MachineEditorPage({
                                 <Input
                                     value={form.name}
                                     onChange={(e) => handleField("name", e.target.value)}
-                                    placeholder="Es. HMS 140"
+                                    placeholder={text.placeholderName}
                                 />
                             </div>
 
@@ -551,7 +579,7 @@ export default function MachineEditorPage({
                                 <Input
                                     value={form.internal_code}
                                     onChange={(e) => handleField("internal_code", e.target.value)}
-                                    placeholder="Es. HM-001"
+                                    placeholder={text.placeholderInternalCode}
                                 />
                             </div>
 
@@ -560,7 +588,7 @@ export default function MachineEditorPage({
                                 <Input
                                     value={form.serial_number}
                                     onChange={(e) => handleField("serial_number", e.target.value)}
-                                    placeholder="Es. SN-2026-001"
+                                    placeholder={text.placeholderSerial}
                                 />
                             </div>
 
@@ -569,7 +597,7 @@ export default function MachineEditorPage({
                                 <Input
                                     value={form.brand}
                                     onChange={(e) => handleField("brand", e.target.value)}
-                                    placeholder="Es. ITR"
+                                    placeholder={text.placeholderBrand}
                                 />
                             </div>
 
@@ -578,7 +606,7 @@ export default function MachineEditorPage({
                                 <Input
                                     value={form.model}
                                     onChange={(e) => handleField("model", e.target.value)}
-                                    placeholder="Es. TSS 180"
+                                    placeholder={text.placeholderModel}
                                 />
                             </div>
 
@@ -611,7 +639,7 @@ export default function MachineEditorPage({
                                     value={form.notes}
                                     onChange={(e) => handleField("notes", e.target.value)}
                                     rows={4}
-                                    placeholder="Note operative, configurazione, contesto..."
+                                    placeholder={text.placeholderNotes}
                                 />
                             </div>
                         </CardContent>
