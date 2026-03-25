@@ -7,6 +7,7 @@ import {
     ShieldCheck,
     Wrench,
 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -19,37 +20,39 @@ export default function MachineQuickActions({
     machineId,
     canEdit = false,
 }: MachineQuickActionsProps) {
+    const { t } = useLanguage();
+
     return (
         <Card className="rounded-2xl">
             <CardHeader>
-                <CardTitle>Azioni rapide</CardTitle>
+                <CardTitle>{t("equipment.quickActions")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                 <Button variant="outline" asChild className="justify-start">
                     <Link href={`/equipment/${machineId}/maintenance`}>
                         <Wrench className="mr-2 h-4 w-4" />
-                        Vai a maintenance
+                        {t("equipment.openMaintenance")}
                     </Link>
                 </Button>
 
                 <Button variant="outline" asChild className="justify-start">
                     <a href="#machine-documents">
                         <FileText className="mr-2 h-4 w-4" />
-                        Apri documenti
+                        {t("equipment.openDocuments")}
                     </a>
                 </Button>
 
                 <Button variant="outline" asChild className="justify-start">
                     <a href="#machine-timeline">
                         <ClipboardList className="mr-2 h-4 w-4" />
-                        Apri timeline
+                        {t("equipment.openTimeline")}
                     </a>
                 </Button>
 
                 <Button variant="outline" asChild className="justify-start">
                     <Link href="/scanner">
                         <QrCode className="mr-2 h-4 w-4" />
-                        Scanner QR
+                        {t("equipment.qrScanner")}
                     </Link>
                 </Button>
 
@@ -58,14 +61,14 @@ export default function MachineQuickActions({
                         <Button variant="outline" asChild className="justify-start">
                             <Link href="/settings/security">
                                 <ShieldCheck className="mr-2 h-4 w-4" />
-                                Controlla sicurezza
+                                {t("equipment.checkSecurity")}
                             </Link>
                         </Button>
 
                         <Button variant="outline" asChild className="justify-start">
                             <Link href="/equipment">
                                 <Settings2 className="mr-2 h-4 w-4" />
-                                Gestisci elenco macchine
+                                {t("equipment.manageList")}
                             </Link>
                         </Button>
                     </>
