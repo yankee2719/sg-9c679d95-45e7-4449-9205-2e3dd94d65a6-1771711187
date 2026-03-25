@@ -6,6 +6,7 @@ import {
     CalendarDays,
     ClipboardList,
     Loader2,
+    Save,
     User,
     Wrench,
 } from "lucide-react";
@@ -18,6 +19,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import WorkOrderStatusBadge from "@/components/work-orders/WorkOrderStatusBadge";
 import WorkOrderPriorityBadge from "@/components/work-orders/WorkOrderPriorityBadge";
 
@@ -38,7 +41,8 @@ interface WorkOrderRow {
 function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
-        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        const locale =
+            lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
         return new Date(value).toLocaleString(locale);
     } catch {
         return value;
@@ -85,19 +89,25 @@ export default function WorkOrderDetailPage() {
         };
     }, [resolvedId, authLoading, router]);
 
-    const handleQuickStatus = async (status: string) => {
+    const handleSave = async () => {
         if (!resolvedId || !row) return;
 
         setSaving(true);
         try {
             const updated = await updateWorkOrder(resolvedId, {
-                ...row,
-                status,
+                title: row.title,
+                description: row.description,
+                status: row.status,
+                priority: row.priority,
+                due_date: row.due_date,
+                machine_id: row.machine_id,
+                assigned_to: row.assigned_to,
             });
+
             setRow(updated);
             toast({
                 title: t("workOrders.updated"),
-                description: `${t("workOrders.status") || "Status"}: ${status}`,
+                description: row.title || "Work order",
             });
         } catch (error: any) {
             console.error(error);
@@ -142,41 +152,59 @@ export default function WorkOrderDetailPage() {
                         </Link>
 
                         {canEdit && (
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => void handleQuickStatus("in_progress")}
-                                    disabled={saving}
-                                >
-                                    {t("workOrders.statusInProgress")}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => void handleQuickStatus("completed")}
-                                    disabled={saving}
-                                >
-                                    {t("workOrders.statusCompleted")}
-                                </Button>
-                            </div>
+                            <Button onClick={handleSave} disabled={saving}>
+                                {saving ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Save className="mr-2 h-4 w-4" />
+                                )}
+                                {saving ? t("common.saving") || "Salvataggio..." : t("common.save") || "Salva"}
+                            </Button>
                         )}
                     </div>
 
                     <Card className="rounded-[28px]">
                         <CardContent className="p-6">
                             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1 space-y-4">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <WorkOrderStatusBadge status={row.status} />
                                         <WorkOrderPriorityBadge priority={row.priority} />
                                     </div>
 
-                                    <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground">
-                                        {row.title || "Work order"}
-                                    </h1>
-
-                                    <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-                                        {row.description || t("workOrders.noDescription") || "Nessuna descrizione disponibile."}
-                                    </p>
+                                    {canEdit ? (
+                                        <>
+                                            <Input
+                                                value={row.title ?? ""}
+                                                onChange={(e) =>
+                                                    setRow((prev) =>
+                                                        prev ? { ...prev, title: e.target.value } : prev
+                                                    )
+                                                }
+                                                className="text-2xl font-bold"
+                                            />
+                                            <Textarea
+                                                value={row.description ?? ""}
+                                                onChange={(e) =>
+                                                    setRow((prev) =>
+                                                        prev ? { ...prev, description: e.target.value } : prev
+                                                    )
+                                                }
+                                                rows={5}
+                                            />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                                                {row.title || "Work order"}
+                                            </h1>
+                                            <p className="text-sm text-muted-foreground">
+                                                {row.description ||
+                                                    t("workOrders.noDescription") ||
+                                                    "Nessuna descrizione disponibile."}
+                                            </p>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[440px]">
@@ -211,10 +239,22 @@ export default function WorkOrderDetailPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <DetailRow label="Status" value={row.status || "—"} />
-                            <DetailRow label={t("workOrders.priorityLabel")} value={row.priority || "—"} />
-                            <DetailRow label={t("workOrders.machineId") || "Machine ID"} value={row.machine_id || "—"} />
-                            <DetailRow label={t("workOrders.assignedTo") || "Assigned to"} value={row.assigned_to || "—"} />
-                            <DetailRow label={t("workOrders.updatedAt") || "Updated at"} value={formatDate(row.updated_at, language)} />
+                            <DetailRow
+                                label={t("workOrders.priorityLabel")}
+                                value={row.priority || "—"}
+                            />
+                            <DetailRow
+                                label={t("workOrders.machineId") || "Machine ID"}
+                                value={row.machine_id || "—"}
+                            />
+                            <DetailRow
+                                label={t("workOrders.assignedTo") || "Assigned to"}
+                                value={row.assigned_to || "—"}
+                            />
+                            <DetailRow
+                                label={t("workOrders.updatedAt") || "Updated at"}
+                                value={formatDate(row.updated_at, language)}
+                            />
                         </CardContent>
                     </Card>
 
@@ -247,9 +287,7 @@ function InfoPill({
                 {icon}
                 <span>{label}</span>
             </div>
-            <div className="mt-1 truncate text-sm font-semibold text-foreground">
-                {value}
-            </div>
+            <div className="mt-1 truncate text-sm font-semibold text-foreground">{value}</div>
         </div>
     );
 }
