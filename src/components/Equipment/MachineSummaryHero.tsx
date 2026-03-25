@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
     Building2,
     CalendarDays,
@@ -27,16 +28,30 @@ interface MachineSummaryHeroProps {
     createdAt?: string | null;
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDate(value: string | null | undefined, locale: string) {
     if (!value) return "—";
     try {
-        return new Date(value).toLocaleDateString("it-IT", {
+        return new Date(value).toLocaleDateString(locale, {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
         });
     } catch {
         return value;
+    }
+}
+
+function getLocale(language: string) {
+    switch (language) {
+        case "en":
+            return "en-GB";
+        case "fr":
+            return "fr-FR";
+        case "es":
+            return "es-ES";
+        case "it":
+        default:
+            return "it-IT";
     }
 }
 
@@ -94,6 +109,9 @@ export default function MachineSummaryHero({
     lineName,
     createdAt,
 }: MachineSummaryHeroProps) {
+    const { language, t } = useLanguage();
+    const locale = getLocale(language);
+
     return (
         <div className="rounded-[28px] border border-border bg-card p-6 shadow-[0_24px_50px_-28px_rgba(15,23,42,0.35)]">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
@@ -106,34 +124,34 @@ export default function MachineSummaryHero({
                         {orgType === "manufacturer" ? (
                             <Badge variant="outline" className="gap-1">
                                 <Factory className="h-3 w-3" />
-                                Costruttore
+                                {t("org.manufacturer")}
                             </Badge>
                         ) : (
                             <Badge variant="outline" className="gap-1">
                                 <Building2 className="h-3 w-3" />
-                                Cliente finale
+                                {t("org.customer")}
                             </Badge>
                         )}
                     </div>
 
                     <h1 className="mt-4 truncate text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                        {name || "Macchina"}
+                        {name || t("equipment.machineFallback")}
                     </h1>
 
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-2">
                             <Hash className="h-4 w-4" />
-                            {internalCode || "Codice non definito"}
+                            {internalCode || t("equipment.noInternalCode")}
                         </span>
 
                         <span className="inline-flex items-center gap-2">
                             <Package className="h-4 w-4" />
-                            {serialNumber || "Matricola non definita"}
+                            {serialNumber || t("equipment.noSerialNumber")}
                         </span>
 
                         <span className="inline-flex items-center gap-2">
                             <CalendarDays className="h-4 w-4" />
-                            Creata il {formatDate(createdAt)}
+                            {t("equipment.createdOn")} {formatDate(createdAt, locale)}
                         </span>
                     </div>
                 </div>
@@ -141,32 +159,32 @@ export default function MachineSummaryHero({
                 <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[520px]">
                     <InfoPill
                         icon={<Wrench className="h-3.5 w-3.5" />}
-                        label="Marca"
+                        label={t("equipment.field.brand")}
                         value={brand}
                     />
                     <InfoPill
                         icon={<Settings2 className="h-3.5 w-3.5" />}
-                        label="Modello"
+                        label={t("equipment.field.model")}
                         value={model}
                     />
                     <InfoPill
                         icon={<Factory className="h-3.5 w-3.5" />}
-                        label="Proprietà"
+                        label={t("equipment.owner")}
                         value={ownerOrganizationName}
                     />
                     <InfoPill
                         icon={<Building2 className="h-3.5 w-3.5" />}
-                        label="Cliente assegnato"
+                        label={t("equipment.assignedCustomer")}
                         value={assignedCustomerName}
                     />
                     <InfoPill
                         icon={<MapPin className="h-3.5 w-3.5" />}
-                        label="Stabilimento"
+                        label={t("plants.fallbackPlant")}
                         value={plantName}
                     />
                     <InfoPill
                         icon={<MapPin className="h-3.5 w-3.5" />}
-                        label="Linea"
+                        label={t("plants.line")}
                         value={lineName}
                     />
                 </div>
