@@ -28,6 +28,45 @@ interface MachineSummaryHeroProps {
     createdAt?: string | null;
 }
 
+const heroLabels = {
+    it: {
+        owner: "Proprietà",
+        assignedCustomer: "Cliente assegnato",
+        plant: "Stabilimento",
+        line: "Linea",
+        createdOn: "Creata il",
+        undefinedCode: "Codice non definito",
+        undefinedSerial: "Matricola non definita",
+    },
+    en: {
+        owner: "Ownership",
+        assignedCustomer: "Assigned customer",
+        plant: "Plant",
+        line: "Line",
+        createdOn: "Created on",
+        undefinedCode: "Code not defined",
+        undefinedSerial: "Serial number not defined",
+    },
+    fr: {
+        owner: "Propriété",
+        assignedCustomer: "Client attribué",
+        plant: "Site",
+        line: "Ligne",
+        createdOn: "Créée le",
+        undefinedCode: "Code non défini",
+        undefinedSerial: "Numéro de série non défini",
+    },
+    es: {
+        owner: "Propiedad",
+        assignedCustomer: "Cliente asignado",
+        plant: "Planta",
+        line: "Línea",
+        createdOn: "Creada el",
+        undefinedCode: "Código no definido",
+        undefinedSerial: "Número de serie no definido",
+    },
+} as const;
+
 function formatDate(value: string | null | undefined, locale: string) {
     if (!value) return "—";
     try {
@@ -38,20 +77,6 @@ function formatDate(value: string | null | undefined, locale: string) {
         });
     } catch {
         return value;
-    }
-}
-
-function getLocale(language: string) {
-    switch (language) {
-        case "en":
-            return "en-GB";
-        case "fr":
-            return "fr-FR";
-        case "es":
-            return "es-ES";
-        case "it":
-        default:
-            return "it-IT";
     }
 }
 
@@ -110,7 +135,9 @@ export default function MachineSummaryHero({
     createdAt,
 }: MachineSummaryHeroProps) {
     const { language, t } = useLanguage();
-    const locale = getLocale(language);
+    const labels = heroLabels[language];
+    const dateLocale =
+        language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : language === "en" ? "en-GB" : "it-IT";
 
     return (
         <div className="rounded-[28px] border border-border bg-card p-6 shadow-[0_24px_50px_-28px_rgba(15,23,42,0.35)]">
@@ -124,34 +151,34 @@ export default function MachineSummaryHero({
                         {orgType === "manufacturer" ? (
                             <Badge variant="outline" className="gap-1">
                                 <Factory className="h-3 w-3" />
-                                {t("org.manufacturer")}
+                                {t("org.manufacturer") || "Manufacturer"}
                             </Badge>
                         ) : (
                             <Badge variant="outline" className="gap-1">
                                 <Building2 className="h-3 w-3" />
-                                {t("org.customer")}
+                                {t("org.customer") || "End customer"}
                             </Badge>
                         )}
                     </div>
 
                     <h1 className="mt-4 truncate text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                        {name || t("equipment.machineFallback")}
+                        {name || t("equipment.machineFallback") || "Machine"}
                     </h1>
 
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-2">
                             <Hash className="h-4 w-4" />
-                            {internalCode || t("equipment.noInternalCode")}
+                            {internalCode || labels.undefinedCode}
                         </span>
 
                         <span className="inline-flex items-center gap-2">
                             <Package className="h-4 w-4" />
-                            {serialNumber || t("equipment.noSerialNumber")}
+                            {serialNumber || labels.undefinedSerial}
                         </span>
 
                         <span className="inline-flex items-center gap-2">
                             <CalendarDays className="h-4 w-4" />
-                            {t("equipment.createdOn")} {formatDate(createdAt, locale)}
+                            {labels.createdOn} {formatDate(createdAt, dateLocale)}
                         </span>
                     </div>
                 </div>
@@ -159,32 +186,32 @@ export default function MachineSummaryHero({
                 <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[520px]">
                     <InfoPill
                         icon={<Wrench className="h-3.5 w-3.5" />}
-                        label={t("equipment.field.brand")}
+                        label={t("equipment.field.brand") || "Brand"}
                         value={brand}
                     />
                     <InfoPill
                         icon={<Settings2 className="h-3.5 w-3.5" />}
-                        label={t("equipment.field.model")}
+                        label={t("equipment.field.model") || "Model"}
                         value={model}
                     />
                     <InfoPill
                         icon={<Factory className="h-3.5 w-3.5" />}
-                        label={t("equipment.owner")}
+                        label={labels.owner}
                         value={ownerOrganizationName}
                     />
                     <InfoPill
                         icon={<Building2 className="h-3.5 w-3.5" />}
-                        label={t("equipment.assignedCustomer")}
+                        label={labels.assignedCustomer}
                         value={assignedCustomerName}
                     />
                     <InfoPill
                         icon={<MapPin className="h-3.5 w-3.5" />}
-                        label={t("plants.fallbackPlant")}
+                        label={labels.plant}
                         value={plantName}
                     />
                     <InfoPill
                         icon={<MapPin className="h-3.5 w-3.5" />}
-                        label={t("plants.line")}
+                        label={labels.line}
                         value={lineName}
                     />
                 </div>
