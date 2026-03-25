@@ -7,3 +7,4 @@ export default function EditEquipmentPage() {
 
     return <MachineEditorPage mode="edit" machineId={machineId} />;
 }
+
