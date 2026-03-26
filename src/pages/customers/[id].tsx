@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import {
-    ArrowLeft,
-    Building2,
-    Factory,
-    Loader2,
-    Mail,
-    MapPin,
-    Phone,
-    Save,
-    Shield,
-    Users,
-    Wrench,
-} from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, Factory, Loader2, Mail, MapPin, Phone, Save, Users, Wrench } from "lucide-react";
 import { getCustomer, updateCustomer } from "@/services/customerApi";
 import { apiFetch } from "@/services/apiClient";
 import MainLayout from "@/components/Layout/MainLayout";
@@ -37,7 +25,6 @@ interface CustomerRow {
     email: string | null;
     phone: string | null;
     subscription_status: string | null;
-    subscription_plan: string | null;
     created_at: string | null;
 }
 
@@ -45,31 +32,17 @@ function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
         const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
-        return new Date(value).toLocaleString(locale, {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-        });
+        return new Date(value).toLocaleString(locale, { year: "numeric", month: "2-digit", day: "2-digit" });
     } catch {
         return value;
     }
 }
 
-function KpiCard({
-    icon,
-    title,
-    value,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    value: number | string;
-}) {
+function KpiCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number | string }) {
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
-                    {icon}
-                </div>
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">{icon}</div>
                 <div className="text-3xl font-bold text-foreground">{value}</div>
                 <div className="mt-2 text-sm text-muted-foreground">{title}</div>
             </CardContent>
@@ -103,17 +76,10 @@ export default function CustomerDetailPage() {
 
             try {
                 const customerData = await getCustomer(resolvedId);
-
-                const memberships = await apiFetch < any[] > (
-                    `/api/internal/customer-memberships?customerId=${resolvedId}`
-                ).catch(() => []);
-
-                const assignments = await apiFetch < any[] > (
-                    `/api/internal/customer-assignments?customerId=${resolvedId}`
-                ).catch(() => []);
+                const memberships = await apiFetch < any[] > (`/api/internal/customer-memberships?customerId=${resolvedId}`).catch(() => []);
+                const assignments = await apiFetch < any[] > (`/api/internal/customer-assignments?customerId=${resolvedId}`).catch(() => []);
 
                 if (!active) return;
-
                 setCustomer(customerData);
                 setMembersCount(Array.isArray(memberships) ? memberships.length : 0);
                 setAssignedMachines(Array.isArray(assignments) ? assignments.length : 0);
@@ -149,7 +115,6 @@ export default function CustomerDetailPage() {
                 email: customer.email,
                 phone: customer.phone,
                 subscription_status: customer.subscription_status,
-                subscription_plan: customer.subscription_plan,
             });
 
             setCustomer(updated);
@@ -170,19 +135,11 @@ export default function CustomerDetailPage() {
     };
 
     if (authLoading || loading) {
-        return (
-            <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div>
-            </MainLayout>
-        );
+        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div></MainLayout>;
     }
 
     if (orgType !== "manufacturer" || !customer) {
-        return (
-            <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">{t("customers.noResults")}</div>
-            </MainLayout>
-        );
+        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("customers.noResults")}</div></MainLayout>;
     }
 
     return (
@@ -193,28 +150,16 @@ export default function CustomerDetailPage() {
                 <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <Link href="/customers">
-                                <Button variant="outline" size="icon">
-                                    <ArrowLeft className="h-4 w-4" />
-                                </Button>
-                            </Link>
+                            <Link href="/customers"><Button variant="outline" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
                             <div>
-                                <h1 className="text-3xl font-bold">
-                                    {customer.name || t("customers.fallbackTitle")}
-                                </h1>
-                                <p className="text-sm text-muted-foreground">
-                                    {t("customers.detailTitle") || "Dettaglio cliente"}
-                                </p>
+                                <h1 className="text-3xl font-bold">{customer.name || t("customers.fallbackTitle")}</h1>
+                                <p className="text-sm text-muted-foreground">{t("customers.detailTitle") || "Dettaglio cliente"}</p>
                             </div>
                         </div>
 
                         {canEdit && (
                             <Button onClick={handleSave} disabled={saving}>
-                                {saving ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Save className="mr-2 h-4 w-4" />
-                                )}
+                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                 {saving ? t("common.saving") || "Salvataggio..." : t("common.save") || "Salva"}
                             </Button>
                         )}
@@ -222,82 +167,33 @@ export default function CustomerDetailPage() {
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                         <KpiCard icon={<Users className="h-5 w-5" />} title={t("nav.users") || "Utenti"} value={membersCount} />
-                        <KpiCard icon={<Shield className="h-5 w-5" />} title={t("customers.kpi.activePlans") || "Piano"} value={customer.subscription_plan || "—"} />
                         <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("customers.machines") || "Macchine"} value={assignedMachines} />
                         <KpiCard icon={<Factory className="h-5 w-5" />} title="Status" value={customer.subscription_status || "—"} />
+                        <KpiCard icon={<CalendarDays className="h-5 w-5" />} title={t("documents.uploadedAt") || "Creato il"} value={formatDate(customer.created_at, language)} />
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Building2 className="h-5 w-5" />
-                                    {t("customers.registry") || "Anagrafica"}
-                                </CardTitle>
+                                <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" />{t("customers.registry") || "Anagrafica"}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {canEdit ? (
                                     <div className="grid gap-4 md:grid-cols-2">
-                                        <Field
-                                            label={(t("customers.nameLabel") || "Nome").replace(" *", "")}
-                                            value={customer.name}
-                                            onChange={(value) =>
-                                                setCustomer((prev) => (prev ? { ...prev, name: value } : prev))
-                                            }
-                                        />
-                                        <Field
-                                            label="Slug"
-                                            value={customer.slug}
-                                            onChange={(value) =>
-                                                setCustomer((prev) => (prev ? { ...prev, slug: value } : prev))
-                                            }
-                                        />
-                                        <Field
-                                            label={t("customers.cityLabel") || "Città"}
-                                            value={customer.city}
-                                            onChange={(value) =>
-                                                setCustomer((prev) => (prev ? { ...prev, city: value } : prev))
-                                            }
-                                        />
-                                        <Field
-                                            label={t("customers.countryLabel") || "Paese"}
-                                            value={customer.country}
-                                            onChange={(value) =>
-                                                setCustomer((prev) => (prev ? { ...prev, country: value } : prev))
-                                            }
-                                        />
-                                        <Field
-                                            label="Email"
-                                            value={customer.email}
-                                            onChange={(value) =>
-                                                setCustomer((prev) => (prev ? { ...prev, email: value } : prev))
-                                            }
-                                        />
-                                        <Field
-                                            label={t("customers.phoneLabel") || "Telefono"}
-                                            value={customer.phone}
-                                            onChange={(value) =>
-                                                setCustomer((prev) => (prev ? { ...prev, phone: value } : prev))
-                                            }
-                                        />
-                                        <Field
-                                            label={(t("customers.kpi.activePlans") || "Piano")}
-                                            value={customer.subscription_plan}
-                                            onChange={(value) =>
-                                                setCustomer((prev) =>
-                                                    prev ? { ...prev, subscription_plan: value } : prev
-                                                )
-                                            }
-                                        />
-                                        <Field
-                                            label="Status"
-                                            value={customer.subscription_status}
-                                            onChange={(value) =>
-                                                setCustomer((prev) =>
-                                                    prev ? { ...prev, subscription_status: value } : prev
-                                                )
-                                            }
-                                        />
+                                        <Field label={(t("customers.nameLabel") || "Nome").replace(" *", "")} value={customer.name} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, name: value } : prev))} />
+                                        <Field label="Slug" value={customer.slug} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, slug: value } : prev))} />
+                                        <Field label={t("customers.cityLabel") || "Città"} value={customer.city} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, city: value } : prev))} />
+                                        <Field label={t("customers.countryLabel") || "Paese"} value={customer.country} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, country: value } : prev))} />
+                                        <Field label="Email" value={customer.email} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, email: value } : prev))} />
+                                        <Field label={t("customers.phoneLabel") || "Telefono"} value={customer.phone} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, phone: value } : prev))} />
+                                        <div className="space-y-2 md:col-span-2">
+                                            <label className="text-sm font-medium">Status</label>
+                                            <select value={customer.subscription_status || "trial"} onChange={(e) => setCustomer((prev) => (prev ? { ...prev, subscription_status: e.target.value } : prev))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                                                <option value="trial">trial</option>
+                                                <option value="active">active</option>
+                                                <option value="suspended">suspended</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 ) : (
                                     <>
@@ -307,60 +203,26 @@ export default function CustomerDetailPage() {
                                         <InfoRow label={t("customers.countryLabel") || "Paese"} value={customer.country} />
                                         <InfoRow label="Email" value={customer.email} />
                                         <InfoRow label={t("customers.phoneLabel") || "Telefono"} value={customer.phone} />
+                                        <InfoRow label="Status" value={customer.subscription_status} />
                                         <InfoRow label={t("documents.uploadedAt") || "Creato il"} value={formatDate(customer.created_at, language)} />
                                     </>
                                 )}
 
                                 <div className="grid gap-3 pt-2 md:grid-cols-2">
-                                    {customer.email && (
-                                        <a
-                                            href={`mailto:${customer.email}`}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
-                                        >
-                                            <Mail className="h-4 w-4" />
-                                            Email
-                                        </a>
-                                    )}
-
-                                    {customer.phone && (
-                                        <a
-                                            href={`tel:${customer.phone}`}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
-                                        >
-                                            <Phone className="h-4 w-4" />
-                                            {t("customers.phoneLabel") || "Telefono"}
-                                        </a>
-                                    )}
+                                    {customer.email && <a href={`mailto:${customer.email}`} className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"><Mail className="h-4 w-4" />Email</a>}
+                                    {customer.phone && <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"><Phone className="h-4 w-4" />{t("customers.phoneLabel") || "Telefono"}</a>}
                                 </div>
                             </CardContent>
                         </Card>
 
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <MapPin className="h-5 w-5" />
-                                    {t("customers.quickActions") || "Azioni rapide"}
-                                </CardTitle>
+                                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5" />{t("customers.quickActions") || "Azioni rapide"}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                <Link href="/customers">
-                                    <Button variant="outline" className="w-full justify-start">
-                                        <Building2 className="mr-2 h-4 w-4" />
-                                        {t("customers.title") || "Clienti"}
-                                    </Button>
-                                </Link>
-                                <Link href="/assignments">
-                                    <Button variant="outline" className="w-full justify-start">
-                                        <Wrench className="mr-2 h-4 w-4" />
-                                        {t("nav.assignments") || "Assegnazioni"}
-                                    </Button>
-                                </Link>
-                                <Link href="/equipment">
-                                    <Button variant="outline" className="w-full justify-start">
-                                        <Factory className="mr-2 h-4 w-4" />
-                                        {t("nav.equipment") || "Macchine"}
-                                    </Button>
-                                </Link>
+                                <Link href="/customers"><Button variant="outline" className="w-full justify-start"><Building2 className="mr-2 h-4 w-4" />{t("customers.title") || "Clienti"}</Button></Link>
+                                <Link href="/assignments"><Button variant="outline" className="w-full justify-start"><Wrench className="mr-2 h-4 w-4" />{t("nav.assignments") || "Assegnazioni"}</Button></Link>
+                                <Link href="/equipment"><Button variant="outline" className="w-full justify-start"><Factory className="mr-2 h-4 w-4" />{t("nav.equipment") || "Macchine"}</Button></Link>
                             </CardContent>
                         </Card>
                     </div>
@@ -370,36 +232,21 @@ export default function CustomerDetailPage() {
     );
 }
 
-function InfoRow({
-    label,
-    value,
-}: {
-    label: string;
-    value: string | null | undefined;
-}) {
+function Field({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (value: string) => void }) {
     return (
-        <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
-            <div className="text-sm text-muted-foreground">{label}</div>
-            <div className="max-w-[60%] text-right text-sm font-medium text-foreground">
-                {value || "—"}
-            </div>
+        <div className="space-y-2">
+            <label className="text-sm font-medium">{label}</label>
+            <Input value={value || ""} onChange={(e) => onChange(e.target.value)} />
         </div>
     );
 }
 
-function Field({
-    label,
-    value,
-    onChange,
-}: {
-    label: string;
-    value: string | null | undefined;
-    onChange: (value: string) => void;
-}) {
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
     return (
-        <div className="space-y-2">
-            <div className="text-sm font-medium text-foreground">{label}</div>
-            <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+        <div className="flex items-start justify-between gap-4 border-b border-border/60 py-3 text-sm last:border-b-0">
+            <div className="font-medium text-foreground">{label}</div>
+            <div className="text-right text-muted-foreground">{value || "—"}</div>
         </div>
     );
 }
+
