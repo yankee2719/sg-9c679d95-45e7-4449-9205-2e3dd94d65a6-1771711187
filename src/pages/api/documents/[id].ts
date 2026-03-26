@@ -1,6 +1,3 @@
-// ============================================================================
-// API: GET/PATCH/DELETE /api/documents/[id]
-// ============================================================================
 import type { NextApiResponse } from "next";
 import {
     withAuth,
@@ -8,113 +5,70 @@ import {
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
-import { getDocumentService } from "@/services/documentService";
+import { getAccessibleDocumentById } from "@/lib/server/documentVisibility";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { id } = req.query;
-
     if (!id || typeof id !== "string") {
         return res.status(400).json({ error: "Document ID is required" });
     }
 
-    const docService = getDocumentService();
-
     try {
-        // ====================================================================
-        // GET: Retrieve document
-        // ====================================================================
+        const serviceSupabase = getServiceSupabase();
+        const document = await getAccessibleDocumentById(req, id);
+
+        if (!document) {
+            return res.status(404).json({ error: "Document not found or access denied" });
+        }
+
         if (req.method === "GET") {
-            const hasPermission = await docService.checkUserPermission(
-                req.user.userId,
-                id,
-                "view"
-            );
-
-            if (!hasPermission) {
-                return res.status(403).json({ error: "Access denied" });
-            }
-
-            const document = await docService.getDocumentById(id);
-
-            if (!document) {
-                return res.status(404).json({ error: "Document not found" });
-            }
-
-            await docService.logDocumentAction(
-                id,
-                "viewed",
-                req.user.userId,
-                "Viewed via API"
-            );
-
-            return res.status(200).json({ success: true, document });
+            return res.status(200).json({ success: true, data: document });
         }
 
-        // ====================================================================
-        // PATCH: Update metadata
-        // ====================================================================
-        else if (req.method === "PATCH") {
-            const hasPermission = await docService.checkUserPermission(
-                req.user.userId,
-                id,
-                "manage"
-            );
-
-            if (!hasPermission) {
-                return res.status(403).json({
-                    error: "Access denied - Manage permission required",
-                });
+        if (req.method === "PATCH") {
+            if (!["admin", "supervisor"].includes(req.user.role)) {
+                return res.status(403).json({ error: "Forbidden" });
             }
 
-            const body = req.body;
+            const payload = req.body ?? {};
+            const { data, error } = await serviceSupabase
+                .from("documents")
+                .update({
+                    title: typeof payload.title === "string" ? payload.title.trim() : undefined,
+                    description: typeof payload.description === "string" ? payload.description.trim() : undefined,
+                    category: typeof payload.category === "string" ? payload.category : undefined,
+                    language: typeof payload.language === "string" ? payload.language : undefined,
+                    regulatory_reference: typeof payload.regulatory_reference === "string" ? payload.regulatory_reference.trim() : undefined,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", id)
+                .select("id, title, description, category, language, regulatory_reference, machine_id, organization_id, version_count, file_size, updated_at, created_at, is_archived, external_url, storage_bucket, storage_path")
+                .single();
 
-            const updatedDocument = await docService.updateDocumentMetadata(
-                {
-                    documentId: id,
-                    title: body.title,
-                    description: body.description,
-                    complianceTags: body.complianceTags,
-                    tags: body.tags,
-                    metadata: body.metadata,
-                },
-                req.user.userId
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: "Document updated successfully",
-                document: updatedDocument,
-            });
+            if (error) throw error;
+            return res.status(200).json({ success: true, data });
         }
 
-        // ====================================================================
-        // DELETE: Delete document (admin/owner only)
-        // ====================================================================
-        else if (req.method === "DELETE") {
-            if (!["admin", "owner"].includes(req.user.role)) {
-                return res
-                    .status(403)
-                    .json({ error: "Access denied - Admin only" });
+        if (req.method === "DELETE") {
+            if (!["admin", "supervisor"].includes(req.user.role)) {
+                return res.status(403).json({ error: "Forbidden" });
             }
 
-            await docService.deleteDocument(id);
+            const { error } = await serviceSupabase
+                .from("documents")
+                .update({ is_archived: true, archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                .eq("id", id);
 
-            return res.status(200).json({
-                success: true,
-                message: "Document deleted successfully",
-            });
+            if (error) throw error;
+            return res.status(200).json({ success: true });
         }
 
-        // ====================================================================
-        else {
-            return res.status(405).json({ error: "Method not allowed" });
-        }
+        return res.status(405).json({ error: "Method not allowed", allowedMethods: ["GET", "PATCH", "DELETE"] });
     } catch (error) {
-        console.error("Document API Error:", error);
+        console.error("Document detail API error:", error);
         return res.status(500).json({
             success: false,
-            error: "Operation failed",
-            message: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : "Operation failed",
         });
     }
 }
