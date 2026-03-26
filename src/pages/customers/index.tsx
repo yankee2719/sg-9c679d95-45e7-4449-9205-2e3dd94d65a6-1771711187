@@ -15,31 +15,22 @@ interface CustomerRow {
     id: string;
     name: string | null;
     slug: string | null;
+    type: string | null;
+    manufacturer_org_id: string | null;
     city: string | null;
     country: string | null;
     email: string | null;
     phone: string | null;
     subscription_status: string | null;
-    subscription_plan: string | null;
     created_at: string | null;
 }
 
-function KpiCard({
-    icon,
-    title,
-    value,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    value: number;
-}) {
+function KpiCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number | string }) {
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
-                    {icon}
-                </div>
-                <div className="text-4xl font-bold text-foreground">{value}</div>
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">{icon}</div>
+                <div className="text-3xl font-bold text-foreground">{value}</div>
                 <div className="mt-2 text-sm text-muted-foreground">{title}</div>
             </CardContent>
         </Card>
@@ -102,12 +93,7 @@ export default function CustomersIndexPage() {
     const filteredRows = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return rows;
-
-        return rows.filter((row) =>
-            [row.name, row.slug, row.city, row.country, row.email]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q))
-        );
+        return rows.filter((row) => [row.name, row.slug, row.city, row.country, row.email].filter(Boolean).some((value) => String(value).toLowerCase().includes(q)));
     }, [rows, search]);
 
     if (authLoading || loading) {
@@ -121,9 +107,7 @@ export default function CustomersIndexPage() {
     if (orgType !== "manufacturer") {
         return (
             <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">
-                    {t("customers.manufacturerOnly")}
-                </div>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.manufacturerOnly")}</div>
             </MainLayout>
         );
     }
@@ -136,14 +120,9 @@ export default function CustomersIndexPage() {
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                {t("customers.title")}
-                            </h1>
-                            <p className="text-base text-muted-foreground">
-                                {t("customers.subtitle")}
-                            </p>
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">{t("customers.title")}</h1>
+                            <p className="text-base text-muted-foreground">{t("customers.subtitle")}</p>
                         </div>
-
                         {canEdit && (
                             <Link href="/customers/new">
                                 <Button>
@@ -156,33 +135,16 @@ export default function CustomersIndexPage() {
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                         <KpiCard icon={<Building2 className="h-5 w-5" />} title={t("customers.kpi.total")} value={rows.length} />
-                        <KpiCard
-                            icon={<Factory className="h-5 w-5" />}
-                            title={t("customers.kpi.activePlans")}
-                            value={rows.filter((r) => !!r.subscription_plan).length}
-                        />
-                        <KpiCard
-                            icon={<Users className="h-5 w-5" />}
-                            title={t("customers.kpi.withEmail")}
-                            value={rows.filter((r) => !!r.email).length}
-                        />
-                        <KpiCard
-                            icon={<Mail className="h-5 w-5" />}
-                            title={t("customers.kpi.withPhone")}
-                            value={rows.filter((r) => !!r.phone).length}
-                        />
+                        <KpiCard icon={<Factory className="h-5 w-5" />} title="In trial" value={rows.filter((r) => r.subscription_status === "trial").length} />
+                        <KpiCard icon={<Users className="h-5 w-5" />} title={t("customers.kpi.withEmail")} value={rows.filter((r) => !!r.email).length} />
+                        <KpiCard icon={<Mail className="h-5 w-5" />} title={t("customers.kpi.withPhone")} value={rows.filter((r) => !!r.phone).length} />
                     </div>
 
                     <Card className="rounded-2xl">
                         <CardContent className="p-6">
                             <div className="relative">
                                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <input
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={t("customers.search")}
-                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                                />
+                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("customers.search")} className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground" />
                             </div>
                         </CardContent>
                     </Card>
@@ -190,13 +152,7 @@ export default function CustomersIndexPage() {
                     <Card className="rounded-2xl">
                         <CardContent className="p-6">
                             {filteredRows.length === 0 ? (
-                                <EmptyState
-                                    title={t("customers.notFoundEmpty")}
-                                    description={t("customers.notFoundDesc")}
-                                    icon={<Building2 className="h-10 w-10" />}
-                                    actionLabel={canEdit ? t("customers.createCustomer") : undefined}
-                                    actionHref={canEdit ? "/customers/new" : undefined}
-                                />
+                                <EmptyState title={t("customers.notFoundEmpty")} description={t("customers.notFoundDesc")} icon={<Building2 className="h-10 w-10" />} actionLabel={canEdit ? t("customers.createCustomer") : undefined} actionHref={canEdit ? "/customers/new" : undefined} />
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     {filteredRows.map((row) => (
@@ -204,36 +160,19 @@ export default function CustomersIndexPage() {
                                             <div className="rounded-2xl border border-border p-5 transition hover:bg-muted/30">
                                                 <div className="space-y-3">
                                                     <div>
-                                                        <div className="text-xl font-semibold text-foreground">
-                                                            {row.name || t("customers.fallbackTitle")}
-                                                        </div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {row.slug || "—"}
-                                                        </div>
+                                                        <div className="text-xl font-semibold text-foreground">{row.name || t("customers.fallbackTitle")}</div>
+                                                        <div className="text-sm text-muted-foreground">{row.slug || "—"}</div>
                                                     </div>
 
                                                     <div className="space-y-1 text-sm text-muted-foreground">
                                                         <div>{row.city || "—"} {row.country ? `· ${row.country}` : ""}</div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Mail className="h-4 w-4" />
-                                                            {row.email || "—"}
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Phone className="h-4 w-4" />
-                                                            {row.phone || "—"}
-                                                        </div>
+                                                        <div className="flex items-center gap-2"><Mail className="h-4 w-4" />{row.email || "—"}</div>
+                                                        <div className="flex items-center gap-2"><Phone className="h-4 w-4" />{row.phone || "—"}</div>
                                                     </div>
 
                                                     <div className="flex flex-wrap gap-2">
-                                                        {row.subscription_plan && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                                                                {row.subscription_plan}
-                                                            </span>
-                                                        )}
                                                         {row.subscription_status && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                                                                {row.subscription_status}
-                                                            </span>
+                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">{row.subscription_status}</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -249,3 +188,4 @@ export default function CustomersIndexPage() {
         </OrgContextGuard>
     );
 }
+
