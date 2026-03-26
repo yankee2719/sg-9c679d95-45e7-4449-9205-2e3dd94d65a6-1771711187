@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ArrowLeft, Building2, CalendarDays, Factory, Loader2, Mail, MapPin, Phone, Save, Users, Wrench } from "lucide-react";
+import {
+    ArrowLeft,
+    Building2,
+    Factory,
+    Loader2,
+    Mail,
+    MapPin,
+    Phone,
+    Plus,
+    Save,
+    Shield,
+    Trash2,
+    UserCog,
+    Users,
+    Wrench,
+} from "lucide-react";
 import { getCustomer, updateCustomer } from "@/services/customerApi";
 import { apiFetch } from "@/services/apiClient";
 import MainLayout from "@/components/Layout/MainLayout";
@@ -13,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 interface CustomerRow {
     id: string;
@@ -28,21 +45,54 @@ interface CustomerRow {
     created_at: string | null;
 }
 
+interface CustomerUserRow {
+    membership_id: string;
+    user_id: string;
+    role: "supervisor" | "technician" | string | null;
+    is_active: boolean;
+    created_at: string | null;
+    accepted_at: string | null;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+}
+
+interface AssignmentRow {
+    id: string;
+    machine_id: string;
+    assigned_at: string | null;
+}
+
 function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
         const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
-        return new Date(value).toLocaleString(locale, { year: "numeric", month: "2-digit", day: "2-digit" });
+        return new Date(value).toLocaleString(locale, {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        });
     } catch {
         return value;
     }
 }
 
-function KpiCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number | string }) {
+function KpiCard({
+    icon,
+    title,
+    value,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    value: number | string;
+}) {
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">{icon}</div>
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
+                    {icon}
+                </div>
                 <div className="text-3xl font-bold text-foreground">{value}</div>
                 <div className="mt-2 text-sm text-muted-foreground">{title}</div>
             </CardContent>
@@ -59,14 +109,46 @@ export default function CustomerDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [usersLoading, setUsersLoading] = useState(false);
+    const [creatingUser, setCreatingUser] = useState(false);
+    const [updatingMembershipId, setUpdatingMembershipId] = useState < string | null > (null);
     const [customer, setCustomer] = useState < CustomerRow | null > (null);
-    const [membersCount, setMembersCount] = useState(0);
-    const [assignedMachines, setAssignedMachines] = useState(0);
+    const [customerUsers, setCustomerUsers] = useState < CustomerUserRow[] > ([]);
+    const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
+
+    const [newUserName, setNewUserName] = useState("");
+    const [newUserEmail, setNewUserEmail] = useState("");
+    const [newUserPassword, setNewUserPassword] = useState("");
+    const [newUserRole, setNewUserRole] = useState < "supervisor" | "technician" > ("technician");
 
     const userRole = membership?.role ?? "viewer";
     const orgType = organization?.type ?? null;
     const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
     const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
+
+    const activeUsersCount = useMemo(
+        () => customerUsers.filter((row) => row.is_active).length,
+        [customerUsers]
+    );
+
+    const techniciansCount = useMemo(
+        () => customerUsers.filter((row) => row.is_active && row.role === "technician").length,
+        [customerUsers]
+    );
+
+    const loadUsersAndAssignments = async (customerId: string) => {
+        setUsersLoading(true);
+        try {
+            const [usersData, assignmentsData] = await Promise.all([
+                apiFetch < CustomerUserRow[] > (`/api/customers/${customerId}/users`),
+                apiFetch < AssignmentRow[] > (`/api/customers/${customerId}/assignments`).catch(() => []),
+            ]);
+            setCustomerUsers(Array.isArray(usersData) ? usersData : []);
+            setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+        } finally {
+            setUsersLoading(false);
+        }
+    };
 
     useEffect(() => {
         let active = true;
@@ -76,13 +158,9 @@ export default function CustomerDetailPage() {
 
             try {
                 const customerData = await getCustomer(resolvedId);
-                const memberships = await apiFetch < any[] > (`/api/internal/customer-memberships?customerId=${resolvedId}`).catch(() => []);
-                const assignments = await apiFetch < any[] > (`/api/internal/customer-assignments?customerId=${resolvedId}`).catch(() => []);
-
                 if (!active) return;
                 setCustomer(customerData);
-                setMembersCount(Array.isArray(memberships) ? memberships.length : 0);
-                setAssignedMachines(Array.isArray(assignments) ? assignments.length : 0);
+                await loadUsersAndAssignments(resolvedId);
             } catch (error) {
                 console.error(error);
                 void router.replace("/customers");
@@ -120,7 +198,7 @@ export default function CustomerDetailPage() {
             setCustomer(updated);
             toast({
                 title: t("customers.updated") || "Cliente aggiornato",
-                description: updated.name || t("customers.fallbackTitle"),
+                description: updated.name || t("customers.fallbackTitle") || "Cliente",
             });
         } catch (error: any) {
             console.error(error);
@@ -134,26 +212,161 @@ export default function CustomerDetailPage() {
         }
     };
 
+    const handleCreateUser = async () => {
+        if (!resolvedId) return;
+        if (!newUserEmail.trim() || !newUserPassword.trim()) {
+            toast({
+                title: t("common.error") || "Errore",
+                description: "Email e password sono obbligatorie.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setCreatingUser(true);
+        try {
+            await apiFetch(`/api/customers/${resolvedId}/users`, {
+                method: "POST",
+                body: JSON.stringify({
+                    email: newUserEmail.trim().toLowerCase(),
+                    password: newUserPassword,
+                    full_name: newUserName.trim() || null,
+                    role: newUserRole,
+                }),
+            });
+
+            setNewUserName("");
+            setNewUserEmail("");
+            setNewUserPassword("");
+            setNewUserRole("technician");
+            await loadUsersAndAssignments(resolvedId);
+            toast({
+                title: "Utente cliente creato",
+                description: "Il nuovo utente è stato aggiunto al tenant cliente.",
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: t("common.error") || "Errore",
+                description: error?.message || "Errore creazione utente cliente",
+                variant: "destructive",
+            });
+        } finally {
+            setCreatingUser(false);
+        }
+    };
+
+    const handleToggleUser = async (row: CustomerUserRow) => {
+        if (!resolvedId) return;
+        setUpdatingMembershipId(row.membership_id);
+        try {
+            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ is_active: !row.is_active }),
+            });
+            await loadUsersAndAssignments(resolvedId);
+            toast({
+                title: row.is_active ? "Utente disattivato" : "Utente riattivato",
+                description: row.email || row.display_name || "Utente cliente",
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: t("common.error") || "Errore",
+                description: error?.message || "Errore aggiornamento utente cliente",
+                variant: "destructive",
+            });
+        } finally {
+            setUpdatingMembershipId(null);
+        }
+    };
+
+    const handleRoleChange = async (row: CustomerUserRow, role: "supervisor" | "technician") => {
+        if (!resolvedId || row.role === role) return;
+        setUpdatingMembershipId(row.membership_id);
+        try {
+            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ role }),
+            });
+            await loadUsersAndAssignments(resolvedId);
+            toast({
+                title: "Ruolo aggiornato",
+                description: row.email || row.display_name || "Utente cliente",
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: t("common.error") || "Errore",
+                description: error?.message || "Errore aggiornamento ruolo",
+                variant: "destructive",
+            });
+        } finally {
+            setUpdatingMembershipId(null);
+        }
+    };
+
+    const handleDeleteUser = async (row: CustomerUserRow) => {
+        if (!resolvedId) return;
+        const confirmed = window.confirm(`Rimuovere ${row.email || row.display_name || "questo utente"} dal cliente?`);
+        if (!confirmed) return;
+
+        setUpdatingMembershipId(row.membership_id);
+        try {
+            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, {
+                method: "DELETE",
+            });
+            await loadUsersAndAssignments(resolvedId);
+            toast({
+                title: "Utente rimosso",
+                description: row.email || row.display_name || "Utente cliente",
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: t("common.error") || "Errore",
+                description: error?.message || "Errore rimozione utente cliente",
+                variant: "destructive",
+            });
+        } finally {
+            setUpdatingMembershipId(null);
+        }
+    };
+
     if (authLoading || loading) {
-        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("customers.loading")}</div></MainLayout>;
+        return (
+            <MainLayout userRole={userRole}>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading") || "Caricamento..."}</div>
+            </MainLayout>
+        );
     }
 
     if (orgType !== "manufacturer" || !customer) {
-        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("customers.noResults")}</div></MainLayout>;
+        return (
+            <MainLayout userRole={userRole}>
+                <div className="p-8 text-sm text-muted-foreground">{t("customers.noResults") || "Nessun risultato"}</div>
+            </MainLayout>
+        );
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${customer.name || t("customers.fallbackTitle")} - MACHINA`} />
+                <SEO title={`${customer.name || t("customers.fallbackTitle") || "Cliente"} - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <Link href="/customers"><Button variant="outline" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+                            <Link href="/customers">
+                                <Button variant="outline" size="icon">
+                                    <ArrowLeft className="h-4 w-4" />
+                                </Button>
+                            </Link>
                             <div>
-                                <h1 className="text-3xl font-bold">{customer.name || t("customers.fallbackTitle")}</h1>
-                                <p className="text-sm text-muted-foreground">{t("customers.detailTitle") || "Dettaglio cliente"}</p>
+                                <h1 className="text-3xl font-bold">{customer.name || t("customers.fallbackTitle") || "Cliente"}</h1>
+                                <p className="text-sm text-muted-foreground">
+                                    {t("customers.detailTitle") || "Dettaglio cliente"}
+                                </p>
                             </div>
                         </div>
 
@@ -166,29 +379,64 @@ export default function CustomerDetailPage() {
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Users className="h-5 w-5" />} title={t("nav.users") || "Utenti"} value={membersCount} />
-                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("customers.machines") || "Macchine"} value={assignedMachines} />
+                        <KpiCard icon={<Users className="h-5 w-5" />} title={t("nav.users") || "Utenti"} value={activeUsersCount} />
+                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("customers.machines") || "Macchine"} value={assignments.length} />
+                        <KpiCard icon={<UserCog className="h-5 w-5" />} title="Tecnici attivi" value={techniciansCount} />
                         <KpiCard icon={<Factory className="h-5 w-5" />} title="Status" value={customer.subscription_status || "—"} />
-                        <KpiCard icon={<CalendarDays className="h-5 w-5" />} title={t("documents.uploadedAt") || "Creato il"} value={formatDate(customer.created_at, language)} />
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" />{t("customers.registry") || "Anagrafica"}</CardTitle>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Building2 className="h-5 w-5" />
+                                    {t("customers.registry") || "Anagrafica"}
+                                </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {canEdit ? (
                                     <div className="grid gap-4 md:grid-cols-2">
-                                        <Field label={(t("customers.nameLabel") || "Nome").replace(" *", "")} value={customer.name} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, name: value } : prev))} />
-                                        <Field label="Slug" value={customer.slug} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, slug: value } : prev))} />
-                                        <Field label={t("customers.cityLabel") || "Città"} value={customer.city} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, city: value } : prev))} />
-                                        <Field label={t("customers.countryLabel") || "Paese"} value={customer.country} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, country: value } : prev))} />
-                                        <Field label="Email" value={customer.email} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, email: value } : prev))} />
-                                        <Field label={t("customers.phoneLabel") || "Telefono"} value={customer.phone} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, phone: value } : prev))} />
+                                        <Field
+                                            label={(t("customers.nameLabel") || "Nome").replace(" *", "")}
+                                            value={customer.name}
+                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, name: value } : prev))}
+                                        />
+                                        <Field
+                                            label="Slug"
+                                            value={customer.slug}
+                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, slug: value } : prev))}
+                                        />
+                                        <Field
+                                            label={t("customers.cityLabel") || "Città"}
+                                            value={customer.city}
+                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, city: value } : prev))}
+                                        />
+                                        <Field
+                                            label={t("customers.countryLabel") || "Paese"}
+                                            value={customer.country}
+                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, country: value } : prev))}
+                                        />
+                                        <Field
+                                            label="Email"
+                                            value={customer.email}
+                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, email: value } : prev))}
+                                        />
+                                        <Field
+                                            label={t("customers.phoneLabel") || "Telefono"}
+                                            value={customer.phone}
+                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, phone: value } : prev))}
+                                        />
                                         <div className="space-y-2 md:col-span-2">
-                                            <label className="text-sm font-medium">Status</label>
-                                            <select value={customer.subscription_status || "trial"} onChange={(e) => setCustomer((prev) => (prev ? { ...prev, subscription_status: e.target.value } : prev))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                                            <div className="text-sm font-medium text-foreground">Status</div>
+                                            <select
+                                                value={customer.subscription_status || "trial"}
+                                                onChange={(e) =>
+                                                    setCustomer((prev) =>
+                                                        prev ? { ...prev, subscription_status: e.target.value } : prev
+                                                    )
+                                                }
+                                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                            >
                                                 <option value="trial">trial</option>
                                                 <option value="active">active</option>
                                                 <option value="suspended">suspended</option>
@@ -209,43 +457,200 @@ export default function CustomerDetailPage() {
                                 )}
 
                                 <div className="grid gap-3 pt-2 md:grid-cols-2">
-                                    {customer.email && <a href={`mailto:${customer.email}`} className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"><Mail className="h-4 w-4" />Email</a>}
-                                    {customer.phone && <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"><Phone className="h-4 w-4" />{t("customers.phoneLabel") || "Telefono"}</a>}
+                                    {customer.email && (
+                                        <a
+                                            href={`mailto:${customer.email}`}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
+                                        >
+                                            <Mail className="h-4 w-4" />
+                                            Email
+                                        </a>
+                                    )}
+
+                                    {customer.phone && (
+                                        <a
+                                            href={`tel:${customer.phone}`}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
+                                        >
+                                            <Phone className="h-4 w-4" />
+                                            {t("customers.phoneLabel") || "Telefono"}
+                                        </a>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
 
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5" />{t("customers.quickActions") || "Azioni rapide"}</CardTitle>
+                                <CardTitle className="flex items-center gap-2">
+                                    <MapPin className="h-5 w-5" />
+                                    {t("customers.quickActions") || "Azioni rapide"}
+                                </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                <Link href="/customers"><Button variant="outline" className="w-full justify-start"><Building2 className="mr-2 h-4 w-4" />{t("customers.title") || "Clienti"}</Button></Link>
-                                <Link href="/assignments"><Button variant="outline" className="w-full justify-start"><Wrench className="mr-2 h-4 w-4" />{t("nav.assignments") || "Assegnazioni"}</Button></Link>
-                                <Link href="/equipment"><Button variant="outline" className="w-full justify-start"><Factory className="mr-2 h-4 w-4" />{t("nav.equipment") || "Macchine"}</Button></Link>
+                                <div className="rounded-2xl border border-border p-4 text-sm text-muted-foreground">
+                                    Il costruttore gestisce gli utenti del cliente. Supervisor e technician di questo tenant vedranno solo le macchine assegnate a questo cliente.
+                                </div>
+                                <Link href="/customers">
+                                    <Button variant="outline" className="w-full justify-start">
+                                        <Building2 className="mr-2 h-4 w-4" />
+                                        {t("customers.title") || "Clienti"}
+                                    </Button>
+                                </Link>
+                                <Link href="/assignments">
+                                    <Button variant="outline" className="w-full justify-start">
+                                        <Wrench className="mr-2 h-4 w-4" />
+                                        {t("nav.assignments") || "Assegnazioni"}
+                                    </Button>
+                                </Link>
+                                <Link href="/equipment">
+                                    <Button variant="outline" className="w-full justify-start">
+                                        <Factory className="mr-2 h-4 w-4" />
+                                        {t("nav.equipment") || "Macchine"}
+                                    </Button>
+                                </Link>
                             </CardContent>
                         </Card>
                     </div>
+
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5" />
+                                Utenti cliente
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {canEdit && (
+                                <div className="grid gap-4 rounded-2xl border border-border p-4 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="space-y-2 xl:col-span-1">
+                                        <Label>Nome visualizzato</Label>
+                                        <Input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="Es. Mario Rossi" />
+                                    </div>
+                                    <div className="space-y-2 xl:col-span-1">
+                                        <Label>Email</Label>
+                                        <Input value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="utente@cliente.com" />
+                                    </div>
+                                    <div className="space-y-2 xl:col-span-1">
+                                        <Label>Password iniziale</Label>
+                                        <Input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Password temporanea" />
+                                    </div>
+                                    <div className="space-y-2 xl:col-span-1">
+                                        <Label>Ruolo</Label>
+                                        <select
+                                            value={newUserRole}
+                                            onChange={(e) => setNewUserRole(e.target.value as "supervisor" | "technician")}
+                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        >
+                                            <option value="technician">technician</option>
+                                            <option value="supervisor">supervisor</option>
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-2 xl:col-span-4">
+                                        <Button onClick={handleCreateUser} disabled={creatingUser}>
+                                            {creatingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                                            {creatingUser ? "Creazione..." : "Crea utente cliente"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {usersLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Caricamento utenti cliente...
+                                </div>
+                            ) : customerUsers.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                                    Nessun utente cliente configurato.
+                                </div>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {customerUsers.map((row) => {
+                                        const fullName = row.display_name || [row.first_name, row.last_name].filter(Boolean).join(" ") || "Utente cliente";
+                                        const busy = updatingMembershipId === row.membership_id;
+                                        return (
+                                            <div key={row.membership_id} className="rounded-2xl border border-border p-4">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="space-y-1">
+                                                        <div className="font-semibold text-foreground">{fullName}</div>
+                                                        <div className="text-sm text-muted-foreground">{row.email || "—"}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            Creato: {formatDate(row.created_at, language)}
+                                                        </div>
+                                                    </div>
+                                                    <Badge variant={row.is_active ? "default" : "outline"}>
+                                                        {row.is_active ? "attivo" : "disattivo"}
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                                    <div className="space-y-2">
+                                                        <Label>Ruolo</Label>
+                                                        <select
+                                                            value={row.role || "technician"}
+                                                            onChange={(e) => handleRoleChange(row, e.target.value as "supervisor" | "technician")}
+                                                            disabled={busy}
+                                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                                        >
+                                                            <option value="technician">technician</option>
+                                                            <option value="supervisor">supervisor</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Accesso</Label>
+                                                        <div className="flex gap-2">
+                                                            <Button variant="outline" disabled={busy} onClick={() => handleToggleUser(row)}>
+                                                                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                                {row.is_active ? "Disattiva" : "Riattiva"}
+                                                            </Button>
+                                                            <Button variant="outline" disabled={busy} onClick={() => handleDeleteUser(row)}>
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                Rimuovi
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </MainLayout>
         </OrgContextGuard>
     );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (value: string) => void }) {
+function InfoRow({
+    label,
+    value,
+}: {
+    label: string;
+    value: string | null | undefined;
+}) {
     return (
-        <div className="space-y-2">
-            <label className="text-sm font-medium">{label}</label>
-            <Input value={value || ""} onChange={(e) => onChange(e.target.value)} />
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
+            <div className="text-sm text-muted-foreground">{label}</div>
+            <div className="max-w-[60%] text-right text-sm font-medium text-foreground">{value || "—"}</div>
         </div>
     );
 }
 
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+function Field({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string | null | undefined;
+    onChange: (value: string) => void;
+}) {
     return (
-        <div className="flex items-start justify-between gap-4 border-b border-border/60 py-3 text-sm last:border-b-0">
-            <div className="font-medium text-foreground">{label}</div>
-            <div className="text-right text-muted-foreground">{value || "—"}</div>
+        <div className="space-y-2">
+            <div className="text-sm font-medium text-foreground">{label}</div>
+            <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
         </div>
     );
 }
