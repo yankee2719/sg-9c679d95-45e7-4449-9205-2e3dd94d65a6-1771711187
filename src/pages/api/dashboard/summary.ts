@@ -4,6 +4,7 @@ import {
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
+import { getAccessibleMachineIds } from "@/lib/server/customerVisibility";
 
 type OrgType = "manufacturer" | "customer" | null;
 
@@ -59,6 +60,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const serviceSupabase = getServiceSupabase();
         const nowIso = new Date().toISOString();
+        const accessibleMachineIds = await getAccessibleMachineIds(serviceSupabase, req.user);
 
         const [
             machinesRes,
@@ -88,20 +90,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             serviceSupabase
                 .from("documents")
-                .select("id, organization_id")
+                .select("id, organization_id, machine_id")
                 .eq("is_archived", false),
 
             serviceSupabase
                 .from("audit_logs")
                 .select("id, entity_type, action, created_at, entity_id, machine_id, metadata, organization_id")
                 .order("created_at", { ascending: false })
-                .limit(50),
+                .limit(100),
 
             serviceSupabase
                 .from("work_orders")
                 .select("id, title, status, due_date, machine_id, organization_id")
                 .order("due_date", { ascending: true })
-                .limit(200),
+                .limit(300),
 
             serviceSupabase
                 .from("organizations")
@@ -109,28 +111,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 .eq("type", "customer"),
         ]);
 
-        if (machinesRes.error) {
-            return res.status(500).json({ error: machinesRes.error.message });
-        }
-        if (assignmentsRes.error) {
-            return res.status(500).json({ error: assignmentsRes.error.message });
-        }
-        if (checklistRes.error) {
-            return res.status(500).json({ error: checklistRes.error.message });
-        }
-        if (documentsRes.error) {
-            return res.status(500).json({ error: documentsRes.error.message });
-        }
-        if (workOrdersRes.error) {
-            return res.status(500).json({ error: workOrdersRes.error.message });
-        }
-        if (customersRes.error) {
-            return res.status(500).json({ error: customersRes.error.message });
-        }
+        if (machinesRes.error) return res.status(500).json({ error: machinesRes.error.message });
+        if (assignmentsRes.error) return res.status(500).json({ error: assignmentsRes.error.message });
+        if (checklistRes.error) return res.status(500).json({ error: checklistRes.error.message });
+        if (documentsRes.error) return res.status(500).json({ error: documentsRes.error.message });
+        if (workOrdersRes.error) return res.status(500).json({ error: workOrdersRes.error.message });
+        if (customersRes.error) return res.status(500).json({ error: customersRes.error.message });
 
         const allMachines = (machinesRes.data ?? []) as RecentMachineRow[];
         const allAssignments = (assignmentsRes.data ?? []) as any[];
         const allCustomers = (customersRes.data ?? []) as any[];
+        const accessibleMachineIdSet = new Set(accessibleMachineIds);
 
         let myMachines: RecentMachineRow[] = [];
         let myCustomerCount = 0;
@@ -138,52 +129,44 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         if (orgType === "manufacturer") {
             myMachines = allMachines.filter((m) => m.organization_id === orgId);
-
             const myAssignments = allAssignments.filter((a: any) => a.manufacturer_org_id === orgId);
             myAssignmentCount = myAssignments.length;
-
             myCustomerCount = allCustomers.filter(
-                (c: any) =>
-                    c.manufacturer_org_id === orgId &&
-                    (c.is_deleted === null || c.is_deleted === false)
+                (c: any) => c.manufacturer_org_id === orgId && (c.is_deleted === null || c.is_deleted === false)
             ).length;
         } else {
             const assignedToMe = allAssignments.filter((a: any) => a.customer_org_id === orgId);
-            const assignedMachineIds = new Set(
-                assignedToMe.map((a: any) => a.machine_id).filter(Boolean)
-            );
-
             myAssignmentCount = assignedToMe.length;
-
-            const mergedMap = new Map < string, RecentMachineRow> ();
-            for (const m of allMachines) {
-                if (m.organization_id === orgId || assignedMachineIds.has(m.id)) {
-                    mergedMap.set(m.id, m);
-                }
-            }
-
-            myMachines = Array.from(mergedMap.values()).sort((a, b) => {
-                const da = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                const db = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                return db - da;
-            });
+            myMachines = allMachines
+                .filter((m) => accessibleMachineIdSet.has(m.id))
+                .sort((a, b) => {
+                    const da = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+                    const db = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+                    return db - da;
+                });
         }
 
-        const myChecklists = (checklistRes.data ?? []).filter(
-            (r: any) => r.organization_id === orgId
-        );
+        const myChecklists = (checklistRes.data ?? []).filter((r: any) => r.organization_id === orgId);
 
-        const myDocuments = (documentsRes.data ?? []).filter(
-            (r: any) => r.organization_id === orgId
-        );
+        const myDocuments = orgType === "manufacturer"
+            ? (documentsRes.data ?? []).filter((r: any) => r.organization_id === orgId)
+            : (documentsRes.data ?? []).filter(
+                (r: any) => r.organization_id === orgId || (r.machine_id && accessibleMachineIdSet.has(r.machine_id))
+            );
 
         const myAuditLogs = auditRes.error
             ? []
-            : (auditRes.data ?? []).filter((r: any) => r.organization_id === orgId).slice(0, 8);
+            : orgType === "manufacturer"
+                ? (auditRes.data ?? []).filter((r: any) => r.organization_id === orgId).slice(0, 8)
+                : (auditRes.data ?? [])
+                    .filter((r: any) => r.organization_id === orgId || (r.machine_id && accessibleMachineIdSet.has(r.machine_id)))
+                    .slice(0, 8);
 
-        const myWorkOrders = (workOrdersRes.data ?? []).filter(
-            (r: any) => r.organization_id === orgId
-        );
+        const myWorkOrders = orgType === "manufacturer"
+            ? (workOrdersRes.data ?? []).filter((r: any) => r.organization_id === orgId)
+            : (workOrdersRes.data ?? []).filter(
+                (r: any) => r.organization_id === orgId || (r.machine_id && accessibleMachineIdSet.has(r.machine_id))
+            );
 
         const openWorkOrders = myWorkOrders.filter((row: any) => {
             const s = String(row.status ?? "").toLowerCase();
@@ -227,3 +210,4 @@ export default withAuth(
     handler,
     { allowPlatformAdmin: true }
 );
+
