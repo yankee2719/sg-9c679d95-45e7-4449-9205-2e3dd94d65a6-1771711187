@@ -151,7 +151,7 @@ export default function ChecklistTemplatesPage() {
                     <div className="mx-auto max-w-[1440px] space-y-8">
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                                <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                                     {text.templates.title}
                                 </h1>
                                 <p className="text-base text-muted-foreground">
@@ -173,10 +173,10 @@ export default function ChecklistTemplatesPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300">
                                     <CheckSquare className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
+                                <div className="text-3xl font-semibold leading-none text-foreground">
                                     {stats.total}
                                 </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">
                                     {text.templates.total}
                                 </div>
                             </CardShell>
@@ -185,10 +185,10 @@ export default function ChecklistTemplatesPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300">
                                     <ShieldCheck className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
+                                <div className="text-3xl font-semibold leading-none text-foreground">
                                     {stats.active}
                                 </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">
                                     {text.templates.active}
                                 </div>
                             </CardShell>
@@ -197,10 +197,10 @@ export default function ChecklistTemplatesPage() {
                                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-300">
                                     <ClipboardList className="h-5 w-5" />
                                 </div>
-                                <div className="text-5xl font-bold leading-none text-foreground">
+                                <div className="text-3xl font-semibold leading-none text-foreground">
                                     {stats.items}
                                 </div>
-                                <div className="mt-2 text-[22px] font-medium text-muted-foreground">
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">
                                     {text.templates.items}
                                 </div>
                             </CardShell>
@@ -264,11 +264,11 @@ export default function ChecklistTemplatesPage() {
                                                         </div>
 
                                                         <div className="min-w-0">
-                                                            <div className="truncate text-2xl font-bold text-foreground">
+                                                            <div className="truncate text-lg font-semibold text-foreground md:text-xl">
                                                                 {row.name ?? text.templates.newTemplate}
                                                             </div>
 
-                                                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-muted-foreground">
+                                                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                                 <span>
                                                                     {row.item_count ?? 0}{" "}
                                                                     {text.templates.itemCount}
@@ -307,13 +307,13 @@ export default function ChecklistTemplatesPage() {
                                                     </div>
 
                                                     <div className="flex shrink-0 items-center gap-6">
-                                                        <div className="rounded-full border border-orange-500/30 bg-orange-500/15 px-4 py-1.5 text-sm font-semibold text-orange-300">
+                                                        <div className="rounded-full border border-orange-500/30 bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300">
                                                             {translateChecklistTarget(
                                                                 row.target_type,
                                                                 language
                                                             )}
                                                         </div>
-                                                        <ArrowRight className="h-6 w-6 text-muted-foreground" />
+                                                        <ArrowRight className="h-5 w-5 text-muted-foreground" />
                                                     </div>
                                                 </div>
                                             </CardShell>
