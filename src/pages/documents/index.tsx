@@ -52,6 +52,10 @@ function formatBytes(value: number | null | undefined) {
 export default function DocumentsIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
     const { t, language } = useLanguage();
+    const tt = (key: string, fallback: string) => {
+        const value = t(key);
+        return value === key ? fallback : value;
+    };
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState < DocumentRow[] > ([]);
     const [search, setSearch] = useState("");
@@ -91,31 +95,31 @@ export default function DocumentsIndexPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${t("documents.title") || "Documents"} - MACHINA`} />
+                <SEO title={`${tt("documents.title", "Documents")} - MACHINA`} />
 
                 <div className="container mx-auto max-w-7xl space-y-6 px-4 py-8">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <h1 className="text-2xl font-semibold tracking-tight">{t("documents.title") || "Documents"}</h1>
-                            <p className="mt-1 text-sm text-muted-foreground">{t("documents.subtitle") || "Technical and operational documents"}</p>
+                            <h1 className="text-2xl font-semibold tracking-tight">{tt("documents.title", "Documents")}</h1>
+                            <p className="mt-1 text-sm text-muted-foreground">{tt("documents.subtitle", "Technical and operational documents")}</p>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {orgType === "manufacturer" ? <Factory className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
-                            <span>{orgType === "manufacturer" ? (t("documents.manufacturerView") || "Manufacturer view") : (t("documents.customerView") || "Customer view")}</span>
+                            <span>{orgType === "manufacturer" ? tt("documents.manufacturerView", "Manufacturer view") : tt("documents.customerView", "Customer view")}</span>
                         </div>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-3">
                         <Card>
-                            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{t("documents.total") || "Total documents"}</CardTitle></CardHeader>
+                            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{tt("documents.total", "Total documents")}</CardTitle></CardHeader>
                             <CardContent><div className="text-3xl font-semibold">{documents.length}</div></CardContent>
                         </Card>
                         <Card>
-                            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{t("documents.categories") || "Categories"}</CardTitle></CardHeader>
+                            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{tt("documents.categories", "Categories")}</CardTitle></CardHeader>
                             <CardContent><div className="text-3xl font-semibold">{categories.length}</div></CardContent>
                         </Card>
                         <Card>
-                            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{t("documents.withMachine") || "Linked to machines"}</CardTitle></CardHeader>
+                            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{tt("documents.withMachine", "Linked to machines")}</CardTitle></CardHeader>
                             <CardContent><div className="text-3xl font-semibold">{documents.filter((row) => !!row.machine_id).length}</div></CardContent>
                         </Card>
                     </div>
@@ -127,7 +131,7 @@ export default function DocumentsIndexPage() {
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={t("documents.search") || "Search documents"}
+                                    placeholder={tt("documents.search", "Search documents")}
                                     className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                                 />
                             </div>
@@ -138,7 +142,7 @@ export default function DocumentsIndexPage() {
                                     onChange={(e) => setCategory(e.target.value)}
                                     className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none"
                                 >
-                                    <option value="all">{t("common.all") || "All"}</option>
+                                    <option value="all">{tt("common.all", "All")}</option>
                                     {categories.map((item) => (
                                         <option key={item} value={item}>{item}</option>
                                     ))}
@@ -149,9 +153,9 @@ export default function DocumentsIndexPage() {
 
                     <div className="space-y-4">
                         {loading ? (
-                            <Card><CardContent className="p-6 text-sm text-muted-foreground">{t("common.loading") || "Loading..."}</CardContent></Card>
+                            <Card><CardContent className="p-6 text-sm text-muted-foreground">{tt("common.loading", "Loading...")}</CardContent></Card>
                         ) : documents.length === 0 ? (
-                            <Card><CardContent className="p-6 text-sm text-muted-foreground">{t("documents.noResults") || "No documents found"}</CardContent></Card>
+                            <Card><CardContent className="p-6 text-sm text-muted-foreground">{tt("documents.noResults", "No documents found")}</CardContent></Card>
                         ) : documents.map((doc) => (
                             <Link key={doc.id} href={`/documents/${doc.id}`} className="block">
                                 <Card className="transition hover:-translate-y-0.5 hover:border-orange-500/40">
@@ -162,15 +166,15 @@ export default function DocumentsIndexPage() {
                                                     <FileText className="h-5 w-5" />
                                                 </div>
                                                 <div>
-                                                    <div className="truncate text-lg font-semibold text-foreground">{doc.title || "Document"}</div>
-                                                    <div className="text-sm text-muted-foreground">{doc.machine_label || (t("documents.noMachine") || "General document")}</div>
+                                                    <div className="truncate text-lg font-semibold text-foreground">{doc.title || tt("documents.title", "Document")}</div>
+                                                    <div className="text-sm text-muted-foreground">{doc.machine_label || tt("documents.noMachine", "General document")}</div>
                                                 </div>
                                             </div>
                                             {doc.description ? <p className="line-clamp-2 text-sm text-muted-foreground">{doc.description}</p> : null}
                                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                                 <Badge variant="secondary">{doc.category || "other"}</Badge>
                                                 <span>{formatBytes(doc.file_size)}</span>
-                                                <span>{t("documents.versions") || "Versions"}: {doc.version_count || 1}</span>
+                                                <span>{tt("documents.versions", "Versions")}: {doc.version_count || 1}</span>
                                                 <span>{formatDate(doc.updated_at, language)}</span>
                                             </div>
                                         </div>
