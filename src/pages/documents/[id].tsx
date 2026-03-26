@@ -11,6 +11,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { VersionHistory } from "@/components/documents/VersionHistory";
+import { AuditLogViewer } from "@/components/documents/AuditLogViewer";
 
 interface DocumentDetail {
     id: string;
@@ -168,6 +170,21 @@ export default function DocumentDetailPage() {
                                     <CardContent className="space-y-3 text-sm">
                                         <div className="flex justify-between gap-4"><span className="text-muted-foreground">{t("documents.machine") || "Machine"}</span><span>{document.machine_label || "—"}</span></div>
                                         <div className="flex justify-between gap-4"><span className="text-muted-foreground">{t("documents.reference") || "Reference"}</span><span className="text-right">{document.regulatory_reference || "—"}</span></div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                            <div className="grid gap-6 lg:grid-cols-2">
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base font-semibold">Version history</CardTitle></CardHeader>
+                                    <CardContent>
+                                        <VersionHistory documentId={document.id} currentVersionNumber={document.version_count || 1} />
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base font-semibold">Audit log</CardTitle></CardHeader>
+                                    <CardContent>
+                                        <AuditLogViewer documentId={document.id} limit={50} />
                                     </CardContent>
                                 </Card>
                             </div>
