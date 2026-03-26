@@ -37,6 +37,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const documentId = typeof req.query.id === "string" ? req.query.id : "";
     const versionId = typeof req.query.versionId === "string" ? req.query.versionId : null;
     const redirect = req.query.redirect !== "0";
+    const forceDownload = req.query.download === "1";
     if (!documentId) return res.status(400).json({ error: "Document ID is required" });
 
     try {
@@ -65,13 +66,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         if (!path) return res.status(400).json({ error: "Document path missing" });
 
-        const { data, error } = await access.supabase.storage.from(bucket).createSignedUrl(path, 600, { download: filename });
+        const signedUrlArgs = forceDownload ? { download: filename } : undefined;
+        const { data, error } = await access.supabase.storage.from(bucket).createSignedUrl(path, 600, signedUrlArgs as any);
         if (error || !data?.signedUrl) return res.status(500).json({ error: error?.message || "Signed URL not available" });
 
         if (redirect) return res.redirect(data.signedUrl);
         return res.status(200).json({ success: true, signedUrl: data.signedUrl, fileName: filename, mimeType });
     } catch (error: any) {
-        console.error("Document download restore error:", error);
+        console.error("Document download open fix error:", error);
         return res.status(500).json({ error: error?.message || "Download failed" });
     }
 }
