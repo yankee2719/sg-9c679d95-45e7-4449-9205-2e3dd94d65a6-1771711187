@@ -5,7 +5,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { downloadCsv } from "@/lib/downloadCsv";
 import { Card, CardContent } from "@/components/ui/card";
 import EmptyState from "@/components/feedback/EmptyState";
@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 interface MembershipRow { id: string; user_id: string; role: string | null; is_active: boolean; created_at: string | null; organization_id: string; }
 interface ProfileRow { id: string; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null; }
 interface UserListRow { membership_id: string; user_id: string; role: string | null; is_active: boolean; created_at: string | null; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null; }
+type FallbackMap = Record<Language, string>;
+const fb = (language: Language, map: FallbackMap) => map[language] || map.en;
 
 function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
@@ -42,19 +44,17 @@ function KpiCard({ icon, title, value, tone = "default" }: { icon: React.ReactNo
 export default function UsersIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
     const { t, language } = useLanguage();
-    const tr = (key: string, fallback: string) => {
+    const tr = (key: string, map: FallbackMap) => {
         const value = t(key);
-        return value === key ? fallback : value;
+        return value === key ? fb(language, map) : value;
     };
-
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState < UserListRow[] > ([]);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
-
     const orgId = organization?.id ?? null;
-    const orgName = organization?.name ?? tr("users.organization", "Organization");
+    const orgName = organization?.name ?? tr("users.organization", { it: "Organizzazione", en: "Organization", fr: "Organisation", es: "Organización" });
     const userRole = membership?.role ?? "technician";
 
     useEffect(() => {
@@ -105,53 +105,50 @@ export default function UsersIndexPage() {
     }), [rows]);
 
     if (authLoading || loading) {
-        return (<OrgContextGuard><MainLayout userRole={userRole}><SEO title={`${tr("nav.users", "Users")} - MACHINA`} /><div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{tr("users.loading", tr("common.loading", "Loading..."))}</CardContent></Card></div></MainLayout></OrgContextGuard>);
+        return (<OrgContextGuard><MainLayout userRole={userRole}><SEO title={`${tr("nav.users", { it: "Utenti", en: "Users", fr: "Utilisateurs", es: "Usuarios" })} - MACHINA`} /><div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{tr("users.loading", { it: "Caricamento utenti...", en: "Loading users...", fr: "Chargement des utilisateurs...", es: "Cargando usuarios..." })}</CardContent></Card></div></MainLayout></OrgContextGuard>);
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${tr("nav.users", "Users")} - MACHINA`} />
+                <SEO title={`${tr("nav.users", { it: "Utenti", en: "Users", fr: "Utilisateurs", es: "Usuarios" })} - MACHINA`} />
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">{tr("nav.users", "Users")}</h1>
-                            <p className="text-base text-muted-foreground">{tr("users.subtitle", `Users in the active organization: ${orgName}.`)}</p>
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">{tr("nav.users", { it: "Utenti", en: "Users", fr: "Utilisateurs", es: "Usuarios" })}</h1>
+                            <p className="text-base text-muted-foreground">{tr("users.subtitle", { it: `Registro utenti del contesto attivo: ${orgName}.`, en: `User registry for the active organization: ${orgName}.`, fr: `Registre des utilisateurs du contexte actif : ${orgName}.`, es: `Registro de usuarios del contexto activo: ${orgName}.` })}</p>
                         </div>
-                        <Button variant="outline" onClick={() => downloadCsv("/api/export/users", "users.csv")}>
-                            <Download className="mr-2 h-4 w-4" /> Export CSV
-                        </Button>
+                        <Button variant="outline" onClick={() => downloadCsv("/api/export/users", "users.csv")}><Download className="mr-2 h-4 w-4" /> Export CSV</Button>
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Users className="h-5 w-5" />} title={tr("users.kpiTotal", "Total users")} value={stats.total} />
-                        <KpiCard icon={<UserCheck className="h-5 w-5" />} title={tr("users.kpiActive", "Active users")} value={stats.active} tone="success" />
-                        <KpiCard icon={<Shield className="h-5 w-5" />} title={tr("users.kpiAdmins", "Admin roles")} value={stats.admins} />
-                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={tr("users.kpiViewers", "Viewers")} value={stats.viewers} />
+                        <KpiCard icon={<Users className="h-5 w-5" />} title={tr("users.kpiTotal", { it: "Utenti totali", en: "Total users", fr: "Utilisateurs totaux", es: "Usuarios totales" })} value={stats.total} />
+                        <KpiCard icon={<UserCheck className="h-5 w-5" />} title={tr("users.kpiActive", { it: "Utenti attivi", en: "Active users", fr: "Utilisateurs actifs", es: "Usuarios activos" })} value={stats.active} tone="success" />
+                        <KpiCard icon={<Shield className="h-5 w-5" />} title={tr("users.kpiAdmins", { it: "Ruoli gestionali", en: "Admin roles", fr: "Rôles de gestion", es: "Roles de gestión" })} value={stats.admins} />
+                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={tr("users.kpiViewers", { it: "Viewer", en: "Viewers", fr: "Lecteurs", es: "Visualizadores" })} value={stats.viewers} />
                     </div>
 
                     <Card className="rounded-2xl">
                         <CardContent className="grid gap-4 p-6 xl:grid-cols-[1.5fr_1fr_1fr]">
                             <div className="relative">
                                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("users.searchPlaceholder", "Search by name, email or role")}
-                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground" />
+                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("users.searchPlaceholder", { it: "Cerca per nome, email o ruolo", en: "Search by name, email or role", fr: "Rechercher par nom, e-mail ou rôle", es: "Buscar por nombre, correo o rol" })} className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground" />
                             </div>
                             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none">
-                                <option value="all">{tr("users.allRoles", "All roles")}</option>
+                                <option value="all">{tr("users.allRoles", { it: "Tutti i ruoli", en: "All roles", fr: "Tous les rôles", es: "Todos los roles" })}</option>
                                 {availableRoles.map((role) => (<option key={role} value={role.toLowerCase()}>{role}</option>))}
                             </select>
                             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none">
-                                <option value="all">{tr("users.allStatuses", "All statuses")}</option>
-                                <option value="active">{tr("users.active", "Active")}</option>
-                                <option value="inactive">{tr("users.inactive", "Inactive")}</option>
+                                <option value="all">{tr("users.allStatuses", { it: "Tutti gli stati", en: "All statuses", fr: "Tous les statuts", es: "Todos los estados" })}</option>
+                                <option value="active">{tr("users.active", { it: "Attivo", en: "Active", fr: "Actif", es: "Activo" })}</option>
+                                <option value="inactive">{tr("users.inactive", { it: "Inattivo", en: "Inactive", fr: "Inactif", es: "Inactivo" })}</option>
                             </select>
                         </CardContent>
                     </Card>
 
                     <Card className="rounded-2xl"><CardContent className="p-0">
                         {filteredRows.length === 0 ? (
-                            <div className="p-6"><EmptyState title={tr("users.noResults", "No users found.")} description={tr("users.noResultsDesc", "No users match the selected filters.")} /></div>
+                            <div className="p-6"><EmptyState title={tr("users.noResults", { it: "Nessun utente trovato.", en: "No users found.", fr: "Aucun utilisateur trouvé.", es: "No se encontraron usuarios." })} description={tr("users.noResultsDesc", { it: "Nessun utente corrisponde ai filtri selezionati.", en: "No users match the selected filters.", fr: "Aucun utilisateur ne correspond aux filtres sélectionnés.", es: "Ningún usuario coincide con los filtros seleccionados." })} /></div>
                         ) : (
                             <div className="divide-y divide-border">
                                 {filteredRows.map((row) => (
@@ -159,12 +156,12 @@ export default function UsersIndexPage() {
                                         <div className="min-w-0 space-y-1">
                                             <div className="truncate text-base font-semibold text-foreground">{displayName(row)}</div>
                                             <div className="truncate text-sm text-muted-foreground">{row.email || row.user_id}</div>
-                                            <div className="text-xs text-muted-foreground">{tr("users.created", "Created on")}: {formatDate(row.created_at, language)}</div>
+                                            <div className="text-xs text-muted-foreground">{tr("users.created", { it: "Creato il", en: "Created on", fr: "Créé le", es: "Creado el" })}: {formatDate(row.created_at, language)}</div>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <UserRoleBadge role={row.role || "technician"} />
                                             <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${row.is_active ? "bg-green-500/10 text-green-600" : "bg-muted text-muted-foreground"}`}>
-                                                {row.is_active ? tr("users.active", "Active") : tr("users.inactive", "Inactive")}
+                                                {row.is_active ? tr("users.active", { it: "Attivo", en: "Active", fr: "Actif", es: "Activo" }) : tr("users.inactive", { it: "Inattivo", en: "Inactive", fr: "Inactif", es: "Inactivo" })}
                                             </span>
                                         </div>
                                     </div>
