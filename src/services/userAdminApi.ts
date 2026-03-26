@@ -1,14 +1,7 @@
-import { authService } from "@/services/authService";
+import { apiFetch } from "@/services/apiClient";
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-    const session = await authService.getCurrentSession();
-    if (!session) throw new Error("Not authenticated");
-    const headers: Record<string, string> = { Authorization: `Bearer ${session.access_token}` };
-    if (options.body) headers["Content-Type"] = "application/json";
-    const response = await fetch(url, { ...options, headers: { ...headers, ...(options.headers as Record<string, string> | undefined) } });
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : null;
-    if (!response.ok) throw new Error(payload?.error || payload?.message || `API error: ${response.status}`);
+    const payload = await apiFetch < any > (url, options);
     return (payload?.data ?? payload) as T;
 }
 
