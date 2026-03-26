@@ -15,10 +15,87 @@ import { Button } from "@/components/ui/button";
 interface MembershipRow { id: string; user_id: string; role: string | null; is_active: boolean; created_at: string | null; organization_id: string; }
 interface ProfileRow { id: string; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null; }
 interface UserListRow { membership_id: string; user_id: string; role: string | null; is_active: boolean; created_at: string | null; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null; }
-type FallbackMap = Record<Language, string>;
-const fb = (language: Language, map: FallbackMap) => map[language] || map.en;
 
-function formatDate(value: string | null | undefined, lang: string) {
+const I18N: Record<Language, Record<string, string>> = {
+    it: {
+        title: "Utenti",
+        subtitlePrefix: "Registro utenti del contesto attivo:",
+        exportCsv: "Esporta CSV",
+        kpiTotal: "Utenti totali",
+        kpiActive: "Utenti attivi",
+        kpiAdmins: "Ruoli gestionali",
+        kpiViewers: "Viewer",
+        searchPlaceholder: "Cerca per nome, email o ruolo",
+        allRoles: "Tutti i ruoli",
+        allStatuses: "Tutti gli stati",
+        active: "Attivo",
+        inactive: "Inattivo",
+        loading: "Caricamento utenti...",
+        noResults: "Nessun utente trovato.",
+        noResultsDesc: "Nessun utente corrisponde ai filtri selezionati.",
+        createdAt: "Creato il",
+        orgFallback: "Organizzazione",
+    },
+    en: {
+        title: "Users",
+        subtitlePrefix: "User registry for the active organization:",
+        exportCsv: "Export CSV",
+        kpiTotal: "Total users",
+        kpiActive: "Active users",
+        kpiAdmins: "Admin roles",
+        kpiViewers: "Viewers",
+        searchPlaceholder: "Search by name, email or role",
+        allRoles: "All roles",
+        allStatuses: "All statuses",
+        active: "Active",
+        inactive: "Inactive",
+        loading: "Loading users...",
+        noResults: "No users found.",
+        noResultsDesc: "No users match the selected filters.",
+        createdAt: "Created on",
+        orgFallback: "Organization",
+    },
+    fr: {
+        title: "Utilisateurs",
+        subtitlePrefix: "Registre des utilisateurs du contexte actif :",
+        exportCsv: "Exporter CSV",
+        kpiTotal: "Utilisateurs totaux",
+        kpiActive: "Utilisateurs actifs",
+        kpiAdmins: "Rôles de gestion",
+        kpiViewers: "Lecteurs",
+        searchPlaceholder: "Rechercher par nom, e-mail ou rôle",
+        allRoles: "Tous les rôles",
+        allStatuses: "Tous les statuts",
+        active: "Actif",
+        inactive: "Inactif",
+        loading: "Chargement des utilisateurs...",
+        noResults: "Aucun utilisateur trouvé.",
+        noResultsDesc: "Aucun utilisateur ne correspond aux filtres sélectionnés.",
+        createdAt: "Créé le",
+        orgFallback: "Organisation",
+    },
+    es: {
+        title: "Usuarios",
+        subtitlePrefix: "Registro de usuarios del contexto activo:",
+        exportCsv: "Exportar CSV",
+        kpiTotal: "Usuarios totales",
+        kpiActive: "Usuarios activos",
+        kpiAdmins: "Roles de gestión",
+        kpiViewers: "Visualizadores",
+        searchPlaceholder: "Buscar por nombre, correo o rol",
+        allRoles: "Todos los roles",
+        allStatuses: "Todos los estados",
+        active: "Activo",
+        inactive: "Inactivo",
+        loading: "Cargando usuarios...",
+        noResults: "No se encontraron usuarios.",
+        noResultsDesc: "Ningún usuario coincide con los filtros seleccionados.",
+        createdAt: "Creado el",
+        orgFallback: "Organización",
+    },
+};
+
+function formatDate(value: string | null | undefined, lang: Language) {
     if (!value) return "—";
     try {
         const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
@@ -43,18 +120,17 @@ function KpiCard({ icon, title, value, tone = "default" }: { icon: React.ReactNo
 
 export default function UsersIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
-    const { t, language } = useLanguage();
-    const tr = (key: string, map: FallbackMap) => {
-        const value = t(key);
-        return value === key ? fb(language, map) : value;
-    };
+    const { language } = useLanguage();
+    const L = I18N[language] || I18N.en;
+
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState < UserListRow[] > ([]);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
+
     const orgId = organization?.id ?? null;
-    const orgName = organization?.name ?? tr("users.organization", { it: "Organizzazione", en: "Organization", fr: "Organisation", es: "Organización" });
+    const orgName = organization?.name ?? L.orgFallback;
     const userRole = membership?.role ?? "technician";
 
     useEffect(() => {
@@ -87,6 +163,7 @@ export default function UsersIndexPage() {
     }, [authLoading, orgId]);
 
     const availableRoles = useMemo(() => Array.from(new Set(rows.map((r) => r.role).filter(Boolean))) as string[], [rows]);
+
     const filteredRows = useMemo(() => {
         const q = search.trim().toLowerCase();
         return rows.filter((row) => {
@@ -105,50 +182,61 @@ export default function UsersIndexPage() {
     }), [rows]);
 
     if (authLoading || loading) {
-        return (<OrgContextGuard><MainLayout userRole={userRole}><SEO title={`${tr("nav.users", { it: "Utenti", en: "Users", fr: "Utilisateurs", es: "Usuarios" })} - MACHINA`} /><div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{tr("users.loading", { it: "Caricamento utenti...", en: "Loading users...", fr: "Chargement des utilisateurs...", es: "Cargando usuarios..." })}</CardContent></Card></div></MainLayout></OrgContextGuard>);
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title={`${L.title} - MACHINA`} />
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{L.loading}</CardContent></Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${tr("nav.users", { it: "Utenti", en: "Users", fr: "Utilisateurs", es: "Usuarios" })} - MACHINA`} />
+                <SEO title={`${L.title} - MACHINA`} />
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">{tr("nav.users", { it: "Utenti", en: "Users", fr: "Utilisateurs", es: "Usuarios" })}</h1>
-                            <p className="text-base text-muted-foreground">{tr("users.subtitle", { it: `Registro utenti del contesto attivo: ${orgName}.`, en: `User registry for the active organization: ${orgName}.`, fr: `Registre des utilisateurs du contexte actif : ${orgName}.`, es: `Registro de usuarios del contexto activo: ${orgName}.` })}</p>
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">{L.title}</h1>
+                            <p className="text-base text-muted-foreground">{L.subtitlePrefix} {orgName}.</p>
                         </div>
-                        <Button variant="outline" onClick={() => downloadCsv("/api/export/users", "users.csv")}><Download className="mr-2 h-4 w-4" /> Export CSV</Button>
+                        <Button variant="outline" onClick={() => downloadCsv("/api/export/users", "users.csv")}>
+                            <Download className="mr-2 h-4 w-4" /> {L.exportCsv}
+                        </Button>
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Users className="h-5 w-5" />} title={tr("users.kpiTotal", { it: "Utenti totali", en: "Total users", fr: "Utilisateurs totaux", es: "Usuarios totales" })} value={stats.total} />
-                        <KpiCard icon={<UserCheck className="h-5 w-5" />} title={tr("users.kpiActive", { it: "Utenti attivi", en: "Active users", fr: "Utilisateurs actifs", es: "Usuarios activos" })} value={stats.active} tone="success" />
-                        <KpiCard icon={<Shield className="h-5 w-5" />} title={tr("users.kpiAdmins", { it: "Ruoli gestionali", en: "Admin roles", fr: "Rôles de gestion", es: "Roles de gestión" })} value={stats.admins} />
-                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={tr("users.kpiViewers", { it: "Viewer", en: "Viewers", fr: "Lecteurs", es: "Visualizadores" })} value={stats.viewers} />
+                        <KpiCard icon={<Users className="h-5 w-5" />} title={L.kpiTotal} value={stats.total} />
+                        <KpiCard icon={<UserCheck className="h-5 w-5" />} title={L.kpiActive} value={stats.active} tone="success" />
+                        <KpiCard icon={<Shield className="h-5 w-5" />} title={L.kpiAdmins} value={stats.admins} />
+                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={L.kpiViewers} value={stats.viewers} />
                     </div>
 
                     <Card className="rounded-2xl">
                         <CardContent className="grid gap-4 p-6 xl:grid-cols-[1.5fr_1fr_1fr]">
                             <div className="relative">
                                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tr("users.searchPlaceholder", { it: "Cerca per nome, email o ruolo", en: "Search by name, email or role", fr: "Rechercher par nom, e-mail ou rôle", es: "Buscar por nombre, correo o rol" })} className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground" />
+                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={L.searchPlaceholder} className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground" />
                             </div>
                             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none">
-                                <option value="all">{tr("users.allRoles", { it: "Tutti i ruoli", en: "All roles", fr: "Tous les rôles", es: "Todos los roles" })}</option>
+                                <option value="all">{L.allRoles}</option>
                                 {availableRoles.map((role) => (<option key={role} value={role.toLowerCase()}>{role}</option>))}
                             </select>
                             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none">
-                                <option value="all">{tr("users.allStatuses", { it: "Tutti gli stati", en: "All statuses", fr: "Tous les statuts", es: "Todos los estados" })}</option>
-                                <option value="active">{tr("users.active", { it: "Attivo", en: "Active", fr: "Actif", es: "Activo" })}</option>
-                                <option value="inactive">{tr("users.inactive", { it: "Inattivo", en: "Inactive", fr: "Inactif", es: "Inactivo" })}</option>
+                                <option value="all">{L.allStatuses}</option>
+                                <option value="active">{L.active}</option>
+                                <option value="inactive">{L.inactive}</option>
                             </select>
                         </CardContent>
                     </Card>
 
                     <Card className="rounded-2xl"><CardContent className="p-0">
                         {filteredRows.length === 0 ? (
-                            <div className="p-6"><EmptyState title={tr("users.noResults", { it: "Nessun utente trovato.", en: "No users found.", fr: "Aucun utilisateur trouvé.", es: "No se encontraron usuarios." })} description={tr("users.noResultsDesc", { it: "Nessun utente corrisponde ai filtri selezionati.", en: "No users match the selected filters.", fr: "Aucun utilisateur ne correspond aux filtres sélectionnés.", es: "Ningún usuario coincide con los filtros seleccionados." })} /></div>
+                            <div className="p-6"><EmptyState title={L.noResults} description={L.noResultsDesc} /></div>
                         ) : (
                             <div className="divide-y divide-border">
                                 {filteredRows.map((row) => (
@@ -156,13 +244,11 @@ export default function UsersIndexPage() {
                                         <div className="min-w-0 space-y-1">
                                             <div className="truncate text-base font-semibold text-foreground">{displayName(row)}</div>
                                             <div className="truncate text-sm text-muted-foreground">{row.email || row.user_id}</div>
-                                            <div className="text-xs text-muted-foreground">{tr("users.created", { it: "Creato il", en: "Created on", fr: "Créé le", es: "Creado el" })}: {formatDate(row.created_at, language)}</div>
+                                            <div className="text-xs text-muted-foreground">{L.createdAt}: {formatDate(row.created_at, language)}</div>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <UserRoleBadge role={row.role || "technician"} />
-                                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${row.is_active ? "bg-green-500/10 text-green-600" : "bg-muted text-muted-foreground"}`}>
-                                                {row.is_active ? tr("users.active", { it: "Attivo", en: "Active", fr: "Actif", es: "Activo" }) : tr("users.inactive", { it: "Inattivo", en: "Inactive", fr: "Inactif", es: "Inactivo" })}
-                                            </span>
+                                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${row.is_active ? "bg-green-500/10 text-green-600" : "bg-muted text-muted-foreground"}`}>{row.is_active ? L.active : L.inactive}</span>
                                         </div>
                                     </div>
                                 ))}
