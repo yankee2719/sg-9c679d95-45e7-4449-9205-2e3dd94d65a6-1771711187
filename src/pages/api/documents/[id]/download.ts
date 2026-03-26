@@ -1,161 +1,85 @@
-// ============================================================================
-// API: GET/POST /api/documents/[id]/versions
-// ============================================================================
 import type { NextApiResponse } from "next";
-import {
-    withAuth,
-    ALL_APP_ROLES,
-    type AuthenticatedRequest,
-} from "@/lib/apiAuth";
-import { getDocumentService } from "@/services/documentService";
-import formidable from "formidable";
-import fs from "fs";
-
-// Disable body parser per file upload (POST)
-export const config = {
-    api: {
-        bodyParser: false,
-    },
-};
-
-const parseForm = (
-    req: AuthenticatedRequest
-): Promise<{
-    fields: formidable.Fields;
-    files: formidable.Files;
-}> => {
-    return new Promise((resolve, reject) => {
-        const form = formidable({ multiples: false });
-        form.parse(req, (err, fields, files) => {
-            if (err) reject(err);
-            else resolve({ fields, files });
-        });
-    });
-};
+import { withAuth, ALL_APP_ROLES, type AuthenticatedRequest } from "@/lib/apiAuth";
+import { resolveDocumentAccess } from "@/lib/server/documentWorkflow";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-    const { id } = req.query;
+    if (req.method !== "GET") {
+        return res.status(405).json({ error: "Method not allowed" });
+    }
 
-    if (!id || typeof id !== "string") {
+    const documentId = typeof req.query.id === "string" ? req.query.id : "";
+    const versionId = typeof req.query.versionId === "string" ? req.query.versionId : null;
+    const redirect = req.query.redirect !== "0";
+
+    if (!documentId) {
         return res.status(400).json({ error: "Document ID is required" });
     }
 
-    const docService = getDocumentService();
-
     try {
-        // ====================================================================
-        // GET: Retrieve version history
-        // ====================================================================
-        if (req.method === "GET") {
-            const hasPermission = await docService.checkUserPermission(
-                req.user.userId,
-                id,
-                "view"
-            );
-
-            if (!hasPermission) {
-                return res.status(403).json({
-                    error: "Access denied - View permission required",
-                });
-            }
-
-            const versions = await docService.getVersionHistory(id);
-
-            return res.status(200).json({
-                success: true,
-                versions,
-                totalVersions: versions.length,
-            });
+        const access = await resolveDocumentAccess(req, documentId);
+        if (!access.document) {
+            return res.status(404).json({ error: "Document not found" });
+        }
+        if (!access.canView) {
+            return res.status(403).json({ error: "Access denied" });
         }
 
-        // ====================================================================
-        // POST: Create new version
-        // ====================================================================
-        else if (req.method === "POST") {
-            const hasPermission = await docService.checkUserPermission(
-                req.user.userId,
-                id,
-                "manage"
-            );
+        let storagePath = access.document.storage_path || null;
+        let fileName = access.document.title || "document";
+        let mimeType = access.document.mime_type || "application/octet-stream";
+        const bucket = access.document.storage_bucket || "documents";
 
-            if (!hasPermission) {
-                return res.status(403).json({
-                    error: "Access denied - Manage permission required to create versions",
-                });
+        if (versionId) {
+            const { data: version, error: versionError } = await access.serviceSupabase
+                .from("document_versions")
+                .select("id, document_id, file_path, file_name, mime_type")
+                .eq("id", versionId)
+                .eq("document_id", documentId)
+                .maybeSingle();
+
+            if (versionError) {
+                return res.status(500).json({ error: versionError.message });
+            }
+            if (!version) {
+                return res.status(404).json({ error: "Document version not found" });
             }
 
-            const { fields, files } = await parseForm(req);
-
-            const changeReason = Array.isArray(fields.changeReason)
-                ? fields.changeReason[0]
-                : fields.changeReason;
-            const changeSummary = Array.isArray(fields.changeSummary)
-                ? fields.changeSummary[0]
-                : fields.changeSummary;
-            const newTitle = Array.isArray(fields.newTitle)
-                ? fields.newTitle[0]
-                : fields.newTitle;
-            const newDescription = Array.isArray(fields.newDescription)
-                ? fields.newDescription[0]
-                : fields.newDescription;
-
-            const fileArray = Array.isArray(files.file)
-                ? files.file
-                : [files.file];
-            const uploadedFile = fileArray[0];
-
-            if (!uploadedFile) {
-                return res
-                    .status(400)
-                    .json({ error: "File is required for new version" });
-            }
-
-            if (!changeReason) {
-                return res
-                    .status(400)
-                    .json({ error: "changeReason is required" });
-            }
-
-            const fileBuffer = fs.readFileSync(uploadedFile.filepath);
-
-            const newVersion = await docService.createNewVersion(
-                {
-                    documentId: id,
-                    file: fileBuffer,
-                    changeReason: changeReason as string,
-                    changeSummary: (changeSummary as string) || undefined,
-                    newTitle: (newTitle as string) || undefined,
-                    newDescription: (newDescription as string) || undefined,
-                },
-                req.user.userId
-            );
-
-            fs.unlinkSync(uploadedFile.filepath);
-
-            return res.status(201).json({
-                success: true,
-                message: "New version created successfully",
-                document: newVersion,
-                versionNumber: newVersion.version_number,
-            });
+            storagePath = version.file_path || null;
+            fileName = version.file_name || fileName;
+            mimeType = version.mime_type || mimeType;
         }
 
-        // ====================================================================
-        else {
-            return res.status(405).json({
-                error: "Method not allowed",
-                allowedMethods: ["GET", "POST"],
-            });
+        if (!storagePath) {
+            return res.status(400).json({ error: "Document has no storage path" });
         }
+
+        const { data, error } = await access.serviceSupabase.storage
+            .from(bucket)
+            .createSignedUrl(storagePath, 60 * 10, {
+                download: fileName,
+            });
+
+        if (error || !data?.signedUrl) {
+            return res.status(500).json({ error: error?.message || "Failed to create signed URL" });
+        }
+
+        if (redirect) {
+            res.setHeader("Cache-Control", "no-store");
+            return res.redirect(data.signedUrl);
+        }
+
+        return res.status(200).json({
+            success: true,
+            signedUrl: data.signedUrl,
+            fileName,
+            mimeType,
+        });
     } catch (error) {
-        console.error("Versions API Error:", error);
+        console.error("Document download API error:", error);
         return res.status(500).json({
-            success: false,
-            error: "Operation failed",
-            message: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : "Unexpected error",
         });
     }
 }
 
 export default withAuth(ALL_APP_ROLES, handler);
-
