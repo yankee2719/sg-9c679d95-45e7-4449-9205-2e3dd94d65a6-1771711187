@@ -10,21 +10,18 @@ import {
     FileBadge2,
     Languages,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { authService } from "@/services/authService";
 import { downloadCsv } from "@/lib/downloadCsv";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/feedback/EmptyState";
 
-type OrgType = "manufacturer" | "customer" | null;
-
-interface DocumentRow {
+type DocumentRow = {
     id: string;
     title: string | null;
     description: string | null;
@@ -37,14 +34,7 @@ interface DocumentRow {
     file_size: number | null;
     updated_at: string | null;
     created_at: string | null;
-    is_archived?: boolean | null;
-}
-
-interface MachineLabelRow {
-    id: string;
-    name: string | null;
-    internal_code: string | null;
-}
+};
 
 function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
@@ -67,43 +57,18 @@ function formatBytes(value: number | null | undefined) {
     const units = ["B", "KB", "MB", "GB"];
     let size = value;
     let unitIndex = 0;
-
     while (size >= 1024 && unitIndex < units.length - 1) {
         size /= 1024;
         unitIndex += 1;
     }
-
     return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function useCategoryLabel() {
-    const { t } = useLanguage();
-
-    return (value: string | null | undefined) => {
-        if (!value) return t("documents.catOther") || "Altro";
-
-        const key = `documents.cat_${value}`;
-        const translated = t(key);
-        // If key not found, t() returns the key itself — fallback to value
-        return translated !== key ? translated : value;
-    };
-}
-
-function KpiCard({
-    icon,
-    title,
-    value,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    value: number;
-}) {
+function KpiCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number }) {
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
-                    {icon}
-                </div>
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">{icon}</div>
                 <div className="text-4xl font-bold text-foreground">{value}</div>
                 <div className="mt-2 text-sm text-muted-foreground">{title}</div>
             </CardContent>
@@ -112,415 +77,159 @@ function KpiCard({
 }
 
 export default function DocumentsIndexPage() {
-    const { loading: authLoading, organization, membership } = useAuth();
     const { t, language } = useLanguage();
-    const categoryLabel = useCategoryLabel();
-
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState < DocumentRow[] > ([]);
-    const [machineMap, setMachineMap] = useState < Map < string, string>> (new Map());
-
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [languageFilter, setLanguageFilter] = useState("all");
 
-    const orgId = organization?.id ?? null;
-    const orgType = (organization?.type as OrgType | undefined) ?? null;
-    const userRole = membership?.role ?? "technician";
-
     useEffect(() => {
-        let active = true;
-
-        const loadDocuments = async () => {
-            if (authLoading) return;
-
-            if (!orgId || !orgType) {
-                if (active) setLoading(false);
-                return;
-            }
-
+        let alive = true;
+        const load = async () => {
             setLoading(true);
-
             try {
-                let docRows: DocumentRow[] = [];
+                const session = await authService.getCurrentSession();
+                if (!session) throw new Error("Not authenticated");
 
-                if (orgType === "manufacturer") {
-                    const { data, error } = await supabase
-                        .from("documents")
-                        .select(
-                            "id, title, description, category, language, regulatory_reference, machine_id, organization_id, version_count, file_size, updated_at, created_at, is_archived"
-                        )
-                        .eq("organization_id", orgId)
-                        .eq("is_archived", false)
-                        .order("updated_at", { ascending: false });
+                const query = new URLSearchParams();
+                if (search.trim()) query.set("q", search.trim());
+                if (categoryFilter !== "all") query.set("category", categoryFilter);
+                if (languageFilter !== "all") query.set("language", languageFilter);
 
-                    if (error) throw error;
-                    docRows = (data ?? []) as DocumentRow[];
-                } else {
-                    const [{ data: ownMachines, error: ownMachinesError }, { data: assignments, error: assignmentsError }] =
-                        await Promise.all([
-                            supabase
-                                .from("machines")
-                                .select("id")
-                                .eq("organization_id", orgId)
-                                .eq("is_archived", false)
-                                .or("is_deleted.is.null,is_deleted.eq.false"),
-                            supabase
-                                .from("machine_assignments")
-                                .select("machine_id")
-                                .eq("customer_org_id", orgId)
-                                .eq("is_active", true),
-                        ]);
+                const response = await fetch(`/api/documents${query.toString() ? `?${query.toString()}` : ""}`, {
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                });
 
-                    if (ownMachinesError) throw ownMachinesError;
-                    if (assignmentsError) throw assignmentsError;
+                const text = await response.text();
+                const payload = text ? JSON.parse(text) : null;
+                if (!response.ok) throw new Error(payload?.error || payload?.message || `API error ${response.status}`);
 
-                    const accessibleMachineIds = Array.from(
-                        new Set([
-                            ...(ownMachines ?? []).map((row: any) => row.id),
-                            ...(assignments ?? []).map((row: any) => row.machine_id),
-                        ].filter(Boolean))
-                    );
-
-                    const [{ data: orgDocs, error: orgDocsError }, machineDocsRes] = await Promise.all([
-                        supabase
-                            .from("documents")
-                            .select(
-                                "id, title, description, category, language, regulatory_reference, machine_id, organization_id, version_count, file_size, updated_at, created_at, is_archived"
-                            )
-                            .eq("organization_id", orgId)
-                            .eq("is_archived", false)
-                            .order("updated_at", { ascending: false }),
-                        accessibleMachineIds.length > 0
-                            ? supabase
-                                .from("documents")
-                                .select(
-                                    "id, title, description, category, language, regulatory_reference, machine_id, organization_id, version_count, file_size, updated_at, created_at, is_archived"
-                                )
-                                .in("machine_id", accessibleMachineIds)
-                                .eq("is_archived", false)
-                                .order("updated_at", { ascending: false })
-                            : Promise.resolve({ data: [], error: null } as any),
-                    ]);
-
-                    if (orgDocsError) throw orgDocsError;
-                    if (machineDocsRes.error) throw machineDocsRes.error;
-
-                    const merged = new Map < string, DocumentRow> ();
-                    for (const row of orgDocs ?? []) merged.set((row as any).id, row as DocumentRow);
-                    for (const row of machineDocsRes.data ?? []) {
-                        merged.set((row as any).id, row as DocumentRow);
-                    }
-
-                    docRows = Array.from(merged.values()).sort((a, b) => {
-                        const da = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                        const db = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                        return db - da;
-                    });
-                }
-
-                const machineIds = Array.from(
-                    new Set(docRows.map((row) => row.machine_id).filter(Boolean))
-                ) as string[];
-
-                let labelMap = new Map < string, string> ();
-                if (machineIds.length > 0) {
-                    const { data: machines, error: machinesError } = await supabase
-                        .from("machines")
-                        .select("id, name, internal_code")
-                        .in("id", machineIds);
-
-                    if (machinesError) throw machinesError;
-
-                    labelMap = new Map(
-                        ((machines ?? []) as MachineLabelRow[]).map((row) => [
-                            row.id,
-                            row.name || row.internal_code || row.id,
-                        ])
-                    );
-                }
-
-                if (!active) return;
-
-                setDocuments(docRows);
-                setMachineMap(labelMap);
+                if (!alive) return;
+                setDocuments((payload?.data ?? []) as DocumentRow[]);
             } catch (error) {
-                console.error("Documents index load error:", error);
+                console.error("Documents page load error:", error);
+                if (alive) setDocuments([]);
             } finally {
-                if (active) setLoading(false);
+                if (alive) setLoading(false);
             }
         };
 
-        void loadDocuments();
-
+        void load();
         return () => {
-            active = false;
+            alive = false;
         };
-    }, [authLoading, orgId, orgType]);
+    }, [search, categoryFilter, languageFilter]);
 
-    const categories = useMemo(() => {
-        return Array.from(
-            new Set(documents.map((row) => row.category).filter(Boolean))
-        ) as string[];
-    }, [documents]);
+    const categories = useMemo(() => Array.from(new Set(documents.map((d) => d.category).filter(Boolean))) as string[], [documents]);
+    const languages = useMemo(() => Array.from(new Set(documents.map((d) => d.language).filter(Boolean))) as string[], [documents]);
 
-    const languages = useMemo(() => {
-        return Array.from(
-            new Set(documents.map((row) => row.language).filter(Boolean))
-        ) as string[];
-    }, [documents]);
+    const stats = useMemo(() => ({
+        total: documents.length,
+        manuals: documents.filter((d) => d.category === "technical_manual" || d.category === "maintenance_manual").length,
+        compliance: documents.filter((d) => Boolean(d.regulatory_reference)).length,
+        multilingual: documents.filter((d) => Boolean(d.language)).length,
+    }), [documents]);
 
-    const filteredDocuments = useMemo(() => {
-        const q = search.trim().toLowerCase();
-
-        return documents.filter((row) => {
-            const matchesSearch =
-                !q ||
-                [
-                    row.title,
-                    row.description,
-                    row.category,
-                    row.language,
-                    row.regulatory_reference,
-                    row.machine_id ? machineMap.get(row.machine_id) : "",
-                ]
-                    .filter(Boolean)
-                    .some((value) => String(value).toLowerCase().includes(q));
-
-            const matchesCategory =
-                categoryFilter === "all" || row.category === categoryFilter;
-
-            const matchesLanguage =
-                languageFilter === "all" || row.language === languageFilter;
-
-            return matchesSearch && matchesCategory && matchesLanguage;
-        });
-    }, [documents, search, categoryFilter, languageFilter, machineMap]);
-
-    const stats = useMemo(() => {
-        const now = Date.now();
-        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-
-        return {
-            total: documents.length,
-            linkedToMachines: documents.filter((row) => !!row.machine_id).length,
-            multilingual: new Set(documents.map((row) => row.language).filter(Boolean)).size,
-            updatedLast30d: documents.filter((row) => {
-                if (!row.updated_at) return false;
-                return now - new Date(row.updated_at).getTime() <= thirtyDaysMs;
-            }).length,
-        };
-    }, [documents]);
-
-    if (authLoading || loading) {
-        return (
-            <OrgContextGuard>
-                <MainLayout userRole={userRole}>
-                    <SEO title={`${t("documents.title")} - MACHINA`} />
-                    <div className="mx-auto max-w-7xl px-4 py-8">
-                        <Card className="rounded-2xl">
-                            <CardContent className="py-10 text-center text-muted-foreground">
-                                {t("documents.loading")}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </MainLayout>
-            </OrgContextGuard>
-        );
-    }
+    const exportRows = documents.map((doc) => ({
+        id: doc.id,
+        title: doc.title ?? "",
+        category: doc.category ?? "",
+        language: doc.language ?? "",
+        versions: doc.version_count ?? 0,
+        file_size: doc.file_size ?? 0,
+        updated_at: doc.updated_at ?? "",
+    }));
 
     return (
         <OrgContextGuard>
-            <MainLayout userRole={userRole}>
-                <SEO title={`${t("documents.title")} - MACHINA`} />
-
-                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                {t("documents.title")}
-                            </h1>
-                            <p className="text-base text-muted-foreground">
-                                {t("documents.subtitle")}
-                            </p>
+            <SEO title="Documents | MACHINA" />
+            <MainLayout>
+                <div className="space-y-6 p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight">{t("documents.title") || "Documenti"}</h1>
+                            <p className="mt-1 text-sm text-muted-foreground">{t("documents.subtitle") || "Archivio tecnico e operativo con accessi coerenti alle macchine assegnate."}</p>
                         </div>
-
-                        <div className="flex gap-3">
-                            <Button variant="outline" onClick={() => downloadCsv("/api/export/documents", "documenti.csv")}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Export CSV
-                            </Button>
-                        </div>
+                        <Button onClick={() => downloadCsv("documents", exportRows)} className="rounded-xl">
+                            <Download className="mr-2 h-4 w-4" />
+                            {t("common.export") || "Export"}
+                        </Button>
                     </div>
 
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard
-                            icon={<FileText className="h-5 w-5" />}
-                            title={t("documents.kpiActive") || "Documenti attivi"}
-                            value={stats.total}
-                        />
-                        <KpiCard
-                            icon={<Factory className="h-5 w-5" />}
-                            title={t("documents.kpiLinked") || "Collegati a macchina"}
-                            value={stats.linkedToMachines}
-                        />
-                        <KpiCard
-                            icon={<Languages className="h-5 w-5" />}
-                            title={t("documents.kpiLanguages") || "Lingue presenti"}
-                            value={stats.multilingual}
-                        />
-                        <KpiCard
-                            icon={<ShieldCheck className="h-5 w-5" />}
-                            title={t("documents.kpiRecent") || "Aggiornati ultimi 30 gg"}
-                            value={stats.updatedLast30d}
-                        />
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <KpiCard icon={<FileText className="h-6 w-6" />} title={t("documents.kpiTotal") || "Totale documenti"} value={stats.total} />
+                        <KpiCard icon={<Factory className="h-6 w-6" />} title={t("documents.kpiManuals") || "Manuali"} value={stats.manuals} />
+                        <KpiCard icon={<ShieldCheck className="h-6 w-6" />} title={t("documents.kpiCompliance") || "Con riferimenti normativi"} value={stats.compliance} />
+                        <KpiCard icon={<Languages className="h-6 w-6" />} title={t("documents.kpiLanguages") || "Con lingua impostata"} value={stats.multilingual} />
                     </div>
 
                     <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Filter className="h-5 w-5" />
-                                {t("documents.filters") || "Filtri archivio"}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid gap-4 xl:grid-cols-[1.5fr_1fr_1fr]">
+                        <CardContent className="grid gap-4 p-4 md:grid-cols-3">
                             <div className="relative">
-                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                                 <input
+                                    className="h-11 w-full rounded-xl border bg-background pl-10 pr-3 text-sm"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={t("documents.search")}
-                                    className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                                    placeholder={t("documents.searchPlaceholder") || "Cerca documenti"}
                                 />
                             </div>
-
-                            <select
-                                value={categoryFilter}
-                                onChange={(e) => setCategoryFilter(e.target.value)}
-                                className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
-                            >
-                                <option value="all">{t("documents.allCategories") || "Tutte le categorie"}</option>
-                                {categories.map((category) => (
-                                    <option key={category} value={category}>
-                                        {categoryLabel(category)}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <select
-                                value={languageFilter}
-                                onChange={(e) => setLanguageFilter(e.target.value)}
-                                className="h-11 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
-                            >
-                                <option value="all">{t("documents.allLanguages") || "Tutte le lingue"}</option>
-                                {languages.map((lang) => (
-                                    <option key={lang} value={lang}>
-                                        {lang}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-2 rounded-xl border px-3">
+                                <Filter className="h-4 w-4 text-muted-foreground" />
+                                <select className="h-11 w-full bg-transparent text-sm outline-none" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                                    <option value="all">{t("common.all") || "Tutti"}</option>
+                                    {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-xl border px-3">
+                                <Languages className="h-4 w-4 text-muted-foreground" />
+                                <select className="h-11 w-full bg-transparent text-sm outline-none" value={languageFilter} onChange={(e) => setLanguageFilter(e.target.value)}>
+                                    <option value="all">{t("common.all") || "Tutti"}</option>
+                                    {languages.map((lang) => <option key={lang} value={lang}>{lang.toUpperCase()}</option>)}
+                                </select>
+                            </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle>{t("documents.registry") || "Registro documenti"}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {filteredDocuments.length === 0 ? (
-                                <EmptyState
-                                    title={t("documents.noResults")}
-                                    description={t("documents.noResultsDesc") || t("documents.noResults")}
-                                    icon={<FileBadge2 className="h-10 w-10" />}
-                                    actionLabel={t("nav.equipment")}
-                                    actionHref="/equipment"
-                                    secondaryActionLabel={t("workOrders.title")}
-                                    secondaryActionHref="/work-orders"
-                                />
-                            ) : (
-                                <div className="space-y-4">
-                                    {filteredDocuments.map((row) => {
-                                        const machineLabel = row.machine_id
-                                            ? machineMap.get(row.machine_id) || row.machine_id
-                                            : null;
-
-                                        return (
-                                            <div
-                                                key={row.id}
-                                                className="rounded-2xl border border-border p-4 transition hover:bg-muted/30"
-                                            >
-                                                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                                                    <div className="min-w-0 space-y-2">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <div className="truncate text-lg font-semibold text-foreground">
-                                                                {row.title || t("documents.title")}
-                                                            </div>
-
-                                                            <Badge variant="outline">
-                                                                {categoryLabel(row.category)}
-                                                            </Badge>
-
-                                                            {row.language && (
-                                                                <Badge variant="secondary">
-                                                                    {row.language}
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-
-                                                        {row.description && (
-                                                            <div className="text-sm text-muted-foreground">
-                                                                {row.description}
-                                                            </div>
-                                                        )}
-
-                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                            <span>
-                                                                {t("documents.versions")}: {row.version_count ?? 1}
-                                                            </span>
-                                                            <span>
-                                                                Size: {formatBytes(row.file_size)}
-                                                            </span>
-                                                            <span>
-                                                                {t("documents.updatedAt") || "Aggiornato"}: {formatDate(row.updated_at, language)}
-                                                            </span>
-                                                            {row.regulatory_reference && (
-                                                                <span>
-                                                                    {t("documents.standard") || "Norma"}: {row.regulatory_reference}
-                                                                </span>
-                                                            )}
-                                                            {machineLabel && (
-                                                                <span>{t("machines.title")}: {machineLabel}</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {row.machine_id ? (
-                                                            <Button variant="outline" asChild>
-                                                                <Link
-                                                                    href={`/equipment/${row.machine_id}#machine-documents`}
-                                                                >
-                                                                    {t("nav.equipment")}
-                                                                </Link>
-                                                            </Button>
-                                                        ) : (
-                                                            <Button variant="outline" asChild>
-                                                                <Link href="/equipment">
-                                                                    {t("nav.equipment")}
-                                                                </Link>
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
+                    {loading ? (
+                        <Card className="rounded-2xl"><CardContent className="p-6 text-sm text-muted-foreground">{t("common.loading") || "Caricamento..."}</CardContent></Card>
+                    ) : documents.length === 0 ? (
+                        <EmptyState title={t("documents.emptyTitle") || "Nessun documento"} description={t("documents.emptyDescription") || "Non ci sono documenti visibili per il contesto attivo."} icon={FileBadge2} />
+                    ) : (
+                        <div className="grid gap-4 xl:grid-cols-2">
+                            {documents.map((doc) => (
+                                <Card key={doc.id} className="rounded-2xl">
+                                    <CardContent className="space-y-4 p-5">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <div className="text-lg font-semibold text-foreground">{doc.title || "—"}</div>
+                                                <div className="mt-1 text-sm text-muted-foreground">{doc.description || "—"}</div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                            <Badge variant="secondary" className="rounded-full">{doc.category || "other"}</Badge>
+                                        </div>
+
+                                        <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                                            <div>{t("documents.language") || "Lingua"}: <span className="text-foreground">{doc.language?.toUpperCase() || "—"}</span></div>
+                                            <div>{t("documents.versions") || "Versioni"}: <span className="text-foreground">{doc.version_count ?? 0}</span></div>
+                                            <div>{t("documents.fileSize") || "Dimensione"}: <span className="text-foreground">{formatBytes(doc.file_size)}</span></div>
+                                            <div>{t("documents.updatedAt") || "Aggiornato"}: <span className="text-foreground">{formatDate(doc.updated_at, language)}</span></div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="text-xs text-muted-foreground">{doc.regulatory_reference || ""}</div>
+                                            <Button asChild className="rounded-xl">
+                                                <Link href={`/documents/${doc.id}`}>{t("documents.open") || "Apri"}</Link>
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </MainLayout>
         </OrgContextGuard>
     );
 }
+
