@@ -11,8 +11,6 @@ import {
     UserCheck,
     Users,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { apiFetch } from "@/services/apiClient";
 import { downloadCsv } from "@/lib/downloadCsv";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
@@ -24,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { userAdminApi, type AssignmentListItem, type AssignmentOptions } from "@/services/userAdminApi";
 import EmptyState from "@/components/feedback/EmptyState";
 import {
     Dialog,
@@ -42,39 +41,10 @@ import {
 
 type OrgType = "manufacturer" | "customer" | null;
 
-interface AssignmentRow {
-    id: string;
-    machine_id: string;
-    customer_org_id: string | null;
-    manufacturer_org_id: string | null;
-    assigned_by: string | null;
-    assigned_at: string | null;
-    is_active: boolean;
-}
-
-interface MachineRow {
-    id: string;
-    name: string | null;
-    internal_code: string | null;
-    serial_number: string | null;
-    model: string | null;
-    brand: string | null;
-}
-
-interface CustomerRow {
-    id: string;
-    name: string | null;
-    city: string | null;
-    email: string | null;
-}
-
-interface ProfileRow {
-    id: string;
-    display_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-}
+type AssignmentRow = AssignmentListItem;
+type MachineRow = AssignmentOptions["machines"][number];
+type CustomerRow = AssignmentOptions["customers"][number];
+type ProfileRow = NonNullable<AssignmentListItem["assigned_user"]>;
 
 const copy = {
     it: {
@@ -274,9 +244,6 @@ export default function AssignmentsIndexPage() {
 
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState < AssignmentRow[] > ([]);
-    const [machineMap, setMachineMap] = useState < Map < string, MachineRow>> (new Map());
-    const [customerMap, setCustomerMap] = useState < Map < string, CustomerRow>> (new Map());
-    const [userMap, setUserMap] = useState < Map < string, ProfileRow>> (new Map());
     const [search, setSearch] = useState("");
 
     // Dialog state
@@ -301,42 +268,8 @@ export default function AssignmentsIndexPage() {
         setLoading(true);
 
         try {
-            const { data: assignments, error: assignmentsError } = await supabase
-                .from("machine_assignments")
-                .select("id, machine_id, customer_org_id, manufacturer_org_id, assigned_by, assigned_at, is_active")
-                .eq("manufacturer_org_id", orgId)
-                .eq("is_active", true)
-                .order("assigned_at", { ascending: false });
-
-            if (assignmentsError) throw assignmentsError;
-
-            const assignmentRows = (assignments ?? []) as AssignmentRow[];
-
-            const machineIds = Array.from(new Set(assignmentRows.map((r) => r.machine_id).filter(Boolean)));
-            const customerIds = Array.from(new Set(assignmentRows.map((r) => r.customer_org_id).filter(Boolean))) as string[];
-            const userIds = Array.from(new Set(assignmentRows.map((r) => r.assigned_by).filter(Boolean))) as string[];
-
-            let nextMachineMap = new Map < string, MachineRow> ();
-            let nextCustomerMap = new Map < string, CustomerRow> ();
-            let nextUserMap = new Map < string, ProfileRow> ();
-
-            if (machineIds.length > 0) {
-                const { data } = await supabase.from("machines").select("id, name, internal_code, serial_number, model, brand").in("id", machineIds);
-                nextMachineMap = new Map(((data ?? []) as MachineRow[]).map((r) => [r.id, r]));
-            }
-            if (customerIds.length > 0) {
-                const { data } = await supabase.from("organizations").select("id, name, city, email").in("id", customerIds);
-                nextCustomerMap = new Map(((data ?? []) as CustomerRow[]).map((r) => [r.id, r]));
-            }
-            if (userIds.length > 0) {
-                const { data } = await supabase.from("profiles").select("id, display_name, first_name, last_name, email").in("id", userIds);
-                nextUserMap = new Map(((data ?? []) as ProfileRow[]).map((r) => [r.id, r]));
-            }
-
+            const assignmentRows = await userAdminApi.listAssignments();
             setRows(assignmentRows);
-            setMachineMap(nextMachineMap);
-            setCustomerMap(nextCustomerMap);
-            setUserMap(nextUserMap);
         } catch (error) {
             console.error("Assignments load error:", error);
         } finally {
@@ -357,21 +290,9 @@ export default function AssignmentsIndexPage() {
         setSelectedCustomerId("");
 
         try {
-            const [machinesRes, customersRes] = await Promise.all([
-                supabase.from("machines").select("id, name, internal_code, serial_number, model, brand")
-                    .eq("organization_id", orgId!)
-                    .eq("is_archived", false)
-                    .or("is_deleted.is.null,is_deleted.eq.false")
-                    .order("name"),
-                supabase.from("organizations").select("id, name, city, email")
-                    .eq("manufacturer_org_id", orgId!)
-                    .eq("type", "customer")
-                    .or("is_deleted.is.null,is_deleted.eq.false")
-                    .order("name"),
-            ]);
-
-            setAllMachines((machinesRes.data ?? []) as MachineRow[]);
-            setAllCustomers((customersRes.data ?? []) as CustomerRow[]);
+            const options = await userAdminApi.getAssignmentOptions();
+            setAllMachines(options.machines);
+            setAllCustomers(options.customers);
         } catch (error) {
             console.error("Error loading dialog data:", error);
         }
@@ -382,13 +303,7 @@ export default function AssignmentsIndexPage() {
 
         setAssigning(true);
         try {
-            await apiFetch("/api/assignments", {
-                method: "POST",
-                body: JSON.stringify({
-                    machine_id: selectedMachineId,
-                    customer_org_id: selectedCustomerId,
-                }),
-            });
+            await userAdminApi.createAssignment({ machine_id: selectedMachineId, customer_org_id: selectedCustomerId });
 
             toast({ title: text.successTitle, description: text.successDesc });
             setDialogOpen(false);
@@ -404,10 +319,7 @@ export default function AssignmentsIndexPage() {
         if (!window.confirm(text.removeConfirm)) return;
 
         try {
-            await apiFetch("/api/assignments", {
-                method: "DELETE",
-                body: JSON.stringify({ assignment_id: assignmentId }),
-            });
+            await userAdminApi.deleteAssignment(assignmentId);
 
             toast({ title: text.removedTitle, description: text.removedDesc });
             await loadAssignments();
@@ -420,14 +332,14 @@ export default function AssignmentsIndexPage() {
         const q = search.trim().toLowerCase();
         if (!q) return rows;
         return rows.filter((row) => {
-            const machine = machineMap.get(row.machine_id);
-            const customer = row.customer_org_id ? customerMap.get(row.customer_org_id) : null;
-            const user = row.assigned_by ? userMap.get(row.assigned_by) : null;
+            const machine = row.machine;
+            const customer = row.customer;
+            const user = row.assigned_user;
             const assignedByLabel = user?.display_name?.trim() || `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || user?.email || "";
             return [machine?.name, machine?.internal_code, machine?.serial_number, machine?.model, machine?.brand, customer?.name, customer?.city, customer?.email, assignedByLabel]
                 .filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
         });
-    }, [rows, search, machineMap, customerMap, userMap]);
+    }, [rows, search]);
 
     const stats = useMemo(() => ({
         total: rows.length,
@@ -518,9 +430,9 @@ export default function AssignmentsIndexPage() {
                             ) : (
                                 <div className="space-y-4">
                                     {filteredRows.map((row) => {
-                                        const machine = machineMap.get(row.machine_id);
-                                        const customer = row.customer_org_id ? customerMap.get(row.customer_org_id) : null;
-                                        const user = row.assigned_by ? userMap.get(row.assigned_by) : null;
+                                        const machine = row.machine;
+                                        const customer = row.customer;
+                                        const user = row.assigned_user;
                                         const assignedByLabel = user?.display_name?.trim() || `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || user?.email || "—";
 
                                         return (
