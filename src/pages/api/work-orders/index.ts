@@ -4,6 +4,7 @@ import {
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
+import { assertCanReferenceMachine, getAccessibleMachineIds } from "@/lib/server/customerVisibility";
 
 const ALLOWED_STATUSES = [
     "draft",
@@ -42,26 +43,84 @@ export default withAuth(
 
         try {
             if (req.method === "GET") {
-                const { data, error } = await serviceSupabase
-                    .from("work_orders")
-                    .select(`
-                        id,
-                        title,
-                        description,
-                        status,
-                        priority,
-                        due_date,
-                        machine_id,
-                        assigned_to,
-                        organization_id,
-                        created_at,
-                        updated_at
-                    `)
-                    .eq("organization_id", organizationId)
-                    .order("created_at", { ascending: false });
+                if (req.user.organizationType === "manufacturer") {
+                    const { data, error } = await serviceSupabase
+                        .from("work_orders")
+                        .select(`
+              id,
+              title,
+              description,
+              status,
+              priority,
+              due_date,
+              machine_id,
+              assigned_to,
+              organization_id,
+              created_at,
+              updated_at
+            `)
+                        .eq("organization_id", organizationId)
+                        .order("created_at", { ascending: false });
 
-                if (error) return res.status(500).json({ error: error.message });
-                return res.status(200).json(data ?? []);
+                    if (error) return res.status(500).json({ error: error.message });
+                    return res.status(200).json(data ?? []);
+                }
+
+                const accessibleMachineIds = await getAccessibleMachineIds(serviceSupabase, req.user);
+
+                const [ownRowsRes, assignedRowsRes] = await Promise.all([
+                    serviceSupabase
+                        .from("work_orders")
+                        .select(`
+              id,
+              title,
+              description,
+              status,
+              priority,
+              due_date,
+              machine_id,
+              assigned_to,
+              organization_id,
+              created_at,
+              updated_at
+            `)
+                        .eq("organization_id", organizationId)
+                        .order("created_at", { ascending: false }),
+                    accessibleMachineIds.length > 0
+                        ? serviceSupabase
+                            .from("work_orders")
+                            .select(`
+                  id,
+                  title,
+                  description,
+                  status,
+                  priority,
+                  due_date,
+                  machine_id,
+                  assigned_to,
+                  organization_id,
+                  created_at,
+                  updated_at
+                `)
+                            .in("machine_id", accessibleMachineIds)
+                            .order("created_at", { ascending: false })
+                        : Promise.resolve({ data: [], error: null } as any),
+                ]);
+
+                if (ownRowsRes.error) return res.status(500).json({ error: ownRowsRes.error.message });
+                if (assignedRowsRes.error) return res.status(500).json({ error: assignedRowsRes.error.message });
+
+                const merged = new Map < string, any> ();
+                for (const row of ownRowsRes.data ?? []) merged.set(row.id, row);
+                for (const row of assignedRowsRes.data ?? []) merged.set(row.id, row);
+
+                const rows = Array.from(merged.values()).sort((a, b) => {
+                    const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return db - da;
+                });
+
+                return res.status(200).json(rows);
             }
 
             if (req.method === "POST") {
@@ -89,6 +148,8 @@ export default withAuth(
                 if (!machine_id) {
                     return res.status(400).json({ error: "Machine is required" });
                 }
+
+                const machine = await assertCanReferenceMachine(serviceSupabase, req.user, machine_id);
 
                 const payload = {
                     organization_id: organizationId,
@@ -125,6 +186,7 @@ export default withAuth(
                         priority: data.priority,
                         due_date: data.due_date,
                         assigned_to: data.assigned_to,
+                        machine_owner_org_id: machine.organization_id,
                     },
                 });
 
@@ -139,3 +201,4 @@ export default withAuth(
     },
     { allowPlatformAdmin: true }
 );
+
