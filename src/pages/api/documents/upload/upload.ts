@@ -1,19 +1,31 @@
 import type { NextApiResponse } from "next";
-import formidable from "formidable";
 import fs from "fs";
 import { withAuth, ALL_APP_ROLES, type AuthenticatedRequest } from "@/lib/apiAuth";
 import { canAttachToMachine, buildStoragePath, resolveMimeType, sha256Buffer } from "@/lib/server/documentWorkflow";
 
 export const config = { api: { bodyParser: false } };
 
-const parseForm = (req: AuthenticatedRequest): Promise<{ fields: formidable.Fields; files: formidable.Files }> =>
-    new Promise((resolve, reject) => {
-        const form = formidable({ multiples: false });
-        form.parse(req, (err, fields, files) => {
+type ParsedForm = {
+    fields: Record<string, string | string[] | undefined>;
+    files: Record<string, any>;
+};
+
+async function parseForm(req: AuthenticatedRequest): Promise<ParsedForm> {
+    let formidableLib: any;
+    try {
+        formidableLib = require("formidable");
+    } catch {
+        throw new Error('Missing dependency "formidable". Install it only if you need document upload/version upload endpoints.');
+    }
+
+    return new Promise((resolve, reject) => {
+        const form = formidableLib.default ? formidableLib.default({ multiples: false }) : formidableLib({ multiples: false });
+        form.parse(req, (err: Error | null, fields: Record<string, any>, files: Record<string, any>) => {
             if (err) reject(err);
             else resolve({ fields, files });
         });
     });
+}
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
@@ -38,74 +50,107 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         const access = await canAttachToMachine(req, machineId ? String(machineId) : null);
         if (!access.allowed && !req.user.isPlatformAdmin) {
-            return res.status(403).json({ error: "Machine access denied" });
+            return res.status(403).json({ error: "Access denied for target machine" });
         }
 
-        const buffer = fs.readFileSync(uploadedFile.filepath);
-        const fileName = uploadedFile.originalFilename || `${String(title).trim() || "document"}.bin`;
+        const fileName = uploadedFile.originalFilename || uploadedFile.newFilename || "document.bin";
         const mimeType = resolveMimeType(fileName, uploadedFile.mimetype);
-        const documentId = globalThis.crypto.randomUUID();
-        const storagePath = buildStoragePath(req.user.organizationId, documentId, 1, fileName);
-        const checksum = sha256Buffer(buffer);
+        const fileBuffer = fs.readFileSync(uploadedFile.filepath);
+        const checksum = sha256Buffer(fileBuffer);
+        const bucket = "documents";
 
-        const { error: uploadError } = await access.serviceSupabase.storage.from("documents").upload(storagePath, buffer, { upsert: false, contentType: mimeType });
-        if (uploadError) return res.status(500).json({ error: uploadError.message });
-
-        const now = new Date().toISOString();
-        const { data: document, error: documentError } = await access.serviceSupabase
+        const { data: insertedDocument, error: insertError } = await access.serviceSupabase
             .from("documents")
             .insert({
-                id: documentId,
                 organization_id: req.user.organizationId,
-                machine_id: machineId || null,
-                title: String(title).trim(),
-                description: typeof description === "string" ? description.trim() || null : null,
+                machine_id: machineId ? String(machineId) : null,
+                title: String(title),
+                description: description ? String(description) : null,
                 category: String(category),
+                created_by: req.user.userId,
+                storage_bucket: bucket,
                 version_count: 0,
                 current_version_id: null,
-                tags: [],
-                created_by: req.user.userId,
                 is_archived: false,
-                archived_at: null,
-                external_url: null,
-                storage_bucket: "documents",
-                storage_path: storagePath,
-                mime_type: mimeType,
-                file_size: buffer.byteLength,
-                created_at: now,
-                updated_at: now,
-            } as any)
-            .select("id, title, created_at")
+            })
+            .select("id, organization_id")
             .single();
-        if (documentError) return res.status(500).json({ error: documentError.message });
+        if (insertError || !insertedDocument) {
+            return res.status(500).json({ error: insertError?.message || "Failed to create document" });
+        }
+
+        const storagePath = buildStoragePath(insertedDocument.organization_id, insertedDocument.id, 1, fileName);
+        const { error: uploadError } = await access.serviceSupabase.storage
+            .from(bucket)
+            .upload(storagePath, fileBuffer, {
+                upsert: false,
+                contentType: mimeType,
+            });
+        if (uploadError) return res.status(500).json({ error: uploadError.message });
 
         const { data: version, error: versionError } = await access.serviceSupabase
             .from("document_versions")
             .insert({
-                document_id: documentId,
+                document_id: insertedDocument.id,
                 version_number: 1,
                 previous_version_id: null,
                 file_path: storagePath,
                 file_name: fileName,
-                file_size: buffer.byteLength,
+                file_size: fileBuffer.byteLength,
                 mime_type: mimeType,
                 checksum_sha256: checksum,
-                change_summary: "Initial upload",
-                signature_data: null,
                 created_by: req.user.userId,
-            } as any)
+            })
             .select("id")
             .single();
-        if (versionError) return res.status(500).json({ error: versionError.message });
+        if (versionError || !version) {
+            return res.status(500).json({ error: versionError?.message || "Failed to create document version" });
+        }
 
-        await access.serviceSupabase.from("documents").update({ current_version_id: version.id, version_count: 1, updated_at: now } as any).eq("id", documentId);
-        await access.serviceSupabase.from("audit_logs").insert({ organization_id: req.user.organizationId, actor_user_id: req.user.userId, entity_type: "document", entity_id: documentId, action: "created", machine_id: machineId || null, metadata: { title: String(title).trim(), file_name: fileName } } as any).then(() => undefined).catch(() => undefined);
+        const now = new Date().toISOString();
+        const { error: docUpdateError } = await access.serviceSupabase
+            .from("documents")
+            .update({
+                current_version_id: version.id,
+                version_count: 1,
+                storage_bucket: bucket,
+                storage_path: storagePath,
+                mime_type: mimeType,
+                file_size: fileBuffer.byteLength,
+                updated_at: now,
+            })
+            .eq("id", insertedDocument.id);
+        if (docUpdateError) {
+            return res.status(500).json({ error: docUpdateError.message });
+        }
 
-        fs.unlinkSync(uploadedFile.filepath);
-        return res.status(201).json({ success: true, document: { ...document, current_version_id: version.id, version_count: 1 } });
+        await access.serviceSupabase.from("audit_logs").insert({
+            organization_id: req.user.organizationId,
+            entity_type: "document",
+            entity_id: insertedDocument.id,
+            action: "created",
+            performed_by: req.user.userId,
+            details: {
+                title: String(title),
+                category: String(category),
+                file_name: fileName,
+            },
+            success: true,
+        });
+
+        try {
+            fs.unlinkSync(uploadedFile.filepath);
+        } catch { }
+
+        return res.status(201).json({
+            success: true,
+            data: { id: insertedDocument.id },
+        });
     } catch (error) {
         console.error("Document upload API error:", error);
-        return res.status(500).json({ error: error instanceof Error ? error.message : "Internal server error" });
+        return res.status(500).json({
+            error: error instanceof Error ? error.message : "Unexpected error",
+        });
     }
 }
 
