@@ -38,6 +38,22 @@ async function resolveCustomerForManufacturer(
     return { customer, error: null, status: 200 };
 }
 
+async function getExistingMembership(
+    serviceSupabase: ReturnType<typeof getServiceSupabase>,
+    customerId: string,
+    userId: string
+) {
+    const { data, error } = await serviceSupabase
+        .from("organization_memberships")
+        .select("id, user_id, organization_id, role, is_active, created_at, accepted_at")
+        .eq("organization_id", customerId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
+}
+
 export default withAuth(["owner", "admin", "supervisor"], async function handler(
     req: AuthenticatedRequest,
     res: NextApiResponse
@@ -118,6 +134,7 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
             const nameParts = displayName ? displayName.split(" ").filter(Boolean) : [];
             const firstName = nameParts.length > 0 ? nameParts[0] : null;
             const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : null;
+            const acceptedAt = new Date().toISOString();
 
             let createdUserId: string | null = null;
 
@@ -145,7 +162,6 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
                         display_name: displayName,
                         first_name: firstName,
                         last_name: lastName,
-                        default_organization_id: customerId,
                     } as any,
                     { onConflict: "id" }
                 );
@@ -155,22 +171,59 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
                     return res.status(500).json({ error: profileError.message });
                 }
 
-                const { data: insertedMembership, error: insertMembershipError } = await serviceSupabase
+                let membership = await getExistingMembership(serviceSupabase, customerId, createdUserId);
+
+                if (!membership) {
+                    const { data: insertedMembership, error: insertMembershipError } = await serviceSupabase
+                        .from("organization_memberships")
+                        .insert({
+                            organization_id: customerId,
+                            user_id: createdUserId,
+                            role,
+                            is_active: true,
+                            accepted_at: acceptedAt,
+                            invited_by: req.user.id,
+                        } as any)
+                        .select("id, user_id, organization_id, role, is_active, created_at, accepted_at")
+                        .single();
+
+                    if (insertMembershipError && !String(insertMembershipError.message || "").includes("organization_memberships_organization_id_user_id_key")) {
+                        await serviceSupabase.auth.admin.deleteUser(createdUserId);
+                        return res.status(500).json({ error: insertMembershipError.message || "Membership creation failed" });
+                    }
+
+                    membership = insertedMembership ?? await getExistingMembership(serviceSupabase, customerId, createdUserId);
+                }
+
+                if (!membership) {
+                    await serviceSupabase.auth.admin.deleteUser(createdUserId);
+                    return res.status(500).json({ error: "Membership resolution failed" });
+                }
+
+                const { data: updatedMembership, error: updateMembershipError } = await serviceSupabase
                     .from("organization_memberships")
-                    .insert({
-                        organization_id: customerId,
-                        user_id: createdUserId,
+                    .update({
                         role,
                         is_active: true,
-                        accepted_at: new Date().toISOString(),
+                        accepted_at: membership.accepted_at ?? acceptedAt,
                         invited_by: req.user.id,
                     } as any)
-                    .select("id, created_at")
+                    .eq("id", membership.id)
+                    .select("id, user_id, role, is_active, created_at, accepted_at")
                     .single();
 
-                if (insertMembershipError || !insertedMembership) {
+                if (updateMembershipError || !updatedMembership) {
                     await serviceSupabase.auth.admin.deleteUser(createdUserId);
-                    return res.status(500).json({ error: insertMembershipError?.message ?? "Membership creation failed" });
+                    return res.status(500).json({ error: updateMembershipError?.message ?? "Membership update failed" });
+                }
+
+                const { error: defaultOrgError } = await serviceSupabase
+                    .from("profiles")
+                    .update({ default_organization_id: customerId } as any)
+                    .eq("id", createdUserId);
+
+                if (defaultOrgError) {
+                    console.error("Default organization update failed:", defaultOrgError);
                 }
 
                 await serviceSupabase
@@ -179,7 +232,7 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
                         organization_id: req.user.organizationId,
                         actor_user_id: req.user.id,
                         entity_type: "customer_user_membership",
-                        entity_id: insertedMembership.id,
+                        entity_id: updatedMembership.id,
                         action: "create",
                         metadata: {
                             customer_org_id: customerId,
@@ -194,14 +247,14 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
                     });
 
                 return res.status(201).json({
-                    membership_id: insertedMembership.id,
+                    membership_id: updatedMembership.id,
                     user_id: createdUserId,
                     email: normalizedEmail,
                     display_name: displayName,
-                    role,
-                    is_active: true,
-                    created_at: insertedMembership.created_at ?? null,
-                    accepted_at: new Date().toISOString(),
+                    role: updatedMembership.role,
+                    is_active: updatedMembership.is_active ?? true,
+                    created_at: updatedMembership.created_at ?? null,
+                    accepted_at: updatedMembership.accepted_at ?? acceptedAt,
                 });
             } catch (error: any) {
                 if (createdUserId) {
@@ -219,4 +272,3 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
         return res.status(500).json({ error: error?.message || "Internal server error" });
     }
 });
-
