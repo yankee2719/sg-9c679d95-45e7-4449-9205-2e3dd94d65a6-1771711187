@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/integrations/supabase/client";
+import { authService } from "@/services/authService";
 
 const BUCKET_FALLBACK = "documents";
 
@@ -16,41 +16,62 @@ export default function DocumentRedirectPage() {
 
         const run = async () => {
             try {
-                const { data: doc, error: docErr } = await supabase
-                    .from("documents")
-                    .select("id, external_url, storage_bucket, storage_path")
-                    .eq("id", id)
-                    .single();
+                const session = await authService.getCurrentSession();
+                if (!session) throw new Error("Not authenticated");
 
-                if (docErr) throw docErr;
+                const response = await fetch(`/api/documents/${id}`, {
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                });
+                const text = await response.text();
+                const payload = text ? JSON.parse(text) : null;
 
-                if (doc?.external_url) {
+                if (!response.ok) throw new Error(payload?.error || payload?.message || `API error ${response.status}`);
+
+                const doc = payload?.data;
+                if (!doc) throw new Error(t("documents.errorOpen") || "Errore apertura documento");
+
+                if (doc.external_url) {
                     window.location.replace(doc.external_url);
                     return;
                 }
 
-                const bucket = doc?.storage_bucket || BUCKET_FALLBACK;
-                const path = doc?.storage_path;
-
+                const bucket = doc.storage_bucket || BUCKET_FALLBACK;
+                const path = doc.storage_path;
                 if (!path) throw new Error(t("documents.errorNoPath") || "Documento senza URL e senza storage path.");
 
-                const { data: signed, error: signErr } = await supabase
-                    .storage
-                    .from(bucket)
-                    .createSignedUrl(path, 60);
+                const encodedPath = encodeURIComponent(path);
+                const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/sign/${bucket}/${encodedPath}`;
+                const signResponse = await fetch(publicUrl, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ expiresIn: 60 }),
+                });
 
-                if (signErr) throw signErr;
-                if (!signed?.signedUrl) throw new Error(t("documents.errorNoSignedUrl") || "Signed URL non disponibile.");
+                const signText = await signResponse.text();
+                const signPayload = signText ? JSON.parse(signText) : null;
+                if (!signResponse.ok) throw new Error(signPayload?.error || signPayload?.message || "Signed URL non disponibile.");
 
-                window.location.replace(signed.signedUrl);
+                const signedUrl = signPayload?.signedURL || signPayload?.signedUrl;
+                if (!signedUrl) throw new Error(t("documents.errorNoSignedUrl") || "Signed URL non disponibile.");
+
+                const absoluteUrl = signedUrl.startsWith("http")
+                    ? signedUrl
+                    : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1${signedUrl}`;
+
+                window.location.replace(absoluteUrl);
             } catch (e: any) {
-                setError(e.message ?? t("documents.errorOpen") || "Errore apertura documento");
+                setError(e?.message ?? t("documents.errorOpen") || "Errore apertura documento");
             }
         };
 
-        run();
+        void run();
     }, [id, t]);
 
     if (error) return <div style={{ padding: 24 }}>{t("common.error") || "Errore"}: {error}</div>;
     return <div style={{ padding: 24 }}>{t("documents.opening") || "Apertura documento..."}</div>;
 }
+
