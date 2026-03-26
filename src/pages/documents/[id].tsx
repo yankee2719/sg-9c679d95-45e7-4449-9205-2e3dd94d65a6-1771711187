@@ -29,10 +29,78 @@ interface DocumentDetail {
     tags?: string[] | null;
 }
 
-type FallbackMap = Record<Language, string>;
-const fb = (language: Language, map: FallbackMap) => map[language] || map.en;
+const I18N: Record<Language, Record<string, string>> = {
+    it: {
+        title: "Documento",
+        back: "Indietro",
+        open: "Apri",
+        download: "Scarica",
+        loading: "Caricamento...",
+        notFound: "Documento non trovato",
+        details: "Dettagli",
+        language: "Lingua",
+        size: "Dimensione",
+        createdAt: "Creato il",
+        updatedAt: "Aggiornato il",
+        compliance: "Compliance",
+        machine: "Macchina",
+        reference: "Riferimento",
+        versions: "Versioni",
+    },
+    en: {
+        title: "Document",
+        back: "Back",
+        open: "Open",
+        download: "Download",
+        loading: "Loading...",
+        notFound: "Document not found",
+        details: "Details",
+        language: "Language",
+        size: "Size",
+        createdAt: "Created on",
+        updatedAt: "Updated on",
+        compliance: "Compliance",
+        machine: "Machine",
+        reference: "Reference",
+        versions: "Version history",
+    },
+    fr: {
+        title: "Document",
+        back: "Retour",
+        open: "Ouvrir",
+        download: "Télécharger",
+        loading: "Chargement...",
+        notFound: "Document introuvable",
+        details: "Détails",
+        language: "Langue",
+        size: "Taille",
+        createdAt: "Créé le",
+        updatedAt: "Mis à jour le",
+        compliance: "Conformité",
+        machine: "Machine",
+        reference: "Référence",
+        versions: "Versions",
+    },
+    es: {
+        title: "Documento",
+        back: "Atrás",
+        open: "Abrir",
+        download: "Descargar",
+        loading: "Cargando...",
+        notFound: "Documento no encontrado",
+        details: "Detalles",
+        language: "Idioma",
+        size: "Tamaño",
+        createdAt: "Creado el",
+        updatedAt: "Actualizado el",
+        compliance: "Compliance",
+        machine: "Máquina",
+        reference: "Referencia",
+        versions: "Versiones",
+    },
+};
 
-function formatDate(value: string | null | undefined, lang: string) {
+function formatDate(value: string | null | undefined, lang: Language) {
     if (!value) return "—";
     try {
         const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
@@ -58,11 +126,8 @@ export default function DocumentDetailPage() {
     const router = useRouter();
     const id = typeof router.query.id === "string" ? router.query.id : "";
     const { membership } = useAuth();
-    const { t, language } = useLanguage();
-    const tr = (key: string, map: FallbackMap) => {
-        const value = t(key);
-        return value === key ? fb(language, map) : value;
-    };
+    const { language } = useLanguage();
+    const L = I18N[language] || I18N.en;
     const [document, setDocument] = useState < DocumentDetail | null > (null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState < string | null > (null);
@@ -106,33 +171,33 @@ export default function DocumentDetailPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={membership?.role ?? "technician"}>
-                <SEO title={`${document?.title || tr("documents.title", { it: "Documento", en: "Document", fr: "Document", es: "Documento" })} - MACHINA`} />
+                <SEO title={`${document?.title || L.title} - MACHINA`} />
                 <div className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
                     <div className="flex items-center justify-between gap-3">
                         <Button variant="ghost" asChild>
-                            <Link href="/documents"><ArrowLeft className="mr-2 h-4 w-4" />{tr("common.back", { it: "Indietro", en: "Back", fr: "Retour", es: "Atrás" })}</Link>
+                            <Link href="/documents"><ArrowLeft className="mr-2 h-4 w-4" />{L.back}</Link>
                         </Button>
                         {document ? (
                             <div className="flex items-center gap-2">
-                                <Button variant="outline" onClick={openDocument}><ExternalLink className="mr-2 h-4 w-4" />{tr("documents.open", { it: "Apri", en: "Open", fr: "Ouvrir", es: "Abrir" })}</Button>
-                                <Button onClick={downloadDocument}><Download className="mr-2 h-4 w-4" />{tr("documents.download", { it: "Scarica", en: "Download", fr: "Télécharger", es: "Descargar" })}</Button>
+                                <Button variant="outline" onClick={openDocument}><ExternalLink className="mr-2 h-4 w-4" />{L.open}</Button>
+                                <Button onClick={downloadDocument}><Download className="mr-2 h-4 w-4" />{L.download}</Button>
                             </div>
                         ) : null}
                     </div>
 
                     {loading ? (
-                        <Card><CardContent className="p-6 text-sm text-muted-foreground">{tr("common.loading", { it: "Caricamento...", en: "Loading...", fr: "Chargement...", es: "Cargando..." })}</CardContent></Card>
+                        <Card><CardContent className="p-6 text-sm text-muted-foreground">{L.loading}</CardContent></Card>
                     ) : error ? (
                         <Card><CardContent className="p-6 text-sm text-destructive">{error}</CardContent></Card>
                     ) : !document ? (
-                        <Card><CardContent className="p-6 text-sm text-muted-foreground">{tr("documents.noResults", { it: "Documento non trovato", en: "Document not found", fr: "Document introuvable", es: "Documento no encontrado" })}</CardContent></Card>
+                        <Card><CardContent className="p-6 text-sm text-muted-foreground">{L.notFound}</CardContent></Card>
                     ) : (
                         <>
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
                                         <FileText className="h-6 w-6 text-orange-500" />
-                                        <span>{document.title || tr("documents.title", { it: "Documento", en: "Document", fr: "Document", es: "Documento" })}</span>
+                                        <span>{document.title || L.title}</span>
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
@@ -140,7 +205,7 @@ export default function DocumentDetailPage() {
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Badge variant="secondary">{document.category || "other"}</Badge>
                                         {document.machine_label ? <Badge variant="outline">{document.machine_label}</Badge> : null}
-                                        <Badge variant="outline">{tr("documents.versions", { it: "Versioni", en: "Versions", fr: "Versions", es: "Versiones" })}: {document.version_count || 1}</Badge>
+                                        <Badge variant="outline">{L.versions}: {document.version_count || 1}</Badge>
                                     </div>
                                     {document.tags?.length ? (
                                         <div className="flex flex-wrap gap-2">
@@ -154,20 +219,20 @@ export default function DocumentDetailPage() {
 
                             <div className="grid gap-6 md:grid-cols-2">
                                 <Card>
-                                    <CardHeader><CardTitle className="text-base font-semibold">{tr("documents.details", { it: "Dettagli", en: "Details", fr: "Détails", es: "Detalles" })}</CardTitle></CardHeader>
+                                    <CardHeader><CardTitle className="text-base font-semibold">{L.details}</CardTitle></CardHeader>
                                     <CardContent className="space-y-3 text-sm">
-                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{tr("documents.language", { it: "Lingua", en: "Language", fr: "Langue", es: "Idioma" })}</span><span>{document.language || "—"}</span></div>
-                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{tr("documents.size", { it: "Dimensione", en: "Size", fr: "Taille", es: "Tamaño" })}</span><span>{formatBytes(document.file_size)}</span></div>
-                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{tr("documents.createdAt", { it: "Creato il", en: "Created", fr: "Créé le", es: "Creado el" })}</span><span>{formatDate(document.created_at, language)}</span></div>
-                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{tr("documents.updatedAt", { it: "Aggiornato il", en: "Updated", fr: "Mis à jour le", es: "Actualizado el" })}</span><span>{formatDate(document.updated_at, language)}</span></div>
+                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{L.language}</span><span>{document.language || "—"}</span></div>
+                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{L.size}</span><span>{formatBytes(document.file_size)}</span></div>
+                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{L.createdAt}</span><span>{formatDate(document.created_at, language)}</span></div>
+                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{L.updatedAt}</span><span>{formatDate(document.updated_at, language)}</span></div>
                                     </CardContent>
                                 </Card>
 
                                 <Card>
-                                    <CardHeader><CardTitle className="text-base font-semibold">{tr("documents.compliance", { it: "Compliance", en: "Compliance", fr: "Conformité", es: "Compliance" })}</CardTitle></CardHeader>
+                                    <CardHeader><CardTitle className="text-base font-semibold">{L.compliance}</CardTitle></CardHeader>
                                     <CardContent className="space-y-3 text-sm">
-                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{tr("documents.machine", { it: "Macchina", en: "Machine", fr: "Machine", es: "Máquina" })}</span><span>{document.machine_label || "—"}</span></div>
-                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{tr("documents.reference", { it: "Riferimento", en: "Reference", fr: "Référence", es: "Referencia" })}</span><span className="text-right">{document.regulatory_reference || "—"}</span></div>
+                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{L.machine}</span><span>{document.machine_label || "—"}</span></div>
+                                        <div className="flex justify-between gap-4"><span className="text-muted-foreground">{L.reference}</span><span className="text-right">{document.regulatory_reference || "—"}</span></div>
                                     </CardContent>
                                 </Card>
                             </div>
