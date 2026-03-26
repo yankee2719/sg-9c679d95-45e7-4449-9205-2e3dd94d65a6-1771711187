@@ -444,3 +444,456 @@ export async function restoreDocument(
 
     if (error) throw error;
 }
+
+// ============================================================================
+// COMPATIBILITY LAYER FOR LEGACY DOCUMENT MODULES
+// Temporary bridge to keep older document pages/components compiling while the
+// real API-first document flow is being consolidated.
+// ============================================================================
+
+export type DocumentVersion = {
+    id: string;
+    document_id: string;
+    version_number: number;
+    storage_path: string;
+    original_filename: string;
+    file_size_bytes: number;
+    mime_type: string;
+    checksum_sha256: string;
+    change_description: string | null;
+    uploaded_at: string;
+    uploaded_by: string | null;
+};
+
+export type AuditLogEntry = {
+    id: string;
+    action: string;
+    performed_at: string;
+    performed_by: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    details: string | null;
+    metadata?: Record<string, any> | null;
+    success: boolean;
+};
+
+async function getDocumentByIdCompat(documentId: string) {
+    const { data, error } = await supabase
+        .from("documents")
+        .select(`
+            id,
+            organization_id,
+            plant_id,
+            machine_id,
+            title,
+            description,
+            category,
+            language,
+            is_mandatory,
+            regulatory_reference,
+            current_version_id,
+            version_count,
+            tags,
+            created_at,
+            updated_at,
+            created_by,
+            is_archived,
+            archived_at,
+            external_url,
+            storage_bucket,
+            storage_path,
+            mime_type,
+            file_size
+        `)
+        .eq("id", documentId)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data ?? null;
+}
+
+async function getVersionHistoryCompat(documentId: string): Promise<DocumentVersion[]> {
+    const { data, error } = await supabase
+        .from("document_versions")
+        .select(`
+            id,
+            document_id,
+            version_number,
+            file_path,
+            file_name,
+            file_size,
+            mime_type,
+            checksum_sha256,
+            change_summary,
+            created_at,
+            created_by
+        `)
+        .eq("document_id", documentId)
+        .order("version_number", { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => ({
+        id: row.id,
+        document_id: row.document_id,
+        version_number: row.version_number,
+        storage_path: row.file_path,
+        original_filename: row.file_name,
+        file_size_bytes: row.file_size,
+        mime_type: row.mime_type,
+        checksum_sha256: row.checksum_sha256,
+        change_description: row.change_summary ?? null,
+        uploaded_at: row.created_at,
+        uploaded_by: row.created_by ?? null,
+    }));
+}
+
+async function getAuditLogCompat(documentId: string, limit = 100): Promise<AuditLogEntry[]> {
+    const { data, error } = await supabase
+        .from("audit_logs")
+        .select("id, action, performed_by, created_at, details, success")
+        .eq("entity_type", "document")
+        .eq("entity_id", documentId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => ({
+        id: row.id,
+        action: row.action,
+        performed_at: row.created_at,
+        performed_by: row.performed_by ?? "unknown",
+        ip_address: null,
+        user_agent: null,
+        details: typeof row.details === "string" ? row.details : row.details ? JSON.stringify(row.details) : null,
+        metadata: typeof row.details === "object" && row.details ? row.details : null,
+        success: row.success !== false,
+    }));
+}
+
+async function logDocumentActionCompat(
+    documentId: string,
+    action: string,
+    performedBy: string,
+    details?: string | null
+) {
+    const document = await getDocumentByIdCompat(documentId);
+    const { error } = await supabase.from("audit_logs").insert({
+        organization_id: document?.organization_id ?? null,
+        entity_type: "document",
+        entity_id: documentId,
+        action,
+        performed_by: performedBy,
+        details: details ?? null,
+        success: true,
+    } as any);
+
+    if (error) throw error;
+}
+
+async function checkUserPermissionCompat(
+    _userId: string,
+    documentId: string,
+    _permission: "view" | "download" | "sign" | "manage"
+) {
+    const document = await getDocumentByIdCompat(documentId);
+    return !!document;
+}
+
+async function updateDocumentMetadataCompat(
+    params: {
+        documentId: string;
+        title?: string;
+        description?: string;
+        complianceTags?: string[];
+        tags?: string[];
+        metadata?: Record<string, any>;
+    },
+    _userId: string
+) {
+    const payload: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+    };
+
+    if (params.title !== undefined) payload.title = params.title?.trim() || null;
+    if (params.description !== undefined) payload.description = params.description?.trim() || null;
+    if (params.tags !== undefined) payload.tags = params.tags ?? [];
+    if (params.complianceTags !== undefined) {
+        payload.regulatory_reference = params.complianceTags.join(", ") || null;
+    }
+
+    const { data, error } = await supabase
+        .from("documents")
+        .update(payload)
+        .eq("id", params.documentId)
+        .select(`
+            id,
+            organization_id,
+            plant_id,
+            machine_id,
+            title,
+            description,
+            category,
+            language,
+            is_mandatory,
+            regulatory_reference,
+            current_version_id,
+            version_count,
+            tags,
+            created_at,
+            updated_at,
+            created_by,
+            is_archived,
+            archived_at,
+            external_url,
+            storage_bucket,
+            storage_path,
+            mime_type,
+            file_size
+        `)
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+async function deleteDocumentCompat(documentId: string) {
+    const { error } = await supabase.from("documents").delete().eq("id", documentId);
+    if (error) throw error;
+}
+
+async function searchDocumentsCompat(params: {
+    query?: string;
+    category?: string;
+    equipmentId?: string;
+    complianceTags?: string[];
+    limit?: number;
+}) {
+    let query = supabase
+        .from("documents")
+        .select(`
+            id,
+            organization_id,
+            machine_id,
+            title,
+            description,
+            category,
+            tags,
+            regulatory_reference,
+            created_at,
+            updated_at,
+            storage_path,
+            mime_type,
+            file_size
+        `)
+        .eq("is_archived", false)
+        .limit(params.limit ?? 50)
+        .order("updated_at", { ascending: false });
+
+    if (params.query) {
+        query = query.or(`title.ilike.%${params.query}%,description.ilike.%${params.query}%`);
+    }
+    if (params.category) {
+        query = query.eq("category", params.category);
+    }
+    if (params.equipmentId) {
+        query = query.eq("machine_id", params.equipmentId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    let rows = (data ?? []) as any[];
+    if (params.complianceTags?.length) {
+        rows = rows.filter((row) =>
+            params.complianceTags?.some((tag) =>
+                String(row.regulatory_reference ?? "").toLowerCase().includes(tag.toLowerCase())
+            )
+        );
+    }
+
+    return rows.map((row) => ({
+        ...row,
+        compliance_tags: row.regulatory_reference
+            ? String(row.regulatory_reference).split(",").map((t) => t.trim()).filter(Boolean)
+            : [],
+    }));
+}
+
+async function createDocumentCompat(
+    params: {
+        equipmentId: string;
+        title: string;
+        description?: string;
+        category: DocumentCategory | string;
+        file: Buffer;
+        complianceTags?: string[];
+        documentNumber?: string;
+        tags?: string[];
+    },
+    userId: string
+) {
+    const { data: machine, error: machineError } = await supabase
+        .from("machines")
+        .select("id, organization_id, plant_id")
+        .eq("id", params.equipmentId)
+        .maybeSingle();
+    if (machineError) throw machineError;
+    if (!machine) throw new Error("Machine not found");
+
+    const documentId = crypto.randomUUID();
+    const objectName = `${(machine as any).organization_id}/${documentId}/v1_${Date.now()}.bin`;
+
+    const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(objectName, params.file, {
+            upsert: false,
+            contentType: "application/octet-stream",
+        });
+    if (uploadError) throw uploadError;
+
+    const { data: doc, error: docError } = await supabase
+        .from("documents")
+        .insert({
+            id: documentId,
+            organization_id: (machine as any).organization_id,
+            machine_id: params.equipmentId,
+            plant_id: (machine as any).plant_id ?? null,
+            title: params.title,
+            description: params.description ?? null,
+            category: params.category,
+            regulatory_reference: params.complianceTags?.join(", ") ?? null,
+            tags: params.tags ?? [],
+            created_by: userId,
+            storage_bucket: BUCKET,
+            storage_path: objectName,
+            mime_type: "application/octet-stream",
+            file_size: params.file.byteLength,
+            version_count: 1,
+            is_archived: false,
+        })
+        .select("*")
+        .single();
+    if (docError) throw docError;
+
+    const checksum = createHash("sha256").update(params.file).digest("hex");
+    const { data: version, error: versionError } = await supabase
+        .from("document_versions")
+        .insert({
+            document_id: documentId,
+            version_number: 1,
+            previous_version_id: null,
+            file_path: objectName,
+            file_name: params.documentNumber || `${params.title}.bin`,
+            file_size: params.file.byteLength,
+            mime_type: "application/octet-stream",
+            checksum_sha256: checksum,
+            change_summary: "Initial upload",
+            created_by: userId,
+        })
+        .select("id")
+        .single();
+    if (versionError) throw versionError;
+
+    const { error: updateError } = await supabase
+        .from("documents")
+        .update({ current_version_id: (version as any).id })
+        .eq("id", documentId);
+    if (updateError) throw updateError;
+
+    return { ...doc, current_version_id: (version as any).id };
+}
+
+async function createNewVersionCompat(
+    params: {
+        documentId: string;
+        file: Buffer;
+        changeReason: string;
+        changeSummary?: string;
+        newTitle?: string;
+        newDescription?: string;
+    },
+    userId: string
+) {
+    const document = await getDocumentByIdCompat(params.documentId);
+    if (!document) throw new Error("Document not found");
+
+    const nextVersion = Number(document.version_count || 0) + 1;
+    const objectName = `${document.organization_id}/${params.documentId}/v${nextVersion}_${Date.now()}.bin`;
+
+    const { error: uploadError } = await supabase.storage
+        .from(document.storage_bucket || BUCKET)
+        .upload(objectName, params.file, {
+            upsert: false,
+            contentType: document.mime_type || "application/octet-stream",
+        });
+    if (uploadError) throw uploadError;
+
+    const checksum = createHash("sha256").update(params.file).digest("hex");
+    const { data: version, error: versionError } = await supabase
+        .from("document_versions")
+        .insert({
+            document_id: params.documentId,
+            version_number: nextVersion,
+            previous_version_id: document.current_version_id,
+            file_path: objectName,
+            file_name: `${document.title}.bin`,
+            file_size: params.file.byteLength,
+            mime_type: document.mime_type || "application/octet-stream",
+            checksum_sha256: checksum,
+            change_summary: params.changeSummary || params.changeReason,
+            created_by: userId,
+        })
+        .select("id, version_number")
+        .single();
+    if (versionError) throw versionError;
+
+    const { error: updateError } = await supabase
+        .from("documents")
+        .update({
+            current_version_id: (version as any).id,
+            version_count: nextVersion,
+            storage_path: objectName,
+            file_size: params.file.byteLength,
+            title: params.newTitle ?? document.title,
+            description: params.newDescription ?? document.description,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", params.documentId);
+    if (updateError) throw updateError;
+
+    return {
+        ...document,
+        current_version_id: (version as any).id,
+        version_number: (version as any).version_number,
+        storage_path: objectName,
+    };
+}
+
+export function getDocumentService() {
+    return {
+        storage: {
+            downloadDocument: async (storagePath: string) => {
+                const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
+                if (error) throw error;
+                return data;
+            },
+            getSignedUrl: async (storagePath: string, expiresIn = 600) => {
+                const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, expiresIn);
+                if (error) throw error;
+                return data?.signedUrl;
+            },
+        },
+        checkUserPermission: checkUserPermissionCompat,
+        getDocumentById: getDocumentByIdCompat,
+        getVersionHistory: getVersionHistoryCompat,
+        getAuditLog: getAuditLogCompat,
+        logDocumentAction: logDocumentActionCompat,
+        updateDocumentMetadata: updateDocumentMetadataCompat,
+        deleteDocument: deleteDocumentCompat,
+        searchDocuments: searchDocumentsCompat,
+        createDocument: createDocumentCompat,
+        createNewVersion: createNewVersionCompat,
+    };
+}
