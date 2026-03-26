@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Download, Search, Shield, Users, UserCheck } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
@@ -12,10 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import EmptyState from "@/components/feedback/EmptyState";
 import UserRoleBadge from "@/components/users/UserRoleBadge";
 import { Button } from "@/components/ui/button";
+import { userAdminApi, type UserAdminRow } from "@/services/userAdminApi";
 
-interface MembershipRow { id: string; user_id: string; role: string | null; is_active: boolean; created_at: string | null; organization_id: string; }
-interface ProfileRow { id: string; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null; }
-interface UserListRow { membership_id: string; user_id: string; role: string | null; is_active: boolean; created_at: string | null; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null; }
+interface UserListRow extends UserAdminRow { user_id: string; }
 
 function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
@@ -62,23 +60,14 @@ export default function UsersIndexPage() {
             if (!orgId) { if (active) setLoading(false); return; }
             setLoading(true);
             try {
-                const { data: memberships, error: membershipsError } = await supabase.from("organization_memberships").select("id, user_id, role, is_active, created_at, organization_id").eq("organization_id", orgId).order("created_at", { ascending: false });
-                if (membershipsError) throw membershipsError;
-                const membershipRows = (memberships ?? []) as MembershipRow[];
-                const userIds = Array.from(new Set(membershipRows.map((r) => r.user_id).filter(Boolean)));
-                let profileMap = new Map < string, ProfileRow> ();
-                if (userIds.length > 0) {
-                    const { data: profiles, error: profilesError } = await supabase.from("profiles").select("id, display_name, first_name, last_name, email").in("id", userIds);
-                    if (profilesError) throw profilesError;
-                    profileMap = new Map(((profiles ?? []) as ProfileRow[]).map((r) => [r.id, r]));
-                }
-                const nextRows: UserListRow[] = membershipRows.map((r) => {
-                    const profile = profileMap.get(r.user_id);
-                    return { membership_id: r.id, user_id: r.user_id, role: r.role, is_active: r.is_active, created_at: r.created_at, display_name: profile?.display_name ?? null, first_name: profile?.first_name ?? null, last_name: profile?.last_name ?? null, email: profile?.email ?? null };
-                });
+                const apiRows = await userAdminApi.listUsers();
                 if (!active) return;
-                setRows(nextRows);
-            } catch (error) { console.error("Users load error:", error); } finally { if (active) setLoading(false); }
+                setRows(apiRows.map((row) => ({ ...row, user_id: row.id })));
+            } catch (error) {
+                console.error("Users load error:", error);
+            } finally {
+                if (active) setLoading(false);
+            }
         };
         void load();
         return () => { active = false; };
