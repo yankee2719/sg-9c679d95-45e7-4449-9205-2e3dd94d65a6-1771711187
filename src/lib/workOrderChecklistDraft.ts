@@ -1,36 +1,25 @@
-export type ChecklistDraftValue = {
+export interface ChecklistDraftItemValue {
     value: string | null;
     notes: string | null;
     bool?: "yes" | "no" | "na";
-};
+}
 
-export interface WorkOrderChecklistDraft {
-    selectedAssignmentId: string | null;
-    values: Record<string, ChecklistDraftValue>;
+export interface WorkOrderChecklistDraftPayload {
+    values: Record<string, ChecklistDraftItemValue>;
     globalNotes: string;
     updatedAt: string;
 }
 
-const PREFIX = "machina:wo-checklist-draft:";
-
-function key(workOrderId: string) {
-    return `${PREFIX}${workOrderId}`;
+function draftKey(workOrderId: string, assignmentId: string) {
+    return `machina:wo-checklist-draft:${workOrderId}:${assignmentId}`;
 }
 
-export function loadWorkOrderChecklistDraft(workOrderId: string): WorkOrderChecklistDraft | null {
+export function loadWorkOrderChecklistDraft(workOrderId: string, assignmentId: string): WorkOrderChecklistDraftPayload | null {
     if (typeof window === "undefined") return null;
     try {
-        const raw = window.localStorage.getItem(key(workOrderId));
+        const raw = window.localStorage.getItem(draftKey(workOrderId, assignmentId));
         if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object") return null;
-        return {
-            selectedAssignmentId:
-                typeof parsed.selectedAssignmentId === "string" ? parsed.selectedAssignmentId : null,
-            values: typeof parsed.values === "object" && parsed.values ? parsed.values : {},
-            globalNotes: typeof parsed.globalNotes === "string" ? parsed.globalNotes : "",
-            updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
-        };
+        return JSON.parse(raw) as WorkOrderChecklistDraftPayload;
     } catch {
         return null;
     }
@@ -38,20 +27,26 @@ export function loadWorkOrderChecklistDraft(workOrderId: string): WorkOrderCheck
 
 export function saveWorkOrderChecklistDraft(
     workOrderId: string,
-    draft: Omit<WorkOrderChecklistDraft, "updatedAt">
+    assignmentId: string,
+    payload: Omit<WorkOrderChecklistDraftPayload, "updatedAt">
 ) {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(
-        key(workOrderId),
-        JSON.stringify({
-            ...draft,
+    try {
+        const data: WorkOrderChecklistDraftPayload = {
+            ...payload,
             updatedAt: new Date().toISOString(),
-        })
-    );
+        };
+        window.localStorage.setItem(draftKey(workOrderId, assignmentId), JSON.stringify(data));
+    } catch {
+        // ignore quota / private mode errors
+    }
 }
 
-export function clearWorkOrderChecklistDraft(workOrderId: string) {
+export function clearWorkOrderChecklistDraft(workOrderId: string, assignmentId: string) {
     if (typeof window === "undefined") return;
-    window.localStorage.removeItem(key(workOrderId));
+    try {
+        window.localStorage.removeItem(draftKey(workOrderId, assignmentId));
+    } catch {
+        // ignore
+    }
 }
-
