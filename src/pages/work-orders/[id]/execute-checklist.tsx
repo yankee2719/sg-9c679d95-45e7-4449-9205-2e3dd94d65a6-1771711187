@@ -31,6 +31,7 @@ import {
     saveWorkOrderChecklistDraft,
     type ChecklistDraftValue,
 } from "@/lib/workOrderChecklistDraft";
+import { enqueueOfflineSyncOperation } from "@/lib/offlineOpsQueue";
 
 type ItemValue = ChecklistDraftValue;
 
@@ -41,8 +42,8 @@ function makeDefaultValues(items: WorkOrderChecklistTemplateItem[], seed?: Recor
         result[item.id] = seeded
             ? seeded
             : item.input_type === "boolean"
-                ? { value: null, notes: null, bool: "na" }
-                : { value: null, notes: null };
+              ? { value: null, notes: null, bool: "na" }
+              : { value: null, notes: null };
     }
     return result;
 }
@@ -56,16 +57,16 @@ export default function ExecuteChecklistInWorkOrderPage() {
 
     const workOrderId = typeof router.query.id === "string" ? router.query.id : null;
 
-    const [role, setRole] = useState < string > ("technician");
+    const [role, setRole] = useState<string>("technician");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [isOnline, setIsOnline] = useState < boolean > (typeof window === "undefined" ? true : navigator.onLine);
+    const [isOnline, setIsOnline] = useState<boolean>(typeof window === "undefined" ? true : navigator.onLine);
 
-    const [context, setContext] = useState < WorkOrderChecklistContext | null > (null);
-    const [selectedAssignmentId, setSelectedAssignmentId] = useState < string > ("none");
-    const [values, setValues] = useState < Record < string, ItemValue>> ({});
+    const [context, setContext] = useState<WorkOrderChecklistContext | null>(null);
+    const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("none");
+    const [values, setValues] = useState<Record<string, ItemValue>>({});
     const [globalNotes, setGlobalNotes] = useState("");
-    const [lastDraftSavedAt, setLastDraftSavedAt] = useState < string | null > (null);
+    const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
     const [restoredDraft, setRestoredDraft] = useState(false);
 
     const draftUi = {
@@ -84,12 +85,14 @@ export default function ExecuteChecklistInWorkOrderPage() {
         saveDraft: isItalian ? "Salva bozza locale" : "Save local draft",
         draftSaved: isItalian ? "Bozza locale salvata" : "Local draft saved",
         submitOnlineOnly: isItalian ? "Per inviare la checklist devi essere online." : "You must be online to submit the checklist.",
+        queuedTitle: isItalian ? "Checklist messa in coda" : "Checklist queued",
+        queuedDescription: isItalian ? "La checklist verrà sincronizzata appena torni online." : "The checklist will sync as soon as you are back online.",
     };
 
     const assignments = context?.assignments ?? [];
     const workOrder = context?.workOrder ?? null;
 
-    const selectedAssignment = useMemo < WorkOrderChecklistAssignmentContext | null > (
+    const selectedAssignment = useMemo<WorkOrderChecklistAssignmentContext | null>(
         () => assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null,
         [assignments, selectedAssignmentId]
     );
@@ -211,13 +214,43 @@ export default function ExecuteChecklistInWorkOrderPage() {
 
     const handleSave = async () => {
         if (!workOrder || !selectedAssignment || !workOrderId) return;
-        if (!isOnline) {
-            persistDraftNow();
-            toast({ title: draftUi.offlineTitle, description: draftUi.submitOnlineOnly, variant: "destructive" });
+        const validationError = validate();
+        if (validationError) {
+            toast({ title: text.loadError, description: validationError, variant: "destructive" });
             return;
         }
 
-        const validationError = validate();
+        if (!isOnline) {
+            enqueueOfflineSyncOperation({
+                entity_type: "checklist_execution_complete",
+                entity_id: `${workOrder.id}:${selectedAssignment.id}`,
+                plant_id: workOrder.plant_id ?? null,
+                dedupe_key: `checklist_execution_complete:${workOrder.id}:${selectedAssignment.id}`,
+                payload: {
+                    assignment_id: selectedAssignment.id,
+                    work_order_id: workOrder.id,
+                    plant_id: workOrder.plant_id ?? null,
+                    items: templateItems.map((item) => {
+                        const value = values[item.id];
+                        let finalValue: string | null = value?.value ?? null;
+                        if (item.input_type === "boolean") {
+                            finalValue = value?.bool === "yes" ? "true" : value?.bool === "no" ? "false" : null;
+                        }
+                        return {
+                            template_item_id: item.id,
+                            value: finalValue,
+                            notes: value?.notes ?? null,
+                        };
+                    }),
+                    notes: globalNotes.trim() || null,
+                },
+            });
+            clearWorkOrderChecklistDraft(workOrderId);
+            toast({ title: draftUi.queuedTitle, description: draftUi.queuedDescription });
+            router.push(`/work-orders/${workOrder.id}`);
+            return;
+        }
+
         if (validationError) {
             toast({ title: text.loadError, description: validationError, variant: "destructive" });
             return;
