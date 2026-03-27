@@ -1,39 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import {
-    CalendarDays,
-    Search,
-    Filter,
-    CheckCircle2,
-    ChevronRight,
-    Clock3,
-    Wrench,
-} from "lucide-react";
+import { CalendarDays, Search, Filter, CheckCircle2, ChevronRight, Clock3, Wrench } from "lucide-react";
+import { getMaintenanceOverview, type MaintenanceOverviewItem } from "@/lib/maintenanceOverviewApi";
 
-type PreventiveWorkOrderRow = {
-    id: string;
-    title: string | null;
-    machine_id: string | null;
-    machine_name?: string | null;
-    due_date?: string | null;
-    priority?: string | null;
-    status?: string | null;
-    created_at?: string | null;
-};
-
-function CardShell({
-    children,
-    className = "",
-}: {
-    children: React.ReactNode;
-    className?: string;
-}) {
+function CardShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
     return <div className={`surface-panel ${className}`}>{children}</div>;
 }
 
@@ -97,57 +72,25 @@ function formatDate(value: string | null | undefined, locale: string) {
 
 export default function MaintenancePage() {
     const { t, language } = useLanguage();
+    const { loading: authLoading, membership } = useAuth();
 
-    const [userRole, setUserRole] = useState("technician");
-    const [items, setItems] = useState < PreventiveWorkOrderRow[] > ([]);
+    const [items, setItems] = useState < MaintenanceOverviewItem[] > ([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [priorityFilter, setPriorityFilter] = useState("all");
+
+    const userRole = membership?.role ?? "viewer";
 
     useEffect(() => {
         let active = true;
 
         const load = async () => {
+            if (authLoading) return;
             try {
-                const ctx = await getUserContext();
-                if (!ctx?.orgId) return;
-
-                setUserRole(ctx.role ?? "technician");
-
-                const { data: workOrders, error } = await supabase
-                    .from("work_orders")
-                    .select("id, title, machine_id, due_date, priority, status, created_at, work_type")
-                    .eq("organization_id", ctx.orgId)
-                    .eq("work_type", "preventive")
-                    .order("created_at", { ascending: false });
-
-                if (error) throw error;
-
-                const machineIds = Array.from(
-                    new Set((workOrders ?? []).map((row: any) => row.machine_id).filter(Boolean))
-                ) as string[];
-
-                const { data: machines, error: machinesError } = machineIds.length
-                    ? await supabase.from("machines").select("id, name").in("id", machineIds)
-                    : ({ data: [], error: null } as { data: Array<{ id: string; name: string | null }>; error: null });
-
-                if (machinesError) throw machinesError;
-
-                const machineMap = new Map((machines ?? []).map((machine) => [machine.id, machine.name]));
-
+                setLoading(true);
+                const data = await getMaintenanceOverview();
                 if (!active) return;
-                setItems(
-                    ((workOrders ?? []) as any[]).map((row) => ({
-                        id: row.id,
-                        title: row.title ?? null,
-                        machine_id: row.machine_id ?? null,
-                        machine_name: row.machine_id ? machineMap.get(row.machine_id) ?? null : null,
-                        due_date: row.due_date ?? null,
-                        priority: row.priority ?? null,
-                        status: row.status ?? null,
-                        created_at: row.created_at ?? null,
-                    }))
-                );
+                setItems(data.items ?? []);
             } catch (error) {
                 console.error("Maintenance load error:", error);
             } finally {
@@ -156,11 +99,10 @@ export default function MaintenancePage() {
         };
 
         void load();
-
         return () => {
             active = false;
         };
-    }, []);
+    }, [authLoading]);
 
     const filteredItems = useMemo(() => {
         return items.filter((item) => {
@@ -178,26 +120,14 @@ export default function MaintenancePage() {
         });
     }, [items, search, priorityFilter]);
 
-    const stats = useMemo(() => {
-        return {
-            total: items.length,
-            open: items.filter((item) => !isClosedStatus(item.status)).length,
-            overdue: items.filter((item) => {
-                if (!item.due_date || isClosedStatus(item.status)) return false;
-                return new Date(item.due_date).getTime() < Date.now();
-            }).length,
-            completed: items.filter((item) => String(item.status || "").toLowerCase() === "completed").length,
-        };
-    }, [items]);
+    const stats = useMemo(() => ({
+        total: items.length,
+        open: items.filter((item) => !isClosedStatus(item.status)).length,
+        overdue: items.filter((item) => item.due_date && !isClosedStatus(item.status) && new Date(item.due_date).getTime() < Date.now()).length,
+        completed: items.filter((item) => String(item.status || "").toLowerCase() === "completed").length,
+    }), [items]);
 
-    const locale =
-        language === "it"
-            ? "it-IT"
-            : language === "fr"
-                ? "fr-FR"
-                : language === "es"
-                    ? "es-ES"
-                    : "en-GB";
+    const locale = language === "it" ? "it-IT" : language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : "en-GB";
 
     return (
         <OrgContextGuard>
@@ -208,12 +138,8 @@ export default function MaintenancePage() {
                     <div className="mx-auto max-w-[1440px] space-y-6">
                         <div className="flex items-start justify-between gap-4">
                             <div className="space-y-2">
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                    {t("maintenance.title")}
-                                </h1>
-                                <p className="text-base text-muted-foreground">
-                                    {t("maintenance.subtitle") || t("workOrders.subtitle")}
-                                </p>
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground">{t("maintenance.title")}</h1>
+                                <p className="text-base text-muted-foreground">{t("maintenance.subtitle") || t("workOrders.subtitle")}</p>
                             </div>
 
                             <Link
@@ -227,53 +153,44 @@ export default function MaintenancePage() {
 
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                             <CardShell className="p-6">
-                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
-                                    <CalendarDays className="h-5 w-5" />
-                                </div>
+                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500"><CalendarDays className="h-5 w-5" /></div>
                                 <div className="text-4xl font-bold text-foreground">{stats.total}</div>
                                 <div className="mt-2 text-sm text-muted-foreground">{t("common.all")}</div>
                             </CardShell>
                             <CardShell className="p-6">
-                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
-                                    <Wrench className="h-5 w-5" />
-                                </div>
+                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500"><Wrench className="h-5 w-5" /></div>
                                 <div className="text-4xl font-bold text-foreground">{stats.open}</div>
-                                <div className="mt-2 text-sm text-muted-foreground">{t("workOrders.statusOpen") || "Open"}</div>
+                                <div className="mt-2 text-sm text-muted-foreground">{t("workOrders.statusOpen") || "Aperti"}</div>
                             </CardShell>
                             <CardShell className="p-6">
-                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
-                                    <Clock3 className="h-5 w-5" />
-                                </div>
+                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500"><Clock3 className="h-5 w-5" /></div>
                                 <div className="text-4xl font-bold text-foreground">{stats.overdue}</div>
-                                <div className="mt-2 text-sm text-muted-foreground">{t("workOrders.overdue") || "Overdue"}</div>
+                                <div className="mt-2 text-sm text-muted-foreground">{t("workOrders.overdue") || "Scaduti"}</div>
                             </CardShell>
                             <CardShell className="p-6">
-                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
-                                    <CheckCircle2 className="h-5 w-5" />
-                                </div>
+                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500"><CheckCircle2 className="h-5 w-5" /></div>
                                 <div className="text-4xl font-bold text-foreground">{stats.completed}</div>
-                                <div className="mt-2 text-sm text-muted-foreground">{t("workOrders.statusCompleted") || "Completed"}</div>
+                                <div className="mt-2 text-sm text-muted-foreground">{t("workOrders.statusCompleted") || "Completati"}</div>
                             </CardShell>
                         </div>
 
                         <CardShell className="p-5">
-                            <div className="flex flex-col gap-4 xl:flex-row">
-                                <div className="relative flex-1">
-                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                     <input
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
-                                        placeholder={t("maintenance.searchPlaceholder") || t("workOrders.search")}
-                                        className="surface-input h-12 w-full pl-12 pr-4 outline-none"
+                                        placeholder={t("common.search") || "Cerca..."}
+                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm outline-none ring-0 transition placeholder:text-muted-foreground focus:border-orange-500"
                                     />
                                 </div>
-
-                                <div className="flex h-12 items-center gap-3 rounded-2xl border border-border bg-card px-4 text-foreground xl:w-[180px]">
-                                    <Filter className="h-5 w-5 text-muted-foreground" />
+                                <div className="relative">
+                                    <Filter className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                     <select
                                         value={priorityFilter}
                                         onChange={(e) => setPriorityFilter(e.target.value)}
-                                        className="w-full bg-transparent outline-none"
+                                        className="h-12 w-full appearance-none rounded-2xl border border-border bg-background pl-11 pr-4 text-sm outline-none transition focus:border-orange-500"
                                     >
                                         <option value="all">{t("common.all")}</option>
                                         <option value="high">{t("maintenance.priority.high") || "High"}</option>
@@ -284,56 +201,37 @@ export default function MaintenancePage() {
                             </div>
                         </CardShell>
 
-                        <div className="space-y-4">
+                        <div className="grid gap-4">
                             {loading ? (
-                                <CardShell className="p-6 text-muted-foreground">
-                                    {t("maintenance.loading") || t("common.loading") || "Loading..."}
-                                </CardShell>
+                                <CardShell className="p-8 text-sm text-muted-foreground">{t("common.loading") || "Caricamento..."}</CardShell>
                             ) : filteredItems.length === 0 ? (
-                                <CardShell className="p-6 text-muted-foreground">
-                                    {t("maintenance.noPlans") || t("workOrders.noResults")}
-                                </CardShell>
+                                <CardShell className="p-8 text-sm text-muted-foreground">{t("common.noData") || "Nessun dato disponibile"}</CardShell>
                             ) : (
                                 filteredItems.map((item) => {
-                                    const style = priorityStyles(item.priority, t);
-
+                                    const priority = priorityStyles(item.priority, t);
                                     return (
-                                        <Link
-                                            key={item.id}
-                                            href={`/work-orders/${item.id}`}
-                                            className="block"
-                                            aria-label={item.title ?? t("maintenance.planFallback") || "Preventive work order"}
-                                        >
-                                            <CardShell className="p-5 transition hover:-translate-y-0.5">
-                                                <div className="flex items-center justify-between gap-4">
-                                                    <div className="flex min-w-0 items-center gap-4">
-                                                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${style.iconWrap}`}>
-                                                            <CalendarDays className="h-5 w-5" />
+                                        <Link key={item.id} href={`/work-orders/${item.id}`}>
+                                            <CardShell className="group p-5 transition hover:border-orange-500/40 hover:shadow-md">
+                                                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                                    <div className="min-w-0 space-y-3">
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${priority.badge}`}>{priority.label}</span>
+                                                            <span className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{statusLabel(item.status, t)}</span>
                                                         </div>
-
-                                                        <div className="min-w-0 space-y-1">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <div className="truncate text-lg font-semibold text-foreground">
-                                                                    {item.title || t("maintenance.planFallback") || "Preventive work order"}
-                                                                </div>
-                                                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${style.badge}`}>
-                                                                    {style.label}
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="text-sm text-muted-foreground">
-                                                                {item.machine_name || t("equipment.machineNotFound") || "Machine not found"}
-                                                            </div>
-
-                                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                                <span>{t("workOrders.status") || "Status"}: {statusLabel(item.status, t)}</span>
-                                                                <span>{t("workOrders.dueDate") || "Due date"}: {formatDate(item.due_date, locale)}</span>
-                                                                <span>{t("common.createdAt") || "Created"}: {formatDate(item.created_at, locale)}</span>
-                                                            </div>
+                                                        <div>
+                                                            <h3 className="truncate text-lg font-semibold text-foreground">{item.title || t("maintenance.untitled") || "Work order"}</h3>
+                                                            <p className="mt-1 text-sm text-muted-foreground">{item.machine_name || t("workOrders.noMachine") || "Macchina non disponibile"}</p>
                                                         </div>
                                                     </div>
-
-                                                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="text-right text-sm text-muted-foreground">
+                                                            <div>{t("workOrders.dueDate") || "Scadenza"}</div>
+                                                            <div className="font-medium text-foreground">{formatDate(item.due_date, locale)}</div>
+                                                        </div>
+                                                        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${priority.iconWrap}`}>
+                                                            <ChevronRight className="h-5 w-5 transition group-hover:translate-x-0.5" />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </CardShell>
                                         </Link>
