@@ -50,4 +50,3 @@ export default withAuth(ALLOWED_ROLES, handler, {
     requireAal2: false,
     allowPlatformAdmin: true,
 });
-
