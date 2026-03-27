@@ -1,144 +1,121 @@
-export type OfflineSyncEntityType = "checklist_execution_complete";
-
-export interface OfflineSyncOperation {
+export interface OfflineOperation {
     id: string;
-    entity_type: OfflineSyncEntityType;
+    operation_type: "create" | "update" | "delete";
+    entity_type: string;
     entity_id: string;
-    plant_id?: string | null;
+    payload: Record<string, unknown>;
     client_timestamp: string;
-    sequence_number: number;
-    dedupe_key?: string | null;
-    payload: Record<string, any>;
+    sequence_number?: number;
+    plant_id?: string | null;
+    device_id?: string | null;
 }
 
 export interface OfflineSyncHistoryEntry {
     id: string;
     created_at: string;
-    ok: boolean;
     synced: number;
     failed: number;
     conflicts: number;
     total: number;
+    ok: boolean;
     message: string;
-    operation_ids: string[];
 }
 
-const STORAGE_KEY = "machina:offline-ops:v1";
-const LAST_SYNC_KEY = "machina:offline-ops:last-sync";
-const HISTORY_KEY = "machina:offline-ops:history";
-const HISTORY_LIMIT = 25;
+const OPS_KEY = "machina.offline.ops.v1";
+const HISTORY_KEY = "machina.offline.history.v1";
 
-function readQueueRaw(): OfflineSyncOperation[] {
-    if (typeof window === "undefined") return [];
+function isBrowser() {
+    return typeof window !== "undefined" && typeof localStorage !== "undefined";
+}
+
+function readJson<T>(key: string, fallback: T): T {
+    if (!isBrowser()) return fallback;
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        return JSON.parse(raw) as T;
     } catch {
-        return [];
+        return fallback;
     }
 }
 
-function writeQueueRaw(items: OfflineSyncOperation[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+function writeJson<T>(key: string, value: T) {
+    if (!isBrowser()) return;
+    localStorage.setItem(key, JSON.stringify(value));
 }
 
-function readHistoryRaw(): OfflineSyncHistoryEntry[] {
-    if (typeof window === "undefined") return [];
-    try {
-        const raw = window.localStorage.getItem(HISTORY_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
+export function listOfflineOperations(): OfflineOperation[] {
+    return readJson < OfflineOperation[] > (OPS_KEY, []);
 }
 
-function writeHistoryRaw(items: OfflineSyncHistoryEntry[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, HISTORY_LIMIT)));
+export function getOfflineOperationCount(): number {
+    return listOfflineOperations().length;
 }
 
-export function listOfflineSyncOperations(): OfflineSyncOperation[] {
-    return readQueueRaw().sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0));
+export function replaceOfflineOperations(operations: OfflineOperation[]) {
+    writeJson(OPS_KEY, operations);
 }
 
-export function getOfflineSyncCount(): number {
-    return listOfflineSyncOperations().length;
+export function clearOfflineOperations() {
+    writeJson(OPS_KEY, []);
 }
 
-export function enqueueOfflineSyncOperation(
-    input: Omit<OfflineSyncOperation, "id" | "client_timestamp" | "sequence_number">
-): OfflineSyncOperation {
-    const current = readQueueRaw();
-    const now = new Date().toISOString();
-    const sequence = current.reduce((max, item) => Math.max(max, item.sequence_number || 0), 0) + 1;
-
-    const next: OfflineSyncOperation = {
-        id:
-            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                ? crypto.randomUUID()
-                : `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        client_timestamp: now,
-        sequence_number: sequence,
-        ...input,
-    };
-
-    const dedupeKey = input.dedupe_key ?? null;
-    const filtered = dedupeKey ? current.filter((item) => item.dedupe_key !== dedupeKey) : current;
-
-    filtered.push(next);
-    writeQueueRaw(filtered);
-    return next;
+export function appendSyncHistory(entry: OfflineSyncHistoryEntry) {
+    const current = readJson < OfflineSyncHistoryEntry[] > (HISTORY_KEY, []);
+    const next = [entry, ...current].slice(0, 30);
+    writeJson(HISTORY_KEY, next);
 }
 
-export function removeOfflineSyncOperations(ids: string[]) {
-    if (!ids.length) return;
-    const idSet = new Set(ids);
-    writeQueueRaw(readQueueRaw().filter((item) => !idSet.has(item.id)));
+export function listSyncHistory(): OfflineSyncHistoryEntry[] {
+    return readJson < OfflineSyncHistoryEntry[] > (HISTORY_KEY, []);
 }
 
-export function clearOfflineSyncQueue() {
-    writeQueueRaw([]);
+export function clearSyncHistory() {
+    writeJson(HISTORY_KEY, []);
 }
 
-export function setOfflineSyncLastRun(value: string) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(LAST_SYNC_KEY, value);
-}
-
-export function getOfflineSyncLastRun(): string | null {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(LAST_SYNC_KEY);
-}
-
-export function addOfflineSyncHistory(entry: Omit<OfflineSyncHistoryEntry, "id" | "created_at">) {
-    const current = readHistoryRaw();
-    const next: OfflineSyncHistoryEntry = {
-        id:
-            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                ? crypto.randomUUID()
-                : `history-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        created_at: new Date().toISOString(),
-        ...entry,
-    };
-
-    current.unshift(next);
-    writeHistoryRaw(current);
-    return next;
-}
-
-export function listOfflineSyncHistory(): OfflineSyncHistoryEntry[] {
-    return readHistoryRaw().sort((a, b) => {
-        const da = new Date(a.created_at).getTime();
-        const db = new Date(b.created_at).getTime();
-        return db - da;
+function openLegacyDb(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open("maintops-offline", 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains("mutations")) {
+                db.createObjectStore("mutations", { keyPath: "id", autoIncrement: true });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 }
 
-export function clearOfflineSyncHistory() {
-    writeHistoryRaw([]);
+export async function getLegacyMutationCount(): Promise<number> {
+    if (typeof indexedDB === "undefined") return 0;
+
+    try {
+        const db = await openLegacyDb();
+        const tx = db.transaction("mutations", "readonly");
+        const store = tx.objectStore("mutations");
+        const request = store.count();
+
+        return await new Promise < number > ((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result ?? 0);
+            request.onerror = () => reject(request.error);
+        });
+    } catch {
+        return 0;
+    }
+}
+
+export async function clearLegacyMutations(): Promise<void> {
+    if (typeof indexedDB === "undefined") return;
+
+    const db = await openLegacyDb();
+    const tx = db.transaction("mutations", "readwrite");
+    tx.objectStore("mutations").clear();
+
+    await new Promise < void> ((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
 }
