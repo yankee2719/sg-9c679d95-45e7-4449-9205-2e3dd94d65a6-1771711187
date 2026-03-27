@@ -209,4 +209,3 @@ export function useSubscription() {
         openCustomerPortal,
     };
 }
-
