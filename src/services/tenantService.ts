@@ -1,120 +1,135 @@
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { organizationService, type Organization } from "@/services/organizationService";
 
-type Tenant = Database["public"]["Tables"]["tenants"]["Row"];
-type TenantInsert = Database["public"]["Tables"]["tenants"]["Insert"];
-type TenantUpdate = Database["public"]["Tables"]["tenants"]["Update"];
+/**
+ * @deprecated MACHINA non usa più il modello tenants/profiles.tenant_id.
+ * Questo shim evita query legacy alle tabelle tenants e instrada i punti residui
+ * verso organizations, finché i vecchi import non vengono rimossi del tutto.
+ */
+
+export type TenantLike = Pick<
+    Organization,
+    | "id"
+    | "name"
+    | "slug"
+    | "type"
+    | "email"
+    | "phone"
+    | "website"
+    | "country"
+    | "subscription_status"
+    | "subscription_plan"
+    | "max_users"
+    | "max_plants"
+    | "max_machines"
+    | "settings"
+    | "is_archived"
+    | "created_at"
+    | "updated_at"
+>;
+
+type TenantInsert = Partial<TenantLike> & { name: string; slug: string; type?: TenantLike["type"] };
+type TenantUpdate = Partial<TenantLike>;
+
+function toTenantLike(organization: Organization | null): TenantLike | null {
+    if (!organization) return null;
+
+    return {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        type: organization.type,
+        email: organization.email,
+        phone: organization.phone,
+        website: organization.website,
+        country: organization.country,
+        subscription_status: organization.subscription_status,
+        subscription_plan: organization.subscription_plan,
+        max_users: organization.max_users,
+        max_plants: organization.max_plants,
+        max_machines: organization.max_machines,
+        settings: organization.settings,
+        is_archived: organization.is_archived,
+        created_at: organization.created_at,
+        updated_at: organization.updated_at,
+    };
+}
+
+function warnLegacy(method: string) {
+    console.warn(
+        `[tenantService.${method}] deprecated: usa organizations + organization_memberships invece del modello tenants legacy.`
+    );
+}
 
 export const tenantService = {
-  // Get current user's tenant
-  async getCurrentTenant(): Promise<Tenant | null> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+    async getCurrentTenant(): Promise<TenantLike | null> {
+        warnLegacy("getCurrentTenant");
+        const organization = await organizationService.getCurrentOrganization();
+        return toTenantLike(organization);
+    },
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", user.id)
-        .single();
+    async getTenantById(id: string): Promise<TenantLike | null> {
+        warnLegacy("getTenantById");
+        const organization = await organizationService.getOrganizationById(id);
+        return toTenantLike(organization);
+    },
 
-      if (!profile?.tenant_id) return null;
+    async createTenant(tenant: TenantInsert): Promise<TenantLike | null> {
+        warnLegacy("createTenant");
 
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*")
-        .eq("id", profile.tenant_id)
-        .single();
+        const slug = tenant.slug?.trim() || (await organizationService.generateUniqueSlug(tenant.name));
+        const { organizationId, error } = await organizationService.createOrganization({
+            name: tenant.name,
+            slug,
+            type: (tenant.type as any) || "customer",
+            email: tenant.email || undefined,
+            phone: tenant.phone || undefined,
+        });
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error fetching current tenant:", error);
-      return null;
-    }
-  },
+        if (error || !organizationId) {
+            console.error("Legacy createTenant failed:", error);
+            return null;
+        }
 
-  // Get tenant by ID
-  async getTenantById(id: string): Promise<Tenant | null> {
-    try {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*")
-        .eq("id", id)
-        .single();
+        const organization = await organizationService.getOrganizationById(organizationId);
+        return toTenantLike(organization);
+    },
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error fetching tenant:", error);
-      return null;
-    }
-  },
+    async updateTenant(id: string, _updates: TenantUpdate): Promise<TenantLike | null> {
+        warnLegacy("updateTenant");
+        console.warn("tenantService.updateTenant è mantenuto solo per compatibilità e non aggiorna più organizations direttamente.");
+        const organization = await organizationService.getOrganizationById(id);
+        return toTenantLike(organization);
+    },
 
-  // Create new tenant (only for super admin)
-  async createTenant(tenant: TenantInsert): Promise<Tenant | null> {
-    try {
-      const { data, error } = await supabase
-        .from("tenants")
-        .insert(tenant)
-        .select()
-        .single();
+    async deleteTenant(_id: string): Promise<boolean> {
+        warnLegacy("deleteTenant");
+        console.warn("tenantService.deleteTenant è disabilitato: usa il flusso platform/org esplicito lato server.");
+        return false;
+    },
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error creating tenant:", error);
-      return null;
-    }
-  },
-
-  // Update tenant
-  async updateTenant(id: string, updates: TenantUpdate): Promise<Tenant | null> {
-    try {
-      const { data, error } = await supabase
-        .from("tenants")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error("Error updating tenant:", error);
-      return null;
-    }
-  },
-
-  // Delete tenant
-  async deleteTenant(id: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from("tenants")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error("Error deleting tenant:", error);
-      return false;
-    }
-  },
-
-  // List all tenants (only for super admin)
-  async listTenants(): Promise<Tenant[]> {
-    try {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*")
-        .order("name");
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error("Error listing tenants:", error);
-      return [];
-    }
-  },
+    async listTenants(): Promise<TenantLike[]> {
+        warnLegacy("listTenants");
+        const organizations = await organizationService.getUserOrganizations();
+        return organizations.map((organization) => ({
+            id: organization.id,
+            name: organization.name,
+            slug: organization.slug,
+            type: organization.type,
+            email: organization.email,
+            phone: organization.phone,
+            website: organization.website,
+            country: organization.country,
+            subscription_status: organization.subscription_status,
+            subscription_plan: organization.subscription_plan,
+            max_users: organization.max_users,
+            max_plants: organization.max_plants,
+            max_machines: organization.max_machines,
+            settings: organization.settings,
+            is_archived: organization.is_archived,
+            created_at: organization.created_at,
+            updated_at: organization.updated_at,
+        }));
+    },
 };
+
+export default tenantService;
