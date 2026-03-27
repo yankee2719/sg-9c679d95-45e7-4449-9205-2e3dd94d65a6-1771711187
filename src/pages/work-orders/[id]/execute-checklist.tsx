@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, WifiOff, HardDriveDownload } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -20,68 +18,94 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
+import { getUserContext } from "@/lib/supabaseHelpers";
+import {
+    workOrderChecklistApi,
+    type WorkOrderChecklistAssignmentContext,
+    type WorkOrderChecklistContext,
+    type WorkOrderChecklistTemplateItem,
+} from "@/lib/workOrderChecklistApi";
+import {
+    clearWorkOrderChecklistDraft,
+    loadWorkOrderChecklistDraft,
+    saveWorkOrderChecklistDraft,
+    type ChecklistDraftValue,
+} from "@/lib/workOrderChecklistDraft";
 
-type WorkOrderRow = {
-    id: string;
-    organization_id: string;
-    machine_id: string | null;
-    title: string;
-};
+type ItemValue = ChecklistDraftValue;
 
-type AssignmentRow = {
-    id: string;
-    template_id: string;
-    machine_id: string | null;
-    production_line_id: string | null;
-    is_active: boolean | null;
-};
-
-type TemplateRow = {
-    id: string;
-    name: string;
-    version: number;
-    is_active: boolean;
-};
-
-type TemplateItemRow = {
-    id: string;
-    title: string;
-    description: string | null;
-    input_type: string;
-    is_required: boolean;
-    order_index: number;
-    metadata: any;
-};
-
-type ItemValue = {
-    value: string | null;
-    notes: string | null;
-    bool?: "yes" | "no" | "na";
-};
+function makeDefaultValues(items: WorkOrderChecklistTemplateItem[], seed?: Record<string, ItemValue>) {
+    const result: Record<string, ItemValue> = {};
+    for (const item of items) {
+        const seeded = seed?.[item.id];
+        result[item.id] = seeded
+            ? seeded
+            : item.input_type === "boolean"
+                ? { value: null, notes: null, bool: "na" }
+                : { value: null, notes: null };
+    }
+    return result;
+}
 
 export default function ExecuteChecklistInWorkOrderPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { language } = useLanguage();
     const text = getChecklistFlowTexts(language).workOrderExecute;
+    const isItalian = language === "it";
 
     const workOrderId = typeof router.query.id === "string" ? router.query.id : null;
 
     const [role, setRole] = useState < string > ("technician");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isOnline, setIsOnline] = useState < boolean > (typeof window === "undefined" ? true : navigator.onLine);
 
-    const [workOrder, setWorkOrder] = useState < WorkOrderRow | null > (null);
-    const [assignments, setAssignments] = useState < (AssignmentRow & { template?: TemplateRow | null })[] > ([]);
+    const [context, setContext] = useState < WorkOrderChecklistContext | null > (null);
     const [selectedAssignmentId, setSelectedAssignmentId] = useState < string > ("none");
-    const [templateItems, setTemplateItems] = useState < TemplateItemRow[] > ([]);
     const [values, setValues] = useState < Record < string, ItemValue>> ({});
     const [globalNotes, setGlobalNotes] = useState("");
+    const [lastDraftSavedAt, setLastDraftSavedAt] = useState < string | null > (null);
+    const [restoredDraft, setRestoredDraft] = useState(false);
 
-    const selectedAssignment = useMemo(
+    const draftUi = {
+        offlineTitle: isItalian ? "Sei offline" : "You are offline",
+        offlineDescription: isItalian
+            ? "Puoi continuare a compilare la checklist. La bozza resta salvata in locale, ma l'invio finale richiede connessione."
+            : "You can keep filling the checklist. A local draft is saved, but final submission requires connectivity.",
+        localDraftTitle: isItalian ? "Bozza locale" : "Local draft",
+        localDraftDescription: isItalian
+            ? "Salvataggio automatico in locale attivo per questo work order."
+            : "Automatic local draft saving is active for this work order.",
+        restoreToastTitle: isItalian ? "Bozza locale ripristinata" : "Local draft restored",
+        restoreToastDescription: isItalian
+            ? "Ho ricaricato l'ultima compilazione salvata su questo dispositivo."
+            : "The last locally saved draft was restored on this device.",
+        saveDraft: isItalian ? "Salva bozza locale" : "Save local draft",
+        draftSaved: isItalian ? "Bozza locale salvata" : "Local draft saved",
+        submitOnlineOnly: isItalian ? "Per inviare la checklist devi essere online." : "You must be online to submit the checklist.",
+    };
+
+    const assignments = context?.assignments ?? [];
+    const workOrder = context?.workOrder ?? null;
+
+    const selectedAssignment = useMemo < WorkOrderChecklistAssignmentContext | null > (
         () => assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null,
         [assignments, selectedAssignmentId]
     );
+
+    const templateItems = selectedAssignment?.items ?? [];
+
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+        return () => {
+            window.removeEventListener("online", handleOnline);
+            window.removeEventListener("offline", handleOffline);
+        };
+    }, []);
 
     const load = async () => {
         if (!workOrderId) return;
@@ -94,56 +118,31 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 return;
             }
 
-            const activeOrgId = ctx.orgId ?? null;
-            if (!activeOrgId) throw new Error(text.activeOrgMissing);
-
             setRole(ctx.role ?? "technician");
+            const payload = await workOrderChecklistApi.getContext(workOrderId);
+            setContext(payload);
 
-            const { data: workOrderData, error: workOrderError } = await supabase
-                .from("work_orders")
-                .select("id, organization_id, machine_id, title")
-                .eq("id", workOrderId)
-                .eq("organization_id", activeOrgId)
-                .single();
+            const draft = loadWorkOrderChecklistDraft(workOrderId);
+            const nextAssignmentId =
+                draft?.selectedAssignmentId && payload.assignments.some((item) => item.id === draft.selectedAssignmentId)
+                    ? draft.selectedAssignmentId
+                    : payload.assignments[0]?.id ?? "none";
 
-            if (workOrderError) throw workOrderError;
-            const currentWorkOrder = workOrderData as WorkOrderRow;
-            if (!currentWorkOrder.machine_id) throw new Error(text.workOrderMachineMissing);
+            setSelectedAssignmentId(nextAssignmentId);
 
-            setWorkOrder(currentWorkOrder);
+            const activeAssignment = payload.assignments.find((item) => item.id === nextAssignmentId) ?? null;
+            const seededValues = activeAssignment ? makeDefaultValues(activeAssignment.items, draft?.values ?? {}) : {};
+            setValues(seededValues);
+            setGlobalNotes(draft?.globalNotes ?? "");
+            setLastDraftSavedAt(draft?.updatedAt ?? null);
 
-            const { data: assignmentRows, error: assignmentError } = await supabase
-                .from("checklist_assignments")
-                .select("id, template_id, machine_id, production_line_id, is_active")
-                .eq("organization_id", activeOrgId)
-                .eq("machine_id", currentWorkOrder.machine_id)
-                .eq("is_active", true);
-
-            if (assignmentError) throw assignmentError;
-            const assignmentList = (assignmentRows ?? []) as AssignmentRow[];
-
-            const templateIds = Array.from(new Set(assignmentList.map((assignment) => assignment.template_id).filter(Boolean)));
-            const templateMap = new Map < string, TemplateRow> ();
-
-            if (templateIds.length > 0) {
-                const { data: templateRows, error: templateError } = await supabase
-                    .from("checklist_templates")
-                    .select("id, name, version, is_active")
-                    .in("id", templateIds);
-
-                if (templateError) throw templateError;
-                for (const row of (templateRows ?? []) as any[]) {
-                    templateMap.set(row.id, row as TemplateRow);
-                }
+            if (draft && !restoredDraft) {
+                setRestoredDraft(true);
+                toast({
+                    title: draftUi.restoreToastTitle,
+                    description: draftUi.restoreToastDescription,
+                });
             }
-
-            const mergedAssignments = assignmentList.map((assignment) => ({
-                ...assignment,
-                template: templateMap.get(assignment.template_id) ?? null,
-            }));
-
-            setAssignments(mergedAssignments);
-            setSelectedAssignmentId(mergedAssignments.length > 0 ? mergedAssignments[0].id : "none");
         } catch (error: any) {
             console.error(error);
             toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
@@ -154,45 +153,27 @@ export default function ExecuteChecklistInWorkOrderPage() {
     };
 
     useEffect(() => {
-        load();
+        void load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workOrderId]);
 
     useEffect(() => {
-        const loadItems = async () => {
-            if (!selectedAssignment?.template_id) {
-                setTemplateItems([]);
-                setValues({});
-                return;
-            }
+        if (!selectedAssignment) {
+            setValues({});
+            return;
+        }
+        setValues((current) => makeDefaultValues(selectedAssignment.items, current));
+    }, [selectedAssignmentId]);
 
-            try {
-                const { data, error } = await supabase
-                    .from("checklist_template_items")
-                    .select("id, title, description, input_type, is_required, order_index, metadata")
-                    .eq("template_id", selectedAssignment.template_id)
-                    .order("order_index", { ascending: true });
-
-                if (error) throw error;
-
-                const rows = (data ?? []) as TemplateItemRow[];
-                setTemplateItems(rows);
-
-                const initialValues: Record<string, ItemValue> = {};
-                for (const item of rows) {
-                    initialValues[item.id] = item.input_type === "boolean"
-                        ? { value: null, notes: null, bool: "na" }
-                        : { value: null, notes: null };
-                }
-                setValues(initialValues);
-            } catch (error: any) {
-                console.error(error);
-                toast({ title: text.loadChecklistError, description: error?.message ?? text.loadItemsError, variant: "destructive" });
-            }
-        };
-
-        loadItems();
-    }, [selectedAssignment, text.loadChecklistError, text.loadItemsError, toast]);
+    useEffect(() => {
+        if (!workOrderId || loading) return;
+        saveWorkOrderChecklistDraft(workOrderId, {
+            selectedAssignmentId: selectedAssignmentId === "none" ? null : selectedAssignmentId,
+            values,
+            globalNotes,
+        });
+        setLastDraftSavedAt(new Date().toISOString());
+    }, [globalNotes, loading, selectedAssignmentId, values, workOrderId]);
 
     const setItemValue = (itemId: string, patch: Partial<ItemValue>) => {
         setValues((current) => ({
@@ -217,8 +198,24 @@ export default function ExecuteChecklistInWorkOrderPage() {
         return null;
     };
 
+    const persistDraftNow = () => {
+        if (!workOrderId) return;
+        saveWorkOrderChecklistDraft(workOrderId, {
+            selectedAssignmentId: selectedAssignmentId === "none" ? null : selectedAssignmentId,
+            values,
+            globalNotes,
+        });
+        setLastDraftSavedAt(new Date().toISOString());
+        toast({ title: draftUi.draftSaved });
+    };
+
     const handleSave = async () => {
-        if (!workOrder || !selectedAssignment) return;
+        if (!workOrder || !selectedAssignment || !workOrderId) return;
+        if (!isOnline) {
+            persistDraftNow();
+            toast({ title: draftUi.offlineTitle, description: draftUi.submitOnlineOnly, variant: "destructive" });
+            return;
+        }
 
         const validationError = validate();
         if (validationError) {
@@ -252,10 +249,12 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 notes: globalNotes.trim() || null,
             });
 
+            clearWorkOrderChecklistDraft(workOrderId);
             toast({ title: text.savedTitle, description: text.savedDescription });
             router.push(`/checklists/executions/${executionId}`);
         } catch (error: any) {
             console.error(error);
+            persistDraftNow();
             toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
         } finally {
             setSaving(false);
@@ -285,6 +284,38 @@ export default function ExecuteChecklistInWorkOrderPage() {
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     {text.backToWorkOrder}
                 </Button>
+
+                {!isOnline ? (
+                    <Card className="rounded-2xl border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                                <WifiOff className="h-5 w-5" />
+                                {draftUi.offlineTitle}
+                            </CardTitle>
+                            <CardDescription>{draftUi.offlineDescription}</CardDescription>
+                        </CardHeader>
+                    </Card>
+                ) : null}
+
+                <Card className="rounded-2xl border-dashed">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <HardDriveDownload className="h-5 w-5" />
+                            {draftUi.localDraftTitle}
+                        </CardTitle>
+                        <CardDescription>
+                            {draftUi.localDraftDescription}
+                            {lastDraftSavedAt
+                                ? ` • ${new Date(lastDraftSavedAt).toLocaleString(language === "it" ? "it-IT" : "en-GB")}`
+                                : ""}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex justify-end">
+                        <Button variant="outline" onClick={persistDraftNow}>
+                            {draftUi.saveDraft}
+                        </Button>
+                    </CardContent>
+                </Card>
 
                 <Card className="rounded-2xl">
                     <CardHeader>
@@ -392,7 +423,10 @@ export default function ExecuteChecklistInWorkOrderPage() {
                                 />
                             </div>
 
-                            <div className="flex justify-end">
+                            <div className="flex flex-wrap justify-end gap-2">
+                                <Button variant="outline" onClick={persistDraftNow}>
+                                    {draftUi.saveDraft}
+                                </Button>
                                 <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]">
                                     <Save className="mr-2 h-4 w-4" />
                                     {saving ? text.saving : text.save}
@@ -405,3 +439,4 @@ export default function ExecuteChecklistInWorkOrderPage() {
         </MainLayout>
     );
 }
+
