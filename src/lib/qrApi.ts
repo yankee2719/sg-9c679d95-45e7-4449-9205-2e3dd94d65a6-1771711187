@@ -7,7 +7,7 @@ export interface QrToken {
     equipment_id: string;
     token_type: QrTokenType;
     token_prefix: string;
-    label?: string | null;
+    qr_label?: string | null;
     allowed_views?: string[] | null;
     max_permission_level?: string | null;
     allowed_roles?: string[] | null;
@@ -61,7 +61,11 @@ export async function generateQrToken(input: GenerateQrTokenInput): Promise<Gene
     });
 }
 
-export async function revokeQrToken(equipmentId: string, tokenId: string, reason?: string): Promise<{ success: boolean; message: string }> {
+export async function revokeQrToken(
+    equipmentId: string,
+    tokenId: string,
+    reason?: string
+): Promise<{ success: boolean; message: string }> {
     return apiFetch < { success: boolean; message: string } > (`/api/qr/equipment/${equipmentId}`, {
         method: "DELETE",
         body: JSON.stringify({ token_id: tokenId, reason: reason || "Manually revoked" }),
