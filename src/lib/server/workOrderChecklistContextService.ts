@@ -46,6 +46,7 @@ export interface WorkOrderChecklistExecutionContext {
         machine_id: string | null;
         title: string;
         status: string | null;
+        plant_id: string | null;
     };
     assignments: WorkOrderChecklistAssignmentContext[];
 }
@@ -131,6 +132,7 @@ export async function getWorkOrderChecklistContext(
             machine_id: (workOrder as any).machine_id ?? null,
             title: String((workOrder as any).title ?? ""),
             status: ((workOrder as any).status ?? null) as string | null,
+            plant_id: ((workOrder as any).plant_id ?? null) as string | null,
         },
         assignments: assignments.map((assignment) => {
             const template = templateMap.get(assignment.template_id) ?? null;
