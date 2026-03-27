@@ -1,4 +1,4 @@
-import { authService } from "@/services/authService";
+import { apiFetch } from "@/services/apiClient";
 
 export interface ChecklistAssignmentTemplateOption {
     id: string;
@@ -32,54 +32,16 @@ export interface ChecklistAssignmentDashboardData {
     assignments: ChecklistAssignmentListItem[];
 }
 
-async function authHeaders() {
-    const session = await authService.getCurrentSession();
-    if (!session?.access_token) {
-        throw new Error("Authentication required.");
-    }
-
-    return {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-    };
-}
-
-async function parseResponse<T>(response: Response): Promise<T> {
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : {};
-
-    if (!response.ok) {
-        throw new Error(payload?.error || payload?.message || `API error ${response.status}`);
-    }
-
-    return (payload?.data ?? payload) as T;
-}
-
 export const checklistAssignmentApi = {
-    async list(): Promise<ChecklistAssignmentDashboardData> {
-        const response = await fetch("/api/checklists/assignments", {
-            method: "GET",
-            headers: await authHeaders(),
-        });
-        return parseResponse < ChecklistAssignmentDashboardData > (response);
-    },
-
-    async create(params: { template_id: string; machine_id: string }): Promise<ChecklistAssignmentListItem> {
-        const response = await fetch("/api/checklists/assignments", {
+    list: () => apiFetch < ChecklistAssignmentDashboardData > ("/api/checklists/assignments"),
+    create: (params: { template_id: string; machine_id: string }) =>
+        apiFetch < ChecklistAssignmentListItem > ("/api/checklists/assignments", {
             method: "POST",
-            headers: await authHeaders(),
             body: JSON.stringify(params),
-        });
-        return parseResponse < ChecklistAssignmentListItem > (response);
-    },
-
-    async deactivate(assignmentId: string): Promise<{ success: true }> {
-        const response = await fetch("/api/checklists/assignments", {
+        }),
+    deactivate: (assignmentId: string) =>
+        apiFetch < { success: true } > ("/api/checklists/assignments", {
             method: "DELETE",
-            headers: await authHeaders(),
             body: JSON.stringify({ assignment_id: assignmentId }),
-        });
-        return parseResponse < { success: true } > (response);
-    },
+        }),
 };
-
