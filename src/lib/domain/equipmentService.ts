@@ -1,6 +1,10 @@
-// src/lib/domain/equipmentService.ts
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import {
+    listMachines,
+    getMachine,
+    createMachine as createMachineViaApi,
+    updateMachine as updateMachineViaApi,
+} from "@/services/machineApi";
+import { apiFetch } from "@/services/apiClient";
 
 export interface EquipmentRecord {
     id: string;
@@ -15,63 +19,35 @@ export interface EquipmentRecord {
     lifecycle_state?: string | null;
     notes?: string | null;
     is_archived?: boolean | null;
+    photo_url?: string | null;
+    created_at?: string;
+    updated_at?: string;
 }
 
-export async function listMachinesForActiveOrganization() {
-    const ctx = await getUserContext();
-    if (!ctx?.orgId) throw new Error("Contesto organizzativo non valido.");
-
-    const { data, error } = await supabase
-        .from("machines")
-        .select("*")
-        .eq("organization_id", ctx.orgId)
-        .order("name", { ascending: true });
-
-    if (error) throw error;
-    return (data ?? []) as EquipmentRecord[];
+export async function listMachinesForActiveOrganization(): Promise<EquipmentRecord[]> {
+    return (await listMachines()) as EquipmentRecord[];
 }
 
-export async function getMachineById(machineId: string) {
-    const { data, error } = await supabase
-        .from("machines")
-        .select("*")
-        .eq("id", machineId)
-        .maybeSingle();
-
-    if (error) throw error;
-    return (data ?? null) as EquipmentRecord | null;
+export async function getMachineById(machineId: string): Promise<EquipmentRecord | null> {
+    if (!machineId) return null;
+    return (await getMachine(machineId)) as EquipmentRecord | null;
 }
 
-export async function createMachine(payload: Partial<EquipmentRecord>) {
-    const { data, error } = await supabase
-        .from("machines")
-        .insert(payload)
-        .select("*")
-        .single();
-
-    if (error) throw error;
-    return data as EquipmentRecord;
+export async function createMachine(payload: Partial<EquipmentRecord>): Promise<EquipmentRecord> {
+    return (await createMachineViaApi(payload)) as EquipmentRecord;
 }
 
-export async function updateMachine(machineId: string, payload: Partial<EquipmentRecord>) {
-    const { data, error } = await supabase
-        .from("machines")
-        .update(payload)
-        .eq("id", machineId)
-        .select("*")
-        .single();
-
-    if (error) throw error;
-    return data as EquipmentRecord;
+export async function updateMachine(
+    machineId: string,
+    payload: Partial<EquipmentRecord>
+): Promise<EquipmentRecord> {
+    return (await updateMachineViaApi(machineId, payload)) as EquipmentRecord;
 }
 
-export async function archiveMachine(machineId: string) {
-    const { error } = await supabase
-        .from("machines")
-        .update({ is_archived: true })
-        .eq("id", machineId);
-
-    if (error) throw error;
+export async function archiveMachine(machineId: string): Promise<void> {
+    await apiFetch(`/api/machines/${machineId}/delete`, {
+        method: "DELETE",
+    });
 }
 
 const equipmentService = {
