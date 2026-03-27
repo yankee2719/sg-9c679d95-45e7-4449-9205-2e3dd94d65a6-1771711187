@@ -75,6 +75,10 @@ export function listCachedDocumentEntries(): CachedDocumentEntry[] {
     });
 }
 
+export function getCachedDocumentCount(): number {
+    return listCachedDocumentEntries().length;
+}
+
 export async function cacheDocumentForOffline(documentId: string): Promise<CachedDocumentEntry> {
     const detailPayload = await apiFetch < any > (`/api/documents/${documentId}`);
     const detail = detailPayload?.document;
@@ -98,13 +102,16 @@ export async function cacheDocumentForOffline(documentId: string): Promise<Cache
 
     const blob = await response.blob();
     const cache = await getCache();
-    await cache.put(cacheUrlForDocument(documentId), new Response(blob, {
-        headers: {
-            "Content-Type": mimeType,
-            "Content-Length": String(blob.size),
-            "X-Machina-File-Name": fileName,
-        },
-    }));
+    await cache.put(
+        cacheUrlForDocument(documentId),
+        new Response(blob, {
+            headers: {
+                "Content-Type": mimeType,
+                "Content-Length": String(blob.size),
+                "X-Machina-File-Name": fileName,
+            },
+        })
+    );
 
     const entry: CachedDocumentEntry = {
         id: detail.id,
@@ -153,7 +160,9 @@ export async function downloadCachedDocument(documentId: string): Promise<void> 
 
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    const preferredName = entry.fileName?.includes(".") ? entry.fileName : `${entry.fileName}.${getExtensionFromMimeType(entry.mimeType)}`;
+    const preferredName = entry.fileName?.includes(".")
+        ? entry.fileName
+        : `${entry.fileName}.${getExtensionFromMimeType(entry.mimeType)}`;
     anchor.href = url;
     anchor.download = preferredName;
     document.body.appendChild(anchor);
