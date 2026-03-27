@@ -7,11 +7,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
     canManageChecklists,
-    formatChecklistDate,
     getChecklistTexts,
     translateChecklistTarget,
 } from "@/lib/checklistsPageText";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/useAuth";
 import { ArrowRightLeft, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import {
     Select,
@@ -20,7 +20,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import {
     checklistAssignmentApi,
     type ChecklistAssignmentDashboardData,
@@ -34,6 +33,7 @@ export default function ChecklistAssignmentsPage() {
     const { toast } = useToast();
     const { language } = useLanguage();
     const text = getChecklistTexts(language);
+    const { loading: authLoading, membership } = useAuth();
 
     const [role, setRole] = useState("technician");
     const [loading, setLoading] = useState(true);
@@ -55,15 +55,10 @@ export default function ChecklistAssignmentsPage() {
     };
 
     const load = async () => {
+        if (authLoading) return;
         setLoading(true);
         try {
-            const ctx = await getUserContext();
-            if (!ctx) {
-                router.push("/login");
-                return;
-            }
-
-            setRole(ctx.role ?? "technician");
+            setRole(membership?.role ?? "technician");
             const payload = await checklistAssignmentApi.list();
             applyPayload(payload);
         } catch (error: any) {
@@ -81,7 +76,7 @@ export default function ChecklistAssignmentsPage() {
     useEffect(() => {
         void load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [authLoading, membership?.role]);
 
     const assign = async () => {
         if (!allow) {
@@ -163,7 +158,7 @@ export default function ChecklistAssignmentsPage() {
 
     return (
         <MainLayout userRole={role}>
-            <div className="container mx-auto max-w-7xl px-4 py-8 space-y-6">
+            <div className="container mx-auto max-w-7xl space-y-6 px-4 py-8">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-2xl font-bold">
@@ -195,7 +190,9 @@ export default function ChecklistAssignmentsPage() {
                     <Card>
                         <CardHeader className="pb-2">
                             <CardDescription>{text.assignments.activeOnly}</CardDescription>
-                            <CardTitle>{stats.total === 0 ? 0 : Math.round((stats.active / stats.total) * 100)}%</CardTitle>
+                            <CardTitle>
+                                {stats.total === 0 ? 0 : Math.round((stats.active / stats.total) * 100)}%
+                            </CardTitle>
                         </CardHeader>
                     </Card>
                 </div>
@@ -235,7 +232,7 @@ export default function ChecklistAssignmentsPage() {
                                         {machines.map((machine) => (
                                             <SelectItem key={machine.id} value={machine.id}>
                                                 {machine.name}
-                                                {machine.internal_code ? ` — ${machine.internal_code}` : ""}
+                                                {machine.internal_code ? ` · ${machine.internal_code}` : ""}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -244,7 +241,7 @@ export default function ChecklistAssignmentsPage() {
                         </div>
 
                         <div className="flex justify-end">
-                            <Button onClick={assign} disabled={!allow || saving} className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]">
+                            <Button onClick={assign} disabled={saving || !allow}>
                                 <Plus className="mr-2 h-4 w-4" />
                                 {saving ? text.assignments.assigning : text.assignments.assign}
                             </Button>
@@ -255,6 +252,7 @@ export default function ChecklistAssignmentsPage() {
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle>{text.assignments.historyTitle}</CardTitle>
+                        <CardDescription>{text.assignments.listDescription}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {loading && <div className="text-sm text-muted-foreground">{text.common.loading}</div>}
@@ -263,53 +261,55 @@ export default function ChecklistAssignmentsPage() {
                             <div className="text-sm text-muted-foreground">{text.assignments.noResults}</div>
                         )}
 
-                        {!loading && assignments.map((assignment) => (
-                            <div
-                                key={assignment.id}
-                                className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-start md:justify-between"
-                            >
-                                <div className="space-y-2">
-                                    <div className="font-medium">
-                                        {assignment.template?.name ?? text.templates.newTemplate}
+                        {!loading &&
+                            assignments.map((assignment) => (
+                                <div
+                                    key={assignment.id}
+                                    className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-start md:justify-between"
+                                >
+                                    <div className="space-y-2">
+                                        <div className="font-medium">{assignment.template?.name ?? text.templates.newTemplate}</div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {text.assignments.machine}: {assignment.machine?.name ?? text.executions.machineFallback}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline">
+                                                {translateChecklistTarget(assignment.template?.target_type, language)}
+                                            </Badge>
+                                            <Badge variant="outline">v{assignment.template?.version ?? 1}</Badge>
+                                            <Badge variant={assignment.is_active ? "default" : "secondary"}>
+                                                {assignment.is_active ? text.common.active : text.common.inactive}
+                                            </Badge>
+                                        </div>
                                     </div>
-                                    <div className="text-sm text-muted-foreground">
-                                        {text.assignments.machine}: {assignment.machine?.name ?? text.executions.machineFallback}
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Badge variant="outline">
-                                            {translateChecklistTarget(assignment.template?.target_type, language)}
-                                        </Badge>
-                                        <Badge variant="outline">
-                                            v{assignment.template?.version ?? 1}
-                                        </Badge>
-                                        <Badge variant={assignment.is_active ? "default" : "secondary"}>
-                                            {assignment.is_active ? text.templates.active : text.templates.statusInactive}
-                                        </Badge>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {assignment.created_at
-                                            ? formatChecklistDate(assignment.created_at, language)
-                                            : "-"}
-                                    </div>
-                                </div>
 
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={!allow || !assignment.is_active}
-                                        onClick={() => deactivate(assignment.id)}
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        {text.assignments.deactivate}
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        {assignment.machine_id && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => router.push(`/equipment/${assignment.machine_id}`)}
+                                            >
+                                                {text.assignments.openMachine}
+                                            </Button>
+                                        )}
+                                        {assignment.is_active && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => deactivate(assignment.id)}
+                                                disabled={!allow}
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                {text.assignments.deactivate}
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
                     </CardContent>
                 </Card>
             </div>
         </MainLayout>
     );
 }
-
