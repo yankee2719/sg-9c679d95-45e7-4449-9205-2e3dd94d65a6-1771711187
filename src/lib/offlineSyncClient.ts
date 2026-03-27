@@ -1,144 +1,81 @@
-import { authService } from "@/services/authService";
+import { apiFetch } from "@/services/apiClient";
 import {
-    addOfflineSyncHistory,
-    getOfflineSyncLastRun,
-    listOfflineSyncOperations,
-    removeOfflineSyncOperations,
-    setOfflineSyncLastRun,
+    appendSyncHistory,
+    listOfflineOperations,
+    replaceOfflineOperations,
+    type OfflineOperation,
 } from "@/lib/offlineOpsQueue";
 
-export interface OfflineSyncRunResult {
-    ok: boolean;
+export interface OfflineSyncSummary {
     synced: number;
     failed: number;
     conflicts: number;
     total: number;
-    message: string;
-    lastSync: string | null;
 }
 
-function parseErrorPayload(payload: any): string {
-    return payload?.error || payload?.message || "Sincronizzazione fallita";
-}
+export async function runOfflineSync(): Promise<OfflineSyncSummary> {
+    const operations = listOfflineOperations();
 
-export async function runOfflineSync(): Promise<OfflineSyncRunResult> {
-    const operations = listOfflineSyncOperations();
     if (operations.length === 0) {
-        return {
+        const summary = { synced: 0, failed: 0, conflicts: 0, total: 0 };
+        appendSyncHistory({
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString(),
             ok: true,
-            synced: 0,
-            failed: 0,
-            conflicts: 0,
-            total: 0,
-            message: "Nessuna operazione in coda",
-            lastSync: getOfflineSyncLastRun(),
-        };
+            message: "Nessuna operazione in coda.",
+            ...summary,
+        });
+        return summary;
     }
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-        return {
-            ok: false,
-            synced: 0,
-            failed: operations.length,
-            conflicts: 0,
-            total: operations.length,
-            message: "Sei offline: sincronizzazione non disponibile",
-            lastSync: getOfflineSyncLastRun(),
-        };
-    }
+    const firstWithPlant = operations.find((operation) => operation.plant_id);
+    const firstWithDevice = operations.find((operation) => operation.device_id);
 
-    const session = await authService.getCurrentSession();
-    if (!session?.access_token) {
-        return {
-            ok: false,
-            synced: 0,
-            failed: operations.length,
-            conflicts: 0,
-            total: operations.length,
-            message: "Accesso richiesto per sincronizzare",
-            lastSync: getOfflineSyncLastRun(),
-        };
-    }
-
-    const response = await fetch("/api/sync", {
+    const response = await apiFetch < {
+        results?: Array < { id: string; status: "synced" | "failed" | "conflict"; error?: string } >;
+        summary?: OfflineSyncSummary;
+    } > ("/api/sync", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-        },
         body: JSON.stringify({
             operations,
-            plant_id: operations.find((item) => item.plant_id)?.plant_id ?? null,
-            device_id:
-                typeof window !== "undefined" ? window.localStorage.getItem("offline_device_id") || null : null,
+            plant_id: firstWithPlant?.plant_id ?? null,
+            device_id: firstWithDevice?.device_id ?? null,
         }),
     });
 
-    let payload: any = null;
-    try {
-        payload = await response.json();
-    } catch {
-        payload = null;
-    }
+    const summary = response.summary ?? { synced: 0, failed: 0, conflicts: 0, total: operations.length };
+    const results = response.results ?? [];
+    const failedIds = new Set(
+        results.filter((row) => row.status !== "synced").map((row) => row.id)
+    );
 
-    if (!response.ok) {
-        const message = parseErrorPayload(payload);
-        addOfflineSyncHistory({
-            ok: false,
-            synced: 0,
-            failed: operations.length,
-            conflicts: 0,
-            total: operations.length,
-            message,
-            operation_ids: operations.map((item) => item.id),
-        });
-        return {
-            ok: false,
-            synced: 0,
-            failed: operations.length,
-            conflicts: 0,
-            total: operations.length,
-            message,
-            lastSync: getOfflineSyncLastRun(),
-        };
-    }
+    const remaining = operations.filter((operation) => failedIds.has(operation.id));
+    replaceOfflineOperations(remaining);
 
-    const results = Array.isArray(payload?.results) ? payload.results : [];
-    const syncedIds = results
-        .filter((row: any) => row?.status === "synced")
-        .map((row: any) => String(row.id));
-
-    removeOfflineSyncOperations(syncedIds);
-
-    const summary = payload?.summary ?? {};
-    const synced = Number(summary.synced ?? syncedIds.length ?? 0);
-    const failed = Number(summary.failed ?? 0);
-    const conflicts = Number(summary.conflicts ?? 0);
-    const total = Number(summary.total ?? operations.length);
-    const ok = failed === 0 && conflicts === 0;
-    const message = ok
-        ? `${synced} operazioni sincronizzate`
-        : `${synced} sincronizzate, ${failed + conflicts} non riuscite`;
-
-    const now = new Date().toISOString();
-    setOfflineSyncLastRun(now);
-    addOfflineSyncHistory({
-        ok,
-        synced,
-        failed,
-        conflicts,
-        total,
-        message,
-        operation_ids: operations.map((item) => item.id),
+    appendSyncHistory({
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        ok: summary.failed === 0 && summary.conflicts === 0,
+        message:
+            summary.failed === 0 && summary.conflicts === 0
+                ? `${summary.synced} operazioni sincronizzate.`
+                : `${summary.synced} sincronizzate, ${summary.failed} fallite, ${summary.conflicts} conflitti.`,
+        ...summary,
     });
 
-    return {
-        ok,
-        synced,
-        failed,
-        conflicts,
-        total,
-        message,
-        lastSync: now,
-    };
+    return summary;
+}
+
+export function queueOfflineOperation(operation: OfflineOperation) {
+    const current = listOfflineOperations();
+    const nextSequence =
+        current.reduce((max, item) => Math.max(max, item.sequence_number ?? 0), 0) + 1;
+
+    current.push({
+        ...operation,
+        sequence_number: operation.sequence_number ?? nextSequence,
+        client_timestamp: operation.client_timestamp || new Date().toISOString(),
+    });
+
+    replaceOfflineOperations(current);
 }
