@@ -1,286 +1,153 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, Download, FileText, Calendar, User, Tag, CheckCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { downloadAndSave } from '@/lib/documentApi';
-import { formatFileSize } from '@/lib/documentUtils';
+import { useEffect, useState } from 'react';
+import { X, Download, FileText, Calendar, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
+import { documentWorkspaceApi } from '@/lib/documentWorkspaceApi';
+import { formatFileSize } from '@/lib/documentUtils';
 import { VersionHistory } from './VersionHistory';
-
-interface DocumentDetail {
-    document_id: string;
-    document_code: string | null;
-    document_title: string;
-    description: string | null;
-    status: string;
-    language_code: string;
-    category_code: string;
-    category_name: any;
-    mandatory_for_ce: boolean;
-    regulatory_reference: string | null;
-    validity_start: string | null;
-    validity_end: string | null;
-    version_number: number | null;
-    filename: string | null;
-    file_size_bytes: number | null;
-    uploaded_at: string | null;
-    uploaded_by_email: string | null;
-    checksum_sha256: string | null;
-    created_at: string;
-    version_id: string | null;
-}
 
 interface DocumentDetailModalProps {
     documentId: string;
     onClose: () => void;
 }
 
+interface DetailState {
+    id: string;
+    title: string | null;
+    description: string | null;
+    category: string | null;
+    language: string | null;
+    regulatory_reference: string | null;
+    updated_at: string | null;
+    created_at: string | null;
+    version_count: number | null;
+    file_size: number | null;
+    can_manage?: boolean;
+}
+
+function mapCategory(value: string | null | undefined) {
+    return value || 'other';
+}
+
+function mapLanguage(value: string | null | undefined) {
+    return (value || 'it').toUpperCase();
+}
+
+function formatDateSafe(value: string | null | undefined) {
+    if (!value) return '—';
+    try {
+        return format(new Date(value), 'PPp', { locale: it });
+    } catch {
+        return value;
+    }
+}
+
 export function DocumentDetailModal({ documentId, onClose }: DocumentDetailModalProps) {
-    const [document, setDocument] = useState < DocumentDetail | null > (null);
+    const [document, setDocument] = useState < DetailState | null > (null);
     const [loading, setLoading] = useState(true);
     const [downloading, setDownloading] = useState(false);
+    const [currentVersionId, setCurrentVersionId] = useState < string | null > (null);
+    const [currentVersionNumber, setCurrentVersionNumber] = useState < number | undefined > (undefined);
 
     useEffect(() => {
-        loadDocument();
+        let mounted = true;
+        async function loadDocument() {
+            setLoading(true);
+            try {
+                const [detailPayload, versionsPayload] = await Promise.all([
+                    documentWorkspaceApi.getDocumentDetail(documentId),
+                    documentWorkspaceApi.getDocumentVersions(documentId),
+                ]);
+                if (!mounted) return;
+                const detail = detailPayload.document;
+                const versions = versionsPayload.data ?? [];
+                setDocument({
+                    id: detail.id,
+                    title: detail.title,
+                    description: detail.description,
+                    category: detail.category,
+                    language: detail.language,
+                    regulatory_reference: detail.regulatory_reference,
+                    updated_at: detail.updated_at,
+                    created_at: detail.created_at,
+                    version_count: detail.version_count,
+                    file_size: detail.file_size,
+                    can_manage: detail.can_manage,
+                });
+                setCurrentVersionId(versions[0]?.id ?? null);
+                setCurrentVersionNumber(typeof versions[0]?.version_number === 'number' ? versions[0].version_number : undefined);
+            } catch (err) {
+                console.error('Error loading document:', err);
+                if (!mounted) return;
+                setDocument(null);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        }
+        void loadDocument();
+        return () => { mounted = false; };
     }, [documentId]);
 
-    async function loadDocument() {
-        setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('current_document_versions')
-                .select('*')
-                .eq('document_id', documentId)
-                .single();
-
-            if (error) throw error;
-            setDocument(data);
-        } catch (err) {
-            console.error('Error loading document:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
     async function handleDownload() {
-        if (!document?.version_id || !document.filename) return;
-
+        if (!currentVersionId) return;
         setDownloading(true);
         try {
-            await downloadAndSave(document.version_id, document.filename);
+            await documentWorkspaceApi.openDocument(documentId, currentVersionId);
         } catch (err) {
-            alert('Errore durante il download');
+            console.error('Download failed:', err);
         } finally {
             setDownloading(false);
         }
     }
 
-    // Close on ESC key
-    useEffect(() => {
-        function handleEscape(e: KeyboardEvent) {
-            if (e.key === 'Escape') onClose();
-        }
-        document.addEventListener('keydown', handleEscape);
-        return () => document.removeEventListener('keydown', handleEscape);
-    }, [onClose]);
-
-    // Prevent body scroll
-    useEffect(() => {
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
-    }, []);
-
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                    <div className="flex items-center gap-3">
-                        <FileText className="w-6 h-6 text-blue-600" />
-                        <h2 className="text-xl font-semibold text-gray-900">Dettagli Documento</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
+                <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Dettaglio documento</h2>
+                        <p className="text-sm text-gray-500">Metadati e storico versioni</p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                        aria-label="Chiudi"
-                    >
-                        <X className="w-5 h-5 text-gray-600" />
-                    </button>
+                    <button onClick={onClose} className="rounded-lg p-2 transition hover:bg-gray-100 dark:hover:bg-gray-800"><X className="h-5 w-5" /></button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-h-[calc(90vh-144px)] overflow-y-auto px-6 py-6">
                     {loading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-                        </div>
+                        <div className="py-12 text-center text-gray-500">Caricamento...</div>
                     ) : !document ? (
-                        <p className="text-center text-gray-500 py-12">Documento non trovato</p>
+                        <div className="py-12 text-center text-gray-500">Documento non trovato</div>
                     ) : (
                         <div className="space-y-6">
-                            {/* Title & Status */}
                             <div>
-                                <div className="flex items-start gap-3 mb-2">
-                                    <h3 className="text-2xl font-bold text-gray-900 flex-1">
-                                        {document.document_title}
-                                    </h3>
-                                    {document.mandatory_for_ce && (
-                                        <span className="px-3 py-1 bg-amber-100 text-amber-800 text-sm font-semibold rounded-full">
-                                            CE Obbligatorio
-                                        </span>
-                                    )}
-                                </div>
-                                {document.description && (
-                                    <p className="text-gray-700">{document.description}</p>
-                                )}
+                                <h3 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{document.title || 'Documento'}</h3>
+                                {document.description && <p className="text-gray-600 dark:text-gray-300">{document.description}</p>}
                             </div>
 
-                            {/* Metadata Grid */}
                             <div className="grid grid-cols-2 gap-4">
-                                {document.document_code && (
-                                    <div className="flex items-start gap-3">
-                                        <Tag className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-500">Codice Documento</p>
-                                            <p className="font-mono font-semibold text-gray-900">{document.document_code}</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="flex items-start gap-3">
-                                    <FileText className="w-5 h-5 text-gray-400 mt-0.5" />
-                                    <div>
-                                        <p className="text-sm text-gray-500">Categoria</p>
-                                        <p className="font-semibold text-gray-900">
-                                            {document.category_name?.it || document.category_code}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {document.regulatory_reference && (
-                                    <div className="flex items-start gap-3">
-                                        <CheckCircle className="w-5 h-5 text-gray-400 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-gray-500">Riferimento Normativo</p>
-                                            <p className="font-semibold text-gray-900">{document.regulatory_reference}</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="flex items-start gap-3">
-                                    <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
-                                    <div>
-                                        <p className="text-sm text-gray-500">Data Creazione</p>
-                                        <p className="font-semibold text-gray-900">
-                                            {format(new Date(document.created_at), 'PPP', { locale: it })}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-start gap-3">
-                                    <Tag className="w-5 h-5 text-gray-400 mt-0.5" />
-                                    <div>
-                                        <p className="text-sm text-gray-500">Stato</p>
-                                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${document.status === 'active'
-                                                ? 'bg-green-100 text-green-800'
-                                                : document.status === 'draft'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-gray-100 text-gray-800'
-                                            }`}>
-                                            {document.status.toUpperCase()}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-start gap-3">
-                                    <FileText className="w-5 h-5 text-gray-400 mt-0.5" />
-                                    <div>
-                                        <p className="text-sm text-gray-500">Lingua</p>
-                                        <p className="font-semibold text-gray-900">
-                                            {document.language_code.toUpperCase()}
-                                        </p>
-                                    </div>
-                                </div>
+                                <div className="flex items-start gap-3"><FileText className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Categoria</p><p className="font-semibold text-gray-900 dark:text-gray-100">{mapCategory(document.category)}</p></div></div>
+                                <div className="flex items-start gap-3"><FileText className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Lingua</p><p className="font-semibold text-gray-900 dark:text-gray-100">{mapLanguage(document.language)}</p></div></div>
+                                <div className="flex items-start gap-3"><Calendar className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Creato il</p><p className="font-semibold text-gray-900 dark:text-gray-100">{formatDateSafe(document.created_at)}</p></div></div>
+                                <div className="flex items-start gap-3"><Calendar className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Aggiornato il</p><p className="font-semibold text-gray-900 dark:text-gray-100">{formatDateSafe(document.updated_at)}</p></div></div>
+                                <div className="flex items-start gap-3"><CheckCircle className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Versioni</p><p className="font-semibold text-gray-900 dark:text-gray-100">{document.version_count ?? '—'}</p></div></div>
+                                <div className="flex items-start gap-3"><FileText className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Dimensione</p><p className="font-semibold text-gray-900 dark:text-gray-100">{document.file_size ? formatFileSize(document.file_size) : '—'}</p></div></div>
+                                {document.regulatory_reference && <div className="col-span-2 flex items-start gap-3"><CheckCircle className="mt-0.5 h-5 w-5 text-gray-400" /><div><p className="text-sm text-gray-500">Riferimento normativo</p><p className="font-semibold text-gray-900 dark:text-gray-100">{document.regulatory_reference}</p></div></div>}
                             </div>
 
-                            {/* Current Version Info */}
-                            {document.version_id && (
-                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <p className="text-sm font-semibold text-blue-900 mb-3">Versione Corrente</p>
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">Versione:</span>
-                                            <span className="font-semibold text-gray-900">v{document.version_number}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">File:</span>
-                                            <span className="font-mono text-gray-900">{document.filename}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">Dimensione:</span>
-                                            <span className="font-semibold text-gray-900">
-                                                {formatFileSize(document.file_size_bytes!)}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">Caricato da:</span>
-                                            <span className="font-semibold text-gray-900">{document.uploaded_by_email}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">Data Upload:</span>
-                                            <span className="font-semibold text-gray-900">
-                                                {format(new Date(document.uploaded_at!), 'PPp', { locale: it })}
-                                            </span>
-                                        </div>
-                                        {document.checksum_sha256 && (
-                                            <div className="mt-2 pt-2 border-t border-blue-300">
-                                                <p className="text-xs text-gray-600 mb-1">Checksum SHA-256:</p>
-                                                <p className="text-xs font-mono text-gray-800 break-all">
-                                                    {document.checksum_sha256}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Version History */}
-                            <VersionHistory documentId={documentId} />
+                            <VersionHistory documentId={documentId} currentVersionNumber={currentVersionNumber} />
                         </div>
                     )}
                 </div>
 
-                {/* Footer Actions */}
-                {document?.version_id && (
-                    <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-3">
+                {document && currentVersionId && (
+                    <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-950">
                         <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium"
-                        >
-                            Chiudi
-                        </button>
-                        <button
-                            onClick={handleDownload}
+                            onClick={() => void handleDownload()}
                             disabled={downloading}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-                disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center gap-2 font-medium transition-colors"
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
                         >
-                            {downloading ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    Download...
-                                </>
-                            ) : (
-                                <>
-                                    <Download className="w-4 h-4" />
-                                    Download
-                                </>
-                            )}
+                            {downloading ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Download className="h-4 w-4" />}Download
                         </button>
                     </div>
                 )}
@@ -288,3 +155,5 @@ export function DocumentDetailModal({ documentId, onClose }: DocumentDetailModal
         </div>
     );
 }
+
+export default DocumentDetailModal;
