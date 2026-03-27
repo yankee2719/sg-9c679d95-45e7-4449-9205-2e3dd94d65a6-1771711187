@@ -49,7 +49,6 @@ export default function ChecklistTemplatesPage() {
 
     const [rows, setRows] = useState < TemplateRow[] > ([]);
     const [loading, setLoading] = useState(true);
-
     const [search, setSearch] = useState("");
     const [targetFilter, setTargetFilter] = useState("all");
 
@@ -74,6 +73,7 @@ export default function ChecklistTemplatesPage() {
                     .from("checklist_templates")
                     .select("id, name, description, target_type, version, is_active, created_at")
                     .eq("organization_id", orgId)
+                    .eq("is_active", true)
                     .order("created_at", { ascending: false });
 
                 if (error) throw error;
@@ -137,7 +137,7 @@ export default function ChecklistTemplatesPage() {
     const stats = useMemo(() => {
         return {
             total: rows.length,
-            active: rows.filter((row) => row.is_active).length,
+            active: rows.length,
             items: rows.reduce((sum, row) => sum + (row.item_count ?? 0), 0),
         };
     }, [rows]);
@@ -227,9 +227,7 @@ export default function ChecklistTemplatesPage() {
                                     >
                                         <option value="all">{text.common.all}</option>
                                         <option value="machine">{text.templates.targetMachine}</option>
-                                        <option value="production_line">
-                                            {text.templates.targetLine}
-                                        </option>
+                                        <option value="production_line">{text.templates.targetLine}</option>
                                     </select>
                                 </div>
                             </div>
@@ -270,30 +268,17 @@ export default function ChecklistTemplatesPage() {
 
                                                             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                                 <span>
-                                                                    {row.item_count ?? 0}{" "}
-                                                                    {text.templates.itemCount}
+                                                                    {row.item_count ?? 0} {text.templates.itemCount}
                                                                 </span>
                                                                 <span>
-                                                                    {text.templates.version}{" "}
-                                                                    {row.version ?? 1}
+                                                                    {text.templates.version} {row.version ?? 1}
                                                                 </span>
                                                                 <span>
-                                                                    {translateChecklistTarget(
-                                                                        row.target_type,
-                                                                        language
-                                                                    )}
-                                                                </span>
-                                                                <span>
-                                                                    {row.is_active
-                                                                        ? text.templates.statusActive
-                                                                        : text.templates.statusInactive}
+                                                                    {translateChecklistTarget(row.target_type, language)}
                                                                 </span>
                                                                 {row.created_at && (
                                                                     <span>
-                                                                        {formatChecklistDate(
-                                                                            row.created_at,
-                                                                            language
-                                                                        )}
+                                                                        {formatChecklistDate(row.created_at, language)}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -308,10 +293,7 @@ export default function ChecklistTemplatesPage() {
 
                                                     <div className="flex shrink-0 items-center gap-6">
                                                         <div className="rounded-full border border-orange-500/30 bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300">
-                                                            {translateChecklistTarget(
-                                                                row.target_type,
-                                                                language
-                                                            )}
+                                                            {translateChecklistTarget(row.target_type, language)}
                                                         </div>
                                                         <ArrowRight className="h-5 w-5 text-muted-foreground" />
                                                     </div>
@@ -328,3 +310,4 @@ export default function ChecklistTemplatesPage() {
         </OrgContextGuard>
     );
 }
+
