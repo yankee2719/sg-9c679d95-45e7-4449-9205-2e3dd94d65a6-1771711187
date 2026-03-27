@@ -2,10 +2,11 @@ import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileText, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/useAuth";
 import { DocumentUpload } from "@/components/Equipment/DocumentUpload";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
+import { apiFetch } from "@/services/apiClient";
 
 type MachineSummary = {
     id: string;
@@ -18,6 +19,7 @@ export default function EquipmentDocumentsPage() {
     const router = useRouter();
     const { id } = router.query;
     const { t } = useLanguage();
+    const { membership } = useAuth();
 
     const [machine, setMachine] = useState < MachineSummary | null > (null);
     const [loading, setLoading] = useState(true);
@@ -30,14 +32,15 @@ export default function EquipmentDocumentsPage() {
         const loadMachine = async () => {
             setLoading(true);
             try {
-                const { data, error } = await supabase
-                    .from("machines")
-                    .select("id, name, internal_code, serial_number")
-                    .eq("id", id)
-                    .maybeSingle();
-
-                if (error) throw error;
-                if (active) setMachine((data as MachineSummary | null) ?? null);
+                const data = await apiFetch < any > (`/api/machines/${id}`);
+                if (active) {
+                    setMachine({
+                        id: data.id,
+                        name: data.name,
+                        internal_code: data.internal_code ?? null,
+                        serial_number: data.serial_number ?? null,
+                    });
+                }
             } catch (error) {
                 console.error("Failed to load machine documents context:", error);
                 if (active) setMachine(null);
@@ -55,7 +58,7 @@ export default function EquipmentDocumentsPage() {
 
     if (!router.isReady || loading) {
         return (
-            <MainLayout>
+            <MainLayout userRole={membership?.role as any}>
                 <div className="flex min-h-[60vh] items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -65,15 +68,11 @@ export default function EquipmentDocumentsPage() {
 
     if (typeof id !== "string") {
         return (
-            <MainLayout>
+            <MainLayout userRole={membership?.role as any}>
                 <div className="flex min-h-[60vh] items-center justify-center px-4">
                     <div className="text-center">
-                        <p className="mb-4 text-muted-foreground">
-                            {t("equipment.invalidId") || "Invalid machine id"}
-                        </p>
-                        <Link href="/equipment" className="text-primary hover:underline">
-                            {t("nav.equipment") || "Machines"}
-                        </Link>
+                        <p className="mb-4 text-muted-foreground">{t("equipment.invalidId") || "Invalid machine id"}</p>
+                        <Link href="/equipment" className="text-primary hover:underline">{t("nav.equipment") || "Machines"}</Link>
                     </div>
                 </div>
             </MainLayout>
@@ -83,13 +82,10 @@ export default function EquipmentDocumentsPage() {
     const secondaryCode = machine?.internal_code || machine?.serial_number || "—";
 
     return (
-        <MainLayout>
+        <MainLayout userRole={membership?.role as any}>
             <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 lg:px-8 lg:py-8">
                 <div>
-                    <Link
-                        href={`/equipment/${id}`}
-                        className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
+                    <Link href={`/equipment/${id}`} className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
                         <ArrowLeft className="h-4 w-4" />
                         {t("equipment.backToMachine") || "Back to machine"}
                     </Link>
@@ -108,9 +104,7 @@ export default function EquipmentDocumentsPage() {
                 <DocumentUpload machineId={id} />
 
                 <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-6">
-                    <h3 className="mb-2 text-sm font-semibold text-blue-500 dark:text-blue-300">
-                        {t("equipment.docBestPracticesTitle") || "Documentation best practices"}
-                    </h3>
+                    <h3 className="mb-2 text-sm font-semibold text-blue-500 dark:text-blue-300">{t("equipment.docBestPracticesTitle") || "Documentation best practices"}</h3>
                     <ul className="space-y-1 text-sm text-blue-600 dark:text-blue-200">
                         <li>• {t("equipment.docTip1") || "Keep mandatory CE documents updated."}</li>
                         <li>• {t("equipment.docTip2") || "Use descriptive filenames with version and date."}</li>
@@ -122,4 +116,3 @@ export default function EquipmentDocumentsPage() {
         </MainLayout>
     );
 }
-
