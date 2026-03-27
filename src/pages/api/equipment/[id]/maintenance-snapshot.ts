@@ -103,4 +103,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 export default withAuth(["owner", "admin", "supervisor", "technician", "viewer"], handler, {
     allowPlatformAdmin: true,
 });
-
