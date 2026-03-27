@@ -7,176 +7,120 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, WifiOff, HardDriveDownload } from "lucide-react";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { ArrowLeft, Save, WifiOff } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/hooks/useAuth";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
-import { getUserContext } from "@/lib/supabaseHelpers";
-import {
-    workOrderChecklistApi,
-    type WorkOrderChecklistAssignmentContext,
-    type WorkOrderChecklistContext,
-    type WorkOrderChecklistTemplateItem,
-} from "@/lib/workOrderChecklistApi";
-import {
-    clearWorkOrderChecklistDraft,
-    loadWorkOrderChecklistDraft,
-    saveWorkOrderChecklistDraft,
-    type ChecklistDraftValue,
-} from "@/lib/workOrderChecklistDraft";
-import { enqueueOfflineSyncOperation } from "@/lib/offlineOpsQueue";
+import { clearWorkOrderChecklistDraft, loadWorkOrderChecklistDraft, saveWorkOrderChecklistDraft, type ChecklistDraftItemValue } from "@/lib/workOrderChecklistDraft";
+import { getWorkOrderChecklistContext, type WorkOrderChecklistAssignment, type WorkOrderChecklistContextItem } from "@/lib/workOrderChecklistApi";
 
-type ItemValue = ChecklistDraftValue;
+type ItemValue = ChecklistDraftItemValue;
 
-function makeDefaultValues(items: WorkOrderChecklistTemplateItem[], seed?: Record<string, ItemValue>) {
-    const result: Record<string, ItemValue> = {};
+function buildInitialValues(items: WorkOrderChecklistContextItem[]): Record<string, ItemValue> {
+    const initial: Record<string, ItemValue> = {};
     for (const item of items) {
-        const seeded = seed?.[item.id];
-        result[item.id] = seeded
-            ? seeded
-            : item.input_type === "boolean"
-              ? { value: null, notes: null, bool: "na" }
-              : { value: null, notes: null };
+        initial[item.id] = item.input_type === "boolean"
+            ? { value: null, notes: null, bool: "na" }
+            : { value: null, notes: null };
     }
-    return result;
+    return initial;
 }
 
 export default function ExecuteChecklistInWorkOrderPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { language } = useLanguage();
+    const { loading: authLoading, membership } = useAuth();
     const text = getChecklistFlowTexts(language).workOrderExecute;
-    const isItalian = language === "it";
 
     const workOrderId = typeof router.query.id === "string" ? router.query.id : null;
+    const userRole = membership?.role ?? "technician";
 
-    const [role, setRole] = useState<string>("technician");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [isOnline, setIsOnline] = useState<boolean>(typeof window === "undefined" ? true : navigator.onLine);
+    const [isOnline, setIsOnline] = useState(true);
 
-    const [context, setContext] = useState<WorkOrderChecklistContext | null>(null);
-    const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("none");
-    const [values, setValues] = useState<Record<string, ItemValue>>({});
+    const [workOrder, setWorkOrder] = useState < { id: string; title: string; machine_id: string | null } | null > (null);
+    const [assignments, setAssignments] = useState < WorkOrderChecklistAssignment[] > ([]);
+    const [selectedAssignmentId, setSelectedAssignmentId] = useState < string > ("none");
+    const [values, setValues] = useState < Record < string, ItemValue>> ({});
     const [globalNotes, setGlobalNotes] = useState("");
-    const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
-    const [restoredDraft, setRestoredDraft] = useState(false);
 
-    const draftUi = {
-        offlineTitle: isItalian ? "Sei offline" : "You are offline",
-        offlineDescription: isItalian
-            ? "Puoi continuare a compilare la checklist. La bozza resta salvata in locale, ma l'invio finale richiede connessione."
-            : "You can keep filling the checklist. A local draft is saved, but final submission requires connectivity.",
-        localDraftTitle: isItalian ? "Bozza locale" : "Local draft",
-        localDraftDescription: isItalian
-            ? "Salvataggio automatico in locale attivo per questo work order."
-            : "Automatic local draft saving is active for this work order.",
-        restoreToastTitle: isItalian ? "Bozza locale ripristinata" : "Local draft restored",
-        restoreToastDescription: isItalian
-            ? "Ho ricaricato l'ultima compilazione salvata su questo dispositivo."
-            : "The last locally saved draft was restored on this device.",
-        saveDraft: isItalian ? "Salva bozza locale" : "Save local draft",
-        draftSaved: isItalian ? "Bozza locale salvata" : "Local draft saved",
-        submitOnlineOnly: isItalian ? "Per inviare la checklist devi essere online." : "You must be online to submit the checklist.",
-        queuedTitle: isItalian ? "Checklist messa in coda" : "Checklist queued",
-        queuedDescription: isItalian ? "La checklist verrà sincronizzata appena torni online." : "The checklist will sync as soon as you are back online.",
-    };
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const update = () => setIsOnline(window.navigator.onLine);
+        update();
+        window.addEventListener("online", update);
+        window.addEventListener("offline", update);
+        return () => {
+            window.removeEventListener("online", update);
+            window.removeEventListener("offline", update);
+        };
+    }, []);
 
-    const assignments = context?.assignments ?? [];
-    const workOrder = context?.workOrder ?? null;
-
-    const selectedAssignment = useMemo<WorkOrderChecklistAssignmentContext | null>(
+    const selectedAssignment = useMemo(
         () => assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null,
         [assignments, selectedAssignmentId]
     );
 
-    const templateItems = selectedAssignment?.items ?? [];
-
     useEffect(() => {
-        const handleOnline = () => setIsOnline(true);
-        const handleOffline = () => setIsOnline(false);
-        window.addEventListener("online", handleOnline);
-        window.addEventListener("offline", handleOffline);
-        return () => {
-            window.removeEventListener("online", handleOnline);
-            window.removeEventListener("offline", handleOffline);
+        let active = true;
+
+        const load = async () => {
+            if (!workOrderId || authLoading) return;
+            setLoading(true);
+
+            try {
+                const data = await getWorkOrderChecklistContext(workOrderId);
+                if (!active) return;
+
+                setWorkOrder(data.workOrder);
+                setAssignments(data.assignments ?? []);
+                setSelectedAssignmentId(data.assignments?.[0]?.id ?? "none");
+            } catch (error: any) {
+                console.error(error);
+                toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
+                void router.push(workOrderId ? `/work-orders/${workOrderId}` : "/work-orders");
+            } finally {
+                if (active) setLoading(false);
+            }
         };
-    }, []);
 
-    const load = async () => {
-        if (!workOrderId) return;
-        setLoading(true);
-
-        try {
-            const ctx = await getUserContext();
-            if (!ctx) {
-                router.push("/login");
-                return;
-            }
-
-            setRole(ctx.role ?? "technician");
-            const payload = await workOrderChecklistApi.getContext(workOrderId);
-            setContext(payload);
-
-            const draft = loadWorkOrderChecklistDraft(workOrderId);
-            const nextAssignmentId =
-                draft?.selectedAssignmentId && payload.assignments.some((item) => item.id === draft.selectedAssignmentId)
-                    ? draft.selectedAssignmentId
-                    : payload.assignments[0]?.id ?? "none";
-
-            setSelectedAssignmentId(nextAssignmentId);
-
-            const activeAssignment = payload.assignments.find((item) => item.id === nextAssignmentId) ?? null;
-            const seededValues = activeAssignment ? makeDefaultValues(activeAssignment.items, draft?.values ?? {}) : {};
-            setValues(seededValues);
-            setGlobalNotes(draft?.globalNotes ?? "");
-            setLastDraftSavedAt(draft?.updatedAt ?? null);
-
-            if (draft && !restoredDraft) {
-                setRestoredDraft(true);
-                toast({
-                    title: draftUi.restoreToastTitle,
-                    description: draftUi.restoreToastDescription,
-                });
-            }
-        } catch (error: any) {
-            console.error(error);
-            toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
-            router.push(workOrderId ? `/work-orders/${workOrderId}` : "/work-orders");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
         void load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workOrderId]);
+        return () => {
+            active = false;
+        };
+    }, [authLoading, router, text.loadError, toast, workOrderId]);
 
     useEffect(() => {
-        if (!selectedAssignment) {
+        if (!workOrderId || !selectedAssignment) {
             setValues({});
+            setGlobalNotes("");
             return;
         }
-        setValues((current) => makeDefaultValues(selectedAssignment.items, current));
-    }, [selectedAssignmentId]);
+
+        const initialValues = buildInitialValues(selectedAssignment.template_items);
+        const draft = loadWorkOrderChecklistDraft(workOrderId, selectedAssignment.id);
+
+        if (draft) {
+            setValues({ ...initialValues, ...draft.values });
+            setGlobalNotes(draft.globalNotes ?? "");
+            return;
+        }
+
+        setValues(initialValues);
+        setGlobalNotes("");
+    }, [selectedAssignment, workOrderId]);
 
     useEffect(() => {
-        if (!workOrderId || loading) return;
-        saveWorkOrderChecklistDraft(workOrderId, {
-            selectedAssignmentId: selectedAssignmentId === "none" ? null : selectedAssignmentId,
+        if (!workOrderId || !selectedAssignment) return;
+        saveWorkOrderChecklistDraft(workOrderId, selectedAssignment.id, {
             values,
             globalNotes,
         });
-        setLastDraftSavedAt(new Date().toISOString());
-    }, [globalNotes, loading, selectedAssignmentId, values, workOrderId]);
+    }, [globalNotes, selectedAssignment, values, workOrderId]);
 
     const setItemValue = (itemId: string, patch: Partial<ItemValue>) => {
         setValues((current) => ({
@@ -186,7 +130,8 @@ export default function ExecuteChecklistInWorkOrderPage() {
     };
 
     const validate = () => {
-        for (const item of templateItems) {
+        const items = selectedAssignment?.template_items ?? [];
+        for (const item of items) {
             const value = values[item.id];
             if (!item.is_required) continue;
 
@@ -201,19 +146,9 @@ export default function ExecuteChecklistInWorkOrderPage() {
         return null;
     };
 
-    const persistDraftNow = () => {
-        if (!workOrderId) return;
-        saveWorkOrderChecklistDraft(workOrderId, {
-            selectedAssignmentId: selectedAssignmentId === "none" ? null : selectedAssignmentId,
-            values,
-            globalNotes,
-        });
-        setLastDraftSavedAt(new Date().toISOString());
-        toast({ title: draftUi.draftSaved });
-    };
-
     const handleSave = async () => {
-        if (!workOrder || !selectedAssignment || !workOrderId) return;
+        if (!workOrder || !selectedAssignment) return;
+
         const validationError = validate();
         if (validationError) {
             toast({ title: text.loadError, description: validationError, variant: "destructive" });
@@ -221,44 +156,16 @@ export default function ExecuteChecklistInWorkOrderPage() {
         }
 
         if (!isOnline) {
-            enqueueOfflineSyncOperation({
-                entity_type: "checklist_execution_complete",
-                entity_id: `${workOrder.id}:${selectedAssignment.id}`,
-                plant_id: workOrder.plant_id ?? null,
-                dedupe_key: `checklist_execution_complete:${workOrder.id}:${selectedAssignment.id}`,
-                payload: {
-                    assignment_id: selectedAssignment.id,
-                    work_order_id: workOrder.id,
-                    plant_id: workOrder.plant_id ?? null,
-                    items: templateItems.map((item) => {
-                        const value = values[item.id];
-                        let finalValue: string | null = value?.value ?? null;
-                        if (item.input_type === "boolean") {
-                            finalValue = value?.bool === "yes" ? "true" : value?.bool === "no" ? "false" : null;
-                        }
-                        return {
-                            template_item_id: item.id,
-                            value: finalValue,
-                            notes: value?.notes ?? null,
-                        };
-                    }),
-                    notes: globalNotes.trim() || null,
-                },
+            toast({
+                title: text.savedTitle || "Bozza salvata",
+                description: text.savedDescription || "Sei offline: la bozza è stata salvata localmente, ma non ancora inviata.",
             });
-            clearWorkOrderChecklistDraft(workOrderId);
-            toast({ title: draftUi.queuedTitle, description: draftUi.queuedDescription });
-            router.push(`/work-orders/${workOrder.id}`);
-            return;
-        }
-
-        if (validationError) {
-            toast({ title: text.loadError, description: validationError, variant: "destructive" });
             return;
         }
 
         setSaving(true);
         try {
-            const itemsPayload = templateItems.map((item) => {
+            const itemsPayload = selectedAssignment.template_items.map((item) => {
                 const value = values[item.id];
                 let finalValue: string | null = value?.value ?? null;
                 if (item.input_type === "boolean") {
@@ -282,194 +189,144 @@ export default function ExecuteChecklistInWorkOrderPage() {
                 notes: globalNotes.trim() || null,
             });
 
-            clearWorkOrderChecklistDraft(workOrderId);
+            clearWorkOrderChecklistDraft(workOrder.id, selectedAssignment.id);
             toast({ title: text.savedTitle, description: text.savedDescription });
-            router.push(`/checklists/executions/${executionId}`);
+            void router.push(`/checklists/executions/${executionId}`);
         } catch (error: any) {
             console.error(error);
-            persistDraftNow();
             toast({ title: text.loadError, description: error?.message ?? text.loadError, variant: "destructive" });
         } finally {
             setSaving(false);
         }
     };
 
-    if (loading) {
+    if (authLoading || loading) {
         return (
-            <MainLayout userRole={role as any}>
-                <div className="p-6">{text.loading}</div>
-            </MainLayout>
-        );
-    }
-
-    if (!workOrder) {
-        return (
-            <MainLayout userRole={role as any}>
-                <div className="p-6">{text.notFound}</div>
+            <MainLayout userRole={userRole}>
+                <div className="p-8 text-sm text-muted-foreground">{text.loading || "Caricamento checklist..."}</div>
             </MainLayout>
         );
     }
 
     return (
-        <MainLayout userRole={role as any}>
-            <div className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
-                <Button variant="ghost" onClick={() => router.push(`/work-orders/${workOrder.id}`)}>
+        <MainLayout userRole={userRole}>
+            <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+                <Button variant="ghost" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    {text.backToWorkOrder}
+                    {text.back || "Indietro"}
                 </Button>
-
-                {!isOnline ? (
-                    <Card className="rounded-2xl border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-                                <WifiOff className="h-5 w-5" />
-                                {draftUi.offlineTitle}
-                            </CardTitle>
-                            <CardDescription>{draftUi.offlineDescription}</CardDescription>
-                        </CardHeader>
-                    </Card>
-                ) : null}
-
-                <Card className="rounded-2xl border-dashed">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <HardDriveDownload className="h-5 w-5" />
-                            {draftUi.localDraftTitle}
-                        </CardTitle>
-                        <CardDescription>
-                            {draftUi.localDraftDescription}
-                            {lastDraftSavedAt
-                                ? ` • ${new Date(lastDraftSavedAt).toLocaleString(language === "it" ? "it-IT" : "en-GB")}`
-                                : ""}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex justify-end">
-                        <Button variant="outline" onClick={persistDraftNow}>
-                            {draftUi.saveDraft}
-                        </Button>
-                    </CardContent>
-                </Card>
 
                 <Card className="rounded-2xl">
                     <CardHeader>
-                        <CardTitle>{text.title}</CardTitle>
-                        <CardDescription>
-                            {text.descriptionPrefix}{" "}
-                            <span className="font-medium text-foreground">{workOrder.title}</span>
-                        </CardDescription>
+                        <CardTitle>{text.title || "Esegui checklist"}</CardTitle>
+                        <CardDescription>{workOrder?.title || text.subtitle || "Compila la checklist collegata al work order."}</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-6">
+                        {!isOnline && (
+                            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                                <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+                                <div>
+                                    {text.offlineDraftNotice || "Sei offline. Puoi compilare la checklist: la bozza viene salvata localmente, ma l'invio finale richiede connessione."}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
-                            <Label>{text.assignedChecklist}</Label>
+                            <Label>{text.assignmentLabel || "Checklist"}</Label>
                             <Select value={selectedAssignmentId} onValueChange={setSelectedAssignmentId}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder={text.selectChecklist} />
+                                    <SelectValue placeholder={text.selectChecklist || "Seleziona checklist"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {assignments.length === 0 ? <SelectItem value="none">{text.noAssignedChecklist}</SelectItem> : null}
-                                    {assignments.map((assignment) => (
-                                        <SelectItem key={assignment.id} value={assignment.id}>
-                                            {assignment.template?.name ?? "Template"} (v{assignment.template?.version ?? 1})
-                                        </SelectItem>
-                                    ))}
+                                    {assignments.length === 0 ? (
+                                        <SelectItem value="none" disabled>{text.noAssignments || "Nessuna checklist attiva"}</SelectItem>
+                                    ) : (
+                                        assignments.map((assignment) => (
+                                            <SelectItem key={assignment.id} value={assignment.id}>
+                                                {assignment.template.name} · v{assignment.template.version}
+                                            </SelectItem>
+                                        ))
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {selectedAssignment ? (
+                            <div className="space-y-4">
+                                {selectedAssignment.template_items.map((item) => {
+                                    const value = values[item.id] ?? { value: null, notes: null };
+
+                                    return (
+                                        <Card key={item.id} className="rounded-2xl border-border/70">
+                                            <CardContent className="space-y-4 p-5">
+                                                <div>
+                                                    <div className="text-sm font-semibold text-foreground">
+                                                        {item.title}
+                                                        {item.is_required ? <span className="ml-1 text-orange-500">*</span> : null}
+                                                    </div>
+                                                    {item.description ? (
+                                                        <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                                                    ) : null}
+                                                </div>
+
+                                                {item.input_type === "boolean" ? (
+                                                    <Select
+                                                        value={value.bool ?? "na"}
+                                                        onValueChange={(next) => setItemValue(item.id, { bool: next as ItemValue["bool"] })}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder={text.booleanPlaceholder || "Seleziona esito"} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="yes">{text.booleanYes || "Sì"}</SelectItem>
+                                                            <SelectItem value="no">{text.booleanNo || "No"}</SelectItem>
+                                                            <SelectItem value="na">{text.booleanNa || "N/A"}</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                ) : (
+                                                    <Input
+                                                        value={value.value ?? ""}
+                                                        onChange={(e) => setItemValue(item.id, { value: e.target.value })}
+                                                        placeholder={text.valuePlaceholder || "Inserisci valore"}
+                                                    />
+                                                )}
+
+                                                <Textarea
+                                                    value={value.notes ?? ""}
+                                                    onChange={(e) => setItemValue(item.id, { notes: e.target.value })}
+                                                    rows={2}
+                                                    placeholder={text.itemNotesPlaceholder || "Note opzionali"}
+                                                />
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+
+                                <div className="space-y-2">
+                                    <Label>{text.globalNotesLabel || "Note finali"}</Label>
+                                    <Textarea
+                                        value={globalNotes}
+                                        onChange={(e) => setGlobalNotes(e.target.value)}
+                                        rows={4}
+                                        placeholder={text.globalNotesPlaceholder || "Note finali intervento"}
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+                                {text.noAssignments || "Nessuna checklist attiva disponibile per questa macchina."}
+                            </div>
+                        )}
+
+                        <div className="flex justify-end">
+                            <Button onClick={handleSave} disabled={saving || !selectedAssignment}>
+                                <Save className="mr-2 h-4 w-4" />
+                                {saving ? text.saving || "Salvataggio..." : text.save || "Completa checklist"}
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
-
-                {selectedAssignmentId !== "none" ? (
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle>{text.formTitle}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {templateItems.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">{text.emptyTemplate}</div>
-                            ) : null}
-
-                            {templateItems.map((item) => {
-                                const value = values[item.id];
-
-                                return (
-                                    <div key={item.id} className="space-y-3 rounded-xl border p-4">
-                                        <div className="space-y-1">
-                                            <div className="font-medium">
-                                                {item.title} {item.is_required ? <span className="text-destructive">*</span> : null}
-                                            </div>
-                                            {item.description ? <div className="text-sm text-muted-foreground">{item.description}</div> : null}
-                                        </div>
-
-                                        {item.input_type === "boolean" ? (
-                                            <Select value={value?.bool ?? "na"} onValueChange={(next) => setItemValue(item.id, { bool: next as any })}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={text.selectResponse} />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="na">{text.boolNa}</SelectItem>
-                                                    <SelectItem value="yes">{text.boolYes}</SelectItem>
-                                                    <SelectItem value="no">{text.boolNo}</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        ) : item.input_type === "number" ? (
-                                            <Input
-                                                type="number"
-                                                value={value?.value ?? ""}
-                                                onChange={(event) => setItemValue(item.id, { value: event.target.value })}
-                                                placeholder={text.numberPlaceholder}
-                                            />
-                                        ) : item.input_type === "text" ? (
-                                            <Textarea
-                                                value={value?.value ?? ""}
-                                                onChange={(event) => setItemValue(item.id, { value: event.target.value })}
-                                                rows={2}
-                                                placeholder={text.textPlaceholder}
-                                            />
-                                        ) : (
-                                            <Input
-                                                value={value?.value ?? ""}
-                                                onChange={(event) => setItemValue(item.id, { value: event.target.value })}
-                                                placeholder={text.genericPlaceholder}
-                                            />
-                                        )}
-
-                                        <div className="space-y-2">
-                                            <Label className="text-xs">{text.itemNotes}</Label>
-                                            <Textarea
-                                                value={value?.notes ?? ""}
-                                                onChange={(event) => setItemValue(item.id, { notes: event.target.value })}
-                                                rows={2}
-                                                placeholder={text.itemNotesPlaceholder}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                            <div className="space-y-2">
-                                <Label>{text.finalNotes}</Label>
-                                <Textarea
-                                    value={globalNotes}
-                                    onChange={(event) => setGlobalNotes(event.target.value)}
-                                    rows={3}
-                                    placeholder={text.finalNotesPlaceholder}
-                                />
-                            </div>
-
-                            <div className="flex flex-wrap justify-end gap-2">
-                                <Button variant="outline" onClick={persistDraftNow}>
-                                    {draftUi.saveDraft}
-                                </Button>
-                                <Button onClick={handleSave} disabled={saving} className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]">
-                                    <Save className="mr-2 h-4 w-4" />
-                                    {saving ? text.saving : text.save}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ) : null}
             </div>
         </MainLayout>
     );
 }
-
