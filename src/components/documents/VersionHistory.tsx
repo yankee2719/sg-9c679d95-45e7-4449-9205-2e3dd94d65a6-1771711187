@@ -44,7 +44,10 @@ export function VersionHistory({ documentId, currentVersionNumber }: VersionHist
                 const versionHistory = (payload.data ?? payload.versions ?? []) as DocumentVersion[];
                 const withDiffs = versionHistory.map((version, index) => {
                     const previousVersion = versionHistory[index + 1];
-                    return { ...version, sizeDelta: previousVersion ? version.file_size_bytes - previousVersion.file_size_bytes : undefined };
+                    return {
+                        ...version,
+                        sizeDelta: previousVersion ? version.file_size_bytes - previousVersion.file_size_bytes : undefined,
+                    };
                 });
                 setVersions(withDiffs);
             })
@@ -87,22 +90,22 @@ export function VersionHistory({ documentId, currentVersionNumber }: VersionHist
         return date.toLocaleDateString('it-IT', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
-    if (versions.length === 0) return <div className="text-center py-12 text-gray-500">No version history available</div>;
+    if (loading) return <div className="flex items-center justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" /></div>;
+    if (versions.length === 0) return <div className="py-12 text-center text-gray-500">No version history available</div>;
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between"><div><h3 className="text-lg font-semibold">Version History</h3><p className="text-sm text-gray-500">{versions.length} versions available</p></div></div>
             <div className="relative">
-                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700" />
+                <div className="absolute bottom-0 left-6 top-0 w-0.5 bg-gray-200 dark:bg-gray-700" />
                 <div className="space-y-6">
                     {versions.map((version) => {
                         const isCurrent = version.version_number === currentVersionNumber;
                         const sizeDelta = version.sizeDelta !== undefined ? formatSizeDelta(version.sizeDelta) : null;
                         return (
                             <div key={version.id} className="relative pl-14">
-                                <div className={`absolute left-3.5 -translate-x-1/2 w-5 h-5 rounded-full border-2 ${isCurrent ? 'bg-blue-600 border-blue-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'}`} />
-                                <div className="border rounded-lg p-4">
+                                <div className={`absolute left-3.5 h-5 w-5 -translate-x-1/2 rounded-full border-2 ${isCurrent ? 'border-blue-600 bg-blue-600' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800'}`} />
+                                <div className="rounded-lg border p-4">
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="space-y-2">
                                             <div className="flex items-center gap-2"><Badge variant={isCurrent ? 'default' : 'secondary'}>v{version.version_number}</Badge>{isCurrent && <Badge>Current</Badge>}</div>
@@ -114,7 +117,7 @@ export function VersionHistory({ documentId, currentVersionNumber }: VersionHist
                                             </div>
                                             {version.change_description && <div className="text-sm text-muted-foreground">{version.change_description}</div>}
                                         </div>
-                                        <Button variant="outline" size="sm" onClick={() => handleDownloadVersion(version)}><Download className="mr-2 h-4 w-4" />Download</Button>
+                                        <Button variant="outline" size="sm" onClick={() => void handleDownloadVersion(version)}><Download className="mr-2 h-4 w-4" />Download</Button>
                                     </div>
                                 </div>
                             </div>
@@ -125,3 +128,5 @@ export function VersionHistory({ documentId, currentVersionNumber }: VersionHist
         </div>
     );
 }
+
+export default VersionHistory;
