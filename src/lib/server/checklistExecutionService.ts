@@ -2,8 +2,17 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedRequest } from "@/lib/apiAuth";
 
 type ApiUser = AuthenticatedRequest["user"];
-
 type ChecklistStatus = "pending" | "passed" | "failed" | "partial";
+
+export class ChecklistExecutionError extends Error {
+    statusCode: number;
+
+    constructor(message: string, statusCode = 400) {
+        super(message);
+        this.name = "ChecklistExecutionError";
+        this.statusCode = statusCode;
+    }
+}
 
 export interface ChecklistExecutionItemInput {
     template_item_id: string;
@@ -48,6 +57,32 @@ interface ExecutionRow {
     checklist_id?: string | null;
 }
 
+function normalizeString(value: unknown): string | null {
+    if (value === undefined || value === null) return null;
+    const text = String(value).trim();
+    return text ? text : null;
+}
+
+function normalizePhotos(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return Array.from(new Set(value.map((item) => normalizeString(item)).filter(Boolean) as string[]));
+}
+
+function normalizeStatus(value: unknown): ChecklistStatus | null {
+    if (value === undefined || value === null || value === "") return null;
+    if (value === "pending" || value === "passed" || value === "failed" || value === "partial") {
+        return value;
+    }
+    throw new ChecklistExecutionError("Invalid overall_status value.", 400);
+}
+
+function isAnswered(inputType: string, value: string | null) {
+    if (inputType === "boolean") {
+        return value === "true" || value === "false";
+    }
+    return Boolean(value && value.trim());
+}
+
 async function canAccessMachineOrOrg(
     supabase: SupabaseClient,
     user: ApiUser,
@@ -63,16 +98,11 @@ async function canAccessMachineOrOrg(
         .select("id")
         .eq("machine_id", machineId)
         .eq("is_active", true)
-        .or(
-            `manufacturer_org_id.eq.${user.organizationId},customer_org_id.eq.${user.organizationId}`
-        )
+        .or(`manufacturer_org_id.eq.${user.organizationId},customer_org_id.eq.${user.organizationId}`)
         .limit(1)
         .maybeSingle();
 
-    if (error) {
-        throw error;
-    }
-
+    if (error) throw error;
     return !!data;
 }
 
@@ -87,12 +117,7 @@ async function getProfileSummary(supabase: SupabaseClient, userId: string) {
 
     const displayName =
         (data as any)?.display_name ||
-        [
-            (data as any)?.first_name,
-            (data as any)?.last_name,
-        ]
-            .filter(Boolean)
-            .join(" ") ||
+        [(data as any)?.first_name, (data as any)?.last_name].filter(Boolean).join(" ") ||
         (data as any)?.email ||
         null;
 
@@ -103,7 +128,7 @@ async function getProfileSummary(supabase: SupabaseClient, userId: string) {
     };
 }
 
-function inferOverallStatus(items: ChecklistExecutionItemInput[]): ChecklistStatus {
+function inferOverallStatus(items: Array<{ value: string | null }>): ChecklistStatus {
     if (items.length === 0) return "partial";
 
     let hasFalse = false;
@@ -132,21 +157,26 @@ export async function createExecutionFromAssignment(
 ) {
     const { data: assignment, error: assignmentError } = await supabase
         .from("checklist_assignments")
-        .select(
-            `
-      id,
-      organization_id,
-      machine_id,
-      template_id,
-      checklist_templates:template_id (id, name, version)
-    `
-        )
+        .select(`
+            id,
+            organization_id,
+            machine_id,
+            template_id,
+            is_active,
+            checklist_templates:template_id (id, name, version, is_active)
+        `)
         .eq("id", params.assignmentId)
         .maybeSingle();
 
     if (assignmentError) throw assignmentError;
     if (!assignment) {
-        throw new Error("Checklist assignment not found.");
+        throw new ChecklistExecutionError("Checklist assignment not found.", 404);
+    }
+    if ((assignment as any).is_active === false) {
+        throw new ChecklistExecutionError("Checklist assignment is inactive.", 409);
+    }
+    if (!(assignment as any).checklist_templates?.id || (assignment as any).checklist_templates?.is_active === false) {
+        throw new ChecklistExecutionError("Checklist template is inactive or missing.", 409);
     }
 
     const allowed = await canAccessMachineOrOrg(
@@ -156,23 +186,34 @@ export async function createExecutionFromAssignment(
         (assignment as any).machine_id ?? null
     );
     if (!allowed) {
-        throw new Error("You cannot execute this checklist in the active organization context.");
+        throw new ChecklistExecutionError("You cannot execute this checklist in the active organization context.", 403);
     }
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
         .from("checklist_executions")
-        .select("id")
+        .select("id, work_order_id")
         .eq("assignment_id", params.assignmentId)
         .is("completed_at", null)
         .order("executed_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
+    if (existingError) throw existingError;
     if (existing?.id) {
+        if (
+            params.workOrderId &&
+            existing.work_order_id &&
+            existing.work_order_id !== params.workOrderId
+        ) {
+            throw new ChecklistExecutionError(
+                "An open execution already exists for this checklist assignment on another work order.",
+                409
+            );
+        }
         return { id: existing.id };
     }
 
-    let workOrderId: string | null = params.workOrderId ?? null;
+    let workOrderId: string | null = typeof params.workOrderId === "string" ? params.workOrderId : null;
     if (workOrderId) {
         const { data: workOrder, error: workOrderError } = await supabase
             .from("work_orders")
@@ -182,13 +223,16 @@ export async function createExecutionFromAssignment(
 
         if (workOrderError) throw workOrderError;
         if (!workOrder) {
-            throw new Error("Work order not found.");
+            throw new ChecklistExecutionError("Work order not found.", 404);
         }
         if (
             (workOrder as any).organization_id !== (assignment as any).organization_id ||
             ((workOrder as any).machine_id ?? null) !== ((assignment as any).machine_id ?? null)
         ) {
-            throw new Error("Work order and checklist assignment do not belong to the same machine context.");
+            throw new ChecklistExecutionError(
+                "Work order and checklist assignment do not belong to the same machine context.",
+                409
+            );
         }
     }
 
@@ -217,34 +261,26 @@ export async function createExecutionFromAssignment(
 
 export async function listExecutions(supabase: SupabaseClient, user: ApiUser) {
     if (!user.organizationId) {
-        throw new Error("Active organization not found.");
+        throw new ChecklistExecutionError("Active organization not found.", 400);
     }
 
     const { data: linkedAssignments, error: linkedAssignmentsError } = await supabase
         .from("machine_assignments")
         .select("machine_id")
         .eq("is_active", true)
-        .or(
-            `manufacturer_org_id.eq.${user.organizationId},customer_org_id.eq.${user.organizationId}`
-        );
+        .or(`manufacturer_org_id.eq.${user.organizationId},customer_org_id.eq.${user.organizationId}`);
 
     if (linkedAssignmentsError) throw linkedAssignmentsError;
 
     const linkedMachineIds = Array.from(
-        new Set(
-            (linkedAssignments ?? [])
-                .map((row: any) => row.machine_id)
-                .filter(Boolean)
-        )
+        new Set((linkedAssignments ?? []).map((row: any) => row.machine_id).filter(Boolean))
     ) as string[];
 
     let executionRows: ExecutionRow[] = [];
 
     const { data: orgRows, error: orgRowsError } = await supabase
         .from("checklist_executions")
-        .select(
-            "id, assignment_id, organization_id, work_order_id, machine_id, executed_by, executed_at, completed_at, overall_status, notes, template_version, checklist_id"
-        )
+        .select("id, assignment_id, organization_id, work_order_id, machine_id, executed_by, executed_at, completed_at, overall_status, notes, template_version, checklist_id")
         .eq("organization_id", user.organizationId)
         .order("executed_at", { ascending: false });
 
@@ -254,9 +290,7 @@ export async function listExecutions(supabase: SupabaseClient, user: ApiUser) {
     if (linkedMachineIds.length > 0) {
         const { data: linkedRows, error: linkedRowsError } = await supabase
             .from("checklist_executions")
-            .select(
-                "id, assignment_id, organization_id, work_order_id, machine_id, executed_by, executed_at, completed_at, overall_status, notes, template_version, checklist_id"
-            )
+            .select("id, assignment_id, organization_id, work_order_id, machine_id, executed_by, executed_at, completed_at, overall_status, notes, template_version, checklist_id")
             .in("machine_id", linkedMachineIds)
             .order("executed_at", { ascending: false });
 
@@ -277,18 +311,10 @@ export async function listExecutions(supabase: SupabaseClient, user: ApiUser) {
             new Date(a.executed_at ?? a.completed_at ?? 0).getTime()
     );
 
-    const assignmentIds = Array.from(
-        new Set(executionRows.map((row) => row.assignment_id).filter(Boolean))
-    ) as string[];
-    const machineIds = Array.from(
-        new Set(executionRows.map((row) => row.machine_id).filter(Boolean))
-    ) as string[];
-    const workOrderIds = Array.from(
-        new Set(executionRows.map((row) => row.work_order_id).filter(Boolean))
-    ) as string[];
-    const userIds = Array.from(
-        new Set(executionRows.map((row) => row.executed_by).filter(Boolean))
-    ) as string[];
+    const assignmentIds = Array.from(new Set(executionRows.map((row) => row.assignment_id).filter(Boolean))) as string[];
+    const machineIds = Array.from(new Set(executionRows.map((row) => row.machine_id).filter(Boolean))) as string[];
+    const workOrderIds = Array.from(new Set(executionRows.map((row) => row.work_order_id).filter(Boolean))) as string[];
+    const userIds = Array.from(new Set(executionRows.map((row) => row.executed_by).filter(Boolean))) as string[];
 
     const assignmentMap = new Map < string, any> ();
     const templateMap = new Map < string, any> ();
@@ -305,9 +331,7 @@ export async function listExecutions(supabase: SupabaseClient, user: ApiUser) {
         if (assignmentsError) throw assignmentsError;
         for (const row of assignments ?? []) assignmentMap.set((row as any).id, row);
 
-        const templateIds = Array.from(
-            new Set((assignments ?? []).map((row: any) => row.template_id).filter(Boolean))
-        );
+        const templateIds = Array.from(new Set((assignments ?? []).map((row: any) => row.template_id).filter(Boolean)));
         if (templateIds.length > 0) {
             const { data: templates, error: templatesError } = await supabase
                 .from("checklist_templates")
@@ -326,9 +350,7 @@ export async function listExecutions(supabase: SupabaseClient, user: ApiUser) {
         if (machinesError) throw machinesError;
         for (const row of machines ?? []) machineMap.set((row as any).id, row);
 
-        const plantIds = Array.from(
-            new Set((machines ?? []).map((row: any) => row.plant_id).filter(Boolean))
-        ) as string[];
+        const plantIds = Array.from(new Set((machines ?? []).map((row: any) => row.plant_id).filter(Boolean))) as string[];
         if (plantIds.length > 0) {
             const { data: plants, error: plantsError } = await supabase
                 .from("plants")
@@ -403,14 +425,12 @@ export async function getExecutionDetail(
 ) {
     const { data: execution, error: executionError } = await supabase
         .from("checklist_executions")
-        .select(
-            "id, assignment_id, organization_id, work_order_id, machine_id, executed_by, executed_at, completed_at, overall_status, notes, template_version, checklist_id"
-        )
+        .select("id, assignment_id, organization_id, work_order_id, machine_id, executed_by, executed_at, completed_at, overall_status, notes, template_version, checklist_id")
         .eq("id", executionId)
         .maybeSingle();
 
     if (executionError) throw executionError;
-    if (!execution) throw new Error("Checklist execution not found.");
+    if (!execution) throw new ChecklistExecutionError("Checklist execution not found.", 404);
 
     const canAccess = await canAccessMachineOrOrg(
         supabase,
@@ -419,7 +439,7 @@ export async function getExecutionDetail(
         (execution as any).machine_id ?? null
     );
     if (!canAccess) {
-        throw new Error("Checklist execution not accessible in the active organization context.");
+        throw new ChecklistExecutionError("Checklist execution not accessible in the active organization context.", 403);
     }
 
     const executionRow = execution as ExecutionRow;
@@ -432,15 +452,14 @@ export async function getExecutionDetail(
     if (executionRow.assignment_id) {
         const { data: assignmentRow, error: assignmentError } = await supabase
             .from("checklist_assignments")
-            .select(
-                `
-        id,
-        template_id,
-        machine_id,
-        production_line_id,
-        checklist_templates:template_id (id, name, description, version, target_type)
-      `
-            )
+            .select(`
+                id,
+                template_id,
+                machine_id,
+                production_line_id,
+                is_active,
+                checklist_templates:template_id (id, name, description, version, target_type)
+            `)
             .eq("id", executionRow.assignment_id)
             .maybeSingle();
 
@@ -588,13 +607,57 @@ export async function completeExecution(
         detail.execution.executed_by !== user.id &&
         (detail.workOrder as any)?.assigned_to !== user.id
     ) {
-        throw new Error("Technicians can only complete their own or assigned checklist executions.");
+        throw new ChecklistExecutionError(
+            "Technicians can only complete their own or assigned checklist executions.",
+            403
+        );
     }
 
-    const previousItems = detail.items
-        .map((item: any) => item.answer?.id)
-        .filter(Boolean) as string[];
+    if (detail.execution.completed_at) {
+        throw new ChecklistExecutionError(
+            "Completed checklist executions are immutable and cannot be overwritten.",
+            409
+        );
+    }
 
+    const templateItemMap = new Map(
+        detail.items.map((item: any) => [item.id, item])
+    );
+
+    const seenTemplateItemIds = new Set < string > ();
+    const cleanedItems = (Array.isArray(params.items) ? params.items : []).map((item) => {
+        const templateItemId = normalizeString(item?.template_item_id);
+        if (!templateItemId) {
+            throw new ChecklistExecutionError("Each checklist item must include template_item_id.", 400);
+        }
+        if (!templateItemMap.has(templateItemId)) {
+            throw new ChecklistExecutionError("Checklist contains an item that does not belong to this template.", 400);
+        }
+        if (seenTemplateItemIds.has(templateItemId)) {
+            throw new ChecklistExecutionError("Checklist contains duplicate answers for the same item.", 400);
+        }
+        seenTemplateItemIds.add(templateItemId);
+
+        return {
+            template_item_id: templateItemId,
+            value: normalizeString(item?.value),
+            notes: normalizeString(item?.notes),
+            photos: normalizePhotos(item?.photos),
+        };
+    });
+
+    for (const templateItem of detail.items as any[]) {
+        const answer = cleanedItems.find((row) => row.template_item_id === templateItem.id);
+        if (!templateItem.is_required) continue;
+        if (!answer || !isAnswered(templateItem.input_type ?? "boolean", answer.value)) {
+            throw new ChecklistExecutionError(
+                `Required checklist item is missing: ${templateItem.title}`,
+                400
+            );
+        }
+    }
+
+    const previousItems = detail.items.map((item: any) => item.answer?.id).filter(Boolean) as string[];
     if (previousItems.length > 0) {
         const { error: photoDeleteError } = await supabase
             .from("checklist_execution_photos")
@@ -608,19 +671,6 @@ export async function completeExecution(
             .eq("execution_id", executionId);
         if (itemDeleteError) throw itemDeleteError;
     }
-
-    const cleanedItems = params.items.map((item) => ({
-        template_item_id: item.template_item_id,
-        value:
-            item.value === undefined || item.value === null || `${item.value}`.trim() === ""
-                ? null
-                : `${item.value}`,
-        notes:
-            item.notes === undefined || item.notes === null || `${item.notes}`.trim() === ""
-                ? null
-                : `${item.notes}`,
-        photos: (item.photos ?? []).filter(Boolean),
-    }));
 
     let insertedRows: Array<{ id: string; template_item_id: string }> = [];
     if (cleanedItems.length > 0) {
@@ -655,20 +705,20 @@ export async function completeExecution(
         if (photosInsertError) throw photosInsertError;
     }
 
-    const overallStatus = params.overall_status ?? inferOverallStatus(cleanedItems);
+    const explicitStatus = normalizeStatus(params.overall_status);
+    const overallStatus = explicitStatus ?? inferOverallStatus(cleanedItems);
     const { error: updateError } = await supabase
         .from("checklist_executions")
         .update({
             overall_status: overallStatus,
             completed_at: new Date().toISOString(),
-            notes:
-                params.notes === undefined || params.notes === null || `${params.notes}`.trim() === ""
-                    ? null
-                    : `${params.notes}`,
+            notes: normalizeString(params.notes),
         } as any)
-        .eq("id", executionId);
+        .eq("id", executionId)
+        .is("completed_at", null);
 
     if (updateError) throw updateError;
 
     return getExecutionDetail(supabase, user, executionId);
 }
+
