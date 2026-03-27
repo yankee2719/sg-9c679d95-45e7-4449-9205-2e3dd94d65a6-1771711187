@@ -1,52 +1,26 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 
-async function resolveMachineAccess(req: AuthenticatedRequest, machineId: string) {
-    const supabase = getServiceSupabase();
-    const organizationId = req.user.organizationId;
-    const organizationType = req.user.organizationType;
+async function hasMachineAccess(
+    supabase: ReturnType<typeof getServiceSupabase>,
+    user: AuthenticatedRequest["user"],
+    machineId: string,
+    machineOrgId: string | null
+) {
+    if (!user.organizationId) return false;
+    if (machineOrgId && machineOrgId === user.organizationId) return true;
 
-    if (!organizationId || !organizationType) {
-        return { error: "No active organization context", status: 400 as const, supabase };
-    }
-
-    const { data: machine, error: machineError } = await supabase
-        .from("machines")
-        .select("*")
-        .eq("id", machineId)
-        .eq("is_archived", false)
-        .or("is_deleted.is.null,is_deleted.eq.false")
+    const { data, error } = await supabase
+        .from("machine_assignments")
+        .select("id")
+        .eq("machine_id", machineId)
+        .eq("is_active", true)
+        .or(`manufacturer_org_id.eq.${user.organizationId},customer_org_id.eq.${user.organizationId}`)
+        .limit(1)
         .maybeSingle();
 
-    if (machineError) throw machineError;
-    if (!machine) {
-        return { error: "Machine not found", status: 404 as const, supabase };
-    }
-
-    let allowed = false;
-    if (req.user.isPlatformAdmin) {
-        allowed = true;
-    } else if (organizationType === "manufacturer") {
-        allowed = machine.organization_id === organizationId;
-    } else if (machine.organization_id === organizationId) {
-        allowed = true;
-    } else {
-        const { data: assignment, error: assignmentError } = await supabase
-            .from("machine_assignments")
-            .select("id")
-            .eq("machine_id", machineId)
-            .eq("customer_org_id", organizationId)
-            .eq("is_active", true)
-            .maybeSingle();
-        if (assignmentError) throw assignmentError;
-        allowed = !!assignment;
-    }
-
-    if (!allowed) {
-        return { error: "Access denied", status: 403 as const, supabase };
-    }
-
-    return { machine, organizationId, organizationType, supabase };
+    if (error) throw error;
+    return !!data;
 }
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -56,18 +30,26 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const machineId = typeof req.query.id === "string" ? req.query.id : "";
     if (!machineId) {
-        return res.status(400).json({ error: "Missing machine id" });
+        return res.status(400).json({ error: "Machine ID is required" });
     }
 
     try {
-        const access = await resolveMachineAccess(req, machineId);
-        if ("error" in access) {
-            return res.status(access.status).json({ error: access.error });
+        const supabase = getServiceSupabase();
+        const { data: machine, error: machineError } = await supabase
+            .from("machines")
+            .select("id, name, internal_code, serial_number, model, brand, notes, lifecycle_state, organization_id, plant_id, production_line_id, photo_url, created_at")
+            .eq("id", machineId)
+            .maybeSingle();
+
+        if (machineError) throw machineError;
+        if (!machine) return res.status(404).json({ error: "Machine not found" });
+
+        const allowed = await hasMachineAccess(supabase, req.user, machineId, (machine as any).organization_id ?? null);
+        if (!allowed) {
+            return res.status(403).json({ error: "Machine not accessible in the active organization context." });
         }
 
-        const { machine, supabase, organizationType } = access;
-
-        const [plantRes, lineRes, ownerOrgRes, assignmentRes, workOrdersRes, documentsRes] = await Promise.all([
+        const [plantRes, lineRes, ownerRes, assignmentRes, workOrdersRes, documentsRes] = await Promise.all([
             machine.plant_id
                 ? supabase.from("plants").select("id, name, code").eq("id", machine.plant_id).maybeSingle()
                 : Promise.resolve({ data: null, error: null } as any),
@@ -80,29 +62,31 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             supabase
                 .from("machine_assignments")
                 .select("id, customer_org_id, organizations:customer_org_id(id, name)")
-                .eq("machine_id", machine.id)
+                .eq("machine_id", machineId)
                 .eq("is_active", true)
+                .limit(1)
                 .maybeSingle(),
             supabase
                 .from("work_orders")
                 .select("id, title, status, priority, due_date, created_at")
-                .eq("machine_id", machine.id)
+                .eq("machine_id", machineId)
                 .order("created_at", { ascending: false })
-                .limit(10),
+                .limit(6),
             supabase
                 .from("documents")
                 .select("id, title, category, updated_at, file_size")
-                .eq("machine_id", machine.id)
+                .eq("machine_id", machineId)
                 .eq("is_archived", false)
                 .order("updated_at", { ascending: false })
-                .limit(20),
+                .limit(6),
         ]);
 
-        for (const candidate of [plantRes, lineRes, ownerOrgRes, assignmentRes, workOrdersRes, documentsRes]) {
-            if (candidate?.error) {
-                throw candidate.error;
-            }
+        for (const entry of [plantRes, lineRes, ownerRes, assignmentRes, workOrdersRes, documentsRes]) {
+            if (entry?.error) throw entry.error;
         }
+
+        const canManage = ["owner", "admin", "supervisor"].includes(req.user.role);
+        const canEdit = canManage && machine.organization_id === req.user.organizationId;
 
         return res.status(200).json({
             success: true,
@@ -110,23 +94,25 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 machine,
                 plant: plantRes.data ?? null,
                 line: lineRes.data ?? null,
-                ownerOrganization: ownerOrgRes.data ?? null,
+                ownerOrganization: ownerRes.data ?? null,
                 assignedCustomerName: (assignmentRes.data as any)?.organizations?.name ?? null,
                 workOrders: workOrdersRes.data ?? [],
                 documents: documentsRes.data ?? [],
                 machineContext: {
-                    canEdit: req.user.isPlatformAdmin || (["owner", "admin", "supervisor"].includes(req.user.role) && machine.organization_id === req.user.organizationId),
-                    canDelete: req.user.isPlatformAdmin || (["owner", "admin", "supervisor"].includes(req.user.role) && machine.organization_id === req.user.organizationId),
+                    canEdit,
+                    canDelete: canEdit,
                     userRole: req.user.role,
-                    orgType: organizationType,
+                    orgType: req.user.organizationType,
                 },
                 generatedAt: new Date().toISOString(),
             },
         });
     } catch (error: any) {
         console.error("Equipment snapshot API error:", error);
-        return res.status(500).json({ error: error?.message || "Internal server error" });
+        return res.status(500).json({ error: error?.message || "Failed to load equipment snapshot" });
     }
 }
 
-export default withAuth(["owner", "admin", "supervisor", "technician", "viewer"], handler, { allowPlatformAdmin: true });
+export default withAuth(["owner", "admin", "supervisor", "technician", "viewer"], handler, {
+    allowPlatformAdmin: true,
+});
