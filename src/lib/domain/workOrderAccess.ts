@@ -1,6 +1,4 @@
-// src/lib/domain/workOrderAccess.ts
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
+import { apiFetch } from "@/services/apiClient";
 
 export interface WorkOrderAccess {
     canView: boolean;
@@ -12,21 +10,8 @@ export interface WorkOrderAccess {
     reason?: string | null;
 }
 
-async function getMachineOwnerOrg(machineId: string) {
-    const { data, error } = await supabase
-        .from("machines")
-        .select("organization_id")
-        .eq("id", machineId)
-        .maybeSingle();
-
-    if (error) throw error;
-    return (data as any)?.organization_id ?? null;
-}
-
 export async function getWorkOrderAccess(machineId: string): Promise<WorkOrderAccess> {
-    const ctx = await getUserContext();
-
-    if (!ctx?.orgId || !ctx.orgType) {
+    if (!machineId) {
         return {
             canView: false,
             canCreate: false,
@@ -34,17 +19,19 @@ export async function getWorkOrderAccess(machineId: string): Promise<WorkOrderAc
             canAssign: false,
             canExecute: false,
             canClose: false,
-            reason: "Contesto utente non valido.",
+            reason: "Macchina non valida.",
         };
     }
 
-    const ownerOrgId = await getMachineOwnerOrg(machineId);
-    const isOwnerOrg = ownerOrgId === ctx.orgId;
-    const isAdmin = ctx.role === "admin";
-    const isSupervisor = ctx.role === "supervisor";
-    const isTechnician = ctx.role === "technician";
+    try {
+        const response = await apiFetch < { access?: WorkOrderAccess } > (
+            `/api/machines/${machineId}/work-order-access`
+        );
 
-    if (ctx.orgType !== "customer") {
+        if (response?.access) {
+            return response.access;
+        }
+
         return {
             canView: false,
             canCreate: false,
@@ -52,11 +39,9 @@ export async function getWorkOrderAccess(machineId: string): Promise<WorkOrderAc
             canAssign: false,
             canExecute: false,
             canClose: false,
-            reason: "I work order operativi sono gestiti solo dall'organizzazione proprietaria cliente.",
+            reason: "Accesso non disponibile.",
         };
-    }
-
-    if (!isOwnerOrg) {
+    } catch (error) {
         return {
             canView: false,
             canCreate: false,
@@ -64,17 +49,8 @@ export async function getWorkOrderAccess(machineId: string): Promise<WorkOrderAc
             canAssign: false,
             canExecute: false,
             canClose: false,
-            reason: "Puoi operare solo sulle macchine possedute dalla tua organizzazione.",
+            reason:
+                error instanceof Error ? error.message : "Impossibile verificare i permessi work order.",
         };
     }
-
-    return {
-        canView: true,
-        canCreate: isAdmin || isSupervisor,
-        canEdit: isAdmin || isSupervisor,
-        canAssign: isAdmin || isSupervisor,
-        canExecute: isAdmin || isSupervisor || isTechnician,
-        canClose: isAdmin || isSupervisor,
-        reason: null,
-    };
 }
