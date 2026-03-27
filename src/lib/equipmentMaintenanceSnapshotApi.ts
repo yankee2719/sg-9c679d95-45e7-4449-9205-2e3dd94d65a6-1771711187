@@ -1,4 +1,4 @@
-import { authService } from "@/services/authService";
+import { apiFetch } from "@/services/apiClient";
 
 export interface MaintenanceSnapshotMachine {
     id: string;
@@ -34,28 +34,11 @@ export interface MaintenanceSnapshotData {
 
 const STORAGE_PREFIX = "machina:maintenance-snapshot:";
 
-async function authHeaders() {
-    const session = await authService.getCurrentSession();
-    if (!session?.access_token) {
-        throw new Error("Authentication required.");
-    }
-    return {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-    };
-}
-
 export async function fetchEquipmentMaintenanceSnapshot(machineId: string): Promise<MaintenanceSnapshotData> {
-    const response = await fetch(`/api/equipment/${machineId}/maintenance-snapshot`, {
-        method: "GET",
-        headers: await authHeaders(),
-    });
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : {};
-    if (!response.ok) {
-        throw new Error(payload?.error || `API error ${response.status}`);
-    }
-    return (payload?.data ?? payload) as MaintenanceSnapshotData;
+    const response = await apiFetch < { success: true; data: MaintenanceSnapshotData } > (
+        `/api/equipment/${machineId}/maintenance-snapshot`
+    );
+    return response.data;
 }
 
 export function saveEquipmentMaintenanceSnapshot(machineId: string, data: MaintenanceSnapshotData) {
@@ -81,4 +64,3 @@ export function loadEquipmentMaintenanceSnapshot(machineId: string): { data: Mai
         return null;
     }
 }
-
