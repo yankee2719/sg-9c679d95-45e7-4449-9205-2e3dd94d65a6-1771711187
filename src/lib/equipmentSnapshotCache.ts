@@ -20,21 +20,8 @@ export interface EquipmentSnapshot {
     line: { id: string; name: string | null; code?: string | null } | null;
     ownerOrganization: { id: string; name: string | null } | null;
     assignedCustomerName: string | null;
-    workOrders: Array<{
-        id: string;
-        title: string;
-        status: string;
-        priority: string;
-        due_date: string | null;
-        created_at: string | null;
-    }>;
-    documents: Array<{
-        id: string;
-        title: string | null;
-        category: string | null;
-        updated_at: string | null;
-        file_size: number | null;
-    }>;
+    workOrders: Array<{ id: string; title: string; status: string; priority: string; due_date: string | null; created_at: string | null }>;
+    documents: Array<{ id: string; title: string | null; category: string | null; updated_at: string | null; file_size: number | null }>;
     machineContext: {
         canEdit: boolean;
         canDelete: boolean;
@@ -63,38 +50,4 @@ export function getEquipmentSnapshot(machineId: string): EquipmentSnapshot | nul
     } catch {
         return null;
     }
-}
-
-export function listEquipmentSnapshots(): EquipmentSnapshot[] {
-    if (typeof window === "undefined") return [];
-    const snapshots: EquipmentSnapshot[] = [];
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-        const key = window.localStorage.key(index);
-        if (!key || !key.startsWith(PREFIX)) continue;
-        try {
-            const raw = window.localStorage.getItem(key);
-            if (!raw) continue;
-            const parsed = JSON.parse(raw);
-            if (parsed?.machine?.id) {
-                snapshots.push(parsed);
-            }
-        } catch {
-            // ignore broken entries
-        }
-    }
-
-    return snapshots.sort((a, b) => {
-        const da = new Date(a.generatedAt || 0).getTime();
-        const db = new Date(b.generatedAt || 0).getTime();
-        return db - da;
-    });
-}
-
-export function getEquipmentSnapshotCount(): number {
-    return listEquipmentSnapshots().length;
-}
-
-export function removeEquipmentSnapshot(machineId: string) {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(storageKey(machineId));
 }
