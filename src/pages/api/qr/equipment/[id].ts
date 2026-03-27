@@ -1,14 +1,8 @@
-// ============================================================================
-// API: GET /api/qr/equipment/[id]  - List tokens per equipment
-// API: DELETE /api/qr/equipment/[id] - Revoke token
-// ============================================================================
 import type { NextApiResponse } from "next";
-import {
-    withAuth,
-    ALL_APP_ROLES,
-    type AuthenticatedRequest,
-} from "@/lib/apiAuth";
+import { withAuth, type AuthenticatedRequest, type AppRole } from "@/lib/apiAuth";
 import { getQrTokenService } from "@/services/offlineAndQrService";
+
+const ALLOWED_ROLES: AppRole[] = ["owner", "admin", "supervisor"];
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { id } = req.query;
@@ -19,7 +13,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const qrService = getQrTokenService();
 
     try {
-        // GET: List all tokens for this equipment
         if (req.method === "GET") {
             const tokens = await qrService.getEquipmentTokens(id);
             const history = await qrService.getScanHistory(id, 20);
@@ -28,22 +21,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 success: true,
                 tokens,
                 recent_scans: history,
-                active_count: tokens.filter((t: any) => t.is_active).length,
-                total_scans: tokens.reduce(
-                    (sum: number, t: any) => sum + t.scan_count,
-                    0
-                ),
+                active_count: tokens.filter((token: any) => token.is_active).length,
+                total_scans: tokens.reduce((sum: number, token: any) => sum + Number(token.scan_count || 0), 0),
             });
         }
 
-        // DELETE: Revoke a specific token
-        else if (req.method === "DELETE") {
-            const { token_id, reason } = req.body;
-
-            if (!token_id) {
-                return res
-                    .status(400)
-                    .json({ error: "token_id is required in body" });
+        if (req.method === "DELETE") {
+            const { token_id, reason } = req.body || {};
+            if (!token_id || typeof token_id !== "string") {
+                return res.status(400).json({ error: "token_id is required in body" });
             }
 
             await qrService.revokeToken(token_id, req.user.userId, reason);
@@ -54,17 +40,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             });
         }
 
-        else {
-            return res.status(405).json({
-                error: "Method not allowed",
-                allowedMethods: ["GET", "DELETE"],
-            });
-        }
+        return res.status(405).json({
+            error: "Method not allowed",
+            allowedMethods: ["GET", "DELETE"],
+        });
     } catch (error) {
         console.error("QR Equipment API Error:", error);
         return res.status(500).json({ error: "Operation failed" });
     }
 }
 
-export default withAuth(ALL_APP_ROLES, handler);
-
+export default withAuth(ALLOWED_ROLES, handler);
