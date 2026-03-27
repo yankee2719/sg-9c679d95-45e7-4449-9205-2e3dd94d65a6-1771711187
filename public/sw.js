@@ -1,20 +1,8 @@
-// =============================================================================
-// MACHINA — Service Worker
-// Offline cache sicura: niente replay cieco delle mutazioni.
-// =============================================================================
-
 const CACHE_VERSION = "v3";
 const STATIC_CACHE = `machina-static-${CACHE_VERSION}`;
-const API_CACHE = `machina-api-${CACHE_VERSION}`;
-const STORAGE_CACHE = `machina-storage-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `machina-runtime-${CACHE_VERSION}`;
 
-const PRECACHE_URLS = [
-    "/dashboard",
-    "/equipment",
-    "/maintenance",
-    "/work-orders",
-    "/offline",
-];
+const PRECACHE_URLS = ["/offline", "/dashboard", "/equipment", "/maintenance", "/work-orders"];
 
 self.addEventListener("install", (event) => {
     event.waitUntil(
@@ -28,7 +16,7 @@ self.addEventListener("activate", (event) => {
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((key) => ![STATIC_CACHE, API_CACHE, STORAGE_CACHE].includes(key))
+                    .filter((key) => ![STATIC_CACHE, RUNTIME_CACHE].includes(key))
                     .map((key) => caches.delete(key))
             )
         )
@@ -41,45 +29,40 @@ self.addEventListener("fetch", (event) => {
     const url = new URL(request.url);
     if (!url.protocol.startsWith("http")) return;
 
+    // Never replay raw mutations from the service worker.
     if (request.method !== "GET") {
         return;
     }
 
-    if (url.pathname.startsWith("/__offline/documents/")) {
-        event.respondWith(cacheFirst(request, STORAGE_CACHE));
+    if (request.mode === "navigate") {
+        event.respondWith(networkFirst(request, STATIC_CACHE, true));
         return;
     }
 
-    if (url.hostname.includes("supabase.co") && url.pathname.includes("/storage/")) {
-        event.respondWith(cacheFirst(request, STORAGE_CACHE));
-        return;
-    }
-
-    if (url.pathname.startsWith("/_next/static/")) {
+    if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
         event.respondWith(cacheFirst(request, STATIC_CACHE));
         return;
     }
 
-    if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) {
-        event.respondWith(networkFirst(request, API_CACHE));
+    if (url.hostname.includes("supabase.co") && url.pathname.includes("/storage/")) {
+        event.respondWith(cacheFirst(request, RUNTIME_CACHE));
         return;
     }
 
     if (url.origin === self.location.origin) {
-        event.respondWith(networkFirst(request, STATIC_CACHE));
+        event.respondWith(networkFirst(request, RUNTIME_CACHE, false));
         return;
     }
-
-    event.respondWith(networkFirst(request, STATIC_CACHE));
 });
 
 async function cacheFirst(request, cacheName) {
-    const cache = await caches.open(cacheName);
-    const cached = await cache.match(request);
+    const cached = await caches.match(request);
     if (cached) return cached;
+
     try {
         const response = await fetch(request);
         if (response.ok) {
+            const cache = await caches.open(cacheName);
             cache.put(request, response.clone());
         }
         return response;
@@ -88,23 +71,21 @@ async function cacheFirst(request, cacheName) {
     }
 }
 
-async function networkFirst(request, cacheName) {
-    const cache = await caches.open(cacheName);
+async function networkFirst(request, cacheName, allowOfflinePage) {
     try {
         const response = await fetch(request);
         if (response.ok) {
+            const cache = await caches.open(cacheName);
             cache.put(request, response.clone());
         }
         return response;
     } catch {
-        const cached = await cache.match(request);
+        const cached = await caches.match(request);
         if (cached) return cached;
-
-        if (request.mode === "navigate") {
-            const offlinePage = await caches.match("/offline");
-            if (offlinePage) return offlinePage;
+        if (allowOfflinePage) {
+            const offline = await caches.match("/offline");
+            if (offline) return offline;
         }
-
         return new Response(JSON.stringify({ error: "offline", message: "Sei offline." }), {
             status: 503,
             headers: { "Content-Type": "application/json" },
