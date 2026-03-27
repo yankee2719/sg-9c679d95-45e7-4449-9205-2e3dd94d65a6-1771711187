@@ -1,72 +1,41 @@
-import { authService } from "@/services/authService";
+import { apiFetch } from "@/services/apiClient";
 
-export interface WorkOrderChecklistTemplateItem {
+export interface WorkOrderChecklistContextItem {
     id: string;
     title: string;
     description: string | null;
     input_type: string;
     is_required: boolean;
     order_index: number;
-    metadata: Record<string, any>;
+    metadata: any;
 }
 
-export interface WorkOrderChecklistAssignmentContext {
+export interface WorkOrderChecklistAssignment {
     id: string;
     template_id: string;
     machine_id: string | null;
     production_line_id: string | null;
-    is_active: boolean | null;
+    organization_id: string;
+    is_active: boolean;
     template: {
         id: string;
         name: string;
         version: number;
         is_active: boolean;
-    } | null;
-    items: WorkOrderChecklistTemplateItem[];
+    };
+    template_items: WorkOrderChecklistContextItem[];
 }
 
 export interface WorkOrderChecklistContext {
     workOrder: {
         id: string;
+        title: string;
         organization_id: string;
         machine_id: string | null;
-        title: string;
-        status: string | null;
-        plant_id: string | null;
     };
-    assignments: WorkOrderChecklistAssignmentContext[];
+    assignments: WorkOrderChecklistAssignment[];
 }
 
-async function authHeaders() {
-    const session = await authService.getCurrentSession();
-    if (!session?.access_token) {
-        throw new Error("Authentication required.");
-    }
-
-    return {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-    };
+export async function getWorkOrderChecklistContext(workOrderId: string): Promise<WorkOrderChecklistContext> {
+    return apiFetch < WorkOrderChecklistContext > (`/api/work-orders/${workOrderId}/checklist-context`);
 }
-
-async function parseResponse<T>(response: Response): Promise<T> {
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : {};
-
-    if (!response.ok) {
-        throw new Error(payload?.error || payload?.message || `API error ${response.status}`);
-    }
-
-    return (payload?.data ?? payload) as T;
-}
-
-export const workOrderChecklistApi = {
-    async getContext(workOrderId: string): Promise<WorkOrderChecklistContext> {
-        const response = await fetch(`/api/work-orders/${workOrderId}/checklist-context`, {
-            method: "GET",
-            headers: await authHeaders(),
-        });
-        return parseResponse < WorkOrderChecklistContext > (response);
-    },
-};
-
