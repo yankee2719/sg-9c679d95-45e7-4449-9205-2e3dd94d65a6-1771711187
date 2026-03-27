@@ -1,4 +1,4 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedRequest } from "@/lib/apiAuth";
 
 type ApiUser = AuthenticatedRequest["user"];
@@ -45,18 +45,22 @@ export interface ChecklistAssignmentListResponse {
     assignments: ChecklistAssignmentListItem[];
 }
 
+function requireOrganization(user: ApiUser) {
+    if (!user.organizationId) {
+        throw new ChecklistAssignmentError("No active organization context", 400);
+    }
+    return user.organizationId;
+}
+
 function canManageAssignments(user: ApiUser) {
-    return ["owner", "admin", "supervisor"].includes(user.role);
+    return ["owner", "admin", "supervisor"].includes(user.role) || user.isPlatformAdmin;
 }
 
 export async function listChecklistAssignments(
     supabase: SupabaseClient,
     user: ApiUser
 ): Promise<ChecklistAssignmentListResponse> {
-    const organizationId = user.organizationId;
-    if (!organizationId) {
-        throw new ChecklistAssignmentError("Active organization not found.", 400);
-    }
+    const organizationId = requireOrganization(user);
 
     const [templatesRes, machinesRes, assignmentsRes] = await Promise.all([
         supabase
@@ -106,12 +110,9 @@ export async function createChecklistAssignment(
     user: ApiUser,
     params: { templateId: string; machineId: string }
 ): Promise<ChecklistAssignmentListItem> {
-    const organizationId = user.organizationId;
-    if (!organizationId) {
-        throw new ChecklistAssignmentError("Active organization not found.", 400);
-    }
-    if (!canManageAssignments(user) && !user.isPlatformAdmin) {
-        throw new ChecklistAssignmentError("You are not allowed to manage checklist assignments.", 403);
+    const organizationId = requireOrganization(user);
+    if (!canManageAssignments(user)) {
+        throw new ChecklistAssignmentError("Only admins and supervisors can manage checklist assignments.", 403);
     }
     if (!params.templateId || !params.machineId) {
         throw new ChecklistAssignmentError("template_id and machine_id are required.", 400);
@@ -196,12 +197,9 @@ export async function deactivateChecklistAssignment(
     user: ApiUser,
     assignmentId: string
 ): Promise<{ success: true }> {
-    const organizationId = user.organizationId;
-    if (!organizationId) {
-        throw new ChecklistAssignmentError("Active organization not found.", 400);
-    }
-    if (!canManageAssignments(user) && !user.isPlatformAdmin) {
-        throw new ChecklistAssignmentError("You are not allowed to manage checklist assignments.", 403);
+    const organizationId = requireOrganization(user);
+    if (!canManageAssignments(user)) {
+        throw new ChecklistAssignmentError("Only admins and supervisors can manage checklist assignments.", 403);
     }
     if (!assignmentId) {
         throw new ChecklistAssignmentError("assignment_id is required.", 400);
@@ -209,7 +207,7 @@ export async function deactivateChecklistAssignment(
 
     const { data: assignment, error: fetchError } = await supabase
         .from("checklist_assignments")
-        .select("id, is_active, organization_id")
+        .select("id, is_active")
         .eq("id", assignmentId)
         .eq("organization_id", organizationId)
         .maybeSingle();
@@ -218,9 +216,7 @@ export async function deactivateChecklistAssignment(
     if (!assignment) {
         throw new ChecklistAssignmentError("Checklist assignment not found.", 404);
     }
-    if (assignment.is_active === false) {
-        return { success: true };
-    }
+    if (!assignment.is_active) return { success: true };
 
     const { error: updateError } = await supabase
         .from("checklist_assignments")
@@ -231,4 +227,3 @@ export async function deactivateChecklistAssignment(
     if (updateError) throw updateError;
     return { success: true };
 }
-
