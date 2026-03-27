@@ -1,103 +1,99 @@
-import { NextApiResponse } from "next";
-import { withAuth, AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import type { NextApiResponse } from "next";
+import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import {
+    createOrganizationUser,
+    isValidOrganizationUserRole,
+    UserProvisioningError,
+    type OrganizationUserRole,
+} from "@/lib/server/userProvisioning";
 
 /**
- * Admin-only endpoint to create users with profiles.
- * Protected by withAuth — requires a valid JWT with role "admin".
- * Automatically assigns the new user to the admin's tenant.
+ * Legacy compatibility endpoint.
+ *
+ * Old clients still call /api/admin/create-user with { fullName, role, phone }.
+ * The platform is now organization-based, so this route provisions the user
+ * inside the caller's active organization and mirrors the legacy response shape.
  */
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
     }
 
-    try {
-        const { email, password, fullName, role, phone } = req.body;
+    const { email, password, fullName, full_name, role, organization_id } = req.body ?? {};
 
-        // Validation
-        if (!email || !password) {
-            return res.status(400).json({ error: "Email and password are required" });
-        }
+    const normalizedRole = String(role || "") as OrganizationUserRole;
+    const normalizedFullName =
+        typeof full_name === "string"
+            ? full_name
+            : typeof fullName === "string"
+                ? fullName
+                : null;
 
-        if (!["admin", "supervisor", "technician"].includes(role)) {
-            return res.status(400).json({ error: "Invalid role" });
-        }
+    const targetOrganizationId =
+        typeof organization_id === "string" && organization_id.trim().length > 0
+            ? organization_id.trim()
+            : req.user.organizationId;
 
-        const supabaseAdmin = getServiceSupabase();
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+    }
 
-        // Resolve the admin's tenant_id so the new user is scoped correctly
-        const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
-            .from("profiles")
-            .select("tenant_id")
-            .eq("id", req.user.id)
-            .single();
+    if (!targetOrganizationId) {
+        return res.status(400).json({ error: "No active organization context" });
+    }
 
-        if (adminProfileError || !adminProfile?.tenant_id) {
-            return res.status(400).json({ error: "Admin tenant not found. Cannot create user without a tenant." });
-        }
-
-        // Create user in auth.users
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: {
-                full_name: fullName || "",
-            },
+    if (!isValidOrganizationUserRole(normalizedRole) || normalizedRole === "owner") {
+        return res.status(400).json({
+            error: "Invalid role. Allowed roles: admin, supervisor, technician, viewer",
         });
+    }
 
-        if (authError) {
-            console.error("Auth creation error:", authError);
-            return res.status(400).json({ error: authError.message });
-        }
-
-        if (!authData?.user) {
-            return res.status(500).json({ error: "User creation failed" });
-        }
-
-        // Create profile with tenant_id inherited from the requesting admin
-        const { data: profileData, error: profileError } = await supabaseAdmin
-            .from("profiles")
-            .upsert(
-                {
-                    id: authData.user.id,
-                    email: email,
-                    full_name: fullName || "",
-                    role: role,
-                    phone: phone || null,
-                    is_active: true,
-                    tenant_id: adminProfile.tenant_id,
-                },
-                { onConflict: "id" }
-            )
-            .select()
-            .single();
-
-        if (profileError) {
-            console.error("Profile creation error:", profileError);
-
-            // Rollback: delete auth user if profile creation fails
-            await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-
-            return res.status(500).json({
-                error: "Profile creation failed",
-                details: profileError.message,
-                code: profileError.code,
-            });
-        }
+    try {
+        const serviceSupabase = getServiceSupabase();
+        const created = await createOrganizationUser(serviceSupabase, {
+            actor: req.user,
+            organizationId: targetOrganizationId,
+            email: String(email),
+            password: String(password),
+            fullName: normalizedFullName,
+            role: normalizedRole,
+        });
 
         return res.status(201).json({
             message: "User created successfully",
             user: {
-                id: authData.user.id,
-                email: authData.user.email,
-                profile: profileData,
+                id: created.userId,
+                email: created.email,
+                profile: {
+                    id: created.userId,
+                    email: created.email,
+                    display_name: created.displayName,
+                    default_organization_id: created.organizationId,
+                    role: created.role,
+                },
+                membership: {
+                    id: created.membershipId,
+                    organization_id: created.organizationId,
+                    role: created.role,
+                    is_active: true,
+                },
             },
         });
     } catch (error) {
         console.error("Error in create-user API:", error);
-        return res.status(500).json({ error: "Internal server error" });
+
+        if (error instanceof UserProvisioningError) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
+
+        return res.status(500).json({
+            error: error instanceof Error ? error.message : "Internal server error",
+        });
     }
 }
 
-export default withAuth(["admin"], handler);
+export default withAuth(["owner", "admin"], handler, {
+    requireAal2: true,
+    allowPlatformAdmin: true,
+});
+
