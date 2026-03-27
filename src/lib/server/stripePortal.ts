@@ -61,4 +61,3 @@ export async function createOrganizationBillingPortalSession(
 
     return { url: session.url };
 }
-
