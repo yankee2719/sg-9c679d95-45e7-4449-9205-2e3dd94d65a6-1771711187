@@ -9,18 +9,17 @@ import MachineQuickActions from "@/components/Equipment/MachineQuickActions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building2, FileText, Factory, Loader2, Pencil, Trash2, WifiOff, Wrench } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Pencil, Trash2, WifiOff, Wrench } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/integrations/supabase/client";
 import { apiFetch } from "@/services/apiClient";
 import { getEquipmentSnapshot, saveEquipmentSnapshot, type EquipmentSnapshot } from "@/lib/equipmentSnapshotCache";
 
 export default function EquipmentDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { loading: authLoading, membership, session } = useAuth();
+    const { loading: authLoading, membership } = useAuth();
     const { t } = useLanguage();
     const resolvedId = useMemo(() => (typeof router.query.id === "string" ? router.query.id : null), [router.query.id]);
 
@@ -31,24 +30,12 @@ export default function EquipmentDetailPage() {
 
     const userRole = membership?.role ?? "technician";
 
-    const getAccessToken = async () => {
-        const accessToken = session?.access_token ?? (await supabase.auth.getSession()).data.session?.access_token;
-        if (!accessToken) throw new Error("Session expired");
-        return accessToken;
-    };
-
     const handleDeleteMachine = async () => {
         if (!snapshot?.machine) return;
-        if (!confirm(`${t("equipment.deleteConfirm")} \"${snapshot.machine.name || snapshot.machine.id}\"`)) return;
+        if (!confirm(`${t("equipment.deleteConfirm")} "${snapshot.machine.name || snapshot.machine.id}"`)) return;
         setDeleting(true);
         try {
-            const accessToken = await getAccessToken();
-            const response = await fetch(`/api/machines/${snapshot.machine.id}/delete`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${accessToken}` },
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data?.error || "Delete error");
+            await apiFetch(`/api/machines/${snapshot.machine.id}/delete`, { method: "DELETE" });
             toast({ title: t("equipment.movedToTrash"), description: snapshot.machine.name || snapshot.machine.id });
             void router.push("/equipment");
         } catch (err: any) {
@@ -110,9 +97,7 @@ export default function EquipmentDetailPage() {
         );
     }
 
-    if (!snapshot) {
-        return null;
-    }
+    if (!snapshot) return null;
 
     const machine = snapshot.machine;
     const canEditMachine = snapshot.machineContext.canEdit && !isOfflineSnapshot;
@@ -212,11 +197,11 @@ export default function EquipmentDetailPage() {
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div>
                                                         <div className="font-medium text-foreground">{workOrder.title}</div>
-                                                        <div className="mt-1 text-xs text-muted-foreground">{workOrder.created_at ? new Date(workOrder.created_at).toLocaleString() : "—"}</div>
+                                                        <div className="text-xs text-muted-foreground">{workOrder.created_at || "—"}</div>
                                                     </div>
-                                                    <div className="flex flex-col items-end gap-2">
+                                                    <div className="flex items-center gap-2">
                                                         <Badge variant="outline">{workOrder.status}</Badge>
-                                                        <span className="text-xs text-muted-foreground">{workOrder.due_date ? new Date(workOrder.due_date).toLocaleDateString() : "—"}</span>
+                                                        <Badge variant="secondary">{workOrder.priority}</Badge>
                                                     </div>
                                                 </div>
                                             </Link>
@@ -228,35 +213,24 @@ export default function EquipmentDetailPage() {
                             <Card className="rounded-2xl">
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{t("documents.title")}</CardTitle>
-                                    <CardDescription>Documenti recenti della macchina, con supporto cache offline dal dettaglio.</CardDescription>
+                                    <CardDescription>{t("equipment.docManagement") || "Documentazione recente legata alla macchina."}</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     {snapshot.documents.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">{t("documents.empty") || "Nessun documento disponibile."}</p>
+                                        <p className="text-sm text-muted-foreground">{t("documents.noDocuments") || "Nessun documento presente."}</p>
                                     ) : (
-                                        snapshot.documents.map((doc) => (
-                                            <Link key={doc.id} href={`/documents/${doc.id}`} className="block rounded-xl border border-border p-4 transition-colors hover:bg-muted/50">
+                                        snapshot.documents.map((document) => (
+                                            <Link key={document.id} href={`/documents/${document.id}`} className="block rounded-xl border border-border p-4 transition-colors hover:bg-muted/50">
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div>
-                                                        <div className="font-medium text-foreground">{doc.title || t("documents.title")}</div>
-                                                        <div className="mt-1 text-xs text-muted-foreground">{doc.category || "other"}</div>
+                                                        <div className="font-medium text-foreground">{document.title || t("documents.title")}</div>
+                                                        <div className="text-xs text-muted-foreground">{document.category || "other"}</div>
                                                     </div>
-                                                    <div className="text-xs text-muted-foreground">{doc.updated_at ? new Date(doc.updated_at).toLocaleDateString() : "—"}</div>
+                                                    <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
                                                 </div>
                                             </Link>
                                         ))
                                     )}
-                                    <div className="pt-2">
-                                        <Link href={`/documents?machine_id=${machine.id}`}><Button variant="outline">{t("documents.viewAll") || "Vedi tutti i documenti"}</Button></Link>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="rounded-2xl">
-                                <CardHeader><CardTitle>{t("equipment.machineContext")}</CardTitle></CardHeader>
-                                <CardContent className="grid gap-4 md:grid-cols-2">
-                                    <ContextCard icon={<Factory className="h-5 w-5" />} title={t("equipment.ownerContext")} value={snapshot.ownerOrganization?.name || "—"} tone="orange" />
-                                    <ContextCard icon={<Building2 className="h-5 w-5" />} title={t("equipment.assignmentContext")} value={snapshot.assignedCustomerName || t("equipment.notAssigned")} tone="blue" />
                                 </CardContent>
                             </Card>
                         </div>
@@ -267,26 +241,11 @@ export default function EquipmentDetailPage() {
     );
 }
 
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
     return (
-        <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 p-3">
             <div className="text-sm text-muted-foreground">{label}</div>
-            <div className="max-w-[60%] text-right text-sm font-medium text-foreground">{value || "—"}</div>
-        </div>
-    );
-}
-
-function ContextCard({ icon, title, value, tone }: { icon: React.ReactNode; title: string; value: string; tone: "orange" | "blue" }) {
-    const toneClasses = tone === "orange" ? "bg-orange-500/10 text-orange-500" : "bg-blue-500/10 text-blue-500";
-    return (
-        <div className="rounded-2xl border border-border p-4">
-            <div className="flex items-start gap-3">
-                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClasses}`}>{icon}</div>
-                <div>
-                    <div className="text-sm text-muted-foreground">{title}</div>
-                    <div className="mt-1 font-semibold text-foreground">{value}</div>
-                </div>
-            </div>
+            <div className="text-sm font-medium text-foreground text-right">{value || "—"}</div>
         </div>
     );
 }
