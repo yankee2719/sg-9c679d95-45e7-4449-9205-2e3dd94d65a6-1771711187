@@ -1,6 +1,10 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-import { completeExecution, getExecutionDetail } from "@/lib/server/checklistExecutionService";
+import {
+    ChecklistExecutionError,
+    completeExecution,
+    getExecutionDetail,
+} from "@/lib/server/checklistExecutionService";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const executionId = typeof req.query.id === "string" ? req.query.id : null;
@@ -33,6 +37,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(405).json({ error: "Method not allowed" });
     } catch (error: any) {
         console.error("Checklist execution detail API error:", error);
+        if (error instanceof ChecklistExecutionError) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
         return res.status(500).json({
             error: error?.message || "Checklist execution request failed",
         });
@@ -40,3 +47,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(["admin", "supervisor", "technician"], handler);
+
