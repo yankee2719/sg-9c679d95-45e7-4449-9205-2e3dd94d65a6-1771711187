@@ -1,19 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { logAudit } from "@/services/auditClient";
-import {
-    createDocumentAndUploadV1,
-    getSignedUrl,
-    type DocumentCategory,
-    uploadNewVersion,
-} from "@/services/documentService";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import {
     Select,
     SelectContent,
@@ -21,47 +13,23 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    FileText,
-    Upload,
-    Plus,
-    Download,
-    Trash2,
-    History,
-    Loader2,
-    Factory,
-    Building2,
-} from "lucide-react";
+import { Download, Loader2, Trash2, Upload } from "lucide-react";
+import { documentWorkspaceApi, type WorkspaceDocument, type WorkspaceDocumentVersion } from "@/lib/documentWorkspaceApi";
 
 type OrgType = "manufacturer" | "customer";
-
-interface DocumentVersionRow {
-    id: string;
-    document_id: string;
-    version_number: number | null;
-    file_name: string | null;
-    file_path: string | null;
-    file_size: number | null;
-    change_summary: string | null;
-    created_at: string | null;
-}
-
-interface DocumentWithVersions {
-    id: string;
-    organization_id: string;
-    machine_id: string | null;
-    title: string;
-    description: string | null;
-    category: string | null;
-    language: string | null;
-    regulatory_reference: string | null;
-    current_version_id: string | null;
-    version_count: number | null;
-    file_size: number | null;
-    updated_at: string | null;
-    is_archived: boolean | null;
-    document_versions: DocumentVersionRow[];
-}
+type DocumentCategory =
+    | "technical_manual"
+    | "risk_assessment"
+    | "ce_declaration"
+    | "electrical_schema"
+    | "maintenance_manual"
+    | "spare_parts_catalog"
+    | "training_material"
+    | "inspection_report"
+    | "certificate"
+    | "photo"
+    | "video"
+    | "other";
 
 interface DocumentManagerProps {
     machineId: string;
@@ -87,40 +55,32 @@ const DOCUMENT_CATEGORY_OPTIONS: Array<{ label: string; value: DocumentCategory 
     { label: "Altro", value: "other" },
 ];
 
-function resolveCurrentVersion(doc: DocumentWithVersions): DocumentVersionRow | null {
+function resolveCurrentVersion(doc: WorkspaceDocument): WorkspaceDocumentVersion | null {
     if (!doc.document_versions?.length) return null;
-
     if (doc.current_version_id) {
         const exact = doc.document_versions.find((v) => v.id === doc.current_version_id);
         if (exact) return exact;
     }
-
-    return [...doc.document_versions].sort(
-        (a, b) => (b.version_number ?? 0) - (a.version_number ?? 0)
-    )[0] ?? null;
+    return [...doc.document_versions].sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0] ?? null;
 }
 
 export default function DocumentManager({
     machineId,
     readOnly = false,
-    machineOwnerOrgId = null,
     currentOrgId = null,
     currentOrgType = null,
     currentUserRole = null,
 }: DocumentManagerProps) {
     const { toast } = useToast();
-    const { organization, membership, user } = useAuth();
+    const { organization, membership } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [documents, setDocuments] = useState < DocumentWithVersions[] > ([]);
+    const [documents, setDocuments] = useState < WorkspaceDocument[] > ([]);
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState < DocumentCategory > ("technical_manual");
-    const [language, setLanguage] = useState("it");
-    const [regulatoryReference, setRegulatoryReference] = useState("");
-    const [changeSummary, setChangeSummary] = useState("");
     const [selectedFile, setSelectedFile] = useState < File | null > (null);
 
     const ctxOrgId = currentOrgId ?? organization?.id ?? null;
@@ -134,110 +94,76 @@ export default function DocumentManager({
     }, [readOnly, ctxOrgId, ctxOrgType, ctxRole]);
 
     const loadDocuments = async () => {
-        const { data, error } = await supabase
-            .from("documents")
-            .select(`
-                id,
-                organization_id,
-                machine_id,
-                title,
-                description,
-                category,
-                language,
-                regulatory_reference,
-                current_version_id,
-                version_count,
-                file_size,
-                updated_at,
-                is_archived,
-                document_versions:document_versions!document_versions_document_id_fkey (
-                    id,
-                    document_id,
-                    version_number,
-                    file_name,
-                    file_path,
-                    file_size,
-                    change_summary,
-                    created_at
-                )
-            `)
-            .eq("machine_id", machineId)
-            .eq("is_archived", false)
-            .order("updated_at", { ascending: false });
-
-        if (error) throw error;
-        setDocuments((data ?? []) as DocumentWithVersions[]);
+        const rows = await documentWorkspaceApi.listMachineDocuments(machineId);
+        setDocuments(rows);
     };
 
     useEffect(() => {
         let active = true;
-
         const init = async () => {
             setLoading(true);
             try {
-                await loadDocuments();
+                const rows = await documentWorkspaceApi.listMachineDocuments(machineId);
+                if (!active) return;
+                setDocuments(rows);
             } catch (e: any) {
                 console.error(e);
                 if (!active) return;
-                toast({
-                    title: "Errore",
-                    description: e?.message ?? "Errore caricamento documenti",
-                    variant: "destructive",
-                });
+                toast({ title: "Errore", description: e?.message ?? "Errore caricamento documenti", variant: "destructive" });
             } finally {
                 if (active) setLoading(false);
             }
         };
-
         void init();
-
         return () => {
             active = false;
         };
-    }, [machineId]);
+    }, [machineId, toast]);
 
     const handleCreate = async () => {
-        if (!ctxOrgId || !selectedFile) return;
-
+        if (!selectedFile) return;
+        if (!title.trim()) {
+            toast({ title: "Errore", description: "Titolo documento obbligatorio", variant: "destructive" });
+            return;
+        }
         setSaving(true);
         try {
-            const result = await createDocumentAndUploadV1({
-                organizationId: ctxOrgId,
+            await documentWorkspaceApi.uploadMachineDocument({
                 machineId,
-                title,
+                title: title.trim(),
                 description,
                 category,
                 file: selectedFile,
-                language,
-                regulatoryReference,
-                changeSummary,
-                createdBy: user?.id ?? null,
             });
-
-            const docId = result?.document?.id ?? null;
-
-            await logAudit({
-                organizationId: ctxOrgId,
-                entityType: "document",
-                entityId: docId,
-                action: "create",
-                machineId: machineId,
-            });
-
             await loadDocuments();
-
             setTitle("");
             setDescription("");
             setSelectedFile(null);
+            toast({ title: "Documento caricato" });
         } catch (e: any) {
             console.error(e);
-            toast({
-                title: "Errore",
-                description: e?.message,
-                variant: "destructive",
-            });
+            toast({ title: "Errore", description: e?.message || "Upload fallito", variant: "destructive" });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleOpen = async (doc: WorkspaceDocument) => {
+        try {
+            await documentWorkspaceApi.openDocument(doc.id, resolveCurrentVersion(doc)?.id || undefined);
+        } catch (e: any) {
+            toast({ title: "Errore", description: e?.message || "Apertura fallita", variant: "destructive" });
+        }
+    };
+
+    const handleDelete = async (doc: WorkspaceDocument) => {
+        if (!doc.can_manage || !window.confirm(`Archiviare il documento "${doc.title}"?`)) return;
+        try {
+            await documentWorkspaceApi.archiveDocument(doc.id);
+            await loadDocuments();
+            toast({ title: "Documento archiviato" });
+        } catch (e: any) {
+            toast({ title: "Errore", description: e?.message || "Archiviazione fallita", variant: "destructive" });
         }
     };
 
@@ -246,7 +172,7 @@ export default function DocumentManager({
             <Card>
                 <CardHeader>
                     <CardTitle>Documenti macchina</CardTitle>
-                    <CardDescription>Archivio documentale</CardDescription>
+                    <CardDescription>Archivio documentale server-first</CardDescription>
                 </CardHeader>
             </Card>
 
@@ -257,11 +183,18 @@ export default function DocumentManager({
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titolo" />
-                        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+                        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrizione" />
+                        <Select value={category} onValueChange={(v) => setCategory(v as DocumentCategory)}>
+                            <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
+                            <SelectContent>
+                                {DOCUMENT_CATEGORY_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <Input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
-
-                        <Button onClick={handleCreate} disabled={saving}>
-                            {saving ? <Loader2 className="animate-spin mr-2" /> : <Upload className="mr-2" />}
+                        <Button onClick={handleCreate} disabled={saving || !selectedFile}>
+                            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                             Carica
                         </Button>
                     </CardContent>
@@ -275,26 +208,33 @@ export default function DocumentManager({
                 <CardContent>
                     {loading ? (
                         <Loader2 className="animate-spin" />
+                    ) : documents.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">Nessun documento presente.</div>
                     ) : (
                         <div className="space-y-3">
                             {documents.map((doc) => {
                                 const version = resolveCurrentVersion(doc);
-
                                 return (
-                                    <div key={doc.id} className="border p-3 rounded">
-                                        <div className="flex justify-between">
-                                            <div>{doc.title}</div>
-                                            <Button
-                                                size="sm"
-                                                onClick={async () => {
-                                                    if (!version?.file_path) return;
-                                                    const url = await getSignedUrl(version.file_path);
-                                                    window.open(url);
-                                                }}
-                                            >
-                                                <Download className="mr-2 h-4 w-4" />
-                                                Apri
-                                            </Button>
+                                    <div key={doc.id} className="rounded-xl border p-4">
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                            <div className="space-y-1">
+                                                <div className="font-medium">{doc.title}</div>
+                                                <div className="text-sm text-muted-foreground">{doc.description || doc.category || "—"}</div>
+                                                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                                    <Badge variant="outline">v{version?.version_number ?? doc.version_count ?? 1}</Badge>
+                                                    <span>{version?.file_name || "file"}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => void handleOpen(doc)}>
+                                                    <Download className="mr-2 h-4 w-4" />Apri
+                                                </Button>
+                                                {doc.can_manage ? (
+                                                    <Button size="sm" variant="outline" onClick={() => void handleDelete(doc)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" />Archivia
+                                                    </Button>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     </div>
                                 );
