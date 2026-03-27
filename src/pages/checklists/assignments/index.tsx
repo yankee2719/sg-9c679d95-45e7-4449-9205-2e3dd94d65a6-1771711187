@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { getUserContext } from "@/lib/supabaseHelpers";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
     canManageChecklists,
+    formatChecklistDate,
     getChecklistTexts,
     translateChecklistTarget,
 } from "@/lib/checklistsPageText";
@@ -21,32 +20,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-
-type Template = {
-    id: string;
-    name: string;
-    target_type: string;
-    version: number;
-};
-
-type Machine = {
-    id: string;
-    name: string;
-    internal_code: string | null;
-    organization_id: string | null;
-};
-
-type Assignment = {
-    id: string;
-    organization_id: string;
-    template_id: string;
-    machine_id: string | null;
-    production_line_id: string | null;
-    is_active: boolean | null;
-    created_at: string | null;
-    template?: Template | null;
-    machine?: Machine | null;
-};
+import { getUserContext } from "@/lib/supabaseHelpers";
+import {
+    checklistAssignmentApi,
+    type ChecklistAssignmentDashboardData,
+    type ChecklistAssignmentListItem,
+    type ChecklistAssignmentMachineOption,
+    type ChecklistAssignmentTemplateOption,
+} from "@/lib/checklistAssignmentApi";
 
 export default function ChecklistAssignmentsPage() {
     const router = useRouter();
@@ -55,18 +36,23 @@ export default function ChecklistAssignmentsPage() {
     const text = getChecklistTexts(language);
 
     const [role, setRole] = useState("technician");
-    const [orgId, setOrgId] = useState < string | null > (null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    const [templates, setTemplates] = useState < Template[] > ([]);
-    const [machines, setMachines] = useState < Machine[] > ([]);
-    const [assignments, setAssignments] = useState < Assignment[] > ([]);
+    const [templates, setTemplates] = useState < ChecklistAssignmentTemplateOption[] > ([]);
+    const [machines, setMachines] = useState < ChecklistAssignmentMachineOption[] > ([]);
+    const [assignments, setAssignments] = useState < ChecklistAssignmentListItem[] > ([]);
 
     const [templateId, setTemplateId] = useState("none");
     const [machineId, setMachineId] = useState("none");
 
     const allow = useMemo(() => canManageChecklists(role), [role]);
+
+    const applyPayload = (payload: ChecklistAssignmentDashboardData) => {
+        setTemplates(payload.templates ?? []);
+        setMachines(payload.machines ?? []);
+        setAssignments(payload.assignments ?? []);
+    };
 
     const load = async () => {
         setLoading(true);
@@ -77,56 +63,9 @@ export default function ChecklistAssignmentsPage() {
                 return;
             }
 
-            const activeOrgId = ctx.orgId ?? null;
-            if (!activeOrgId) throw new Error(text.assignments.assignError);
-
             setRole(ctx.role ?? "technician");
-            setOrgId(activeOrgId);
-
-            const [
-                { data: tplRows, error: tplError },
-                { data: machineRows, error: machineError },
-                { data: assignmentRows, error: assignmentError },
-            ] = await Promise.all([
-                supabase
-                    .from("checklist_templates")
-                    .select("id, name, target_type, version")
-                    .eq("organization_id", activeOrgId)
-                    .eq("is_active", true)
-                    .order("name", { ascending: true }),
-                supabase
-                    .from("machines")
-                    .select("id, name, internal_code, organization_id")
-                    .eq("organization_id", activeOrgId)
-                    .eq("is_archived", false)
-                    .order("name", { ascending: true }),
-                supabase
-                    .from("checklist_assignments")
-                    .select("id, organization_id, template_id, machine_id, production_line_id, is_active, created_at")
-                    .eq("organization_id", activeOrgId)
-                    .order("created_at", { ascending: false }),
-            ]);
-
-            if (tplError) throw tplError;
-            if (machineError) throw machineError;
-            if (assignmentError) throw assignmentError;
-
-            const templateList = (tplRows ?? []) as Template[];
-            const machineList = (machineRows ?? []) as Machine[];
-            const assignmentList = (assignmentRows ?? []) as Assignment[];
-
-            const templateMap = new Map(templateList.map((row) => [row.id, row]));
-            const machineMap = new Map(machineList.map((row) => [row.id, row]));
-
-            setTemplates(templateList);
-            setMachines(machineList);
-            setAssignments(
-                assignmentList.map((row) => ({
-                    ...row,
-                    template: templateMap.get(row.template_id) ?? null,
-                    machine: row.machine_id ? machineMap.get(row.machine_id) ?? null : null,
-                }))
-            );
+            const payload = await checklistAssignmentApi.list();
+            applyPayload(payload);
         } catch (error: any) {
             console.error(error);
             toast({
@@ -140,7 +79,8 @@ export default function ChecklistAssignmentsPage() {
     };
 
     useEffect(() => {
-        load();
+        void load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const assign = async () => {
@@ -153,7 +93,6 @@ export default function ChecklistAssignmentsPage() {
             return;
         }
 
-        if (!orgId) return;
         if (templateId === "none" || machineId === "none") {
             toast({
                 title: text.common.error,
@@ -177,20 +116,13 @@ export default function ChecklistAssignmentsPage() {
 
         setSaving(true);
         try {
-            const { error } = await supabase.from("checklist_assignments").insert({
-                id: crypto.randomUUID(),
-                organization_id: orgId,
+            await checklistAssignmentApi.create({
                 template_id: templateId,
                 machine_id: machineId,
-                production_line_id: null,
-                is_active: true,
-            } as any);
-
-            if (error) throw error;
+            });
 
             setTemplateId("none");
             setMachineId("none");
-
             toast({ title: text.assignments.assigned });
             await load();
         } catch (error: any) {
@@ -210,14 +142,7 @@ export default function ChecklistAssignmentsPage() {
         if (!window.confirm(text.assignments.deactivateConfirm)) return;
 
         try {
-            const { error } = await supabase
-                .from("checklist_assignments")
-                .update({ is_active: false } as any)
-                .eq("id", assignmentId)
-                .eq("organization_id", orgId);
-
-            if (error) throw error;
-
+            await checklistAssignmentApi.deactivate(assignmentId);
             toast({ title: text.assignments.deactivated });
             await load();
         } catch (error: any) {
@@ -319,7 +244,7 @@ export default function ChecklistAssignmentsPage() {
                         </div>
 
                         <div className="flex justify-end">
-                            <Button onClick={assign} disabled={!allow || saving} className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white">
+                            <Button onClick={assign} disabled={!allow || saving} className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]">
                                 <Plus className="mr-2 h-4 w-4" />
                                 {saving ? text.assignments.assigning : text.assignments.assign}
                             </Button>
@@ -338,59 +263,53 @@ export default function ChecklistAssignmentsPage() {
                             <div className="text-sm text-muted-foreground">{text.assignments.noResults}</div>
                         )}
 
-                        {!loading &&
-                            assignments.map((assignment) => (
-                                <div
-                                    key={assignment.id}
-                                    className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-start md:justify-between"
-                                >
-                                    <div className="space-y-2">
-                                        <div className="font-medium">
-                                            {assignment.template?.name ?? text.templates.newTemplate}
-                                        </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            {text.assignments.machine}: {assignment.machine?.name ?? text.executions.machineFallback}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Badge variant="outline">
-                                                {translateChecklistTarget(assignment.template?.target_type, language)}
-                                            </Badge>
-                                            <Badge variant="outline">
-                                                v{assignment.template?.version ?? 1}
-                                            </Badge>
-                                            <Badge variant={assignment.is_active ? "default" : "secondary"}>
-                                                {assignment.is_active ? text.common.active : text.common.inactive}
-                                            </Badge>
-                                        </div>
+                        {!loading && assignments.map((assignment) => (
+                            <div
+                                key={assignment.id}
+                                className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-start md:justify-between"
+                            >
+                                <div className="space-y-2">
+                                    <div className="font-medium">
+                                        {assignment.template?.name ?? text.templates.newTemplate}
                                     </div>
-
-                                    <div className="flex items-center gap-2">
-                                        {assignment.machine_id && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => router.push(`/equipment/${assignment.machine_id}`)}
-                                            >
-                                                {text.assignments.openMachine}
-                                            </Button>
-                                        )}
-                                        {assignment.is_active && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => deactivate(assignment.id)}
-                                                disabled={!allow}
-                                            >
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                {text.assignments.deactivate}
-                                            </Button>
-                                        )}
+                                    <div className="text-sm text-muted-foreground">
+                                        {text.assignments.machine}: {assignment.machine?.name ?? text.executions.machineFallback}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Badge variant="outline">
+                                            {translateChecklistTarget(assignment.template?.target_type, language)}
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            v{assignment.template?.version ?? 1}
+                                        </Badge>
+                                        <Badge variant={assignment.is_active ? "default" : "secondary"}>
+                                            {assignment.is_active ? text.templates.active : text.templates.statusInactive}
+                                        </Badge>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {assignment.created_at
+                                            ? formatChecklistDate(assignment.created_at, language)
+                                            : "-"}
                                     </div>
                                 </div>
-                            ))}
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={!allow || !assignment.is_active}
+                                        onClick={() => deactivate(assignment.id)}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        {text.assignments.deactivate}
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
                     </CardContent>
                 </Card>
             </div>
         </MainLayout>
     );
 }
+
