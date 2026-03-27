@@ -178,4 +178,3 @@ async function applyOperation(
 }
 
 export default withAuth(ALL_APP_ROLES, handler);
-
