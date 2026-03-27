@@ -4,31 +4,37 @@ import { useRouter } from "next/router";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
+import { useLanguage } from "@/contexts/LanguageContext";
+import DocumentManager from "@/components/documents/DocumentManager";
+import { MachinePhotoUpload } from "@/components/Equipment/MachinePhotoUpload";
+import { MachineEventTimeline } from "@/components/MachineEventTimeline";
 import MachineSummaryHero from "@/components/Equipment/MachineSummaryHero";
 import MachineQuickActions from "@/components/Equipment/MachineQuickActions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Loader2, Pencil, Trash2, WifiOff, Wrench } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Factory, History, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { apiFetch } from "@/services/apiClient";
-import { getEquipmentSnapshot, saveEquipmentSnapshot, type EquipmentSnapshot } from "@/lib/equipmentSnapshotCache";
+import { getMachineSnapshot } from "@/lib/machineWorkspaceApi";
+
+type OrgType = "manufacturer" | "customer";
 
 export default function EquipmentDetailPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { loading: authLoading, membership } = useAuth();
+    const { id } = router.query;
+    const { loading: authLoading, organization, membership } = useAuth();
     const { t } = useLanguage();
-    const resolvedId = useMemo(() => (typeof router.query.id === "string" ? router.query.id : null), [router.query.id]);
 
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
-    const [snapshot, setSnapshot] = useState < EquipmentSnapshot | null > (null);
-    const [isOfflineSnapshot, setIsOfflineSnapshot] = useState(false);
+    const [snapshot, setSnapshot] = useState < any > (null);
 
     const userRole = membership?.role ?? "technician";
+    const orgId = organization?.id ?? null;
+    const orgType = (organization?.type as OrgType | undefined) ?? null;
+    const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
 
     const handleDeleteMachine = async () => {
         if (!snapshot?.machine) return;
@@ -39,6 +45,7 @@ export default function EquipmentDetailPage() {
             toast({ title: t("equipment.movedToTrash"), description: snapshot.machine.name || snapshot.machine.id });
             void router.push("/equipment");
         } catch (err: any) {
+            console.error(err);
             toast({ title: t("common.error"), description: err?.message || "Delete error", variant: "destructive" });
         } finally {
             setDeleting(false);
@@ -46,62 +53,43 @@ export default function EquipmentDetailPage() {
     };
 
     useEffect(() => {
-        if (!resolvedId || authLoading) return;
         let active = true;
-
-        async function load() {
-            setLoading(true);
+        const load = async () => {
+            if (!resolvedId || authLoading) return;
             try {
-                const payload = await apiFetch < any > (`/api/equipment/${resolvedId}/snapshot`);
+                setLoading(true);
+                const data = await getMachineSnapshot(resolvedId);
                 if (!active) return;
-                const nextSnapshot = payload?.snapshot as EquipmentSnapshot;
-                setSnapshot(nextSnapshot);
-                setIsOfflineSnapshot(false);
-                saveEquipmentSnapshot(nextSnapshot);
+                setSnapshot(data);
             } catch (error: any) {
-                const cached = getEquipmentSnapshot(resolvedId);
-                if (!active) return;
-                if (cached) {
-                    setSnapshot(cached);
-                    setIsOfflineSnapshot(true);
-                } else {
-                    toast({ title: t("common.error"), description: error?.message || t("equipment.loadError"), variant: "destructive" });
-                    void router.replace("/equipment");
-                }
+                console.error(error);
+                toast({ title: t("common.error"), description: error?.message ?? t("equipment.loadError"), variant: "destructive" });
+                void router.replace("/equipment");
             } finally {
                 if (active) setLoading(false);
             }
-        }
-
-        void load();
-        return () => {
-            active = false;
         };
-    }, [resolvedId, authLoading, toast, t, router]);
+        void load();
+        return () => { active = false; };
+    }, [resolvedId, authLoading, router, toast, t]);
 
     if (authLoading || loading) {
         return (
             <OrgContextGuard>
-                <MainLayout userRole={userRole as any}>
-                    <SEO title={`${t("machines.title")} - MACHINA`} />
-                    <div className="mx-auto max-w-7xl px-4 py-8">
-                        <Card className="rounded-2xl">
-                            <CardContent className="flex items-center gap-3 py-10 text-muted-foreground">
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                                {t("machines.loading")}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </MainLayout>
+                <MainLayout userRole={userRole as any}><SEO title={`${t("machines.title")} - MACHINA`} /><div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="flex items-center gap-3 py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />{t("machines.loading")}</CardContent></Card></div></MainLayout>
             </OrgContextGuard>
         );
     }
 
-    if (!snapshot) return null;
+    if (!snapshot?.machine) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole as any}><SEO title={`${t("machines.title")} - MACHINA`} /><div className="mx-auto max-w-7xl px-4 py-8"><Card className="rounded-2xl"><CardContent className="py-10 text-muted-foreground">{t("machines.noResults")}</CardContent></Card></div></MainLayout>
+            </OrgContextGuard>
+        );
+    }
 
     const machine = snapshot.machine;
-    const canEditMachine = snapshot.machineContext.canEdit && !isOfflineSnapshot;
-    const canDeleteMachine = snapshot.machineContext.canDelete && !isOfflineSnapshot;
 
     return (
         <OrgContextGuard>
@@ -109,34 +97,12 @@ export default function EquipmentDetailPage() {
                 <SEO title={`${machine.name ?? t("machines.title")} - MACHINA`} />
                 <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
-                        <Button variant="outline" onClick={() => router.push("/equipment")}>
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            {t("nav.equipment")}
-                        </Button>
+                        <Button variant="outline" onClick={() => router.push("/equipment")}><ArrowLeft className="mr-2 h-4 w-4" />{t("nav.equipment")}</Button>
                         <div className="flex flex-wrap gap-2">
-                            {canEditMachine && (
-                                <Link href={`/equipment/${machine.id}/edit`}>
-                                    <Button variant="outline"><Pencil className="mr-2 h-4 w-4" />{t("equipment.editMachine")}</Button>
-                                </Link>
-                            )}
-                            {canDeleteMachine && (
-                                <Button variant="destructive" onClick={() => void handleDeleteMachine()} disabled={deleting}>
-                                    {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                    {t("equipment.moveToTrash")}
-                                </Button>
-                            )}
+                            {snapshot.can_edit_machine && <Link href={`/equipment/${machine.id}/edit`}><Button variant="outline"><Pencil className="mr-2 h-4 w-4" />{t("equipment.editMachine")}</Button></Link>}
+                            {snapshot.can_delete_machine && <Button variant="destructive" onClick={handleDeleteMachine} disabled={deleting}>{deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{t("equipment.moveToTrash")}</Button>}
                         </div>
                     </div>
-
-                    {isOfflineSnapshot ? (
-                        <Card className="rounded-2xl border-orange-200 bg-orange-50/70 dark:border-orange-500/30 dark:bg-orange-500/10">
-                            <CardContent className="flex items-center gap-3 p-4 text-sm text-orange-700 dark:text-orange-300">
-                                <WifiOff className="h-4 w-4" />
-                                Dati macchina offline: vista sola lettura basata sull’ultima snapshot salvata.
-                            </CardContent>
-                        </Card>
-                    ) : null}
-
                     <MachineSummaryHero
                         name={machine.name}
                         internalCode={machine.internal_code}
@@ -144,95 +110,24 @@ export default function EquipmentDetailPage() {
                         brand={machine.brand}
                         model={machine.model}
                         lifecycleState={machine.lifecycle_state}
-                        orgType={snapshot.machineContext.orgType}
-                        ownerOrganizationName={snapshot.ownerOrganization?.name ?? null}
+                        orgType={orgType}
+                        ownerOrganizationName={snapshot.ownerOrganization?.name ?? organization?.name ?? null}
                         assignedCustomerName={snapshot.assignedCustomerName}
                         plantName={snapshot.plant?.name || snapshot.plant?.code || null}
                         lineName={snapshot.line?.name || snapshot.line?.code || null}
                         createdAt={machine.created_at}
                     />
-
                     <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
                         <div className="space-y-6">
-                            {!isOfflineSnapshot ? <MachineQuickActions machineId={machine.id} canEdit={canEditMachine} /> : null}
-                            <Card className="rounded-2xl">
-                                <CardHeader><CardTitle>{t("equipment.quickInfo")}</CardTitle></CardHeader>
-                                <CardContent className="space-y-3">
-                                    <InfoRow label={t("equipment.internalCode")} value={machine.internal_code} />
-                                    <InfoRow label={t("machines.serialNumber")} value={machine.serial_number} />
-                                    <InfoRow label={t("machines.manufacturer")} value={machine.brand} />
-                                    <InfoRow label={t("machines.model")} value={machine.model} />
-                                    <InfoRow label={t("plants.fallbackPlant")} value={snapshot.plant?.name || snapshot.plant?.code} />
-                                    <InfoRow label={t("plants.line")} value={snapshot.line?.name || snapshot.line?.code} />
-                                    <InfoRow label={t("equipment.assignedCustomer")} value={snapshot.assignedCustomerName} />
-                                    <InfoRow label={t("equipment.owner")} value={snapshot.ownerOrganization?.name} />
-                                </CardContent>
-                            </Card>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.photo")}</CardTitle><CardDescription>{t("equipment.photoDesc")}</CardDescription></CardHeader><CardContent><MachinePhotoUpload machineId={machine.id} currentPhotoUrl={machine.photo_url ?? null} onPhotoChange={(url) => setSnapshot((prev: any) => ({ ...prev, machine: { ...prev.machine, photo_url: url } }))} readonly={!snapshot.can_edit_machine} /></CardContent></Card>
+                            <MachineQuickActions machineId={machine.id} canEdit={snapshot.can_edit_machine} />
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.quickInfo")}</CardTitle></CardHeader><CardContent className="space-y-3"><InfoRow label={t("equipment.internalCode")} value={machine.internal_code} /><InfoRow label={t("machines.serialNumber")} value={machine.serial_number} /><InfoRow label={t("machines.manufacturer")} value={machine.brand} /><InfoRow label={t("machines.model")} value={machine.model} /><InfoRow label={t("plants.fallbackPlant")} value={snapshot.plant?.name || snapshot.plant?.code} /><InfoRow label={t("plants.line")} value={snapshot.line?.name || snapshot.line?.code} /><InfoRow label={t("equipment.assignedCustomer")} value={snapshot.assignedCustomerName} /><InfoRow label={t("equipment.owner")} value={snapshot.ownerOrganization?.name || organization?.name} /></CardContent></Card>
                         </div>
-
                         <div className="space-y-6">
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle>{t("equipment.notes")}</CardTitle>
-                                    <CardDescription>{t("equipment.notesDesc")}</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">
-                                        {machine.notes || t("equipment.noNotes")}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2"><Wrench className="h-4 w-4" />{t("equipment.latestWorkOrders") || "Ultimi work order"}</CardTitle>
-                                    <CardDescription>Snapshot rapido utile anche sul campo.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {snapshot.workOrders.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">{t("equipment.noWorkOrders") || "Nessun work order presente."}</p>
-                                    ) : (
-                                        snapshot.workOrders.map((workOrder) => (
-                                            <Link key={workOrder.id} href={`/work-orders/${workOrder.id}`} className="block rounded-xl border border-border p-4 transition-colors hover:bg-muted/50">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <div className="font-medium text-foreground">{workOrder.title}</div>
-                                                        <div className="text-xs text-muted-foreground">{workOrder.created_at || "—"}</div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge variant="outline">{workOrder.status}</Badge>
-                                                        <Badge variant="secondary">{workOrder.priority}</Badge>
-                                                    </div>
-                                                </div>
-                                            </Link>
-                                        ))
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{t("documents.title")}</CardTitle>
-                                    <CardDescription>{t("equipment.docManagement") || "Documentazione recente legata alla macchina."}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {snapshot.documents.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">{t("documents.noDocuments") || "Nessun documento presente."}</p>
-                                    ) : (
-                                        snapshot.documents.map((document) => (
-                                            <Link key={document.id} href={`/documents/${document.id}`} className="block rounded-xl border border-border p-4 transition-colors hover:bg-muted/50">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <div className="font-medium text-foreground">{document.title || t("documents.title")}</div>
-                                                        <div className="text-xs text-muted-foreground">{document.category || "other"}</div>
-                                                    </div>
-                                                    <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-                                                </div>
-                                            </Link>
-                                        ))
-                                    )}
-                                </CardContent>
-                            </Card>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.notes")}</CardTitle><CardDescription>{t("equipment.notesDesc")}</CardDescription></CardHeader><CardContent><div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">{machine.notes || t("equipment.noNotes")}</div></CardContent></Card>
+                            <section id="machine-timeline"><Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2"><History className="h-4 w-4" />{t("equipment.timeline")}</CardTitle><CardDescription>{t("equipment.timelineDesc")}</CardDescription></CardHeader><CardContent><MachineEventTimeline machineId={machine.id} limit={50} showIntegrityCheck={true} /></CardContent></Card></section>
+                            <section id="machine-documents"><Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{t("documents.title")}</CardTitle><CardDescription>{t("equipment.docsDesc")}</CardDescription></CardHeader><CardContent><DocumentManager machineId={machine.id} machineOwnerOrgId={machine.organization_id} currentOrgId={orgId} currentOrgType={orgType} currentUserRole={userRole} /></CardContent></Card></section>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.machineContext")}</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><ContextCard icon={<Factory className="h-5 w-5" />} title={t("equipment.ownerContext")} value={snapshot.ownerOrganization?.name || "—"} tone="orange" /><ContextCard icon={<Building2 className="h-5 w-5" />} title={t("equipment.assignmentContext")} value={snapshot.assignedCustomerName || t("equipment.notAssigned")} tone="blue" /></CardContent></Card>
                         </div>
                     </div>
                 </div>
@@ -241,11 +136,11 @@ export default function EquipmentDetailPage() {
     );
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
-    return (
-        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 p-3">
-            <div className="text-sm text-muted-foreground">{label}</div>
-            <div className="text-sm font-medium text-foreground text-right">{value || "—"}</div>
-        </div>
-    );
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+    return <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0"><div className="text-sm text-muted-foreground">{label}</div><div className="max-w-[60%] text-right text-sm font-medium text-foreground">{value || "—"}</div></div>;
+}
+
+function ContextCard({ icon, title, value, tone }: { icon: React.ReactNode; title: string; value: string; tone: "orange" | "blue" }) {
+    const toneClasses = tone === "orange" ? "bg-orange-500/10 text-orange-500" : "bg-blue-500/10 text-blue-500";
+    return <div className="rounded-2xl border border-border p-4"><div className="flex items-start gap-3"><div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClasses}`}>{icon}</div><div><div className="text-sm text-muted-foreground">{title}</div><div className="mt-1 font-semibold text-foreground">{value}</div></div></div></div>;
 }
