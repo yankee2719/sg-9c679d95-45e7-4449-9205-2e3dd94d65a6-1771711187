@@ -1,5 +1,5 @@
 import type { NextApiResponse } from "next";
-import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { ALL_APP_ROLES, withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 import {
     ChecklistAssignmentError,
     createChecklistAssignment,
@@ -8,28 +8,29 @@ import {
 } from "@/lib/server/checklistAssignmentService";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-    const supabase = getServiceSupabase();
-
     try {
+        const supabase = getServiceSupabase();
+
         if (req.method === "GET") {
             const data = await listChecklistAssignments(supabase, req.user);
-            return res.status(200).json({ success: true, data });
+            return res.status(200).json(data);
         }
 
         if (req.method === "POST") {
-            const templateId = typeof req.body?.template_id === "string" ? req.body.template_id : "";
-            const machineId = typeof req.body?.machine_id === "string" ? req.body.machine_id : "";
-            const data = await createChecklistAssignment(supabase, req.user, {
-                templateId,
-                machineId,
+            const assignment = await createChecklistAssignment(supabase, req.user, {
+                templateId: String(req.body?.template_id || ""),
+                machineId: String(req.body?.machine_id || ""),
             });
-            return res.status(201).json({ success: true, data });
+            return res.status(201).json(assignment);
         }
 
         if (req.method === "DELETE") {
-            const assignmentId = typeof req.body?.assignment_id === "string" ? req.body.assignment_id : "";
-            const data = await deactivateChecklistAssignment(supabase, req.user, assignmentId);
-            return res.status(200).json({ success: true, data });
+            const result = await deactivateChecklistAssignment(
+                supabase,
+                req.user,
+                String(req.body?.assignment_id || "")
+            );
+            return res.status(200).json(result);
         }
 
         return res.status(405).json({ error: "Method not allowed" });
@@ -38,13 +39,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         if (error instanceof ChecklistAssignmentError) {
             return res.status(error.statusCode).json({ error: error.message });
         }
-        return res.status(500).json({
-            error: error?.message || "Checklist assignments request failed",
-        });
+        return res.status(500).json({ error: error?.message || "Internal server error" });
     }
 }
 
-export default withAuth(["owner", "admin", "supervisor", "technician", "viewer"], handler, {
-    allowPlatformAdmin: true,
-});
-
+export default withAuth(ALL_APP_ROLES, handler);
