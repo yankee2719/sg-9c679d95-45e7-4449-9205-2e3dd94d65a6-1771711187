@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
+import { apiFetch } from "@/services/apiClient";
 import {
     Factory,
     ArrowRight,
@@ -34,28 +34,15 @@ interface MachineRow {
     created_at?: string | null;
 }
 
-interface AssignmentRow {
-    machine_id: string;
-    customer_org_id: string | null;
-    manufacturer_org_id: string | null;
-    is_active: boolean | null;
+interface EquipmentCatalogResponse {
+    machines: MachineRow[];
+    hiddenMachineIds: string[];
+    assignmentCount: number;
 }
 
-interface HiddenRow {
-    machine_id: string;
-}
-
-function CardShell({
-    children,
-    className = "",
-}: {
-    children: React.ReactNode;
-    className?: string;
-}) {
+function CardShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
     return (
-        <div
-            className={`rounded-[22px] border border-border bg-card text-card-foreground shadow-[0_16px_30px_-22px_rgba(15,23,42,0.28)] ${className}`}
-        >
+        <div className={`rounded-[22px] border border-border bg-card text-card-foreground shadow-[0_16px_30px_-22px_rgba(15,23,42,0.28)] ${className}`}>
             {children}
         </div>
     );
@@ -65,15 +52,14 @@ export default function EquipmentPage() {
     const { t } = useLanguage();
     const { loading: authLoading, organization, membership } = useAuth();
 
-    const [machines, setMachines] = useState<MachineRow[]>([]);
-    const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
-    const [hiddenRows, setHiddenRows] = useState<HiddenRow[]>([]);
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
+    const [hiddenMachineIds, setHiddenMachineIds] = useState < string[] > ([]);
+    const [assignmentCount, setAssignmentCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [showHidden, setShowHidden] = useState(false);
 
     const userRole = membership?.role ?? "technician";
-    const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
 
     useEffect(() => {
@@ -81,118 +67,68 @@ export default function EquipmentPage() {
 
         const load = async () => {
             if (authLoading) return;
-
-            if (!orgId || !orgType) {
+            if (!organization?.id || !organization?.type) {
                 if (active) setLoading(false);
                 return;
             }
 
             setLoading(true);
             try {
-                const [machinesRes, assignmentsRes] = await Promise.all([
-                    supabase
-                        .from("machines")
-                        .select(
-                            "id, name, internal_code, serial_number, model, brand, lifecycle_state, organization_id, plant_id, production_line_id, is_archived, is_deleted, created_at"
-                        )
-                        .eq("is_archived", false)
-                        .or("is_deleted.is.null,is_deleted.eq.false")
-                        .order("created_at", { ascending: false }),
-                    supabase
-                        .from("machine_assignments")
-                        .select("machine_id, customer_org_id, manufacturer_org_id, is_active")
-                        .eq("is_active", true),
-                ]);
-
-                if (machinesRes.error) throw machinesRes.error;
-                if (assignmentsRes.error) throw assignmentsRes.error;
-
+                const response = await apiFetch < { success: true; data: EquipmentCatalogResponse } > (
+                    "/api/equipment/catalog"
+                );
                 if (!active) return;
-
-                setMachines((machinesRes.data ?? []) as MachineRow[]);
-                setAssignments((assignmentsRes.data ?? []) as AssignmentRow[]);
-
-                if (orgType === "customer") {
-                    const hiddenRes = await supabase
-                        .from("customer_hidden_machines")
-                        .select("machine_id")
-                        .eq("customer_org_id", orgId);
-
-                    if (hiddenRes.error) throw hiddenRes.error;
-                    setHiddenRows((hiddenRes.data ?? []) as HiddenRow[]);
-                } else {
-                    setHiddenRows([]);
-                }
+                setMachines(response.data.machines ?? []);
+                setHiddenMachineIds(response.data.hiddenMachineIds ?? []);
+                setAssignmentCount(response.data.assignmentCount ?? 0);
             } catch (error) {
                 console.error("Equipment load error:", error);
+                if (!active) {
+                    return;
+                }
+                setMachines([]);
+                setHiddenMachineIds([]);
+                setAssignmentCount(0);
             } finally {
                 if (active) setLoading(false);
             }
         };
 
         void load();
-
         return () => {
             active = false;
         };
-    }, [authLoading, orgId, orgType]);
+    }, [authLoading, organization?.id, organization?.type]);
 
-    const hiddenMachineIds = useMemo(
-        () => new Set(hiddenRows.map((x) => x.machine_id)),
-        [hiddenRows]
-    );
+    const hiddenSet = useMemo(() => new Set(hiddenMachineIds), [hiddenMachineIds]);
 
     const visibleMachines = useMemo(() => {
-        let rows = machines;
-
-        if (orgType === "manufacturer" && orgId) {
-            rows = rows.filter((machine) => machine.organization_id === orgId);
-        }
-
-        if (orgType === "customer" && orgId) {
-            const assignedIds = new Set(
-                assignments
-                    .filter((a) => a.customer_org_id === orgId && a.is_active)
-                    .map((a) => a.machine_id)
-            );
-
-            rows = rows.filter(
-                (machine) => machine.organization_id === orgId || assignedIds.has(machine.id)
-            );
-        }
+        let rows = [...machines];
 
         if (!showHidden && orgType === "customer") {
-            rows = rows.filter((machine) => !hiddenMachineIds.has(machine.id));
+            rows = rows.filter((machine) => !hiddenSet.has(machine.id));
         }
 
         if (search.trim()) {
             const q = search.toLowerCase();
             rows = rows.filter((machine) =>
-                [
-                    machine.name,
-                    machine.internal_code,
-                    machine.serial_number,
-                    machine.model,
-                    machine.brand,
-                ].some((value) => (value ?? "").toLowerCase().includes(q))
+                [machine.name, machine.internal_code, machine.serial_number, machine.model, machine.brand].some(
+                    (value) => (value ?? "").toLowerCase().includes(q)
+                )
             );
         }
 
         return rows;
-    }, [machines, assignments, orgType, orgId, hiddenMachineIds, showHidden, search]);
+    }, [machines, orgType, hiddenSet, showHidden, search]);
 
-    const stats = useMemo(() => {
-        const assignedCount =
-            orgType === "manufacturer"
-                ? assignments.filter((a) => a.manufacturer_org_id === orgId && a.is_active).length
-                : assignments.filter((a) => a.customer_org_id === orgId && a.is_active).length;
-
-        return {
+    const stats = useMemo(
+        () => ({
             total: visibleMachines.length,
-            assigned: assignedCount,
-            hidden: orgType === "customer" ? hiddenRows.length : 0,
-        };
-    }, [visibleMachines.length, assignments, orgType, orgId, hiddenRows.length]);
+            assigned: assignmentCount,
+            hidden: orgType === "customer" ? hiddenMachineIds.length : 0,
+        }),
+        [visibleMachines.length, assignmentCount, orgType, hiddenMachineIds.length]
+    );
 
     const subtitle =
         orgType === "manufacturer"
@@ -228,24 +164,16 @@ export default function EquipmentPage() {
                                 <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-300">
                                     <Factory className="h-5 w-5" />
                                 </div>
-                                <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">
-                                    {stats.total}
-                                </div>
-                                <div className="mt-2 text-sm font-medium text-muted-foreground">
-                                    {t("equipment.kpi.visibleMachines")}
-                                </div>
+                                <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">{stats.total}</div>
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">{t("equipment.kpi.visibleMachines")}</div>
                             </CardShell>
 
                             <CardShell className="p-6">
                                 <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
                                     <Package className="h-5 w-5" />
                                 </div>
-                                <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">
-                                    {stats.assigned}
-                                </div>
-                                <div className="mt-2 text-sm font-medium text-muted-foreground">
-                                    {t("equipment.kpi.activeAssignments")}
-                                </div>
+                                <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">{stats.assigned}</div>
+                                <div className="mt-2 text-sm font-medium text-muted-foreground">{t("equipment.kpi.activeAssignments")}</div>
                             </CardShell>
 
                             {orgType === "customer" && (
@@ -253,24 +181,20 @@ export default function EquipmentPage() {
                                     <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
                                         <EyeOff className="h-5 w-5" />
                                     </div>
-                                    <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">
-                                        {stats.hidden}
-                                    </div>
-                                    <div className="mt-2 text-sm font-medium text-muted-foreground">
-                                        {t("equipment.kpi.hiddenMachines")}
-                                    </div>
+                                    <div className="text-3xl font-bold leading-none text-foreground md:text-4xl">{stats.hidden}</div>
+                                    <div className="mt-2 text-sm font-medium text-muted-foreground">{t("equipment.kpi.hiddenMachines")}</div>
                                 </CardShell>
                             )}
                         </div>
 
                         <CardShell className="p-5">
-                            <div className="flex flex-col gap-4 xl:flex-row">
+                            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                                 <div className="relative flex-1">
                                     <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                                     <input
                                         value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        placeholder={t("equipment.searchPlaceholder")}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        placeholder={t("equipment.search")}
                                         className="h-12 w-full rounded-2xl border border-border bg-background pl-12 pr-4 text-foreground outline-none placeholder:text-muted-foreground"
                                     />
                                 </div>
@@ -279,91 +203,59 @@ export default function EquipmentPage() {
                                     <button
                                         type="button"
                                         onClick={() => setShowHidden((prev) => !prev)}
-                                        className="inline-flex h-12 items-center gap-2 rounded-2xl border border-border bg-card px-4 font-medium text-foreground transition hover:bg-muted"
+                                        className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-border px-5 font-medium text-foreground transition hover:bg-muted/50"
                                     >
-                                        {showHidden ? (
-                                            <>
-                                                <Eye className="h-4 w-4" />
-                                                {t("equipment.showOnlyVisible")}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <EyeOff className="h-4 w-4" />
-                                                {t("equipment.showHiddenToo")}
-                                            </>
-                                        )}
+                                        {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                        {showHidden ? t("equipment.hideHidden") : t("equipment.showHidden")}
                                     </button>
                                 )}
                             </div>
                         </CardShell>
 
-                        <section className="space-y-4">
-                            <h2 className="text-2xl font-semibold text-foreground md:text-[28px]">
-                                {t("equipment.listTitle")}
-                            </h2>
-
-                            {loading ? (
-                                <CardShell className="p-6 text-sm text-muted-foreground">
-                                    {t("equipment.loading")}
-                                </CardShell>
-                            ) : visibleMachines.length === 0 ? (
-                                <CardShell className="p-6 text-sm text-muted-foreground">
-                                    {t("equipment.noResults")}
-                                </CardShell>
-                            ) : (
-                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    {visibleMachines.map((machine) => (
-                                        <Link
-                                            key={machine.id}
-                                            href={`/equipment/${machine.id}`}
-                                            className="block"
-                                        >
+                        {loading ? (
+                            <CardShell className="p-6 text-sm text-muted-foreground">{t("common.loading")}</CardShell>
+                        ) : visibleMachines.length === 0 ? (
+                            <CardShell className="p-10 text-center text-sm text-muted-foreground">{t("equipment.empty")}</CardShell>
+                        ) : (
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                {visibleMachines.map((machine) => {
+                                    const isHidden = hiddenSet.has(machine.id);
+                                    return (
+                                        <Link key={machine.id} href={`/equipment/${machine.id}`} className="block">
                                             <CardShell className="p-5 transition hover:translate-y-[-2px]">
-                                                <div className="space-y-4">
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <div className="truncate text-xl font-semibold text-foreground">
-                                                                {machine.name ?? t("equipment.fallbackName")}
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0 space-y-3">
+                                                        <div>
+                                                            <div className="truncate text-lg font-semibold text-foreground">
+                                                                {machine.name || t("equipment.unnamedMachine")}
                                                             </div>
-                                                            <div className="truncate text-sm text-muted-foreground">
-                                                                {machine.internal_code ||
-                                                                    machine.serial_number ||
-                                                                    "—"}
+                                                            <div className="mt-1 text-sm text-muted-foreground">
+                                                                {[machine.internal_code, machine.serial_number, machine.brand, machine.model]
+                                                                    .filter(Boolean)
+                                                                    .join(" · ") || "—"}
                                                             </div>
                                                         </div>
-                                                        <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+
+                                                        <div className="flex flex-wrap gap-2 text-xs">
+                                                            <span className="rounded-full border border-border px-3 py-1 text-muted-foreground">
+                                                                {machine.lifecycle_state || "active"}
+                                                            </span>
+                                                            {isHidden && orgType === "customer" ? (
+                                                                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-700 dark:text-amber-300">
+                                                                    {t("equipment.hidden")}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                     </div>
 
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {machine.model && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground/80">
-                                                                {machine.model}
-                                                            </span>
-                                                        )}
-                                                        {machine.brand && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground/80">
-                                                                {machine.brand}
-                                                            </span>
-                                                        )}
-                                                        {machine.lifecycle_state && (
-                                                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground/80">
-                                                                {machine.lifecycle_state}
-                                                            </span>
-                                                        )}
-                                                        {orgType === "customer" &&
-                                                            hiddenMachineIds.has(machine.id) && (
-                                                                <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-300">
-                                                                    hidden
-                                                                </span>
-                                                            )}
-                                                    </div>
+                                                    <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
                                                 </div>
                                             </CardShell>
                                         </Link>
-                                    ))}
-                                </div>
-                            )}
-                        </section>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
             </MainLayout>
