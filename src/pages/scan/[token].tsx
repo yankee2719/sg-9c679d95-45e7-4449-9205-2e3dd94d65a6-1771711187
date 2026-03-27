@@ -30,7 +30,7 @@ export default function ScanPage() {
         if (offlineResult?.is_valid && offlineResult.equipment_id) {
             setState('offline_success');
             setTimeout(() => {
-                void router.push(`/equipment/${offlineResult.equipment_id}?from=qr&offline=true`);
+                void router.push(`/equipment/${offlineResult.equipment_id}/maintenance?from=qr&offline=true`);
             }, 1200);
             return true;
         }
