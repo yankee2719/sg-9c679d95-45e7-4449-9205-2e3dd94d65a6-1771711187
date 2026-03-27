@@ -1,45 +1,41 @@
-// src/components/Offline/OfflineStatusBar.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Download, X } from 'lucide-react';
 import { usePWA } from '@/contexts/PWAProvider';
+import { authService } from '@/services/authService';
+import {
+    getOfflineSyncCount,
+    getOfflineSyncLastRun,
+    listOfflineSyncOperations,
+    removeOfflineSyncOperations,
+    setOfflineSyncLastRun,
+} from '@/lib/offlineOpsQueue';
 
 export function OfflineStatusBar() {
-    const { isOnline, isInstallable, pendingSync, installApp } = usePWA();
+    const { isOnline, isInstallable, installApp } = usePWA();
     const [pendingMutations, setPendingMutations] = useState(0);
     const [syncing, setSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState < { ok: boolean; msg: string } | null > (null);
     const [lastSync, setLastSync] = useState < string | null > (null);
     const [dismissed, setDismissed] = useState(false);
 
-    // Count queued mutations in IndexedDB
-    const countMutations = useCallback(async () => {
-        try {
-            const db = await openDB();
-            const tx = db.transaction('mutations', 'readonly');
-            const store = tx.objectStore('mutations');
-            const countReq = store.count();
-            countReq.onsuccess = () => setPendingMutations(countReq.result);
-        } catch {
-            // IndexedDB not ready or no mutations store
-            setPendingMutations(0);
-        }
+    const refreshPendingCount = useCallback(() => {
+        setPendingMutations(getOfflineSyncCount());
+        setLastSync(getOfflineSyncLastRun());
     }, []);
 
     useEffect(() => {
-        countMutations();
-        const iv = setInterval(countMutations, 5000);
-        setLastSync(localStorage.getItem('offline_last_sync'));
+        refreshPendingCount();
+        const iv = setInterval(refreshPendingCount, 4000);
         return () => clearInterval(iv);
-    }, [countMutations]);
+    }, [refreshPendingCount]);
 
-    // Auto-sync when coming back online
     useEffect(() => {
         if (isOnline && pendingMutations > 0 && !syncing) {
-            handleSync();
+            void handleSync();
         }
-    }, [isOnline]);
+    }, [isOnline, pendingMutations, syncing]);
 
     const handleSync = async () => {
         if (syncing || !isOnline) return;
@@ -47,112 +43,115 @@ export function OfflineStatusBar() {
         setSyncResult(null);
 
         try {
-            const db = await openDB();
-            const tx = db.transaction('mutations', 'readwrite');
-            const store = tx.objectStore('mutations');
+            const operations = listOfflineSyncOperations();
+            if (operations.length === 0) {
+                setSyncResult({ ok: true, msg: 'Nessuna operazione in coda' });
+                return;
+            }
 
-            const allReq = store.getAll();
-            await new Promise < void> ((resolve, reject) => {
-                allReq.onsuccess = async () => {
-                    const mutations = allReq.result || [];
-                    let synced = 0;
-                    let failed = 0;
+            const session = await authService.getCurrentSession();
+            if (!session?.access_token) {
+                setSyncResult({ ok: false, msg: 'Accesso richiesto per sincronizzare' });
+                return;
+            }
 
-                    for (const m of mutations) {
-                        try {
-                            await fetch(m.url, {
-                                method: m.method,
-                                headers: m.headers,
-                                body: m.body,
-                            });
-                            // Remove from IDB
-                            const delTx = db.transaction('mutations', 'readwrite');
-                            delTx.objectStore('mutations').delete(m.id);
-                            synced++;
-                        } catch {
-                            failed++;
-                        }
-                    }
-
-                    const now = new Date().toISOString();
-                    localStorage.setItem('offline_last_sync', now);
-                    setLastSync(now);
-                    await countMutations();
-
-                    setSyncResult({
-                        ok: failed === 0,
-                        msg: failed === 0
-                            ? `${synced} operazioni sincronizzate`
-                            : `${synced} sincronizzate, ${failed} fallite`,
-                    });
-                    resolve();
-                };
-                allReq.onerror = () => reject(allReq.error);
+            const response = await fetch('/api/sync', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    operations,
+                    plant_id: operations.find((item) => item.plant_id)?.plant_id ?? null,
+                    device_id: null,
+                }),
             });
-        } catch (err) {
-            setSyncResult({ ok: false, msg: 'Sincronizzazione fallita' });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Sincronizzazione fallita');
+            }
+
+            const syncedIds = Array.isArray(payload?.results)
+                ? payload.results.filter((row: any) => row.status === 'synced').map((row: any) => row.id)
+                : [];
+
+            removeOfflineSyncOperations(syncedIds);
+            const now = new Date().toISOString();
+            setOfflineSyncLastRun(now);
+            setLastSync(now);
+            refreshPendingCount();
+
+            const summary = payload?.summary ?? {};
+            const synced = Number(summary.synced ?? syncedIds.length ?? 0);
+            const failed = Number(summary.failed ?? 0);
+            const conflicts = Number(summary.conflicts ?? 0);
+            setSyncResult({
+                ok: failed === 0 && conflicts === 0,
+                msg:
+                    failed === 0 && conflicts === 0
+                        ? `${synced} operazioni sincronizzate`
+                        : `${synced} sincronizzate, ${failed + conflicts} non riuscite`,
+            });
+        } catch (err: any) {
+            setSyncResult({ ok: false, msg: err?.message || 'Sincronizzazione fallita' });
         } finally {
             setSyncing(false);
             setTimeout(() => setSyncResult(null), 4000);
         }
     };
 
-    // Don't show if online with nothing pending and no install prompt
     const shouldShow = !isOnline || pendingMutations > 0 || syncResult || isInstallable;
     if (!shouldShow || dismissed) return null;
 
     return (
-        <div className={`w-full px-4 py-2 flex items-center justify-between text-sm transition-all z-50
-            ${isOnline
-                ? 'bg-blue-50 dark:bg-blue-500/10 border-b border-blue-200 dark:border-blue-500/20'
-                : 'bg-amber-50 dark:bg-amber-500/10 border-b border-amber-300 dark:border-amber-500/20'}`}
-        >
-            <div className="flex items-center gap-3 flex-wrap">
-                {isOnline
-                    ? <Wifi className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                    : <WifiOff className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                }
+        <div className={`z-50 flex w-full items-center justify-between px-4 py-2 text-sm transition-all ${isOnline
+                ? 'border-b border-blue-200 bg-blue-50 dark:border-blue-500/20 dark:bg-blue-500/10'
+                : 'border-b border-amber-300 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10'
+            }`}>
+            <div className="flex flex-wrap items-center gap-3">
+                {isOnline ? (
+                    <Wifi className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                ) : (
+                    <WifiOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                )}
 
-                <span className={isOnline ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300 font-medium'}>
-                    {isOnline ? 'Online' : 'Offline — modifiche salvate in locale'}
+                <span className={isOnline ? 'text-blue-700 dark:text-blue-300' : 'font-medium text-amber-700 dark:text-amber-300'}>
+                    {isOnline ? 'Online' : 'Offline — modifiche salvate in coda locale'}
                 </span>
 
                 {pendingMutations > 0 && (
-                    <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-400 bg-amber-100 dark:bg-amber-500/20">
+                    <Badge variant="outline" className="border-amber-400 bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
                         {pendingMutations} in attesa
                     </Badge>
                 )}
 
                 {syncResult && (
                     <div className={`flex items-center gap-1 ${syncResult.ok ? 'text-green-600' : 'text-red-600'}`}>
-                        {syncResult.ok
-                            ? <CheckCircle2 className="h-4 w-4" />
-                            : <AlertCircle className="h-4 w-4" />
-                        }
+                        {syncResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                         <span className="text-xs">{syncResult.msg}</span>
                     </div>
                 )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
                 {lastSync && (
-                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                    <span className="hidden text-xs text-muted-foreground sm:inline">
                         Sync: {new Date(lastSync).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                 )}
 
                 {isOnline && pendingMutations > 0 && (
-                    <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}
-                        className="h-7 text-xs rounded-lg">
-                        <RefreshCw className={`h-3 w-3 mr-1 ${syncing ? 'animate-spin' : ''}`} />
+                    <Button size="sm" variant="outline" onClick={() => void handleSync()} disabled={syncing} className="h-7 rounded-lg text-xs">
+                        <RefreshCw className={`mr-1 h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
                         {syncing ? 'Sync...' : 'Sincronizza'}
                     </Button>
                 )}
 
                 {isInstallable && (
-                    <Button size="sm" variant="outline" onClick={installApp}
-                        className="h-7 text-xs rounded-lg text-blue-600 border-blue-300">
-                        <Download className="h-3 w-3 mr-1" /> Installa App
+                    <Button size="sm" variant="outline" onClick={installApp} className="h-7 rounded-lg border-blue-300 text-xs text-blue-600">
+                        <Download className="mr-1 h-3 w-3" /> Installa App
                     </Button>
                 )}
 
@@ -162,20 +161,5 @@ export function OfflineStatusBar() {
             </div>
         </div>
     );
-}
-
-// Open IndexedDB (same DB as service worker)
-function openDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open('maintops-offline', 1);
-        req.onupgradeneeded = () => {
-            const db = req.result;
-            if (!db.objectStoreNames.contains('mutations')) {
-                db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
-            }
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
 }
 
