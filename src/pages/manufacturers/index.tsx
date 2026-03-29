@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { SEO } from "@/components/SEO";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/integrations/supabase/client";
 import { getUserContext } from "@/lib/supabaseHelpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Factory, Plus, Trash2, Edit2, Save, X, Globe, Mail, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Manufacturer { id: string; name: string; country: string | null; website: string | null; email: string | null; phone: string | null; address: string | null; notes: string | null; is_archived: boolean; }
+import { manufacturerApi, type Manufacturer } from "@/lib/manufacturerApi";
 
 export default function ManufacturersPage() {
     const router = useRouter();
@@ -20,57 +18,119 @@ export default function ManufacturersPage() {
     const { t } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [userRole, setUserRole] = useState("technician");
-    const [orgId, setOrgId] = useState<string | null>(null);
-    const [items, setItems] = useState<Manufacturer[]>([]);
+    const [items, setItems] = useState < Manufacturer[] > ([]);
     const [showForm, setShowForm] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState({ name: "", country: "", website: "", email: "", phone: "", address: "", notes: "" });
+    const [editingId, setEditingId] = useState < string | null > (null);
+    const [form, setForm] = useState({
+        name: "",
+        country: "",
+        website: "",
+        email: "",
+        phone: "",
+        address: "",
+        notes: "",
+    });
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         const load = async () => {
             try {
                 const ctx = await getUserContext();
-                if (!ctx) { router.push("/login"); return; }
-                setUserRole(ctx.role); setOrgId(ctx.orgId);
-                const { data } = await supabase.from("manufacturers").select("*").order("name");
-                if (data) setItems(data);
-            } catch (err) { console.error(err); }
-            finally { setLoading(false); }
+                if (!ctx) {
+                    router.push("/login");
+                    return;
+                }
+                setUserRole(ctx.role);
+                const data = await manufacturerApi.list();
+                setItems(data);
+            } catch (err: any) {
+                console.error(err);
+                toast({
+                    title: t("common.error") || "Errore",
+                    description: err?.message || (t("manufacturers.loadError") as string) || "Impossibile caricare i costruttori",
+                    variant: "destructive",
+                });
+            } finally {
+                setLoading(false);
+            }
         };
-        load();
-    }, [router]);
 
-    const isAdmin = userRole === "admin" || userRole === "supervisor";
-    const resetForm = () => { setForm({ name: "", country: "", website: "", email: "", phone: "", address: "", notes: "" }); setEditingId(null); setShowForm(false); };
+        load();
+    }, [router, t, toast]);
+
+    const isAdmin = userRole === "owner" || userRole === "admin" || userRole === "supervisor";
+
+    const resetForm = () => {
+        setForm({ name: "", country: "", website: "", email: "", phone: "", address: "", notes: "" });
+        setEditingId(null);
+        setShowForm(false);
+    };
+
+    const buildPayload = () => ({
+        name: form.name.trim(),
+        country: form.country.trim() || null,
+        website: form.website.trim() || null,
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        address: form.address.trim() || null,
+        notes: form.notes.trim() || null,
+    });
 
     const handleSave = async () => {
         if (!form.name.trim()) return;
+
         setSaving(true);
         try {
-            const payload = { name: form.name.trim(), country: form.country.trim() || null, website: form.website.trim() || null, email: form.email.trim() || null, phone: form.phone.trim() || null, address: form.address.trim() || null, notes: form.notes.trim() || null };
+            const payload = buildPayload();
             if (editingId) {
-                const { error } = await supabase.from("manufacturers").update(payload).eq("id", editingId);
-                if (error) throw error;
-                setItems(prev => prev.map(m => m.id === editingId ? { ...m, ...payload } as Manufacturer : m));
+                const updated = await manufacturerApi.update(editingId, payload);
+                setItems((prev) => prev.map((item) => (item.id === editingId ? updated : item)));
                 toast({ title: t("manufacturers.updated") || "Aggiornato" });
             } else {
-                const { data, error } = await supabase.from("manufacturers").insert({ ...payload, organization_id: orgId, is_archived: false }).select().single();
-                if (error) throw error;
-                setItems(prev => [...prev, data]);
+                const created = await manufacturerApi.create(payload);
+                setItems((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
                 toast({ title: t("manufacturers.added") || "Costruttore aggiunto" });
             }
             resetForm();
-        } catch (err: any) { toast({ title: t("common.error") || "Errore", description: err?.message, variant: "destructive" }); }
-        finally { setSaving(false); }
+        } catch (err: any) {
+            toast({
+                title: t("common.error") || "Errore",
+                description: err?.message || "Operazione non riuscita",
+                variant: "destructive",
+            });
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handleEdit = (m: Manufacturer) => { setEditingId(m.id); setForm({ name: m.name, country: m.country || "", website: m.website || "", email: m.email || "", phone: m.phone || "", address: m.address || "", notes: m.notes || "" }); setShowForm(true); };
+    const handleEdit = (item: Manufacturer) => {
+        setEditingId(item.id);
+        setForm({
+            name: item.name,
+            country: item.country || "",
+            website: item.website || "",
+            email: item.email || "",
+            phone: item.phone || "",
+            address: item.address || "",
+            notes: item.notes || "",
+        });
+        setShowForm(true);
+    };
 
     const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`${t("common.delete")} "${name}"?`)) return;
-        try { const { error } = await supabase.from("manufacturers").delete().eq("id", id); if (error) throw error; setItems(prev => prev.filter(m => m.id !== id)); toast({ title: t("manufacturers.deleted") || "Eliminato" }); }
-        catch (err: any) { toast({ title: t("common.error") || "Errore", description: err?.message, variant: "destructive" }); }
+        if (!confirm(`${t("common.delete")} \"${name}\"?`)) return;
+
+        try {
+            await manufacturerApi.remove(id);
+            setItems((prev) => prev.filter((item) => item.id !== id));
+            toast({ title: t("manufacturers.deleted") || "Eliminato" });
+        } catch (err: any) {
+            toast({
+                title: t("common.error") || "Errore",
+                description: err?.message || "Eliminazione non riuscita",
+                variant: "destructive",
+            });
+        }
     };
 
     if (loading) return null;
@@ -78,55 +138,120 @@ export default function ManufacturersPage() {
     return (
         <MainLayout userRole={userRole as any}>
             <SEO title={`${t("manufacturers.title") || "Costruttori"} - MACHINA`} />
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="mx-auto max-w-4xl space-y-6">
                 <div className="flex items-center justify-between">
-                    <div><h1 className="text-2xl font-bold text-foreground">{t("manufacturers.title") || "Costruttori"}</h1><p className="text-muted-foreground mt-1">{t("manufacturers.subtitle") || "Anagrafica costruttori macchine"}</p></div>
-                    {isAdmin && !showForm && (<Button className="bg-[#FF6B35] hover:bg-[#e55a2b] text-white" onClick={() => setShowForm(true)}><Plus className="w-4 h-4 mr-2" />{t("manufacturers.new") || "Nuovo Costruttore"}</Button>)}
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">{t("manufacturers.title") || "Costruttori"}</h1>
+                        <p className="mt-1 text-muted-foreground">
+                            {t("manufacturers.subtitle") || "Anagrafica costruttori macchine"}
+                        </p>
+                    </div>
+                    {isAdmin && !showForm ? (
+                        <Button className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]" onClick={() => setShowForm(true)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            {t("manufacturers.new") || "Nuovo Costruttore"}
+                        </Button>
+                    ) : null}
                 </div>
 
-                {showForm && isAdmin && (
-                    <Card className="bg-card border-border">
-                        <CardHeader><CardTitle className="text-foreground">{editingId ? t("manufacturers.editTitle") || "Modifica Costruttore" : t("manufacturers.new") || "Nuovo Costruttore"}</CardTitle></CardHeader>
+                {showForm && isAdmin ? (
+                    <Card className="border-border bg-card">
+                        <CardHeader>
+                            <CardTitle className="text-foreground">
+                                {editingId ? t("manufacturers.editTitle") || "Modifica Costruttore" : t("manufacturers.new") || "Nuovo Costruttore"}
+                            </CardTitle>
+                        </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2"><Label className="text-foreground">{t("manufacturers.nameLabel") || "Nome"} *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted border-border text-foreground" /></div>
-                                <div className="space-y-2"><Label className="text-foreground">{t("manufacturers.countryLabel") || "Paese"}</Label><Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className="bg-muted border-border text-foreground" /></div>
-                                <div className="space-y-2"><Label className="text-foreground">{t("manufacturers.websiteLabel") || "Sito Web"}</Label><Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} className="bg-muted border-border text-foreground" /></div>
-                                <div className="space-y-2"><Label className="text-foreground">Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-muted border-border text-foreground" /></div>
-                                <div className="space-y-2"><Label className="text-foreground">{t("manufacturers.phoneLabel") || "Telefono"}</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-muted border-border text-foreground" /></div>
-                                <div className="space-y-2"><Label className="text-foreground">{t("manufacturers.addressLabel") || "Indirizzo"}</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="bg-muted border-border text-foreground" /></div>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("manufacturers.nameLabel") || "Nome"} *</Label>
+                                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border-border bg-muted text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("manufacturers.countryLabel") || "Paese"}</Label>
+                                    <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className="border-border bg-muted text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("manufacturers.websiteLabel") || "Sito Web"}</Label>
+                                    <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} className="border-border bg-muted text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">Email</Label>
+                                    <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-border bg-muted text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("manufacturers.phoneLabel") || "Telefono"}</Label>
+                                    <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-border bg-muted text-foreground" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-foreground">{t("manufacturers.addressLabel") || "Indirizzo"}</Label>
+                                    <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border-border bg-muted text-foreground" />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-foreground">{t("common.notes") || "Note"}</Label>
+                                <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="border-border bg-muted text-foreground" />
                             </div>
                             <div className="flex gap-2">
-                                <Button onClick={handleSave} disabled={saving || !form.name.trim()} className="bg-green-600 hover:bg-green-700"><Save className="w-4 h-4 mr-2" />{saving ? "..." : t("common.save")}</Button>
-                                <Button variant="outline" onClick={resetForm}><X className="w-4 h-4 mr-2" />{t("common.cancel")}</Button>
+                                <Button onClick={handleSave} disabled={saving || !form.name.trim()} className="bg-green-600 hover:bg-green-700">
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {saving ? "..." : t("common.save")}
+                                </Button>
+                                <Button variant="outline" onClick={resetForm}>
+                                    <X className="mr-2 h-4 w-4" />
+                                    {t("common.cancel")}
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
-                )}
+                ) : null}
 
                 <div className="space-y-3">
-                    {items.map(m => (
-                        <Card key={m.id} className="bg-card border-border">
-                            <CardContent className="p-4 flex items-center justify-between">
+                    {items.map((item) => (
+                        <Card key={item.id} className="border-border bg-card">
+                            <CardContent className="flex items-center justify-between p-4">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><Factory className="w-5 h-5 text-purple-400" /></div>
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20">
+                                        <Factory className="h-5 w-5 text-purple-400" />
+                                    </div>
                                     <div>
-                                        <h3 className="text-foreground font-bold">{m.name}</h3>
-                                        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                                            {m.country && <span>{m.country}</span>}
-                                            {m.website && <span className="flex items-center gap-1"><Globe className="w-3 h-3" />{m.website}</span>}
-                                            {m.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{m.email}</span>}
-                                            {m.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{m.phone}</span>}
+                                        <h3 className="font-bold text-foreground">{item.name}</h3>
+                                        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                                            {item.country ? <span>{item.country}</span> : null}
+                                            {item.website ? (
+                                                <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{item.website}</span>
+                                            ) : null}
+                                            {item.email ? (
+                                                <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{item.email}</span>
+                                            ) : null}
+                                            {item.phone ? (
+                                                <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{item.phone}</span>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
-                                {isAdmin && (<div className="flex gap-1"><Button variant="ghost" size="icon" onClick={() => handleEdit(m)}><Edit2 className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDelete(m.id, m.name)} className="text-red-600 dark:text-red-400"><Trash2 className="w-4 h-4" /></Button></div>)}
+                                {isAdmin ? (
+                                    <div className="flex gap-1">
+                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(item)}>
+                                            <Edit2 className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id, item.name)} className="text-red-600 dark:text-red-400">
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ) : null}
                             </CardContent>
                         </Card>
                     ))}
                 </div>
 
-                {items.length === 0 && (<Card className="bg-card border-border p-12 text-center"><Factory className="w-16 h-16 text-muted-foreground/60 mx-auto mb-4" /><h3 className="text-xl font-bold text-foreground mb-2">{t("manufacturers.empty") || "Nessun costruttore"}</h3><p className="text-muted-foreground">{t("manufacturers.emptyDesc") || "Aggiungi i costruttori delle tue macchine"}</p></Card>)}
+                {items.length === 0 ? (
+                    <Card className="border-border bg-card p-12 text-center">
+                        <Factory className="mx-auto mb-4 h-16 w-16 text-muted-foreground/60" />
+                        <h3 className="mb-2 text-xl font-bold text-foreground">{t("manufacturers.empty") || "Nessun costruttore"}</h3>
+                        <p className="text-muted-foreground">{t("manufacturers.emptyDesc") || "Aggiungi i costruttori delle tue macchine"}</p>
+                    </Card>
+                ) : null}
             </div>
         </MainLayout>
     );
