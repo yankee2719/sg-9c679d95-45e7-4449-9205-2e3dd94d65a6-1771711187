@@ -13,8 +13,17 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
-import { clearWorkOrderChecklistDraft, loadWorkOrderChecklistDraft, saveWorkOrderChecklistDraft, type ChecklistDraftItemValue } from "@/lib/workOrderChecklistDraft";
-import { getWorkOrderChecklistContext, type WorkOrderChecklistAssignment, type WorkOrderChecklistContextItem } from "@/lib/workOrderChecklistApi";
+import {
+    clearWorkOrderChecklistDraft,
+    loadWorkOrderChecklistDraft,
+    saveWorkOrderChecklistDraft,
+    type ChecklistDraftItemValue,
+} from "@/lib/workOrderChecklistDraft";
+import {
+    getWorkOrderChecklistContext,
+    type WorkOrderChecklistAssignment,
+    type WorkOrderChecklistContextItem,
+} from "@/lib/workOrderChecklistApi";
 
 type ItemValue = ChecklistDraftItemValue;
 
@@ -26,6 +35,21 @@ function buildInitialValues(items: WorkOrderChecklistContextItem[]): Record<stri
             : { value: null, notes: null };
     }
     return initial;
+}
+
+function getItemPlaceholder(
+    item: WorkOrderChecklistContextItem,
+    text: ReturnType<typeof getChecklistFlowTexts>["workOrderExecute"]
+) {
+    if (item.input_type === "number") {
+        return text.numberPlaceholder || "Inserisci un valore";
+    }
+
+    if (item.input_type === "text") {
+        return text.textPlaceholder || "Inserisci testo";
+    }
+
+    return text.genericPlaceholder || "Inserisci un valore";
 }
 
 export default function ExecuteChecklistInWorkOrderPage() {
@@ -158,7 +182,8 @@ export default function ExecuteChecklistInWorkOrderPage() {
         if (!isOnline) {
             toast({
                 title: text.savedTitle || "Bozza salvata",
-                description: text.savedDescription || "Sei offline: la bozza è stata salvata localmente, ma non ancora inviata.",
+                description:
+                    "Sei offline: la bozza è stata salvata localmente, ma non ancora inviata.",
             });
             return;
         }
@@ -213,33 +238,37 @@ export default function ExecuteChecklistInWorkOrderPage() {
             <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
                 <Button variant="ghost" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    {text.back || "Indietro"}
+                    {text.backToWorkOrder || "Indietro"}
                 </Button>
 
                 <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle>{text.title || "Esegui checklist"}</CardTitle>
-                        <CardDescription>{workOrder?.title || text.subtitle || "Compila la checklist collegata al work order."}</CardDescription>
+                        <CardDescription>
+                            {workOrder?.title || text.formTitle || "Compila la checklist collegata al work order."}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {!isOnline && (
                             <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
                                 <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
                                 <div>
-                                    {text.offlineDraftNotice || "Sei offline. Puoi compilare la checklist: la bozza viene salvata localmente, ma l'invio finale richiede connessione."}
+                                    Sei offline. Puoi compilare la checklist: la bozza viene salvata localmente, ma l'invio finale richiede connessione.
                                 </div>
                             </div>
                         )}
 
                         <div className="space-y-2">
-                            <Label>{text.assignmentLabel || "Checklist"}</Label>
+                            <Label>{text.assignedChecklist || "Checklist"}</Label>
                             <Select value={selectedAssignmentId} onValueChange={setSelectedAssignmentId}>
                                 <SelectTrigger>
                                     <SelectValue placeholder={text.selectChecklist || "Seleziona checklist"} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {assignments.length === 0 ? (
-                                        <SelectItem value="none" disabled>{text.noAssignments || "Nessuna checklist attiva"}</SelectItem>
+                                        <SelectItem value="none" disabled>
+                                            {text.noAssignedChecklist || "Nessuna checklist attiva"}
+                                        </SelectItem>
                                     ) : (
                                         assignments.map((assignment) => (
                                             <SelectItem key={assignment.id} value={assignment.id}>
@@ -252,69 +281,75 @@ export default function ExecuteChecklistInWorkOrderPage() {
                         </div>
 
                         {selectedAssignment ? (
-                            <div className="space-y-4">
-                                {selectedAssignment.template_items.map((item) => {
-                                    const value = values[item.id] ?? { value: null, notes: null };
-
-                                    return (
-                                        <Card key={item.id} className="rounded-2xl border-border/70">
-                                            <CardContent className="space-y-4 p-5">
-                                                <div>
-                                                    <div className="text-sm font-semibold text-foreground">
-                                                        {item.title}
-                                                        {item.is_required ? <span className="ml-1 text-orange-500">*</span> : null}
-                                                    </div>
-                                                    {item.description ? (
-                                                        <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-                                                    ) : null}
-                                                </div>
-
-                                                {item.input_type === "boolean" ? (
-                                                    <Select
-                                                        value={value.bool ?? "na"}
-                                                        onValueChange={(next) => setItemValue(item.id, { bool: next as ItemValue["bool"] })}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder={text.booleanPlaceholder || "Seleziona esito"} />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="yes">{text.booleanYes || "Sì"}</SelectItem>
-                                                            <SelectItem value="no">{text.booleanNo || "No"}</SelectItem>
-                                                            <SelectItem value="na">{text.booleanNa || "N/A"}</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                ) : (
-                                                    <Input
-                                                        value={value.value ?? ""}
-                                                        onChange={(e) => setItemValue(item.id, { value: e.target.value })}
-                                                        placeholder={text.valuePlaceholder || "Inserisci valore"}
-                                                    />
-                                                )}
-
-                                                <Textarea
-                                                    value={value.notes ?? ""}
-                                                    onChange={(e) => setItemValue(item.id, { notes: e.target.value })}
-                                                    rows={2}
-                                                    placeholder={text.itemNotesPlaceholder || "Note opzionali"}
-                                                />
-                                            </CardContent>
-                                        </Card>
-                                    );
-                                })}
-
-                                <div className="space-y-2">
-                                    <Label>{text.globalNotesLabel || "Note finali"}</Label>
-                                    <Textarea
-                                        value={globalNotes}
-                                        onChange={(e) => setGlobalNotes(e.target.value)}
-                                        rows={4}
-                                        placeholder={text.globalNotesPlaceholder || "Note finali intervento"}
-                                    />
+                            selectedAssignment.template_items.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+                                    {text.emptyTemplate || "Il template selezionato non contiene elementi."}
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {selectedAssignment.template_items.map((item) => {
+                                        const value = values[item.id] ?? { value: null, notes: null };
+
+                                        return (
+                                            <Card key={item.id} className="rounded-2xl border-border/70">
+                                                <CardContent className="space-y-4 p-5">
+                                                    <div>
+                                                        <div className="text-sm font-semibold text-foreground">
+                                                            {item.title}
+                                                            {item.is_required ? <span className="ml-1 text-orange-500">*</span> : null}
+                                                        </div>
+                                                        {item.description ? (
+                                                            <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                                                        ) : null}
+                                                    </div>
+
+                                                    {item.input_type === "boolean" ? (
+                                                        <Select
+                                                            value={value.bool ?? "na"}
+                                                            onValueChange={(next) => setItemValue(item.id, { bool: next as ItemValue["bool"] })}
+                                                        >
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder={text.selectResponse || "Seleziona esito"} />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="yes">{text.boolYes || "Sì"}</SelectItem>
+                                                                <SelectItem value="no">{text.boolNo || "No"}</SelectItem>
+                                                                <SelectItem value="na">{text.boolNa || "N/A"}</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    ) : (
+                                                        <Input
+                                                            value={value.value ?? ""}
+                                                            onChange={(e) => setItemValue(item.id, { value: e.target.value })}
+                                                            placeholder={getItemPlaceholder(item, text)}
+                                                        />
+                                                    )}
+
+                                                    <Textarea
+                                                        value={value.notes ?? ""}
+                                                        onChange={(e) => setItemValue(item.id, { notes: e.target.value })}
+                                                        rows={2}
+                                                        placeholder={text.itemNotesPlaceholder || "Note opzionali"}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+
+                                    <div className="space-y-2">
+                                        <Label>{text.finalNotes || "Note finali"}</Label>
+                                        <Textarea
+                                            value={globalNotes}
+                                            onChange={(e) => setGlobalNotes(e.target.value)}
+                                            rows={4}
+                                            placeholder={text.finalNotesPlaceholder || "Note finali intervento"}
+                                        />
+                                    </div>
+                                </div>
+                            )
                         ) : (
                             <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-                                {text.noAssignments || "Nessuna checklist attiva disponibile per questa macchina."}
+                                {text.noAssignedChecklist || "Nessuna checklist attiva disponibile per questa macchina."}
                             </div>
                         )}
 
