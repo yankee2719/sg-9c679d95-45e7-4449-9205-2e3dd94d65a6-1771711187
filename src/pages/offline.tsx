@@ -1,171 +1,155 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Trash2, WifiOff } from "lucide-react";
-import MainLayout from "@/components/Layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/hooks/useAuth";
-import {
-    clearLegacyMutations,
-    clearOfflineOperations,
-    clearSyncHistory,
-    getLegacyMutationCount,
-    listOfflineOperations,
-    listSyncHistory,
-    type OfflineSyncHistoryEntry,
-} from "@/lib/offlineOpsQueue";
-import { runOfflineSync } from "@/lib/offlineSyncClient";
+import Head from "next/head";
+import Link from "next/link";
+import { Database, FileText, RefreshCw, WifiOff, Wrench } from "lucide-react";
 
 export default function OfflinePage() {
-    const { membership } = useAuth();
-    const userRole = membership?.role ?? "viewer";
-    const [pendingOps, setPendingOps] = useState(listOfflineOperations());
-    const [syncHistory, setSyncHistory] = useState < OfflineSyncHistoryEntry[] > ([]);
-    const [legacyCount, setLegacyCount] = useState(0);
-    const [syncing, setSyncing] = useState(false);
-
-    const refresh = useCallback(async () => {
-        setPendingOps(listOfflineOperations());
-        setSyncHistory(listSyncHistory());
-        setLegacyCount(await getLegacyMutationCount());
-    }, []);
-
-    useEffect(() => {
-        refresh();
-    }, [refresh]);
-
-    const summary = useMemo(() => ({
-        queue: pendingOps.length,
-        legacy: legacyCount,
-        lastSync: syncHistory[0]?.created_at ?? null,
-    }), [legacyCount, pendingOps.length, syncHistory]);
-
-    const handleSync = async () => {
-        setSyncing(true);
-        try {
-            await runOfflineSync();
-            await refresh();
-        } finally {
-            setSyncing(false);
-        }
-    };
-
     return (
-        <MainLayout userRole={userRole}>
-            <div className="space-y-6">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                        <h1 className="text-2xl font-bold">Centro offline</h1>
-                        <p className="text-muted-foreground">
-                            Stato coda, storico sync e pulizia residui legacy prima del rilascio.
-                        </p>
-                    </div>
-                    <Button onClick={handleSync} disabled={syncing || pendingOps.length === 0}>
-                        <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-                        {syncing ? "Sincronizzazione..." : "Sincronizza ora"}
-                    </Button>
-                </div>
+        <>
+            <Head>
+                <title>MACHINA | Modalità offline</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+            </Head>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <Card>
-                        <CardHeader><CardTitle>Operazioni in coda</CardTitle></CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold">{summary.queue}</div>
-                            <p className="text-sm text-muted-foreground">Operazioni applicative salvate localmente.</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader><CardTitle>Mutazioni legacy</CardTitle></CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-amber-600">{summary.legacy}</div>
-                            <p className="text-sm text-muted-foreground">Residui della vecchia coda raw del service worker.</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader><CardTitle>Ultimo sync</CardTitle></CardHeader>
-                        <CardContent>
-                            <div className="text-sm font-medium">
-                                {summary.lastSync ? new Date(summary.lastSync).toLocaleString("it-IT") : "Mai eseguito"}
-                            </div>
-                            <p className="text-sm text-muted-foreground">Storico locale delle ultime sincronizzazioni.</p>
-                        </CardContent>
-                    </Card>
-                </div>
+            <main className="min-h-screen bg-slate-950 text-slate-100">
+                <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 sm:px-6 lg:px-8">
+                    <div className="grid w-full gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+                        <section className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-sm sm:p-10">
+                            <div className="mb-8 flex items-center gap-3">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10">
+                                    <WifiOff className="h-7 w-7 text-amber-400" />
+                                </div>
 
-                {legacyCount > 0 && (
-                    <Card className="border-amber-300 bg-amber-50">
-                        <CardContent className="pt-6 flex items-start justify-between gap-4 flex-wrap">
-                            <div className="flex gap-3">
-                                <AlertTriangle className="h-5 w-5 text-amber-700 mt-0.5" />
                                 <div>
-                                    <h2 className="font-semibold text-amber-900">Coda legacy rilevata</h2>
-                                    <p className="text-sm text-amber-800">
-                                        Nel browser ci sono ancora mutazioni raw del vecchio service worker. Non vanno rilanciate automaticamente in produzione.
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">
+                                        Stato connessione
+                                    </p>
+                                    <h1 className="mt-1 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                                        Modalità offline attiva
+                                    </h1>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <p className="max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+                                    MACHINA non riesce a raggiungere la rete in questo momento.
+                                    Le funzioni già disponibili offline possono continuare a essere
+                                    utilizzate, mentre le operazioni che richiedono sincronizzazione
+                                    o download live verranno riprese quando la connessione tornerà attiva.
+                                </p>
+
+                                <div className="flex flex-wrap gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => window.location.reload()}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-400"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                        Riprova connessione
+                                    </button>
+
+                                    <Link
+                                        href="/dashboard"
+                                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:bg-white/10"
+                                    >
+                                        Vai alla dashboard
+                                    </Link>
+                                </div>
+                            </div>
+
+                            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400">
+                                        <Wrench className="h-5 w-5" />
+                                    </div>
+                                    <h2 className="text-sm font-semibold text-white">
+                                        Manutenzione sul campo
+                                    </h2>
+                                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                                        Le attività già preparate localmente restano consultabili.
+                                    </p>
+                                </div>
+
+                                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <h2 className="text-sm font-semibold text-white">
+                                        Documenti offline
+                                    </h2>
+                                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                                        I file già salvati offline possono essere aperti anche senza rete.
+                                    </p>
+                                </div>
+
+                                <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400">
+                                        <Database className="h-5 w-5" />
+                                    </div>
+                                    <h2 className="text-sm font-semibold text-white">
+                                        Sincronizzazione
+                                    </h2>
+                                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                                        Le modifiche locali verranno inviate appena la connessione ritorna.
                                     </p>
                                 </div>
                             </div>
-                            <Button variant="outline" onClick={async () => { await clearLegacyMutations(); await refresh(); }}>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Svuota legacy queue
-                            </Button>
-                        </CardContent>
-                    </Card>
-                )}
+                        </section>
 
-                <div className="grid gap-6 lg:grid-cols-2">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle>Operazioni pending</CardTitle>
-                            <Button variant="ghost" size="sm" onClick={() => { clearOfflineOperations(); refresh(); }}>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Svuota
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                            {pendingOps.length === 0 ? (
-                                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                                    <WifiOff className="h-4 w-4" />
-                                    Nessuna operazione in coda.
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {pendingOps.map((operation) => (
-                                        <div key={operation.id} className="rounded-lg border p-3 text-sm">
-                                            <div className="font-medium">{operation.entity_type} · {operation.operation_type}</div>
-                                            <div className="text-muted-foreground">Entity: {operation.entity_id}</div>
-                                            <div className="text-muted-foreground">{new Date(operation.client_timestamp).toLocaleString("it-IT")}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                        <aside className="rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl">
+                            <div className="mb-6">
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                    Indicazioni operative
+                                </p>
+                                <h2 className="mt-2 text-2xl font-bold text-white">
+                                    Cosa puoi fare adesso
+                                </h2>
+                            </div>
 
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle>Storico sync locale</CardTitle>
-                            <Button variant="ghost" size="sm" onClick={() => { clearSyncHistory(); refresh(); }}>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Pulisci
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                            {syncHistory.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">Nessuna sincronizzazione registrata.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {syncHistory.map((entry) => (
-                                        <div key={entry.id} className="rounded-lg border p-3 text-sm">
-                                            <div className="font-medium">{entry.ok ? "Sync completata" : "Sync con errori"}</div>
-                                            <div className="text-muted-foreground">{new Date(entry.created_at).toLocaleString("it-IT")}</div>
-                                            <div className="text-muted-foreground">{entry.message}</div>
-                                        </div>
-                                    ))}
+                            <div className="space-y-4">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                    <p className="text-sm font-semibold text-white">
+                                        1. Continua il lavoro locale
+                                    </p>
+                                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                                        Usa checklist, snapshot e documenti già disponibili sul dispositivo.
+                                    </p>
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
+
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                    <p className="text-sm font-semibold text-white">
+                                        2. Evita operazioni che richiedono rete
+                                    </p>
+                                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                                        Download nuovi file, aggiornamenti live e sincronizzazioni complete
+                                        potrebbero non riuscire finché la rete resta assente.
+                                    </p>
+                                </div>
+
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                    <p className="text-sm font-semibold text-white">
+                                        3. Riprova appena la rete torna disponibile
+                                    </p>
+                                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                                        Quando la connessione ritorna, aggiorna la pagina o rientra nella
+                                        dashboard per riprendere il flusso normale.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mt-8 rounded-2xl border border-orange-500/20 bg-orange-500/10 p-4">
+                                <p className="text-sm font-semibold text-orange-300">
+                                    Nota
+                                </p>
+                                <p className="mt-2 text-sm leading-6 text-orange-100/80">
+                                    Questa pagina è pensata per restare stabile anche in caso di problemi
+                                    ai provider principali dell’app. Per questo è volutamente indipendente
+                                    dai layout condivisi.
+                                </p>
+                            </div>
+                        </aside>
+                    </div>
                 </div>
-            </div>
-        </MainLayout>
+            </main>
+        </>
     );
 }
