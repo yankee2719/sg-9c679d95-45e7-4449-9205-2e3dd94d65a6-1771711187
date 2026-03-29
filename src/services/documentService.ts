@@ -64,17 +64,132 @@ export type DocumentWithVersions = DocumentRow & {
     document_versions: DocumentVersionRow[];
 };
 
-async function sha256(file: File): Promise<string> {
-    const buffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+export interface UploadDocumentParams {
+    organizationId: string;
+    equipmentId?: string | null;
+    machineId?: string | null;
+    plantId?: string | null;
+    title: string;
+    description?: string | null;
+    category: DocumentCategory;
+    file: File;
+    changeSummary?: string | null;
+    language?: string | null;
+    isMandatory?: boolean;
+    tags?: string[];
+    complianceTags?: string[];
+    regulatoryReference?: string | null;
+    createdBy?: string | null;
+}
+
+export interface UploadDocumentResult {
+    document: DocumentRow;
+    version: DocumentVersionRow;
+}
+
+export interface MandatoryDocumentStatus {
+    category_code: DocumentCategory | string;
+    category_name_it: string;
+    category_name_en: string;
+    mandatory: boolean;
+    active_count: number;
+    exists: boolean;
+    compliance_status: "compliant" | "missing";
+    latest_document_id: string | null;
+    document_ids: string[];
+}
+
+export type DocumentVersion = {
+    id: string;
+    document_id: string;
+    version_number: number;
+    storage_path: string;
+    original_filename: string;
+    file_size_bytes: number;
+    mime_type: string;
+    checksum_sha256: string;
+    change_description: string | null;
+    uploaded_at: string;
+    uploaded_by: string | null;
+};
+
+export type AuditLogEntry = {
+    id: string;
+    action: string;
+    performed_at: string;
+    performed_by: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    details: string | null;
+    metadata?: Record<string, any> | null;
+    success: boolean;
+};
+
+const MANDATORY_CATEGORIES: Array<{
+    code: DocumentCategory;
+    it: string;
+    en: string;
+}> = [
+    { code: "technical_manual", it: "Manuale tecnico", en: "Technical manual" },
+    { code: "risk_assessment", it: "Valutazione dei rischi", en: "Risk assessment" },
+    { code: "ce_declaration", it: "Dichiarazione CE", en: "CE declaration" },
+    { code: "electrical_schema", it: "Schema elettrico", en: "Electrical schema" },
+    { code: "maintenance_manual", it: "Manuale di manutenzione", en: "Maintenance manual" },
+];
+
+function safeExt(name: string) {
+    const ext = name.split(".").pop();
+    return ext ? ext.toLowerCase() : "bin";
+}
+
+function normalizeText(value: string | null | undefined) {
+    const trimmed = String(value ?? "").trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+    return Array.from(
+        new Set(
+            values
+                .map((value) => normalizeText(value))
+                .filter((value): value is string => Boolean(value))
+        )
+    );
+}
+
+async function arrayBufferFromFile(file: File): Promise<ArrayBuffer> {
+    return file.arrayBuffer();
+}
+
+async function arrayBufferFromBuffer(buffer: any): Promise<ArrayBuffer> {
+    if (buffer instanceof ArrayBuffer) {
+        return buffer;
+    }
+
+    if (ArrayBuffer.isView(buffer)) {
+        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    }
+
+    if (buffer?.buffer && typeof buffer.byteOffset === "number" && typeof buffer.byteLength === "number") {
+        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    }
+
+    throw new Error("Unsupported binary payload");
+}
+
+async function sha256HexFromArrayBuffer(buffer: ArrayBuffer): Promise<string> {
+    const hashBuffer = await globalThis.crypto.subtle.digest("SHA-256", buffer);
     return Array.from(new Uint8Array(hashBuffer))
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 }
 
-function safeExt(name: string) {
-    const ext = name.split(".").pop();
-    return ext ? ext.toLowerCase() : "bin";
+async function sha256File(file: File): Promise<string> {
+    return sha256HexFromArrayBuffer(await arrayBufferFromFile(file));
+}
+
+async function sha256Buffer(buffer: any): Promise<string> {
+    return sha256HexFromArrayBuffer(await arrayBufferFromBuffer(buffer));
 }
 
 export function normalizeMimeType(file: File) {
@@ -108,9 +223,7 @@ export function normalizeMimeType(file: File) {
     return "application/octet-stream";
 }
 
-export async function listMachineDocuments(
-    machineId: string
-): Promise<DocumentWithVersions[]> {
+export async function listMachineDocuments(machineId: string): Promise<DocumentWithVersions[]> {
     const { data, error } = await supabase
         .from("documents")
         .select(`
@@ -169,13 +282,28 @@ export async function listMachineDocuments(
     })) as DocumentWithVersions[];
 }
 
-export async function getSignedUrl(filePath: string, expiresInSec = 600) {
-    const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(filePath, expiresInSec);
+export const getMachineDocuments = listMachineDocuments;
+export const getDocumentsByEquipment = listMachineDocuments;
 
+export async function getSignedUrl(filePath: string, expiresInSec = 600) {
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, expiresInSec);
     if (error) throw error;
     return data.signedUrl;
+}
+
+export async function downloadVersion(versionId?: string | null, expiresInSec = 600) {
+    if (!versionId) return null;
+
+    const { data, error } = await supabase
+        .from("document_versions")
+        .select("file_path")
+        .eq("id", versionId)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data?.file_path) return null;
+
+    return getSignedUrl(data.file_path, expiresInSec);
 }
 
 export async function createDocumentAndUploadV1(params: {
@@ -218,17 +346,14 @@ export async function createDocumentAndUploadV1(params: {
     let createdDocument = false;
 
     try {
-        const { error: uploadError } = await supabase.storage
-            .from(BUCKET)
-            .upload(objectName, file, {
-                upsert: false,
-                contentType: resolvedMimeType,
-            });
-
+        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(objectName, file, {
+            upsert: false,
+            contentType: resolvedMimeType,
+        });
         if (uploadError) throw uploadError;
         uploaded = true;
 
-        const checksum = await sha256(file);
+        const checksum = await sha256File(file);
 
         const { data: doc, error: docErr } = await supabase
             .from("documents")
@@ -238,11 +363,11 @@ export async function createDocumentAndUploadV1(params: {
                 machine_id: machineId ?? null,
                 plant_id: plantId ?? null,
                 title: title.trim(),
-                description: description?.trim() || null,
+                description: normalizeText(description),
                 category,
-                language: language?.trim() || "it",
+                language: normalizeText(language) ?? "it",
                 is_mandatory: Boolean(isMandatory),
-                regulatory_reference: regulatoryReference?.trim() || null,
+                regulatory_reference: normalizeText(regulatoryReference),
                 version_count: 0,
                 current_version_id: null,
                 tags: tags ?? [],
@@ -257,7 +382,6 @@ export async function createDocumentAndUploadV1(params: {
             })
             .select("*")
             .single();
-
         if (docErr) throw docErr;
         createdDocument = true;
 
@@ -272,13 +396,12 @@ export async function createDocumentAndUploadV1(params: {
                 file_size: file.size,
                 mime_type: resolvedMimeType,
                 checksum_sha256: checksum,
-                change_summary: changeSummary?.trim() || null,
+                change_summary: normalizeText(changeSummary),
                 signature_data: null,
                 created_by: createdBy ?? null,
             })
             .select("*")
             .single();
-
         if (verErr) throw verErr;
 
         const { error: updErr } = await supabase
@@ -293,7 +416,6 @@ export async function createDocumentAndUploadV1(params: {
                 updated_at: new Date().toISOString(),
             })
             .eq("id", documentId);
-
         if (updErr) throw updErr;
 
         return {
@@ -305,31 +427,22 @@ export async function createDocumentAndUploadV1(params: {
                 storage_path: objectName,
                 mime_type: resolvedMimeType,
                 file_size: file.size,
-            },
-            version,
+            } as DocumentRow,
+            version: version as DocumentVersionRow,
         };
     } catch (error) {
         console.error("createDocumentAndUploadV1 error:", error);
 
         if (createdDocument) {
-            await supabase
-                .from("documents")
-                .delete()
-                .eq("id", documentId)
-                .then(() => undefined)
-                .catch((err) => {
-                    console.error("Rollback document delete error:", err);
-                });
+            await supabase.from("documents").delete().eq("id", documentId).then(() => undefined).catch((err) => {
+                console.error("Rollback document delete error:", err);
+            });
         }
 
         if (uploaded) {
-            await supabase.storage
-                .from(BUCKET)
-                .remove([objectName])
-                .then(() => undefined)
-                .catch((err) => {
-                    console.error("Rollback storage remove error:", err);
-                });
+            await supabase.storage.from(BUCKET).remove([objectName]).then(() => undefined).catch((err) => {
+                console.error("Rollback storage remove error:", err);
+            });
         }
 
         throw error;
@@ -350,7 +463,6 @@ export async function uploadNewVersion(params: {
         .select("id, current_version_id, version_count")
         .eq("id", documentId)
         .single();
-
     if (docErr) throw docErr;
 
     const nextVersion = (doc.version_count ?? 0) + 1;
@@ -358,16 +470,13 @@ export async function uploadNewVersion(params: {
     const ext = safeExt(file.name);
     const objectName = `${organizationId}/${documentId}/v${nextVersion}_${Date.now()}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(objectName, file, {
-            upsert: false,
-            contentType: resolvedMimeType,
-        });
-
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(objectName, file, {
+        upsert: false,
+        contentType: resolvedMimeType,
+    });
     if (uploadError) throw uploadError;
 
-    const checksum = await sha256(file);
+    const checksum = await sha256File(file);
 
     const { data: version, error: verErr } = await supabase
         .from("document_versions")
@@ -380,13 +489,12 @@ export async function uploadNewVersion(params: {
             file_size: file.size,
             mime_type: resolvedMimeType,
             checksum_sha256: checksum,
-            change_summary: changeSummary?.trim() || null,
+            change_summary: normalizeText(changeSummary),
             signature_data: null,
             created_by: createdBy ?? null,
         })
         .select("*")
         .single();
-
     if (verErr) throw verErr;
 
     const { error: updErr } = await supabase
@@ -401,81 +509,50 @@ export async function uploadNewVersion(params: {
             updated_at: new Date().toISOString(),
         })
         .eq("id", documentId);
-
     if (updErr) throw updErr;
 
     return version as DocumentVersionRow;
 }
 
-export async function archiveDocument(
-    documentId: string,
-    organizationId: string
-) {
+export async function archiveDocument(documentId: string, organizationId?: string | null) {
     const now = new Date().toISOString();
 
-    const { error } = await supabase
+    let query = supabase
         .from("documents")
         .update({
             is_archived: true,
             archived_at: now,
             updated_at: now,
         })
-        .eq("id", documentId)
-        .eq("organization_id", organizationId);
+        .eq("id", documentId);
 
+    if (organizationId) {
+        query = query.eq("organization_id", organizationId);
+    }
+
+    const { error } = await query;
     if (error) throw error;
 }
 
-export async function restoreDocument(
-    documentId: string,
-    organizationId: string
-) {
+export async function restoreDocument(documentId: string, organizationId?: string | null) {
     const now = new Date().toISOString();
 
-    const { error } = await supabase
+    let query = supabase
         .from("documents")
         .update({
             is_archived: false,
             archived_at: null,
             updated_at: now,
         })
-        .eq("id", documentId)
-        .eq("organization_id", organizationId);
+        .eq("id", documentId);
 
+    if (organizationId) {
+        query = query.eq("organization_id", organizationId);
+    }
+
+    const { error } = await query;
     if (error) throw error;
 }
-
-// ============================================================================
-// COMPATIBILITY LAYER FOR LEGACY DOCUMENT MODULES
-// Temporary bridge to keep older document pages/components compiling while the
-// real API-first document flow is being consolidated.
-// ============================================================================
-
-export type DocumentVersion = {
-    id: string;
-    document_id: string;
-    version_number: number;
-    storage_path: string;
-    original_filename: string;
-    file_size_bytes: number;
-    mime_type: string;
-    checksum_sha256: string;
-    change_description: string | null;
-    uploaded_at: string;
-    uploaded_by: string | null;
-};
-
-export type AuditLogEntry = {
-    id: string;
-    action: string;
-    performed_at: string;
-    performed_by: string;
-    ip_address: string | null;
-    user_agent: string | null;
-    details: string | null;
-    metadata?: Record<string, any> | null;
-    success: boolean;
-};
 
 async function getDocumentByIdCompat(documentId: string) {
     const { data, error } = await supabase
@@ -509,7 +586,7 @@ async function getDocumentByIdCompat(documentId: string) {
         .maybeSingle();
 
     if (error) throw error;
-    return data ?? null;
+    return (data ?? null) as DocumentRow | null;
 }
 
 async function getVersionHistoryCompat(documentId: string): Promise<DocumentVersion[]> {
@@ -623,8 +700,8 @@ async function updateDocumentMetadataCompat(
         updated_at: new Date().toISOString(),
     };
 
-    if (params.title !== undefined) payload.title = params.title?.trim() || null;
-    if (params.description !== undefined) payload.description = params.description?.trim() || null;
+    if (params.title !== undefined) payload.title = normalizeText(params.title);
+    if (params.description !== undefined) payload.description = normalizeText(params.description);
     if (params.tags !== undefined) payload.tags = params.tags ?? [];
     if (params.complianceTags !== undefined) {
         payload.regulatory_reference = params.complianceTags.join(", ") || null;
@@ -662,7 +739,7 @@ async function updateDocumentMetadataCompat(
         .single();
 
     if (error) throw error;
-    return data;
+    return data as DocumentRow;
 }
 
 async function deleteDocumentCompat(documentId: string) {
@@ -688,6 +765,7 @@ async function searchDocumentsCompat(params: {
             category,
             tags,
             regulatory_reference,
+            current_version_id,
             created_at,
             updated_at,
             storage_path,
@@ -723,7 +801,10 @@ async function searchDocumentsCompat(params: {
     return rows.map((row) => ({
         ...row,
         compliance_tags: row.regulatory_reference
-            ? String(row.regulatory_reference).split(",").map((t) => t.trim()).filter(Boolean)
+            ? String(row.regulatory_reference)
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean)
             : [],
     }));
 }
@@ -734,7 +815,7 @@ async function createDocumentCompat(
         title: string;
         description?: string;
         category: DocumentCategory | string;
-        file: Buffer;
+        file: any;
         complianceTags?: string[];
         documentNumber?: string;
         tags?: string[];
@@ -752,12 +833,10 @@ async function createDocumentCompat(
     const documentId = crypto.randomUUID();
     const objectName = `${(machine as any).organization_id}/${documentId}/v1_${Date.now()}.bin`;
 
-    const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(objectName, params.file, {
-            upsert: false,
-            contentType: "application/octet-stream",
-        });
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(objectName, params.file, {
+        upsert: false,
+        contentType: "application/octet-stream",
+    });
     if (uploadError) throw uploadError;
 
     const { data: doc, error: docError } = await supabase
@@ -768,7 +847,7 @@ async function createDocumentCompat(
             machine_id: params.equipmentId,
             plant_id: (machine as any).plant_id ?? null,
             title: params.title,
-            description: params.description ?? null,
+            description: normalizeText(params.description),
             category: params.category,
             regulatory_reference: params.complianceTags?.join(", ") ?? null,
             tags: params.tags ?? [],
@@ -784,7 +863,7 @@ async function createDocumentCompat(
         .single();
     if (docError) throw docError;
 
-    const checksum = createHash("sha256").update(params.file).digest("hex");
+    const checksum = await sha256Buffer(params.file);
     const { data: version, error: versionError } = await supabase
         .from("document_versions")
         .insert({
@@ -815,7 +894,7 @@ async function createDocumentCompat(
 async function createNewVersionCompat(
     params: {
         documentId: string;
-        file: Buffer;
+        file: any;
         changeReason: string;
         changeSummary?: string;
         newTitle?: string;
@@ -837,7 +916,7 @@ async function createNewVersionCompat(
         });
     if (uploadError) throw uploadError;
 
-    const checksum = createHash("sha256").update(params.file).digest("hex");
+    const checksum = await sha256Buffer(params.file);
     const { data: version, error: versionError } = await supabase
         .from("document_versions")
         .insert({
@@ -878,29 +957,110 @@ async function createNewVersionCompat(
     };
 }
 
-export function getDocumentService() {
-    return {
-        storage: {
-            downloadDocument: async (storagePath: string) => {
-                const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
-                if (error) throw error;
-                return data;
-            },
-            getSignedUrl: async (storagePath: string, expiresIn = 600) => {
-                const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, expiresIn);
-                if (error) throw error;
-                return data?.signedUrl;
-            },
-        },
-        checkUserPermission: checkUserPermissionCompat,
-        getDocumentById: getDocumentByIdCompat,
-        getVersionHistory: getVersionHistoryCompat,
-        getAuditLog: getAuditLogCompat,
-        logDocumentAction: logDocumentActionCompat,
-        updateDocumentMetadata: updateDocumentMetadataCompat,
-        deleteDocument: deleteDocumentCompat,
-        searchDocuments: searchDocumentsCompat,
-        createDocument: createDocumentCompat,
-        createNewVersion: createNewVersionCompat,
-    };
+export async function uploadDocument(params: UploadDocumentParams): Promise<UploadDocumentResult> {
+    const machineId = params.machineId ?? params.equipmentId ?? null;
+    const complianceReference = uniqueStrings(params.complianceTags ?? []).join(", ");
+    const regulatoryReference = normalizeText(params.regulatoryReference) ?? normalizeText(complianceReference);
+
+    return createDocumentAndUploadV1({
+        organizationId: params.organizationId,
+        machineId,
+        plantId: params.plantId ?? null,
+        title: params.title,
+        description: params.description ?? null,
+        category: params.category,
+        file: params.file,
+        changeSummary: params.changeSummary ?? null,
+        language: params.language ?? "it",
+        isMandatory: params.isMandatory,
+        tags: params.tags ?? [],
+        regulatoryReference,
+        createdBy: params.createdBy ?? null,
+    });
 }
+
+export async function getMandatoryDocumentStatus(
+    organizationId: string,
+    machineId?: string
+): Promise<MandatoryDocumentStatus[]> {
+    let query = supabase
+        .from("documents")
+        .select("id, category, machine_id, organization_id, is_archived, updated_at")
+        .eq("organization_id", organizationId)
+        .eq("is_archived", false)
+        .in(
+            "category",
+            MANDATORY_CATEGORIES.map((item) => item.code)
+        )
+        .order("updated_at", { ascending: false });
+
+    if (machineId) {
+        query = query.eq("machine_id", machineId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{
+        id: string;
+        category: DocumentCategory;
+        updated_at?: string | null;
+    }>;
+
+    return MANDATORY_CATEGORIES.map((definition) => {
+        const matches = rows.filter((row) => row.category === definition.code);
+        return {
+            category_code: definition.code,
+            category_name_it: definition.it,
+            category_name_en: definition.en,
+            mandatory: true,
+            active_count: matches.length,
+            exists: matches.length > 0,
+            compliance_status: matches.length > 0 ? "compliant" : "missing",
+            latest_document_id: matches[0]?.id ?? null,
+            document_ids: matches.map((row) => row.id),
+        };
+    });
+}
+
+export const documentService = {
+    storage: {
+        downloadDocument: async (storagePath: string) => {
+            const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
+            if (error) throw error;
+            return data;
+        },
+        getSignedUrl: async (storagePath: string, expiresIn = 600) => {
+            const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, expiresIn);
+            if (error) throw error;
+            return data?.signedUrl;
+        },
+    },
+    listMachineDocuments,
+    getMachineDocuments,
+    getDocumentsByEquipment,
+    getSignedUrl,
+    downloadVersion,
+    createDocumentAndUploadV1,
+    uploadNewVersion,
+    archiveDocument,
+    restoreDocument,
+    uploadDocument,
+    getMandatoryDocumentStatus,
+    checkUserPermission: checkUserPermissionCompat,
+    getDocumentById: getDocumentByIdCompat,
+    getVersionHistory: getVersionHistoryCompat,
+    getAuditLog: getAuditLogCompat,
+    logDocumentAction: logDocumentActionCompat,
+    updateDocumentMetadata: updateDocumentMetadataCompat,
+    deleteDocument: deleteDocumentCompat,
+    searchDocuments: searchDocumentsCompat,
+    createDocument: createDocumentCompat,
+    createNewVersion: createNewVersionCompat,
+};
+
+export function getDocumentService() {
+    return documentService;
+}
+
+export default documentService;
