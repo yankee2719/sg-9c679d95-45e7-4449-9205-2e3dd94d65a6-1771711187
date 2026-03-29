@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { SEO } from "@/components/SEO";
@@ -7,160 +7,160 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
-    Check,
-    QrCode,
-    ClipboardCheck,
-    Calendar,
+    ArrowRight,
     BarChart3,
     Bell,
-    Users,
-    Shield,
-    ArrowRight,
+    Check,
     ChevronDown,
-    Wrench,
-    Star,
-    Zap,
+    ClipboardCheck,
+    Factory,
+    FileText,
     Globe,
     Lock,
+    QrCode,
+    Shield,
+    Users,
+    Wrench,
 } from "lucide-react";
 
-const pricingPlans = [
+type PricingPlan = {
+    id: string;
+    name: string;
+    description: string;
+    monthlyPrice: number;
+    yearlyPrice: number;
+    popular?: boolean;
+    features: string[];
+};
+
+const pricingPlans: PricingPlan[] = [
     {
         id: "starter",
         name: "Starter",
-        description: "Per piccoli team e officine",
+        description: "Per piccole realtà industriali e reparti manutenzione",
         monthlyPrice: 49,
         yearlyPrice: 490,
-        popular: false,
         features: [
             "1 Admin + 5 utenti",
-            "100 attrezzature",
+            "Fino a 100 macchine / impianti",
             "Checklist illimitate",
-            "QR Code per ogni attrezzatura",
-            "App mobile responsive",
+            "QR code per ogni asset",
+            "Archivio documentale tecnico",
             "Supporto email",
-            "Report base",
         ],
     },
     {
         id: "professional",
         name: "Professional",
-        description: "Per aziende in crescita",
+        description: "Per costruttori e aziende con più linee o stabilimenti",
         monthlyPrice: 99,
         yearlyPrice: 990,
         popular: true,
         features: [
             "1 Admin + 3 Supervisor + 15 utenti",
-            "500 attrezzature",
-            "Tutto di Starter, più:",
-            "KPI avanzati (MTBF, MTTR)",
-            "Calendario manutenzioni drag & drop",
+            "Fino a 500 macchine / impianti",
+            "Dashboard KPI MTBF / MTTR",
+            "Pianificazione work order",
             "Notifiche programmate",
-            "Export PDF/Excel",
+            "Export PDF / Excel",
             "Supporto prioritario",
         ],
     },
     {
         id: "enterprise",
         name: "Enterprise",
-        description: "Per grandi organizzazioni",
+        description: "Per gruppi industriali e multi-tenant manufacturer/customer",
         monthlyPrice: 199,
         yearlyPrice: 1990,
-        popular: false,
         features: [
-            "Utenti illimitati",
-            "Attrezzature illimitate",
-            "Tutto di Professional, più:",
-            "API REST completa",
-            "Integrazioni ERP custom",
+            "Utenti e asset illimitati",
+            "Contesto manufacturer / customer",
+            "Ruoli avanzati e audit trail",
+            "Integrazioni custom",
             "Account manager dedicato",
-            "Formazione inclusa (2h)",
-            "SLA 99.9% garantito",
-            "Single Sign-On (SSO)",
+            "Onboarding e formazione inclusi",
         ],
     },
 ];
 
-const features = [
+const featureCards = [
     {
         icon: QrCode,
-        title: "QR Code Intelligenti",
-        description: "Genera e stampa QR code per ogni attrezzatura. Scansiona per accedere istantaneamente a manuali, storico e checklist.",
+        title: "QR code operativi",
+        description:
+            "Ogni macchina ha un accesso rapido a documenti, checklist, storico e work order direttamente dal campo.",
     },
     {
         icon: ClipboardCheck,
-        title: "Checklist Digitali",
-        description: "Crea checklist personalizzate con foto, firme e campi obbligatori. Mai più fogli di carta persi.",
+        title: "Checklist digitali",
+        description:
+            "Esecuzioni guidate con foto, firme, campi obbligatori e storico consultabile da reparto, manutenzione o assistenza.",
     },
     {
-        icon: Calendar,
-        title: "Manutenzione Preventiva",
-        description: "Pianifica interventi ricorrenti e ricevi notifiche automatiche. Riduci i fermi macchina imprevisti.",
+        icon: FileText,
+        title: "Documentazione tecnica",
+        description:
+            "Manuali, dichiarazioni, schemi e revisioni documentali gestiti con versioning e tracciabilità.",
+    },
+    {
+        icon: Wrench,
+        title: "Work order e manutenzione",
+        description:
+            "Pianifica interventi, assegna tecnici e monitora attività preventive e correttive in un flusso unico.",
     },
     {
         icon: BarChart3,
-        title: "Dashboard Analytics",
-        description: "Monitora KPI come MTBF e MTTR. Visualizza trend e identifica le attrezzature problematiche.",
-    },
-    {
-        icon: Bell,
-        title: "Notifiche in Tempo Reale",
-        description: "Avvisi automatici per manutenzioni scadute, checklist incomplete e anomalie rilevate.",
+        title: "Dashboard industriali",
+        description:
+            "KPI operativi, stato macchine, criticità e vista direzionale per costruttori e utilizzatori finali.",
     },
     {
         icon: Users,
-        title: "Multi-Utente & Ruoli",
-        description: "Admin, Supervisor e Tecnici con permessi differenziati. Ogni team ha la vista giusta.",
+        title: "Multi-tenant reale",
+        description:
+            "Gestisci costruttori, clienti, stabilimenti, linee e macchine con contesti separati e permessi coerenti.",
     },
+];
+
+const pillars = [
+    "Progettata per macchine e impianti industriali, non per asset generici.",
+    "Uso rapido da smartphone per tecnici sul campo tramite QR.",
+    "Operatività offline per checklist e manutenzioni; i documenti restano scaricabili quando necessario.",
+    "Approccio serio a audit trail, compliance e documentazione tecnica.",
 ];
 
 const faqs = [
     {
-        question: "Posso provare gratis prima di acquistare?",
-        answer: "Sì! Offriamo 14 giorni di prova gratuita senza carta di credito. Potrai testare tutte le funzionalità del piano Professional.",
+        question: "MACHINA va bene anche per costruttori di macchine?",
+        answer:
+            "Sì. Il modello manufacturer/customer è pensato per chi costruisce, assegna e mantiene nel tempo un parco macchine distribuito presso clienti diversi.",
     },
     {
-        question: "Posso cambiare piano in qualsiasi momento?",
-        answer: "Assolutamente. Puoi fare upgrade o downgrade in qualsiasi momento. Il cambio sarà effettivo dal prossimo ciclo di fatturazione.",
+        question: "Funziona bene per i tecnici in reparto o in assistenza?",
+        answer:
+            "Sì. Il flusso QR + mobile consente di aprire rapidamente scheda macchina, checklist e work order. Le attività operative possono funzionare anche offline.",
     },
     {
-        question: "I miei dati sono al sicuro?",
-        answer: "I tuoi dati sono ospitati su server europei (GDPR compliant), con backup giornalieri e crittografia SSL/TLS.",
+        question: "Posso gestire documenti tecnici versionati?",
+        answer:
+            "Sì. MACHINA è pensata per archiviare manuali, schemi, certificati, dichiarazioni e revisioni in modo coerente con l'uso industriale.",
     },
     {
-        question: "Funziona su mobile?",
-        answer: "Sì! L'interfaccia è completamente responsive. I tecnici possono usare lo scanner QR e compilare checklist direttamente dal telefono.",
-    },
-];
-
-const testimonials = [
-    {
-        name: "Marco Bianchi",
-        role: "Responsabile Manutenzione",
-        company: "Industria Meccanica SpA",
-        text: "Abbiamo ridotto i fermi macchina del 40% nel primo anno. Il ROI è stato immediato.",
-        rating: 5,
-    },
-    {
-        name: "Laura Rossi",
-        role: "Plant Manager",
-        company: "Food Processing Srl",
-        text: "Finalmente addio ai fogli Excel! Le checklist digitali hanno reso le ispezioni HACCP molto più semplici.",
-        rating: 5,
-    },
-    {
-        name: "Giuseppe Verdi",
-        role: "Titolare",
-        company: "Officina Verdi & Figli",
-        text: "Anche con un piccolo team, riusciamo a gestire 50+ attrezzature senza stress. Ottimo rapporto qualità-prezzo.",
-        rating: 5,
+        question: "C'è una prova iniziale?",
+        answer:
+            "Sì. Puoi iniziare con una prova gratuita per verificare flusso operativo, ruoli, QR e documentazione sul tuo caso reale.",
     },
 ];
 
 export default function LandingPage() {
     const router = useRouter();
     const [isYearly, setIsYearly] = useState(true);
-    const [openFaq, setOpenFaq] = useState < number | null > (null);
+    const [openFaq, setOpenFaq] = useState < number | null > (0);
+
+    const heroPricing = useMemo(() => {
+        const professional = pricingPlans.find((plan) => plan.id === "professional")!;
+        return isYearly ? `${professional.yearlyPrice}€/anno` : `${professional.monthlyPrice}€/mese`;
+    }, [isYearly]);
 
     const scrollToSection = (id: string) => {
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -169,244 +169,293 @@ export default function LandingPage() {
     return (
         <>
             <SEO
-                title="MaintOps - Software CMMS per la Gestione della Manutenzione"
-                description="Gestisci manutenzione, attrezzature e checklist in modo semplice e intelligente. 14 giorni di prova gratuita."
+                title="MACHINA - Gestione manutenzione, documenti e checklist industriali"
+                description="Web app SaaS industriale per macchine e impianti: documentazione tecnica, work order, checklist, QR e analytics per costruttori e clienti finali."
             />
 
-            <div className="min-h-screen bg-slate-900">
-                {/* NAVBAR */}
-                <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-lg border-b border-slate-800">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="flex items-center justify-between h-16">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                                    <Wrench className="w-5 h-5 text-white" />
-                                </div>
-                                <span className="text-xl font-bold text-white">MaintOps</span>
+            <div className="min-h-screen bg-slate-950 text-white">
+                <nav className="fixed inset-x-0 top-0 z-50 border-b border-slate-800 bg-slate-950/85 backdrop-blur">
+                    <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+                        <button onClick={() => router.push("/")} className="flex items-center gap-3" type="button">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400">
+                                <Factory className="h-5 w-5" />
                             </div>
-                            <div className="hidden md:flex items-center gap-8">
-                                <button onClick={() => scrollToSection("features")} className="text-slate-300 hover:text-white transition-colors">Funzionalità</button>
-                                <button onClick={() => scrollToSection("pricing")} className="text-slate-300 hover:text-white transition-colors">Prezzi</button>
-                                <button onClick={() => scrollToSection("faq")} className="text-slate-300 hover:text-white transition-colors">FAQ</button>
+                            <div className="text-left">
+                                <div className="text-sm font-semibold tracking-[0.18em] text-orange-400">MACHINA</div>
+                                <div className="text-xs text-slate-400">Industrial maintenance platform</div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <Button variant="ghost" className="text-slate-300 hover:text-white" onClick={() => router.push("/login")}>Accedi</Button>
-                                <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => router.push("/register")}>Prova Gratis</Button>
-                            </div>
+                        </button>
+
+                        <div className="hidden items-center gap-8 md:flex">
+                            <button className="text-sm text-slate-300 transition hover:text-white" onClick={() => scrollToSection("features")} type="button">Funzionalità</button>
+                            <button className="text-sm text-slate-300 transition hover:text-white" onClick={() => scrollToSection("positioning")} type="button">Perché MACHINA</button>
+                            <button className="text-sm text-slate-300 transition hover:text-white" onClick={() => scrollToSection("pricing")} type="button">Prezzi</button>
+                            <button className="text-sm text-slate-300 transition hover:text-white" onClick={() => scrollToSection("faq")} type="button">FAQ</button>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <Button variant="ghost" className="text-slate-200 hover:text-white" onClick={() => router.push("/login")}>Accedi</Button>
+                            <Button className="bg-orange-600 text-white hover:bg-orange-500" onClick={() => router.push("/register")}>Prova gratuita</Button>
                         </div>
                     </div>
                 </nav>
 
-                {/* HERO SECTION */}
-                <section className="relative pt-32 pb-20 px-4 overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-b from-blue-600/10 to-transparent" />
-                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
-                    <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+                <section className="relative overflow-hidden px-4 pb-20 pt-32 sm:px-6 lg:px-8">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.14),_transparent_30%)]" />
+                    <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+                        <div>
+                            <div className="mb-6 flex flex-wrap items-center gap-3">
+                                <Badge className="border-orange-500/30 bg-orange-500/10 px-3 py-1 text-orange-300">
+                                    <Shield className="mr-1 h-3 w-3" /> SaaS industriale
+                                </Badge>
+                                <Badge className="border-blue-500/30 bg-blue-500/10 px-3 py-1 text-blue-300">
+                                    <QrCode className="mr-1 h-3 w-3" /> QR per tecnici sul campo
+                                </Badge>
+                                <Badge className="border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-300">
+                                    <Globe className="mr-1 h-3 w-3" /> Offline-ready per operatività
+                                </Badge>
+                            </div>
 
-                    <div className="relative max-w-5xl mx-auto text-center">
-                        <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-                            <Badge className="bg-green-500/10 text-green-400 border-green-500/30 px-3 py-1">
-                                <Check className="w-3 h-3 mr-1" /> 14 giorni gratis
-                            </Badge>
-                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 px-3 py-1">
-                                <Shield className="w-3 h-3 mr-1" /> Nessuna carta richiesta
-                            </Badge>
-                            <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/30 px-3 py-1">
-                                <Globe className="w-3 h-3 mr-1" /> Server EU - GDPR
-                            </Badge>
-                        </div>
+                            <h1 className="max-w-4xl text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+                                Gestione industriale di <span className="text-orange-400">macchine, documenti e manutenzione</span> in un'unica piattaforma.
+                            </h1>
+                            <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-300">
+                                MACHINA è la web app pensata per costruttori e utilizzatori finali che vogliono governare documentazione tecnica, work order, checklist, QR code e KPI di reparto con un'impostazione seria, industriale e vendibile.
+                            </p>
 
-                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                            Gestisci la manutenzione<br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-                                in modo semplice e intelligente
-                            </span>
-                        </h1>
+                            <div className="mt-8 flex flex-wrap gap-4">
+                                <Button size="lg" className="bg-orange-600 text-white hover:bg-orange-500" onClick={() => router.push("/register")}>
+                                    Inizia ora
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                                <Button size="lg" variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={() => scrollToSection("pricing")}>
+                                    Vedi i piani
+                                </Button>
+                            </div>
 
-                        <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
-                            Il software CMMS italiano che semplifica la gestione di attrezzature, manutenzioni preventive e checklist. Per PMI e grandi aziende.
-                        </p>
-
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-                            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-6 rounded-xl shadow-lg shadow-blue-500/25" onClick={() => router.push("/register")}>
-                                Inizia la Prova Gratuita <ArrowRight className="w-5 h-5 ml-2" />
-                            </Button>
-                            <Button size="lg" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800 text-lg px-8 py-6 rounded-xl" onClick={() => scrollToSection("features")}>
-                                Scopri le Funzionalità
-                            </Button>
-                        </div>
-
-                        <div className="flex items-center justify-center gap-8 text-slate-500">
-                            <div className="flex items-center gap-2"><Users className="w-5 h-5" /><span>500+ aziende</span></div>
-                            <div className="flex items-center gap-2"><Star className="w-5 h-5 text-yellow-500" /><span>4.9/5 rating</span></div>
-                            <div className="flex items-center gap-2"><Zap className="w-5 h-5" /><span>Setup in 5 minuti</span></div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* FEATURES SECTION */}
-                <section id="features" className="py-20 px-4 bg-slate-800/50">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="text-center mb-16">
-                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 mb-4">Funzionalità</Badge>
-                            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Tutto ciò che serve per gestire la manutenzione</h2>
-                            <p className="text-slate-400 text-lg max-w-2xl mx-auto">Dalla creazione di QR code alla pianificazione delle manutenzioni, MaintOps copre ogni aspetto del CMMS.</p>
-                        </div>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {features.map((feature, index) => (
-                                <Card key={index} className="bg-slate-800/50 border-slate-700 hover:border-blue-500/50 transition-all duration-300">
-                                    <CardContent className="p-6">
-                                        <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
-                                            <feature.icon className="w-6 h-6 text-blue-400" />
-                                        </div>
-                                        <h3 className="text-xl font-semibold text-white mb-2">{feature.title}</h3>
-                                        <p className="text-slate-400">{feature.description}</p>
+                            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                                <Card className="rounded-2xl border-slate-800 bg-slate-900/70">
+                                    <CardContent className="p-5">
+                                        <div className="text-2xl font-semibold text-white">QR + Mobile</div>
+                                        <p className="mt-2 text-sm text-slate-400">Accesso immediato per tecnici, manutentori e assistenza.</p>
                                     </CardContent>
                                 </Card>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* PRICING SECTION */}
-                <section id="pricing" className="py-20 px-4">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="text-center mb-12">
-                            <Badge className="bg-green-500/10 text-green-400 border-green-500/30 mb-4">Prezzi Trasparenti</Badge>
-                            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Scegli il piano adatto a te</h2>
-                            <p className="text-slate-400 text-lg mb-8">Nessun costo nascosto. Cancella quando vuoi.</p>
-                            <div className="flex items-center justify-center gap-4 mb-8">
-                                <span className={`text-sm ${!isYearly ? "text-white" : "text-slate-500"}`}>Mensile</span>
-                                <Switch checked={isYearly} onCheckedChange={setIsYearly} className="data-[state=checked]:bg-blue-600" />
-                                <span className={`text-sm ${isYearly ? "text-white" : "text-slate-500"}`}>Annuale</span>
-                                {isYearly && <Badge className="bg-green-500/20 text-green-400 border-green-500/30 ml-2">Risparmia 2 mesi</Badge>}
+                                <Card className="rounded-2xl border-slate-800 bg-slate-900/70">
+                                    <CardContent className="p-5">
+                                        <div className="text-2xl font-semibold text-white">Documenti versionati</div>
+                                        <p className="mt-2 text-sm text-slate-400">Manuali, schemi, dichiarazioni e revisioni sempre tracciabili.</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className="rounded-2xl border-slate-800 bg-slate-900/70">
+                                    <CardContent className="p-5">
+                                        <div className="text-2xl font-semibold text-white">Multi-tenant</div>
+                                        <p className="mt-2 text-sm text-slate-400">Costruttore, cliente, stabilimento, linea e macchina nello stesso modello.</p>
+                                    </CardContent>
+                                </Card>
                             </div>
                         </div>
 
-                        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                            {pricingPlans.map((plan) => (
-                                <Card key={plan.id} className={`relative bg-slate-800/50 border-slate-700 ${plan.popular ? "border-blue-500 ring-2 ring-blue-500/20" : "hover:border-slate-600"} transition-all`}>
-                                    {plan.popular && (
-                                        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                                            <Badge className="bg-blue-600 text-white border-0 px-3">Più Popolare</Badge>
+                        <Card className="rounded-3xl border-slate-800 bg-slate-900/80 shadow-2xl shadow-black/30">
+                            <CardHeader className="space-y-4">
+                                <Badge className="w-fit border-orange-500/30 bg-orange-500/10 text-orange-300">Professional</Badge>
+                                <div>
+                                    <CardTitle className="text-2xl text-white">Piattaforma pronta per demo e vendita</CardTitle>
+                                    <p className="mt-2 text-sm text-slate-400">
+                                        Un posizionamento credibile per il settore industriale: meno fogli sparsi, meno ambiguità operative, più controllo.
+                                    </p>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-5">
+                                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                                    <div className="text-sm text-slate-400">Piano di riferimento</div>
+                                    <div className="mt-2 text-4xl font-bold text-white">{heroPricing}</div>
+                                    <div className="mt-1 text-sm text-slate-400">billed {isYearly ? "yearly" : "monthly"}</div>
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                                    <span className="text-sm text-slate-300">Mostra prezzo annuale</span>
+                                    <Switch checked={isYearly} onCheckedChange={setIsYearly} />
+                                </div>
+
+                                <ul className="space-y-3 text-sm text-slate-200">
+                                    {[
+                                        "Archivio documentale tecnico con versioni",
+                                        "Checklist operative da smartphone",
+                                        "Work order preventivi e correttivi",
+                                        "QR per apertura rapida della macchina",
+                                        "Vista KPI e criticità per reparto",
+                                    ].map((item) => (
+                                        <li key={item} className="flex items-start gap-3">
+                                            <Check className="mt-0.5 h-4 w-4 text-emerald-400" />
+                                            <span>{item}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </section>
+
+                <section id="features" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+                    <div className="max-w-3xl">
+                        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-400">Funzionalità chiave</p>
+                        <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Pensata per l'uso reale in officina, reparto e assistenza.</h2>
+                        <p className="mt-4 text-base leading-7 text-slate-400">
+                            MACHINA non prova a sembrare industriale: parte direttamente dai bisogni veri di chi gestisce macchine, documentazione e manutenzione.
+                        </p>
+                    </div>
+                    <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        {featureCards.map((feature) => {
+                            const Icon = feature.icon;
+                            return (
+                                <Card key={feature.title} className="rounded-3xl border-slate-800 bg-slate-900/70">
+                                    <CardHeader>
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-400">
+                                            <Icon className="h-6 w-6" />
                                         </div>
-                                    )}
-                                    <CardHeader className="pb-4">
-                                        <CardTitle className="text-white">{plan.name}</CardTitle>
-                                        <p className="text-slate-400 text-sm">{plan.description}</p>
+                                        <CardTitle className="text-xl text-white">{feature.title}</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="mb-6">
-                                            <span className="text-4xl font-bold text-white">€{isYearly ? plan.yearlyPrice : plan.monthlyPrice}</span>
-                                            <span className="text-slate-400">/{isYearly ? "anno" : "mese"}</span>
-                                            {isYearly && <p className="text-sm text-slate-500 mt-1">€{Math.round(plan.yearlyPrice / 12)}/mese fatturato annualmente</p>}
+                                        <p className="text-sm leading-6 text-slate-400">{feature.description}</p>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                <section id="positioning" className="border-y border-slate-800 bg-slate-900/60 px-4 py-16 sm:px-6 lg:px-8">
+                    <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
+                        <div>
+                            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-400">Perché MACHINA</p>
+                            <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Una piattaforma industriale credibile, non un gestionale generico travestito.</h2>
+                            <p className="mt-4 text-base leading-7 text-slate-400">
+                                Il punto forte è mettere insieme documenti, manutenzione, checklists e contesto macchina in modo coerente, senza staccare il tecnico dalla realtà del campo.
+                            </p>
+                        </div>
+                        <div className="grid gap-4">
+                            {pillars.map((item) => (
+                                <Card key={item} className="rounded-2xl border-slate-800 bg-slate-950/70">
+                                    <CardContent className="flex items-start gap-3 p-5">
+                                        <Check className="mt-0.5 h-5 w-5 text-emerald-400" />
+                                        <p className="text-sm leading-6 text-slate-300">{item}</p>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                            <Card className="rounded-2xl border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950">
+                                <CardContent className="flex items-start gap-3 p-5">
+                                    <Lock className="mt-0.5 h-5 w-5 text-blue-400" />
+                                    <p className="text-sm leading-6 text-slate-300">
+                                        Sicurezza, ruoli e audit trail restano parte del prodotto, non un'aggiunta di facciata. Questo aiuta sia in demo sia nell'uso reale in azienda.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="pricing" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-400">Prezzi</p>
+                            <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Piani semplici, industriali, difendibili in vendita.</h2>
+                        </div>
+                        <div className="flex items-center gap-3 rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300">
+                            <span>Mensile</span>
+                            <Switch checked={isYearly} onCheckedChange={setIsYearly} />
+                            <span>Annuale</span>
+                        </div>
+                    </div>
+
+                    <div className="mt-10 grid gap-6 lg:grid-cols-3">
+                        {pricingPlans.map((plan) => {
+                            const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
+                            const suffix = isYearly ? "/anno" : "/mese";
+                            return (
+                                <Card
+                                    key={plan.id}
+                                    className={[
+                                        "rounded-3xl border-slate-800 bg-slate-900/70",
+                                        plan.popular ? "ring-1 ring-orange-500/40" : "",
+                                    ].join(" ")}
+                                >
+                                    <CardHeader>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <CardTitle className="text-2xl text-white">{plan.name}</CardTitle>
+                                            {plan.popular ? <Badge className="bg-orange-600 text-white">Più scelto</Badge> : null}
                                         </div>
-                                        <Button className={`w-full mb-6 ${plan.popular ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700 hover:bg-slate-600"}`} onClick={() => router.push(`/register?plan=${plan.id}&period=${isYearly ? "yearly" : "monthly"}`)}>
-                                            Inizia con {plan.name}
-                                        </Button>
-                                        <ul className="space-y-3">
-                                            {plan.features.map((feature, index) => (
-                                                <li key={index} className="flex items-start gap-2 text-sm text-slate-300">
-                                                    <Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                                        <p className="text-sm text-slate-400">{plan.description}</p>
+                                        <div className="pt-2 text-4xl font-bold text-white">{price}€<span className="ml-1 text-base font-medium text-slate-400">{suffix}</span></div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <ul className="space-y-3 text-sm text-slate-300">
+                                            {plan.features.map((feature) => (
+                                                <li key={feature} className="flex items-start gap-3">
+                                                    <Check className="mt-0.5 h-4 w-4 text-emerald-400" />
                                                     <span>{feature}</span>
                                                 </li>
                                             ))}
                                         </ul>
+                                        <Button className="w-full bg-orange-600 text-white hover:bg-orange-500" onClick={() => router.push("/register")}>Attiva prova</Button>
                                     </CardContent>
                                 </Card>
-                            ))}
-                        </div>
-                        <div className="text-center mt-12">
-                            <div className="inline-flex items-center gap-2 text-slate-400 bg-slate-800/50 px-4 py-2 rounded-full">
-                                <Shield className="w-5 h-5 text-green-400" />
-                                <span>Garanzia soddisfatti o rimborsati entro 30 giorni</span>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                <section id="faq" className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
+                    <div className="text-center">
+                        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-400">FAQ</p>
+                        <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Domande frequenti</h2>
+                    </div>
+                    <div className="mt-10 space-y-4">
+                        {faqs.map((faq, index) => {
+                            const open = openFaq === index;
+                            return (
+                                <button
+                                    key={faq.question}
+                                    className="w-full rounded-3xl border border-slate-800 bg-slate-900/70 p-6 text-left transition hover:border-slate-700"
+                                    onClick={() => setOpenFaq(open ? null : index)}
+                                    type="button"
+                                >
+                                    <div className="flex items-center justify-between gap-4">
+                                        <span className="text-lg font-semibold text-white">{faq.question}</span>
+                                        <ChevronDown className={["h-5 w-5 text-slate-400 transition-transform", open ? "rotate-180" : ""].join(" ")} />
+                                    </div>
+                                    {open ? <p className="mt-4 text-sm leading-6 text-slate-400">{faq.answer}</p> : null}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                <section className="px-4 pb-20 pt-8 sm:px-6 lg:px-8">
+                    <Card className="mx-auto max-w-6xl rounded-[2rem] border-slate-800 bg-gradient-to-r from-slate-900 to-slate-950">
+                        <CardContent className="flex flex-col gap-8 p-8 md:flex-row md:items-center md:justify-between md:p-10">
+                            <div className="max-w-3xl">
+                                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-orange-400">Pronto a provarla sul tuo caso reale?</p>
+                                <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Porta in ordine documenti, manutenzione e operatività macchina.</h2>
+                                <p className="mt-4 text-base leading-7 text-slate-400">
+                                    Inizia con il tuo reparto, una linea o un gruppo di macchine. MACHINA è costruita per essere seria in demo e utile nel quotidiano.
+                                </p>
                             </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* TESTIMONIALS SECTION */}
-                <section className="py-20 px-4 bg-slate-800/50">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="text-center mb-12">
-                            <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/30 mb-4">Testimonianze</Badge>
-                            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Cosa dicono i nostri clienti</h2>
-                        </div>
-                        <div className="grid md:grid-cols-3 gap-6">
-                            {testimonials.map((testimonial, index) => (
-                                <Card key={index} className="bg-slate-800/50 border-slate-700">
-                                    <CardContent className="p-6">
-                                        <div className="flex items-center gap-1 mb-4">
-                                            {Array.from({ length: testimonial.rating }).map((_, i) => (
-                                                <Star key={i} className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                                            ))}
-                                        </div>
-                                        <p className="text-slate-300 mb-6 italic">&ldquo;{testimonial.text}&rdquo;</p>
-                                        <div>
-                                            <p className="font-semibold text-white">{testimonial.name}</p>
-                                            <p className="text-sm text-slate-400">{testimonial.role}, {testimonial.company}</p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* FAQ SECTION */}
-                <section id="faq" className="py-20 px-4">
-                    <div className="max-w-3xl mx-auto">
-                        <div className="text-center mb-12">
-                            <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/30 mb-4">FAQ</Badge>
-                            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Domande Frequenti</h2>
-                        </div>
-                        <div className="space-y-4">
-                            {faqs.map((faq, index) => (
-                                <Card key={index} className="bg-slate-800/50 border-slate-700 cursor-pointer" onClick={() => setOpenFaq(openFaq === index ? null : index)}>
-                                    <CardContent className="p-4">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="font-semibold text-white">{faq.question}</h3>
-                                            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openFaq === index ? "rotate-180" : ""}`} />
-                                        </div>
-                                        {openFaq === index && <p className="text-slate-400 mt-4 pt-4 border-t border-slate-700">{faq.answer}</p>}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* CTA SECTION */}
-                <section className="py-20 px-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20">
-                    <div className="max-w-4xl mx-auto text-center">
-                        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Pronto a semplificare la manutenzione?</h2>
-                        <p className="text-xl text-slate-400 mb-8">Inizia oggi con 14 giorni di prova gratuita. Nessuna carta di credito richiesta.</p>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-6 rounded-xl" onClick={() => router.push("/register")}>
-                                Inizia la Prova Gratuita <ArrowRight className="w-5 h-5 ml-2" />
-                            </Button>
-                        </div>
-                    </div>
-                </section>
-
-                {/* FOOTER */}
-                <footer className="py-12 px-4 border-t border-slate-800">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                                    <Wrench className="w-5 h-5 text-white" />
-                                </div>
-                                <span className="text-xl font-bold text-white">MaintOps</span>
+                            <div className="flex flex-col gap-3 sm:flex-row">
+                                <Button size="lg" className="bg-orange-600 text-white hover:bg-orange-500" onClick={() => router.push("/register")}>Crea account</Button>
+                                <Button size="lg" variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={() => router.push("/login")}>Accedi</Button>
                             </div>
-                            <p className="text-sm text-slate-500">© {new Date().getFullYear()} MaintOps. Tutti i diritti riservati.</p>
-                            <div className="flex items-center gap-4 text-sm text-slate-500">
-                                <Lock className="w-4 h-4" />
-                                <span>Pagamenti sicuri con Stripe</span>
-                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="mx-auto mt-8 flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-slate-800 pt-6 text-sm text-slate-500 md:flex-row">
+                        <span>© {new Date().getFullYear()} MACHINA</span>
+                        <div className="flex items-center gap-5">
+                            <Link href="/login" className="transition hover:text-white">Login</Link>
+                            <Link href="/register" className="transition hover:text-white">Registrazione</Link>
+                            <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Notifiche, QR, checklist e documenti</span>
                         </div>
                     </div>
-                </footer>
+                </section>
             </div>
         </>
     );
