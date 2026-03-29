@@ -551,7 +551,7 @@ async function getVersionHistoryCompat(documentId: string): Promise<DocumentVers
 async function getAuditLogCompat(documentId: string, limit = 100): Promise<AuditLogEntry[]> {
     const { data, error } = await supabase
         .from("audit_logs")
-        .select("id, action, performed_by, created_at, details, success")
+        .select("id, action, actor_user_id, created_at, old_data, new_data, metadata")
         .eq("entity_type", "document")
         .eq("entity_id", documentId)
         .order("created_at", { ascending: false })
@@ -559,17 +559,20 @@ async function getAuditLogCompat(documentId: string, limit = 100): Promise<Audit
 
     if (error) throw error;
 
-    return (data ?? []).map((row: any) => ({
-        id: row.id,
-        action: row.action,
-        performed_at: row.created_at,
-        performed_by: row.performed_by ?? "unknown",
-        ip_address: null,
-        user_agent: null,
-        details: typeof row.details === "string" ? row.details : row.details ? JSON.stringify(row.details) : null,
-        metadata: typeof row.details === "object" && row.details ? row.details : null,
-        success: row.success !== false,
-    }));
+    return (data ?? []).map((row: any) => {
+        const detailsObject = row.metadata ?? row.new_data ?? row.old_data ?? null;
+        return {
+            id: row.id,
+            action: row.action,
+            performed_at: row.created_at,
+            performed_by: row.actor_user_id ?? "unknown",
+            ip_address: null,
+            user_agent: null,
+            details: detailsObject ? JSON.stringify(detailsObject) : null,
+            metadata: detailsObject,
+            success: true,
+        };
+    });
 }
 
 async function logDocumentActionCompat(
@@ -579,14 +582,18 @@ async function logDocumentActionCompat(
     details?: string | null
 ) {
     const document = await getDocumentByIdCompat(documentId);
+    const metadata = details ? { message: details } : {};
+
     const { error } = await supabase.from("audit_logs").insert({
         organization_id: document?.organization_id ?? null,
+        actor_user_id: performedBy,
         entity_type: "document",
         entity_id: documentId,
+        document_id: documentId,
+        machine_id: document?.machine_id ?? null,
         action,
-        performed_by: performedBy,
-        details: details ?? null,
-        success: true,
+        metadata,
+        new_data: {},
     } as any);
 
     if (error) throw error;
