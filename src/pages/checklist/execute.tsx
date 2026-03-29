@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Camera, ChevronLeft, Clock, Flag, Loader2, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
+import { uploadChecklistExecutionPhotos } from "@/lib/checklistExecutionUploadApi";
 
 type InputType = "text" | "number" | "boolean" | "select" | "photo";
 type BooleanState = "ok" | "ko" | "na";
@@ -171,21 +171,9 @@ export default function ChecklistExecutionPage() {
     const uploadPhotosIfAny = async (executionId: string, item: ExecutionItemUI) => {
         if (!item.files || item.files.length === 0) return item.uploadedPaths ?? [];
 
-        const bucket = "checklist-photos";
-        const uploaded: string[] = [...(item.uploadedPaths ?? [])];
-
-        for (const file of item.files) {
-            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-            const path = `executions/${executionId}/${item.id}/${Date.now()}_${safeName}`;
-            const { error } = await supabase.storage.from(bucket).upload(path, file, {
-                upsert: false,
-                contentType: file.type,
-            });
-            if (error) throw error;
-            uploaded.push(path);
-        }
-
-        return uploaded;
+        const uploaded = [...(item.uploadedPaths ?? [])];
+        const newPaths = await uploadChecklistExecutionPhotos(executionId, item.id, item.files);
+        return [...uploaded, ...newPaths];
     };
 
     const validateBeforeComplete = () => {
