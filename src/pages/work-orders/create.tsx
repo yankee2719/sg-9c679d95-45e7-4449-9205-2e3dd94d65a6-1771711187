@@ -15,7 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Loader2, Wrench, User, CalendarDays } from "lucide-react";
 import { PageLoader } from "@/components/feedback/PageLoader";
 import { createWorkOrder } from "@/services/workOrderApi";
-import { getWorkOrderCreateContext, type WorkOrderCreateContextAssignee, type WorkOrderCreateContextMachine } from "@/lib/workOrderCreateApi";
+import {
+    getWorkOrderCreateContext,
+    type WorkOrderCreateContextAssignee,
+    type WorkOrderCreateContextMachine,
+} from "@/lib/workOrderCreateApi";
 
 type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency";
 type WorkStatus = "draft" | "scheduled" | "in_progress" | "pending_review" | "completed" | "cancelled";
@@ -83,7 +87,7 @@ export default function WorkOrderCreatePage() {
                 console.error(error);
                 toast({
                     title: t("common.error") || "Errore",
-                    description: error?.message ?? t("workOrders.errorLoadPage") || "Errore caricamento pagina",
+                    description: error?.message ?? (t("workOrders.errorLoadPage") || "Errore caricamento pagina"),
                     variant: "destructive",
                 });
                 void router.push("/work-orders");
@@ -166,7 +170,7 @@ export default function WorkOrderCreatePage() {
             console.error(error);
             toast({
                 title: t("common.error") || "Errore",
-                description: error?.message ?? t("workOrders.errorCreate") || "Errore creazione work order",
+                description: error?.message ?? (t("workOrders.errorCreate") || "Errore creazione work order"),
                 variant: "destructive",
             });
         } finally {
@@ -262,7 +266,9 @@ export default function WorkOrderCreatePage() {
                                 <div className="space-y-2">
                                     <Label>{t("workOrders.typeLabel")}</Label>
                                     <Select value={workType} onValueChange={(v) => setWorkType(v as WorkType)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="preventive">{t("workOrders.typePreventive")}</SelectItem>
                                             <SelectItem value="corrective">{t("workOrders.typeCorrective")}</SelectItem>
@@ -276,7 +282,9 @@ export default function WorkOrderCreatePage() {
                                 <div className="space-y-2">
                                     <Label>{t("workOrders.statusLabel") || "Stato"}</Label>
                                     <Select value={status} onValueChange={(v) => setStatus(v as WorkStatus)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="draft">{t("workOrders.statusDraft") || "Bozza"}</SelectItem>
                                             <SelectItem value="scheduled">{t("workOrders.statusScheduled") || "Pianificato"}</SelectItem>
@@ -291,7 +299,9 @@ export default function WorkOrderCreatePage() {
                                 <div className="space-y-2">
                                     <Label>{t("workOrders.priorityLabel")}</Label>
                                     <Select value={priority} onValueChange={(v) => setPriority(v as WorkPriority)}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="low">{t("workOrders.priorityLow") || "Bassa"}</SelectItem>
                                             <SelectItem value="medium">{t("workOrders.priorityMedium") || "Media"}</SelectItem>
