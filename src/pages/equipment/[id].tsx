@@ -26,6 +26,10 @@ export default function EquipmentDetailPage() {
     const { id } = router.query;
     const { loading: authLoading, organization, membership } = useAuth();
     const { t } = useLanguage();
+    const tx = (key: string, fallback: string) => {
+        const value = t(key);
+        return value === key ? fallback : value;
+    };
 
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
@@ -38,15 +42,15 @@ export default function EquipmentDetailPage() {
 
     const handleDeleteMachine = async () => {
         if (!snapshot?.machine) return;
-        if (!confirm(`${t("equipment.deleteConfirm")} "${snapshot.machine.name || snapshot.machine.id}"`)) return;
+        if (!confirm(`${tx("equipment.deleteConfirm", "Confermi di voler spostare nel cestino la macchina")} "${snapshot.machine.name || snapshot.machine.id}"`)) return;
         setDeleting(true);
         try {
             await apiFetch(`/api/machines/${snapshot.machine.id}/delete`, { method: "DELETE" });
-            toast({ title: t("equipment.movedToTrash"), description: snapshot.machine.name || snapshot.machine.id });
+            toast({ title: tx("equipment.movedToTrash", "Macchina spostata nel cestino"), description: snapshot.machine.name || snapshot.machine.id });
             void router.push("/equipment");
         } catch (err: any) {
             console.error(err);
-            toast({ title: t("common.error"), description: err?.message || "Delete error", variant: "destructive" });
+            toast({ title: tx("common.error", "Errore"), description: err?.message || "Delete error", variant: "destructive" });
         } finally {
             setDeleting(false);
         }
@@ -63,7 +67,7 @@ export default function EquipmentDetailPage() {
                 setSnapshot(data);
             } catch (error: any) {
                 console.error(error);
-                toast({ title: t("common.error"), description: error?.message ?? t("equipment.loadError"), variant: "destructive" });
+                toast({ title: tx("common.error", "Errore"), description: error?.message ?? tx("equipment.loadError", "Errore durante il caricamento della macchina"), variant: "destructive" });
                 void router.replace("/equipment");
             } finally {
                 if (active) setLoading(false);
@@ -99,8 +103,8 @@ export default function EquipmentDetailPage() {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <Button variant="outline" onClick={() => router.push("/equipment")}><ArrowLeft className="mr-2 h-4 w-4" />{t("nav.equipment")}</Button>
                         <div className="flex flex-wrap gap-2">
-                            {snapshot.can_edit_machine && <Link href={`/equipment/${machine.id}/edit`}><Button variant="outline"><Pencil className="mr-2 h-4 w-4" />{t("equipment.editMachine")}</Button></Link>}
-                            {snapshot.can_delete_machine && <Button variant="destructive" onClick={handleDeleteMachine} disabled={deleting}>{deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{t("equipment.moveToTrash")}</Button>}
+                            {snapshot.can_edit_machine && <Link href={`/equipment/${machine.id}/edit`}><Button variant="outline"><Pencil className="mr-2 h-4 w-4" />{tx("equipment.editMachine", "Modifica macchina")}</Button></Link>}
+                            {snapshot.can_delete_machine && <Button variant="destructive" onClick={handleDeleteMachine} disabled={deleting}>{deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{tx("equipment.moveToTrash", "Sposta nel cestino")}</Button>}
                         </div>
                     </div>
                     <MachineSummaryHero
@@ -119,15 +123,15 @@ export default function EquipmentDetailPage() {
                     />
                     <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
                         <div className="space-y-6">
-                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.photo")}</CardTitle><CardDescription>{t("equipment.photoDesc")}</CardDescription></CardHeader><CardContent><MachinePhotoUpload machineId={machine.id} currentPhotoUrl={machine.photo_url ?? null} onPhotoChange={(url) => setSnapshot((prev: any) => ({ ...prev, machine: { ...prev.machine, photo_url: url } }))} readonly={!snapshot.can_edit_machine} /></CardContent></Card>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{tx("equipment.photo", "Foto macchina")}</CardTitle><CardDescription>{tx("equipment.photoDesc", "Carica o aggiorna una foto identificativa della macchina.")}</CardDescription></CardHeader><CardContent><MachinePhotoUpload machineId={machine.id} currentPhotoUrl={machine.photo_url ?? null} onPhotoChange={(url) => setSnapshot((prev: any) => ({ ...prev, machine: { ...prev.machine, photo_url: url } }))} readonly={!snapshot.can_edit_machine} /></CardContent></Card>
                             <MachineQuickActions machineId={machine.id} canEdit={snapshot.can_edit_machine} />
-                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.quickInfo")}</CardTitle></CardHeader><CardContent className="space-y-3"><InfoRow label={t("equipment.internalCode")} value={machine.internal_code} /><InfoRow label={t("machines.serialNumber")} value={machine.serial_number} /><InfoRow label={t("machines.manufacturer")} value={machine.brand} /><InfoRow label={t("machines.model")} value={machine.model} /><InfoRow label={t("plants.fallbackPlant")} value={snapshot.plant?.name || snapshot.plant?.code} /><InfoRow label={t("plants.line")} value={snapshot.line?.name || snapshot.line?.code} /><InfoRow label={t("equipment.assignedCustomer")} value={snapshot.assignedCustomerName} /><InfoRow label={t("equipment.owner")} value={snapshot.ownerOrganization?.name || organization?.name} /></CardContent></Card>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{tx("equipment.quickInfo", "Informazioni rapide")}</CardTitle></CardHeader><CardContent className="space-y-3"><InfoRow label={tx("equipment.internalCode", "Codice interno")} value={machine.internal_code} /><InfoRow label={t("machines.serialNumber")} value={machine.serial_number} /><InfoRow label={t("machines.manufacturer")} value={machine.brand} /><InfoRow label={t("machines.model")} value={machine.model} /><InfoRow label={t("plants.fallbackPlant")} value={snapshot.plant?.name || snapshot.plant?.code} /><InfoRow label={tx("plants.line", "Linea")} value={snapshot.line?.name || snapshot.line?.code} /><InfoRow label={tx("equipment.assignedCustomer", "Cliente assegnato")} value={snapshot.assignedCustomerName} /><InfoRow label={tx("equipment.owner", "Organizzazione proprietaria")} value={snapshot.ownerOrganization?.name || organization?.name} /></CardContent></Card>
                         </div>
                         <div className="space-y-6">
-                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.notes")}</CardTitle><CardDescription>{t("equipment.notesDesc")}</CardDescription></CardHeader><CardContent><div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">{machine.notes || t("equipment.noNotes")}</div></CardContent></Card>
-                            <section id="machine-timeline"><Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2"><History className="h-4 w-4" />{t("equipment.timeline")}</CardTitle><CardDescription>{t("equipment.timelineDesc")}</CardDescription></CardHeader><CardContent><MachineEventTimeline machineId={machine.id} limit={50} showIntegrityCheck={true} /></CardContent></Card></section>
-                            <section id="machine-documents"><Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{t("documents.title")}</CardTitle><CardDescription>{t("equipment.docsDesc")}</CardDescription></CardHeader><CardContent><DocumentManager machineId={machine.id} machineOwnerOrgId={machine.organization_id} currentOrgId={orgId} currentOrgType={orgType} currentUserRole={userRole} /></CardContent></Card></section>
-                            <Card className="rounded-2xl"><CardHeader><CardTitle>{t("equipment.machineContext")}</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><ContextCard icon={<Factory className="h-5 w-5" />} title={t("equipment.ownerContext")} value={snapshot.ownerOrganization?.name || "—"} tone="orange" /><ContextCard icon={<Building2 className="h-5 w-5" />} title={t("equipment.assignmentContext")} value={snapshot.assignedCustomerName || t("equipment.notAssigned")} tone="blue" /></CardContent></Card>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{tx("equipment.notes", "Note")}</CardTitle><CardDescription>{tx("equipment.notesDesc", "Annotazioni operative e informazioni aggiuntive.")}</CardDescription></CardHeader><CardContent><div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">{machine.notes || tx("equipment.noNotes", "Nessuna nota disponibile.")}</div></CardContent></Card>
+                            <section id="machine-timeline"><Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2"><History className="h-4 w-4" />{tx("equipment.timeline", "Timeline macchina")}</CardTitle><CardDescription>{tx("equipment.timelineDesc", "Storico eventi e attività collegati alla macchina.")}</CardDescription></CardHeader><CardContent><MachineEventTimeline machineId={machine.id} limit={50} showIntegrityCheck={true} /></CardContent></Card></section>
+                            <section id="machine-documents"><Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{t("documents.title")}</CardTitle><CardDescription>{tx("equipment.docsDesc", "Documentazione tecnica e documenti operativi collegati alla macchina.")}</CardDescription></CardHeader><CardContent><DocumentManager machineId={machine.id} machineOwnerOrgId={machine.organization_id} currentOrgId={orgId} currentOrgType={orgType} currentUserRole={userRole} /></CardContent></Card></section>
+                            <Card className="rounded-2xl"><CardHeader><CardTitle>{tx("equipment.machineContext", "Contesto macchina")}</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2"><ContextCard icon={<Factory className="h-5 w-5" />} title={tx("equipment.ownerContext", "Contesto proprietario")} value={snapshot.ownerOrganization?.name || "—"} tone="orange" /><ContextCard icon={<Building2 className="h-5 w-5" />} title={tx("equipment.assignmentContext", "Contesto assegnazione")} value={snapshot.assignedCustomerName || tx("equipment.notAssigned", "Non assegnata")} tone="blue" /></CardContent></Card>
                         </div>
                     </div>
                 </div>
