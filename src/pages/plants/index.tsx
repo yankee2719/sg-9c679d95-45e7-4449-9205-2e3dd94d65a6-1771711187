@@ -30,6 +30,10 @@ function KpiCard({ icon, title, value }: { icon: ReactNode; title: string; value
 export default function PlantsIndexPage() {
     const { loading: authLoading, organization, membership } = useAuth();
     const { t } = useLanguage();
+    const tx = (key: string, fallback: string) => {
+        const value = t(key);
+        return value === key ? fallback : value;
+    };
 
     const [loading, setLoading] = useState(true);
     const [plants, setPlants] = useState < PlantRow[] > ([]);
@@ -113,11 +117,11 @@ export default function PlantsIndexPage() {
         return (
             <OrgContextGuard>
                 <MainLayout userRole={userRole}>
-                    <SEO title={`${t("plants.title") || "Plants"} - MACHINA`} />
+                    <SEO title={`${tx("plants.title", "Stabilimenti")} - MACHINA`} />
                     <div className="mx-auto max-w-7xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                {t("plants.loading") || "Loading plants..."}
+                                {tx("plants.loading", "Caricamento stabilimenti...")}
                             </CardContent>
                         </Card>
                     </div>
@@ -130,11 +134,11 @@ export default function PlantsIndexPage() {
         return (
             <OrgContextGuard>
                 <MainLayout userRole={userRole}>
-                    <SEO title={`${t("plants.title") || "Plants"} - MACHINA`} />
+                    <SEO title={`${tx("plants.title", "Stabilimenti")} - MACHINA`} />
                     <div className="mx-auto max-w-7xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                {t("plants.customerOnly") || "Plant management is available only in final customer context."}
+                                {tx("plants.customerOnly", "La gestione stabilimenti è disponibile solo nel contesto cliente finale.")}
                             </CardContent>
                         </Card>
                     </div>
@@ -146,16 +150,16 @@ export default function PlantsIndexPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${t("plants.title") || "Plants"} - MACHINA`} />
+                <SEO title={`${tx("plants.title", "Stabilimenti")} - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
                             <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                {t("plants.title") || "Plants"}
+                                {tx("plants.title", "Stabilimenti")}
                             </h1>
                             <p className="text-base text-muted-foreground">
-                                {t("plants.subtitle") || "Manage plants, lines and machine placement."}
+                                {tx("plants.subtitle", "Gestisci stabilimenti, linee e posizionamento macchine.")}
                             </p>
                         </div>
 
@@ -163,17 +167,17 @@ export default function PlantsIndexPage() {
                             <Link href="/plants/new">
                                 <Button>
                                     <Plus className="mr-2 h-4 w-4" />
-                                    {t("plants.new") || "New plant"}
+                                    {tx("plants.new", "Nuovo Stabilimento")}
                                 </Button>
                             </Link>
                         )}
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Building2 className="h-5 w-5" />} title={t("plants.title") || "Plants"} value={stats.plants} />
-                        <KpiCard icon={<GitBranch className="h-5 w-5" />} title={t("plants.lines") || "Lines"} value={stats.lines} />
-                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("plants.machinesPlaced") || "Machines placed"} value={stats.machinesOnPlants} />
-                        <KpiCard icon={<Factory className="h-5 w-5" />} title={t("plants.plantsWithMachines") || "Plants with machines"} value={stats.plantsWithMachines} />
+                        <KpiCard icon={<Building2 className="h-5 w-5" />} title={tx("plants.title", "Stabilimenti")} value={stats.plants} />
+                        <KpiCard icon={<GitBranch className="h-5 w-5" />} title={tx("plants.lines", "Linee")} value={stats.lines} />
+                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={tx("plants.machinesPlaced", "Macchine posizionate")} value={stats.machinesOnPlants} />
+                        <KpiCard icon={<Factory className="h-5 w-5" />} title={tx("plants.plantsWithMachines", "Stabilimenti con macchine")} value={stats.plantsWithMachines} />
                     </div>
 
                     <Card className="rounded-2xl">
@@ -183,7 +187,7 @@ export default function PlantsIndexPage() {
                                 <input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder={t("plants.search") || "Search by name or code"}
+                                    placeholder={tx("plants.search", "Cerca per nome o codice")}
                                     className="h-11 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                                 />
                             </div>
@@ -194,10 +198,10 @@ export default function PlantsIndexPage() {
                         <CardContent className="p-6">
                             {filteredPlants.length === 0 ? (
                                 <EmptyState
-                                    title={t("plants.emptyTitle") || "No plants found"}
-                                    description={t("plants.emptyDesc") || "Create the first plant to structure machines and production lines."}
+                                    title={tx("plants.emptyTitle", "Nessuno stabilimento trovato")}
+                                    description={tx("plants.emptyDesc", "Crea il primo stabilimento per strutturare macchine e linee produttive.")}
                                     icon={<Building2 className="h-10 w-10" />}
-                                    actionLabel={canEdit ? t("plants.new") || "New plant" : undefined}
+                                    actionLabel={canEdit ? tx("plants.new", "Nuovo Stabilimento") : undefined}
                                     actionHref={canEdit ? "/plants/new" : undefined}
                                 />
                             ) : (
@@ -226,7 +230,7 @@ export default function PlantsIndexPage() {
                                                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                                                         <div className="rounded-2xl border border-border bg-muted/30 p-4">
                                                             <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                {t("plants.lines") || "Lines"}
+                                                                {tx("plants.lines", "Linee")}
                                                             </div>
                                                             <div className="mt-1 text-2xl font-semibold text-foreground">{linesCount}</div>
                                                         </div>
