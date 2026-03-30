@@ -53,11 +53,17 @@ export interface SaveChecklistTemplateResult {
     created_new_version: boolean;
 }
 
+/**
+ * Important:
+ * The active server routes live under /api/checklists/template/* (singular).
+ * Calling /api/checklists/templates/* (plural) is currently intercepted by the
+ * legacy dynamic route /api/checklists/[id]/index.ts, which returns 410 Gone.
+ */
 export const checklistTemplateApi = {
-    list: () => apiFetch < { rows: ChecklistTemplateCatalogRow[] } > ("/api/checklists/templates"),
-    get: (id: string) => apiFetch < ChecklistTemplateDetail > (`/api/checklists/templates/${id}`),
+    list: () => apiFetch<{ rows: ChecklistTemplateCatalogRow[] }>("/api/checklists/template"),
+    get: (id: string) => apiFetch<ChecklistTemplateDetail>(`/api/checklists/template/${id}`),
     save: (payload: SaveChecklistTemplatePayload) =>
-        apiFetch < SaveChecklistTemplateResult > ("/api/checklists/templates/save", {
+        apiFetch<SaveChecklistTemplateResult>("/api/checklists/template/save", {
             method: "POST",
             body: JSON.stringify(payload),
         }),
