@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { hasMinimumRole, type OrgRole } from "@/services/organizationService";
+import { hasMinimumRole, organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
 
 export interface AuthState {
     user: User | null;
@@ -29,6 +29,7 @@ export interface AuthState {
         role: OrgRole;
         is_active: boolean;
     } | null;
+    memberships: MembershipWithOrganization[];
     isPlatformAdmin: boolean;
     isAuthenticated: boolean;
     isOwner: boolean;
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState < ProfileRow > (null);
     const [organization, setOrganization] = useState < OrganizationRow > (null);
     const [membership, setMembership] = useState < MembershipRow > (null);
+    const [memberships, setMemberships] = useState < MembershipWithOrganization[] > ([]);
     const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
     const loadRequestIdRef = useRef(0);
 
@@ -64,13 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setOrganization(null);
         setMembership(null);
+        setMemberships([]);
         setIsPlatformAdmin(false);
     }, []);
 
     const loadAuthContext = useCallback(async (currentUser: User) => {
         const requestId = ++loadRequestIdRef.current;
 
-        const [{ data: profileData, error: profileError }, { data: adminData, error: adminError }] = await Promise.all([
+        const [
+            { data: profileData, error: profileError },
+            { data: adminData, error: adminError },
+            activeMemberships,
+        ] = await Promise.all([
             supabase
                 .from("profiles")
                 .select("id, first_name, last_name, display_name, email, avatar_url, language, default_organization_id")
@@ -82,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .eq("user_id", currentUser.id)
                 .eq("is_active", true)
                 .maybeSingle(),
+            organizationService.getActiveMemberships(),
         ]);
 
         if (profileError) throw profileError;
@@ -90,20 +98,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setProfile((profileData as ProfileRow) ?? null);
         setIsPlatformAdmin(!!adminData);
+        setMemberships(activeMemberships);
 
         let activeOrgId = profileData?.default_organization_id ?? null;
 
         if (!activeOrgId) {
-            const { data: firstMembership, error: firstMembershipError } = await supabase
-                .from("organization_memberships")
-                .select("organization_id")
-                .eq("user_id", currentUser.id)
-                .eq("is_active", true)
-                .limit(1)
-                .maybeSingle();
-
-            if (firstMembershipError) throw firstMembershipError;
-            activeOrgId = firstMembership?.organization_id ?? null;
+            activeOrgId = activeMemberships[0]?.organization_id ?? null;
         }
 
         if (!activeOrgId) {
@@ -113,27 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        const [{ data: orgData, error: orgError }, { data: membershipData, error: membershipError }] = await Promise.all([
-            supabase
-                .from("organizations")
-                .select("id, name, slug, type, subscription_status")
-                .eq("id", activeOrgId)
-                .maybeSingle(),
-            supabase
-                .from("organization_memberships")
-                .select("id, role, is_active")
-                .eq("organization_id", activeOrgId)
-                .eq("user_id", currentUser.id)
-                .eq("is_active", true)
-                .maybeSingle(),
-        ]);
+        const activeMembership = activeMemberships.find((row) => row.organization_id === activeOrgId) ?? null;
+
+        const { data: orgData, error: orgError } = await supabase
+            .from("organizations")
+            .select("id, name, slug, type, subscription_status")
+            .eq("id", activeOrgId)
+            .maybeSingle();
 
         if (orgError) throw orgError;
-        if (membershipError) throw membershipError;
         if (requestId !== loadRequestIdRef.current) return;
 
         setOrganization((orgData as OrganizationRow) ?? null);
-        setMembership((membershipData as MembershipRow) ?? null);
+        setMembership(
+            activeMembership
+                ? {
+                    id: activeMembership.id,
+                    role: activeMembership.role,
+                    is_active: activeMembership.is_active,
+                }
+                : null
+        );
     }, []);
 
     useEffect(() => {
@@ -220,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         organization,
         membership,
+        memberships,
         isPlatformAdmin,
         isAuthenticated: !!user,
         isOwner,
@@ -245,3 +246,4 @@ export function useAuth(): AuthState {
     }
     return context;
 }
+
