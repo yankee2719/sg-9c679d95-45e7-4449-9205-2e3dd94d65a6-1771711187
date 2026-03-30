@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
     ArrowLeft,
     CalendarDays,
+    ClipboardCheck,
     ClipboardList,
     Loader2,
     Save,
@@ -34,8 +35,11 @@ interface WorkOrderRow {
     machine_id: string | null;
     assigned_to: string | null;
     organization_id: string | null;
+    maintenance_plan_id: string | null;
     created_at: string | null;
     updated_at: string | null;
+    assignee?: { display_name?: string | null; email?: string | null } | null;
+    machine?: { id: string; name?: string | null; internal_code?: string | null } | null;
 }
 
 function formatDate(value: string | null | undefined, lang: string) {
@@ -143,7 +147,7 @@ export default function WorkOrderDetailPage() {
                 <SEO title={`${row.title || "Work Order"} - MACHINA`} />
 
                 <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                         <Link href="/work-orders">
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -151,16 +155,32 @@ export default function WorkOrderDetailPage() {
                             </Button>
                         </Link>
 
-                        {canEdit && (
-                            <Button onClick={handleSave} disabled={saving}>
-                                {saving ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Save className="mr-2 h-4 w-4" />
-                                )}
-                                {saving ? t("common.saving") || "Salvataggio..." : t("common.save") || "Salva"}
-                            </Button>
-                        )}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {row.maintenance_plan_id && (
+                                <Link href={`/maintenance/${row.maintenance_plan_id}`}>
+                                    <Button variant="outline">
+                                        <ClipboardList className="mr-2 h-4 w-4" />
+                                        Piano di manutenzione
+                                    </Button>
+                                </Link>
+                            )}
+                            <Link href={`/work-orders/${row.id}/execute-checklist`}>
+                                <Button variant="outline">
+                                    <ClipboardCheck className="mr-2 h-4 w-4" />
+                                    Checklist da eseguire
+                                </Button>
+                            </Link>
+                            {canEdit && (
+                                <Button onClick={handleSave} disabled={saving}>
+                                    {saving ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Save className="mr-2 h-4 w-4" />
+                                    )}
+                                    {saving ? t("common.saving") || "Salvataggio..." : t("common.save") || "Salva"}
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     <Card className="rounded-[28px]">
@@ -221,12 +241,12 @@ export default function WorkOrderDetailPage() {
                                     <InfoPill
                                         icon={<User className="h-4 w-4" />}
                                         label={t("workOrders.assignedTo") || "Assigned to"}
-                                        value={row.assigned_to || t("workOrders.unassigned") || "Non assegnato"}
+                                        value={row.assignee?.display_name || row.assigned_to || t("workOrders.unassigned") || "Non assegnato"}
                                     />
                                     <InfoPill
                                         icon={<ClipboardList className="h-4 w-4" />}
-                                        label={t("workOrders.createdAt") || "Creato il"}
-                                        value={formatDate(row.created_at, language)}
+                                        label={row.maintenance_plan_id ? "Piano origine" : (t("workOrders.createdAt") || "Creato il")}
+                                        value={row.maintenance_plan_id || formatDate(row.created_at, language)}
                                     />
                                 </div>
                             </div>
@@ -244,12 +264,12 @@ export default function WorkOrderDetailPage() {
                                 value={row.priority || "—"}
                             />
                             <DetailRow
-                                label={t("workOrders.machineId") || "Machine ID"}
-                                value={row.machine_id || "—"}
+                                label={t("workOrders.machineId") || "Machine"}
+                                value={row.machine?.name || row.machine_id || "—"}
                             />
                             <DetailRow
                                 label={t("workOrders.assignedTo") || "Assigned to"}
-                                value={row.assigned_to || "—"}
+                                value={row.assignee?.display_name || row.assigned_to || "—"}
                             />
                             <DetailRow
                                 label={t("workOrders.updatedAt") || "Updated at"}
@@ -258,14 +278,22 @@ export default function WorkOrderDetailPage() {
                         </CardContent>
                     </Card>
 
-                    {row.machine_id && (
-                        <Link href={`/equipment/${row.machine_id}`}>
-                            <Button variant="outline">
-                                <Wrench className="mr-2 h-4 w-4" />
-                                {t("nav.equipment")}
+                    <div className="flex flex-wrap gap-3">
+                        {row.machine_id && (
+                            <Link href={`/equipment/${row.machine_id}`}>
+                                <Button variant="outline">
+                                    <Wrench className="mr-2 h-4 w-4" />
+                                    {t("nav.equipment")}
+                                </Button>
+                            </Link>
+                        )}
+                        <Link href={`/work-orders/${row.id}/execute-checklist`}>
+                            <Button>
+                                <ClipboardCheck className="mr-2 h-4 w-4" />
+                                Checklist da eseguire
                             </Button>
                         </Link>
-                    )}
+                    </div>
                 </div>
             </MainLayout>
         </OrgContextGuard>
