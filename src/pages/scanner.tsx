@@ -1,298 +1,435 @@
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { Camera, Keyboard, QrCode, Search } from "lucide-react";
-import { QRCodeScanner } from "@/components/QRCodeScanner";
+import {
+    AlertCircle,
+    ArrowLeft,
+    CheckCircle2,
+    Eye,
+    EyeOff,
+    Factory,
+    Loader2,
+    Lock,
+    Shield,
+    Wrench,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { SEO } from "@/components/SEO";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/contexts/LanguageContext";
-
-interface ScanHistory {
-    id: string;
-    code: string;
-    equipmentName: string;
-    timestamp: string;
-}
-
-function resolveScanTarget(code: string): string {
-    const normalized = code.trim();
-
-    if (/^https?:\/\//i.test(normalized)) {
-        try {
-            const url = new URL(normalized);
-            const tokenMatch = url.pathname.match(/\/scan\/([^/]+)$/i);
-            if (tokenMatch?.[1]) return `/scan/${tokenMatch[1]}`;
-        } catch {
-            return `/equipment/${normalized}`;
-        }
-    }
-
-    if (normalized.startsWith("/scan/")) return normalized;
-    if (/^EQ-/i.test(normalized)) return `/equipment/${normalized.replace(/^EQ-/i, "")}`;
-    if (/^[A-Z0-9]{8}\.[A-Z0-9]{8,}$/i.test(normalized) || normalized.includes(".")) return `/scan/${normalized}`;
-    return `/equipment/${normalized}`;
-}
 
 const copy = {
     it: {
-        title: "Scanner QR",
-        subtitle: "Scansiona un QR code macchina oppure inserisci manualmente il codice.",
-        scanQR: "Scansione QR",
-        manualEntry: "Inserimento manuale",
-        frameQR: "Inquadra il QR code",
-        positionQR: "Posiziona il codice all’interno dell’area di scansione.",
-        frameWell: "Inquadra bene",
-        keepCentered: "Mantieni il QR centrato nel riquadro.",
-        goodLight: "Buona luce",
-        ensureLight: "Assicurati che il codice sia ben illuminato.",
-        rightDistance: "Distanza corretta",
-        notTooClose: "Non troppo vicino e non troppo lontano.",
-        manualEntryTitle: "Ricerca manuale",
-        manualEntryDesc: "Inserisci codice macchina, seriale o token QR.",
-        equipmentCode: "Codice macchina",
-        searchEquipment: "Apri macchina",
-        acceptedFormats: "Formati accettati",
-        recentScans: "Scansioni recenti",
-        noRecentScans: "Nessuna scansione recente.",
-        now: "ora",
-        ago: "fa",
+        seoTitle: "Reimposta password - MACHINA",
+        seoDescription: "Crea una nuova password per il tuo account MACHINA.",
+        kicker: "Sicurezza account",
+        title: "Imposta una nuova password",
+        subtitle: "Completa il recupero accesso con una password sicura e torna nel tuo ambiente MACHINA.",
+        passwordLabel: "Nuova password",
+        passwordPlaceholder: "Minimo 8 caratteri",
+        confirmLabel: "Conferma nuova password",
+        confirmPlaceholder: "Ripeti la password",
+        updateButton: "Aggiorna password",
+        updating: "Aggiornamento in corso...",
+        backToLogin: "Torna al login",
+        invalidTitle: "Link non valido",
+        invalidMessage: "Il link di reset non è valido o è scaduto. Richiedi un nuovo link.",
+        invalidAction: "Richiedi nuovo link",
+        successTitle: "Password aggiornata",
+        successMessage: "La password è stata aggiornata correttamente. Verrai reindirizzato al login.",
+        goToLogin: "Vai al login",
+        genericError: "Errore durante il reset della password",
+        minLength: "La password deve contenere almeno 8 caratteri",
+        oneUpper: "La password deve contenere almeno una lettera maiuscola",
+        oneLower: "La password deve contenere almeno una lettera minuscola",
+        oneNumber: "La password deve contenere almeno un numero",
+        oneSpecial: "La password deve contenere almeno un carattere speciale (!@#$%^&*)",
+        mismatch: "Le password non coincidono",
+        showPassword: "Mostra password",
+        hidePassword: "Nascondi password",
+        ruleTitle: "Regole minime",
+        rule1: "8 caratteri minimi",
+        rule2: "1 maiuscola, 1 minuscola, 1 numero",
+        rule3: "1 carattere speciale",
+        panelTitle: "Reset coerente con il flusso pubblico MACHINA",
+        panelBody: "Anche la fase finale di recupero credenziali mantiene lo stesso tono industriale e la stessa chiarezza operativa di landing, login e registrazione.",
+        panelBullet1: "Accesso sicuro per ruoli industriali",
+        panelBullet2: "Stesso linguaggio visivo pubblico",
+        panelBullet3: "Rientro rapido in dashboard, documenti e work order",
     },
     en: {
-        title: "QR Scanner",
-        subtitle: "Scan a machine QR code or enter the code manually.",
-        scanQR: "QR scan",
-        manualEntry: "Manual entry",
-        frameQR: "Frame the QR code",
-        positionQR: "Place the code inside the scan area.",
-        frameWell: "Frame it well",
-        keepCentered: "Keep the QR centered in the frame.",
-        goodLight: "Good light",
-        ensureLight: "Make sure the code is well lit.",
-        rightDistance: "Right distance",
-        notTooClose: "Not too close and not too far.",
-        manualEntryTitle: "Manual search",
-        manualEntryDesc: "Enter machine code, serial number, or QR token.",
-        equipmentCode: "Machine code",
-        searchEquipment: "Open machine",
-        acceptedFormats: "Accepted formats",
-        recentScans: "Recent scans",
-        noRecentScans: "No recent scans.",
-        now: "now",
-        ago: "ago",
+        seoTitle: "Reset password - MACHINA",
+        seoDescription: "Create a new password for your MACHINA account.",
+        kicker: "Account security",
+        title: "Set a new password",
+        subtitle: "Complete access recovery with a secure password and return to your MACHINA workspace.",
+        passwordLabel: "New password",
+        passwordPlaceholder: "Minimum 8 characters",
+        confirmLabel: "Confirm new password",
+        confirmPlaceholder: "Repeat password",
+        updateButton: "Update password",
+        updating: "Updating...",
+        backToLogin: "Back to login",
+        invalidTitle: "Invalid link",
+        invalidMessage: "The reset link is invalid or expired. Request a new one.",
+        invalidAction: "Request new link",
+        successTitle: "Password updated",
+        successMessage: "Your password has been updated successfully. You will be redirected to login.",
+        goToLogin: "Go to login",
+        genericError: "Error while resetting the password",
+        minLength: "Password must be at least 8 characters long",
+        oneUpper: "Password must include at least one uppercase letter",
+        oneLower: "Password must include at least one lowercase letter",
+        oneNumber: "Password must include at least one number",
+        oneSpecial: "Password must include at least one special character (!@#$%^&*)",
+        mismatch: "Passwords do not match",
+        showPassword: "Show password",
+        hidePassword: "Hide password",
+        ruleTitle: "Minimum rules",
+        rule1: "At least 8 characters",
+        rule2: "1 uppercase, 1 lowercase, 1 number",
+        rule3: "1 special character",
+        panelTitle: "Reset aligned with the MACHINA public flow",
+        panelBody: "The final step of credential recovery keeps the same industrial tone and operational clarity as landing, login, and registration.",
+        panelBullet1: "Secure access for industrial roles",
+        panelBullet2: "Same public visual language",
+        panelBullet3: "Fast return to dashboards, documents, and work orders",
     },
     fr: {
-        title: "Scanner QR",
-        subtitle: "Scannez un QR code machine ou saisissez le code manuellement.",
-        scanQR: "Scan QR",
-        manualEntry: "Saisie manuelle",
-        frameQR: "Cadrez le QR code",
-        positionQR: "Placez le code dans la zone de lecture.",
-        frameWell: "Bien cadrer",
-        keepCentered: "Gardez le QR centré dans le cadre.",
-        goodLight: "Bonne lumière",
-        ensureLight: "Assurez-vous que le code est bien éclairé.",
-        rightDistance: "Bonne distance",
-        notTooClose: "Ni trop près ni trop loin.",
-        manualEntryTitle: "Recherche manuelle",
-        manualEntryDesc: "Saisissez le code machine, le numéro de série ou le token QR.",
-        equipmentCode: "Code machine",
-        searchEquipment: "Ouvrir la machine",
-        acceptedFormats: "Formats acceptés",
-        recentScans: "Scans récents",
-        noRecentScans: "Aucun scan récent.",
-        now: "maintenant",
-        ago: "il y a",
+        seoTitle: "Réinitialiser le mot de passe - MACHINA",
+        seoDescription: "Créez un nouveau mot de passe pour votre compte MACHINA.",
+        kicker: "Sécurité du compte",
+        title: "Définissez un nouveau mot de passe",
+        subtitle: "Finalisez la récupération d'accès avec un mot de passe sécurisé et revenez dans votre environnement MACHINA.",
+        passwordLabel: "Nouveau mot de passe",
+        passwordPlaceholder: "Minimum 8 caractères",
+        confirmLabel: "Confirmer le nouveau mot de passe",
+        confirmPlaceholder: "Répétez le mot de passe",
+        updateButton: "Mettre à jour le mot de passe",
+        updating: "Mise à jour en cours...",
+        backToLogin: "Retour à la connexion",
+        invalidTitle: "Lien invalide",
+        invalidMessage: "Le lien de réinitialisation est invalide ou expiré. Demandez-en un nouveau.",
+        invalidAction: "Demander un nouveau lien",
+        successTitle: "Mot de passe mis à jour",
+        successMessage: "Votre mot de passe a été mis à jour avec succès. Vous serez redirigé vers la connexion.",
+        goToLogin: "Aller à la connexion",
+        genericError: "Erreur lors de la réinitialisation du mot de passe",
+        minLength: "Le mot de passe doit contenir au moins 8 caractères",
+        oneUpper: "Le mot de passe doit contenir au moins une majuscule",
+        oneLower: "Le mot de passe doit contenir au moins une minuscule",
+        oneNumber: "Le mot de passe doit contenir au moins un chiffre",
+        oneSpecial: "Le mot de passe doit contenir au moins un caractère spécial (!@#$%^&*)",
+        mismatch: "Les mots de passe ne correspondent pas",
+        showPassword: "Afficher le mot de passe",
+        hidePassword: "Masquer le mot de passe",
+        ruleTitle: "Règles minimales",
+        rule1: "8 caractères minimum",
+        rule2: "1 majuscule, 1 minuscule, 1 chiffre",
+        rule3: "1 caractère spécial",
+        panelTitle: "Réinitialisation alignée avec le flux public MACHINA",
+        panelBody: "La dernière étape de récupération des identifiants conserve le même ton industriel et la même clarté opérationnelle que la landing, la connexion et l'inscription.",
+        panelBullet1: "Accès sécurisé pour les rôles industriels",
+        panelBullet2: "Même langage visuel public",
+        panelBullet3: "Retour rapide vers tableaux de bord, documents et ordres de travail",
     },
     es: {
-        title: "Escáner QR",
-        subtitle: "Escanea un código QR de máquina o introduce el código manualmente.",
-        scanQR: "Escaneo QR",
-        manualEntry: "Entrada manual",
-        frameQR: "Enfoca el código QR",
-        positionQR: "Coloca el código dentro del área de lectura.",
-        frameWell: "Enfoque correcto",
-        keepCentered: "Mantén el QR centrado en el recuadro.",
-        goodLight: "Buena luz",
-        ensureLight: "Asegúrate de que el código esté bien iluminado.",
-        rightDistance: "Distancia correcta",
-        notTooClose: "Ni demasiado cerca ni demasiado lejos.",
-        manualEntryTitle: "Búsqueda manual",
-        manualEntryDesc: "Introduce código de máquina, serie o token QR.",
-        equipmentCode: "Código de máquina",
-        searchEquipment: "Abrir máquina",
-        acceptedFormats: "Formatos aceptados",
-        recentScans: "Escaneos recientes",
-        noRecentScans: "Sin escaneos recientes.",
-        now: "ahora",
-        ago: "hace",
+        seoTitle: "Restablecer contraseña - MACHINA",
+        seoDescription: "Crea una nueva contraseña para tu cuenta MACHINA.",
+        kicker: "Seguridad de la cuenta",
+        title: "Define una nueva contraseña",
+        subtitle: "Completa la recuperación de acceso con una contraseña segura y vuelve a tu entorno MACHINA.",
+        passwordLabel: "Nueva contraseña",
+        passwordPlaceholder: "Mínimo 8 caracteres",
+        confirmLabel: "Confirmar nueva contraseña",
+        confirmPlaceholder: "Repite la contraseña",
+        updateButton: "Actualizar contraseña",
+        updating: "Actualizando...",
+        backToLogin: "Volver al acceso",
+        invalidTitle: "Enlace no válido",
+        invalidMessage: "El enlace de restablecimiento no es válido o ha caducado. Solicita uno nuevo.",
+        invalidAction: "Solicitar nuevo enlace",
+        successTitle: "Contraseña actualizada",
+        successMessage: "Tu contraseña se ha actualizado correctamente. Serás redirigido al acceso.",
+        goToLogin: "Ir al acceso",
+        genericError: "Error al restablecer la contraseña",
+        minLength: "La contraseña debe tener al menos 8 caracteres",
+        oneUpper: "La contraseña debe incluir al menos una mayúscula",
+        oneLower: "La contraseña debe incluir al menos una minúscula",
+        oneNumber: "La contraseña debe incluir al menos un número",
+        oneSpecial: "La contraseña debe incluir al menos un carácter especial (!@#$%^&*)",
+        mismatch: "Las contraseñas no coinciden",
+        showPassword: "Mostrar contraseña",
+        hidePassword: "Ocultar contraseña",
+        ruleTitle: "Reglas mínimas",
+        rule1: "8 caracteres mínimos",
+        rule2: "1 mayúscula, 1 minúscula, 1 número",
+        rule3: "1 carácter especial",
+        panelTitle: "Restablecimiento alineado con el flujo público de MACHINA",
+        panelBody: "La fase final de recuperación de credenciales mantiene el mismo tono industrial y la misma claridad operativa que la landing, el acceso y el registro.",
+        panelBullet1: "Acceso seguro para roles industriales",
+        panelBullet2: "Mismo lenguaje visual público",
+        panelBullet3: "Vuelta rápida a dashboards, documentos y órdenes de trabajo",
     },
 } as const;
 
-export default function ScannerPage() {
+export default function ResetPasswordPage() {
     const router = useRouter();
     const { language } = useLanguage();
     const text = useMemo(() => copy[language], [language]);
-    const [activeTab, setActiveTab] = useState < "scanner" | "manual" > ("scanner");
-    const [manualCode, setManualCode] = useState("");
-    const [scanHistory, setScanHistory] = useState < ScanHistory[] > ([]);
 
-    const handleScan = (code: string) => {
-        const target = resolveScanTarget(code);
-        const newScan: ScanHistory = {
-            id: Date.now().toString(),
-            code,
-            equipmentName: code,
-            timestamp: new Date().toISOString(),
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
+    const [error, setError] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [validToken, setValidToken] = useState(false);
+
+    useEffect(() => {
+        const checkSession = async () => {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+
+            if (session) {
+                setValidToken(true);
+            } else {
+                setError(text.invalidMessage);
+            }
         };
 
-        setScanHistory((prev) => [newScan, ...prev].slice(0, 10));
-        router.push(target);
+        void checkSession();
+    }, [text.invalidMessage]);
+
+    const validatePassword = (pwd: string): string | null => {
+        if (pwd.length < 8) return text.minLength;
+        if (!/[A-Z]/.test(pwd)) return text.oneUpper;
+        if (!/[a-z]/.test(pwd)) return text.oneLower;
+        if (!/[0-9]/.test(pwd)) return text.oneNumber;
+        if (!/[!@#$%^&*]/.test(pwd)) return text.oneSpecial;
+        return null;
     };
 
-    const handleManualSubmit = (event: React.FormEvent) => {
+    const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (manualCode.trim()) handleScan(manualCode.trim());
+        setLoading(true);
+        setError("");
+
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            setError(passwordError);
+            setLoading(false);
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            setError(text.mismatch);
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const { error: updateError } = await supabase.auth.updateUser({ password });
+            if (updateError) throw updateError;
+
+            setSuccess(true);
+            window.setTimeout(() => {
+                void router.push("/login");
+            }, 3000);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : text.genericError);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const formatRelativeTime = (timestamp: string) => {
-        const now = new Date();
-        const past = new Date(timestamp);
-        const diffMs = now.getTime() - past.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-
-        if (diffMins < 1) return text.now;
-        if (diffMins < 60) return `${diffMins}m ${text.ago}`;
-        if (diffHours < 24) return `${diffHours}h ${text.ago}`;
-        return past.toLocaleDateString();
-    };
+    const passwordType = showPassword ? "text" : "password";
+    const confirmType = showConfirmPassword ? "text" : "password";
 
     return (
         <>
-            <SEO title={`${text.title} - MACHINA`} />
+            <SEO title={text.seoTitle} description={text.seoDescription} />
+            <div className="min-h-screen bg-slate-950 text-white">
+                <div className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
+                    <div className="relative hidden overflow-hidden border-r border-slate-800 bg-slate-950 lg:block">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(249,115,22,0.16),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.12),_transparent_28%)]" />
+                        <div className="relative flex h-full flex-col justify-between p-10 xl:p-14">
+                            <div>
+                                <Link href="/landing" className="inline-flex items-center gap-3">
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-400">
+                                        <Factory className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-semibold tracking-[0.18em] text-orange-400">MACHINA</div>
+                                        <div className="text-xs text-slate-400">Industrial maintenance platform</div>
+                                    </div>
+                                </Link>
+                            </div>
 
-            <div className="min-h-screen bg-background">
-                <div className="mx-auto max-w-4xl px-6 py-8">
-                    <div className="mb-8">
-                        <h1 className="mb-2 text-3xl font-bold text-foreground">{text.title}</h1>
-                        <p className="text-muted-foreground">{text.subtitle}</p>
+                            <div className="max-w-xl">
+                                <Badge className="border-orange-500/30 bg-orange-500/10 px-3 py-1 text-orange-300">{text.kicker}</Badge>
+                                <h1 className="mt-6 text-4xl font-bold leading-tight text-white xl:text-5xl">{text.panelTitle}</h1>
+                                <p className="mt-5 text-lg leading-8 text-slate-300">{text.panelBody}</p>
+
+                                <div className="mt-10 space-y-4">
+                                    {[text.panelBullet1, text.panelBullet2, text.panelBullet3].map((item) => (
+                                        <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-900/75 p-4 text-sm text-slate-300">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-300">
+                                                <Wrench className="h-4 w-4" />
+                                            </div>
+                                            <span>{item}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6">
+                                <div className="flex items-center gap-3 text-sm text-slate-300">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300">
+                                        <Shield className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div className="font-semibold text-white">{text.ruleTitle}</div>
+                                        <div className="text-slate-400">{text.rule1} · {text.rule2} · {text.rule3}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <Button onClick={() => setActiveTab("scanner")} variant={activeTab === "scanner" ? "default" : "outline"} className="h-14 rounded-2xl font-semibold">
-                                <QrCode className="mr-2 h-5 w-5" />
-                                {text.scanQR}
-                            </Button>
-                            <Button onClick={() => setActiveTab("manual")} variant={activeTab === "manual" ? "default" : "outline"} className="h-14 rounded-2xl font-semibold">
-                                <Keyboard className="mr-2 h-5 w-5" />
-                                {text.manualEntry}
-                            </Button>
-                        </div>
+                    <div className="relative flex items-center justify-center p-4 sm:p-6 lg:p-10">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.08),_transparent_28%)] lg:hidden" />
+                        <div className="relative w-full max-w-md">
+                            <div className="mb-6 flex items-center justify-between lg:hidden">
+                                <Link href="/login" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
+                                    <ArrowLeft className="h-4 w-4" />
+                                    {text.backToLogin}
+                                </Link>
+                                <div className="text-xs font-semibold tracking-[0.18em] text-orange-400">MACHINA</div>
+                            </div>
 
-                        {activeTab === "scanner" && (
-                            <Card className="mx-auto max-w-2xl rounded-3xl border-border bg-card shadow-sm">
-                                <CardContent className="space-y-6 p-8">
-                                    <div className="overflow-hidden rounded-3xl border border-border bg-muted/30">
-                                        <QRCodeScanner onScan={handleScan} onClose={() => router.push("/dashboard")} />
+                            <Card className="w-full rounded-[2rem] border-slate-800 bg-slate-900/90 text-white shadow-2xl shadow-black/30">
+                                <CardHeader className="space-y-4 text-center">
+                                    <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-3xl ${success ? "bg-emerald-500/15 text-emerald-300" : !validToken && error ? "bg-red-500/15 text-red-300" : "bg-orange-500/15 text-orange-300"}`}>
+                                        {success ? <CheckCircle2 className="h-8 w-8" /> : !validToken && error ? <AlertCircle className="h-8 w-8" /> : <Lock className="h-8 w-8" />}
                                     </div>
-                                    <div className="text-center">
-                                        <p className="text-lg font-semibold text-foreground">{text.frameQR}</p>
-                                        <p className="mt-1 text-sm text-muted-foreground">{text.positionQR}</p>
+                                    <div className="space-y-2">
+                                        <CardTitle className="text-2xl font-bold text-white">
+                                            {success ? text.successTitle : !validToken && error ? text.invalidTitle : text.title}
+                                        </CardTitle>
+                                        <CardDescription className="text-slate-400">
+                                            {success ? text.successMessage : !validToken && error ? text.invalidMessage : text.subtitle}
+                                        </CardDescription>
                                     </div>
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                        <div className="rounded-2xl border border-border bg-muted/50 p-4 text-center">
-                                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-                                                <Camera className="h-6 w-6 text-primary" />
-                                            </div>
-                                            <p className="mb-1 text-sm font-medium text-foreground">{text.frameWell}</p>
-                                            <p className="text-xs text-muted-foreground">{text.keepCentered}</p>
+                                </CardHeader>
+                                <CardContent>
+                                    {!validToken && error ? (
+                                        <div className="space-y-4">
+                                            <Alert variant="destructive" className="border-red-500/30 bg-red-500/10 text-red-100">
+                                                <AlertDescription>{text.invalidMessage}</AlertDescription>
+                                            </Alert>
+                                            <Button onClick={() => router.push("/forgot-password")} className="w-full bg-orange-600 text-white hover:bg-orange-500">
+                                                {text.invalidAction}
+                                            </Button>
                                         </div>
-                                        <div className="rounded-2xl border border-border bg-muted/50 p-4 text-center">
-                                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-                                                <QrCode className="h-6 w-6 text-primary" />
-                                            </div>
-                                            <p className="mb-1 text-sm font-medium text-foreground">{text.goodLight}</p>
-                                            <p className="text-xs text-muted-foreground">{text.ensureLight}</p>
+                                    ) : success ? (
+                                        <div className="space-y-4">
+                                            <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-50">
+                                                <AlertDescription>{text.successMessage}</AlertDescription>
+                                            </Alert>
+                                            <Button onClick={() => router.push("/login")} className="w-full bg-orange-600 text-white hover:bg-orange-500">
+                                                {text.goToLogin}
+                                            </Button>
                                         </div>
-                                        <div className="rounded-2xl border border-border bg-muted/50 p-4 text-center">
-                                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-                                                <Search className="h-6 w-6 text-primary" />
-                                            </div>
-                                            <p className="mb-1 text-sm font-medium text-foreground">{text.rightDistance}</p>
-                                            <p className="text-xs text-muted-foreground">{text.notTooClose}</p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
+                                    ) : (
+                                        <form onSubmit={handleSubmit} className="space-y-4">
+                                            {error ? (
+                                                <Alert variant="destructive" className="border-red-500/30 bg-red-500/10 text-red-100">
+                                                    <AlertDescription>{error}</AlertDescription>
+                                                </Alert>
+                                            ) : null}
 
-                        {activeTab === "manual" && (
-                            <Card className="rounded-3xl border-border bg-card shadow-sm">
-                                <CardContent className="p-8">
-                                    <div className="mb-6 text-center">
-                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-                                            <Keyboard className="h-8 w-8 text-primary" />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-foreground">{text.manualEntryTitle}</h3>
-                                        <p className="mt-2 text-sm text-muted-foreground">{text.manualEntryDesc}</p>
-                                    </div>
-                                    <form onSubmit={handleManualSubmit} className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-foreground">{text.equipmentCode}</label>
-                                            <Input
-                                                value={manualCode}
-                                                onChange={(event) => setManualCode(event.target.value.toUpperCase())}
-                                                placeholder="EQ-001 o QR token"
-                                                className="h-14 rounded-2xl border-border bg-background text-center font-mono text-lg text-foreground"
-                                                autoFocus
-                                            />
-                                        </div>
-                                        <Button type="submit" disabled={!manualCode.trim()} className="h-14 w-full rounded-2xl font-bold">
-                                            <Search className="mr-2 h-5 w-5" />
-                                            {text.searchEquipment}
-                                        </Button>
-                                    </form>
-                                    <div className="mt-6 rounded-2xl border border-border bg-muted/50 p-4">
-                                        <p className="mb-2 text-xs font-semibold text-foreground">{text.acceptedFormats}:</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Badge variant="secondary" className="font-mono">EQ-001</Badge>
-                                            <Badge variant="secondary" className="font-mono">EQ-123</Badge>
-                                            <Badge variant="secondary" className="font-mono">AB12CD34.EF56GH78</Badge>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        <Card className="rounded-3xl border-border bg-card shadow-sm">
-                            <CardContent className="p-6">
-                                <div className="mb-4 flex items-center gap-2">
-                                    <QrCode className="h-5 w-5 text-primary" />
-                                    <h3 className="text-lg font-semibold text-foreground">{text.recentScans}</h3>
-                                </div>
-                                {scanHistory.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">{text.noRecentScans}</p>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {scanHistory.map((scan) => (
-                                            <div key={scan.id} className="flex items-center justify-between rounded-2xl border border-border bg-muted/40 px-4 py-3">
-                                                <div>
-                                                    <div className="font-medium text-foreground">{scan.code}</div>
-                                                    <div className="text-sm text-muted-foreground">{scan.equipmentName}</div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="password" className="text-slate-200">{text.passwordLabel}</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        id="password"
+                                                        type={passwordType}
+                                                        placeholder={text.passwordPlaceholder}
+                                                        value={password}
+                                                        onChange={(event) => setPassword(event.target.value)}
+                                                        required
+                                                        className="border-slate-700 bg-slate-950 pr-11 text-white placeholder:text-slate-500"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword((value) => !value)}
+                                                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-white"
+                                                        aria-label={showPassword ? text.hidePassword : text.showPassword}
+                                                    >
+                                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                    </button>
                                                 </div>
-                                                <div className="text-xs text-muted-foreground">{formatRelativeTime(scan.timestamp)}</div>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="confirmPassword" className="text-slate-200">{text.confirmLabel}</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        id="confirmPassword"
+                                                        type={confirmType}
+                                                        placeholder={text.confirmPlaceholder}
+                                                        value={confirmPassword}
+                                                        onChange={(event) => setConfirmPassword(event.target.value)}
+                                                        required
+                                                        className="border-slate-700 bg-slate-950 pr-11 text-white placeholder:text-slate-500"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowConfirmPassword((value) => !value)}
+                                                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 hover:text-white"
+                                                        aria-label={showConfirmPassword ? text.hidePassword : text.showPassword}
+                                                    >
+                                                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-400">
+                                                <div className="mb-2 font-medium text-slate-200">{text.ruleTitle}</div>
+                                                <ul className="space-y-1">
+                                                    <li>• {text.rule1}</li>
+                                                    <li>• {text.rule2}</li>
+                                                    <li>• {text.rule3}</li>
+                                                </ul>
+                                            </div>
+
+                                            <Button type="submit" className="w-full bg-orange-600 text-white hover:bg-orange-500" disabled={loading}>
+                                                {loading ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        {text.updating}
+                                                    </>
+                                                ) : (
+                                                    text.updateButton
+                                                )}
+                                            </Button>
+                                        </form>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
                     </div>
                 </div>
             </div>
         </>
     );
 }
+
