@@ -56,6 +56,7 @@ export default withAuth(
               machine_id,
               assigned_to,
               organization_id,
+              maintenance_plan_id,
               created_at,
               updated_at
             `)
@@ -81,6 +82,7 @@ export default withAuth(
               machine_id,
               assigned_to,
               organization_id,
+              maintenance_plan_id,
               created_at,
               updated_at
             `)
@@ -99,6 +101,7 @@ export default withAuth(
                   machine_id,
                   assigned_to,
                   organization_id,
+                  maintenance_plan_id,
                   created_at,
                   updated_at
                 `)
@@ -139,6 +142,7 @@ export default withAuth(
                     plant_id,
                     work_type,
                     created_by,
+                    maintenance_plan_id,
                 } = req.body ?? {};
 
                 if (!title?.trim()) {
@@ -163,6 +167,7 @@ export default withAuth(
                     plant_id: plant_id || null,
                     work_type: work_type || "preventive",
                     created_by: created_by || req.user.userId,
+                    maintenance_plan_id: maintenance_plan_id || null,
                 };
 
                 const { data, error } = await serviceSupabase
@@ -186,6 +191,7 @@ export default withAuth(
                         priority: data.priority,
                         due_date: data.due_date,
                         assigned_to: data.assigned_to,
+                        maintenance_plan_id: data.maintenance_plan_id ?? null,
                         machine_owner_org_id: machine.organization_id,
                     },
                 });
@@ -201,4 +207,3 @@ export default withAuth(
     },
     { allowPlatformAdmin: true }
 );
-
