@@ -1,13 +1,4 @@
-// src/services/organizationService.ts
-// ============================================================================
-// ORGANIZATION SERVICE — connects to real organizations + memberships tables
-// ============================================================================
-
 import { supabase } from '@/integrations/supabase/client';
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 export type OrgType = 'manufacturer' | 'customer' | 'enterprise';
 export type OrgRole = 'owner' | 'admin' | 'plant_manager' | 'technician' | 'viewer';
@@ -56,6 +47,10 @@ export interface OrganizationWithMembership extends Organization {
     membership?: OrganizationMembership;
 }
 
+export interface MembershipWithOrganization extends OrganizationMembership {
+    organization: Pick<Organization, 'id' | 'name' | 'type' | 'slug'> | null;
+}
+
 export interface CreateOrganizationParams {
     name: string;
     slug: string;
@@ -70,10 +65,6 @@ export interface InviteMemberParams {
     role: OrgRole;
 }
 
-// ============================================================================
-// ROLE HIERARCHY
-// ============================================================================
-
 const ROLE_RANK: Record<OrgRole, number> = {
     owner: 5,
     admin: 4,
@@ -82,18 +73,26 @@ const ROLE_RANK: Record<OrgRole, number> = {
     viewer: 1,
 };
 
+function normalizeOrgType(value: string): OrgType {
+    if (value === 'manufacturer' || value === 'customer' || value === 'enterprise') {
+        return value;
+    }
+    return 'customer';
+}
+
+function normalizeIncomingOrgType(value: string): OrgType {
+    const raw = String(value ?? '').toLowerCase();
+    if (raw === 'manufacturer') return 'manufacturer';
+    if (raw === 'enterprise') return 'enterprise';
+    if (raw === 'company' || raw === 'customer') return 'customer';
+    return 'customer';
+}
+
 export function hasMinimumRole(userRole: OrgRole, requiredRole: OrgRole): boolean {
     return ROLE_RANK[userRole] >= ROLE_RANK[requiredRole];
 }
 
-// ============================================================================
-// SERVICE
-// ============================================================================
-
 export const organizationService = {
-
-    // ─── CREATE ──────────────────────────────────────────────────────────
-
     async createOrganization(
         params: CreateOrganizationParams
     ): Promise<{ organizationId: string | null; error: Error | null }> {
@@ -107,80 +106,81 @@ export const organizationService = {
             });
 
             if (error) throw error;
-            return { organizationId: data as string, error: null };
+            return { organizationId: (data as string) ?? null, error: null };
         } catch (error) {
             console.error('Error creating organization:', error);
             return { organizationId: null, error: error as Error };
         }
     },
 
+    async createOrganizationWithOwner(
+        params: Omit<CreateOrganizationParams, 'type'> & { type: CreateOrganizationParams['type'] | 'company' }
+    ) {
+        return this.createOrganization({
+            ...params,
+            type: normalizeIncomingOrgType(params.type),
+        });
+    },
+
     async generateUniqueSlug(name: string): Promise<string> {
-        const slug = name
+        const slugBase = name
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
-            .replace(/(^-|-$)/g, '');
+            .replace(/(^-|-$)/g, '') || 'organization';
 
         let counter = 0;
         while (counter < 10) {
-            const checkSlug = counter === 0 ? slug : `${slug}-${counter}`;
+            const checkSlug = counter === 0 ? slugBase : `${slugBase}-${counter}`;
 
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('organizations')
                 .select('id')
                 .eq('slug', checkSlug)
                 .maybeSingle();
 
-            if (!data) {
-                return checkSlug;
-            }
-            counter++;
+            if (!data) return checkSlug;
+            counter += 1;
         }
-        return `${slug}-${Date.now()}`;
-    },
 
-    // ─── READ ────────────────────────────────────────────────────────────
+        return `${slugBase}-${Date.now()}`;
+    },
 
     async getCurrentOrganization(): Promise<Organization | null> {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return null;
 
-            // Get user's default org from profile
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('default_organization_id')
                 .eq('id', user.id)
                 .single();
 
-            if (!profile?.default_organization_id) {
-                // Fallback: get first active membership
+            let organizationId = profile?.default_organization_id ?? null;
+
+            if (!organizationId) {
                 const { data: membership } = await supabase
                     .from('organization_memberships')
                     .select('organization_id')
                     .eq('user_id', user.id)
                     .eq('is_active', true)
+                    .order('created_at', { ascending: true })
                     .limit(1)
-                    .single();
+                    .maybeSingle();
 
-                if (!membership) return null;
-
-                const { data: org } = await supabase
-                    .from('organizations')
-                    .select('*')
-                    .eq('id', membership.organization_id)
-                    .single();
-
-                return org;
+                organizationId = membership?.organization_id ?? null;
             }
+
+            if (!organizationId) return null;
 
             const { data, error } = await supabase
                 .from('organizations')
                 .select('*')
-                .eq('id', profile.default_organization_id)
+                .eq('id', organizationId)
                 .single();
 
             if (error) throw error;
-            return data;
+            return data as Organization;
         } catch (error) {
             console.error('Error fetching current organization:', error);
             return null;
@@ -195,7 +195,7 @@ export const organizationService = {
             .single();
 
         if (error) return null;
-        return data;
+        return data as Organization;
     },
 
     async getUserOrganizations(): Promise<OrganizationWithMembership[]> {
@@ -206,7 +206,15 @@ export const organizationService = {
             const { data: memberships, error } = await supabase
                 .from('organization_memberships')
                 .select(`
-                    *,
+                    id,
+                    organization_id,
+                    user_id,
+                    role,
+                    invited_by,
+                    invited_at,
+                    accepted_at,
+                    is_active,
+                    created_at,
                     organizations (*)
                 `)
                 .eq('user_id', user.id)
@@ -214,18 +222,18 @@ export const organizationService = {
 
             if (error) throw error;
 
-            return (memberships || []).map((m: any) => ({
-                ...m.organizations,
+            return (memberships || []).map((row: any) => ({
+                ...(row.organizations as Organization),
                 membership: {
-                    id: m.id,
-                    organization_id: m.organization_id,
-                    user_id: m.user_id,
-                    role: m.role,
-                    invited_by: m.invited_by,
-                    invited_at: m.invited_at,
-                    accepted_at: m.accepted_at,
-                    is_active: m.is_active,
-                    created_at: m.created_at,
+                    id: row.id,
+                    organization_id: row.organization_id,
+                    user_id: row.user_id,
+                    role: row.role,
+                    invited_by: row.invited_by,
+                    invited_at: row.invited_at,
+                    accepted_at: row.accepted_at,
+                    is_active: row.is_active,
+                    created_at: row.created_at,
                 },
             }));
         } catch (error) {
@@ -234,7 +242,55 @@ export const organizationService = {
         }
     },
 
-    // ─── MEMBERSHIP ──────────────────────────────────────────────────────
+    async getActiveMemberships(): Promise<MembershipWithOrganization[]> {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return [];
+
+            const { data, error } = await supabase
+                .from('organization_memberships')
+                .select(`
+                    id,
+                    organization_id,
+                    user_id,
+                    role,
+                    invited_by,
+                    invited_at,
+                    accepted_at,
+                    is_active,
+                    created_at,
+                    organizations (id, name, type, slug)
+                `)
+                .eq('user_id', user.id)
+                .eq('is_active', true)
+                .order('created_at', { ascending: true });
+
+            if (error) throw error;
+
+            return (data || []).map((row: any) => ({
+                id: row.id,
+                organization_id: row.organization_id,
+                user_id: row.user_id,
+                role: row.role,
+                invited_by: row.invited_by,
+                invited_at: row.invited_at,
+                accepted_at: row.accepted_at,
+                is_active: row.is_active,
+                created_at: row.created_at,
+                organization: row.organizations
+                    ? {
+                        id: row.organizations.id,
+                        name: row.organizations.name,
+                        slug: row.organizations.slug,
+                        type: normalizeOrgType(row.organizations.type),
+                    }
+                    : null,
+            }));
+        } catch (error) {
+            console.error('Error fetching active memberships:', error);
+            return [];
+        }
+    },
 
     async getCurrentMembership(organizationId: string): Promise<OrganizationMembership | null> {
         try {
@@ -250,17 +306,30 @@ export const organizationService = {
                 .single();
 
             if (error) return null;
-            return data;
+            return data as OrganizationMembership;
         } catch {
             return null;
         }
+    },
+
+    async getUserRole(organizationId: string): Promise<OrgRole | null> {
+        const membership = await this.getCurrentMembership(organizationId);
+        return membership?.role ?? null;
     },
 
     async getOrganizationMembers(organizationId: string): Promise<(OrganizationMembership & { profile: any })[]> {
         const { data, error } = await supabase
             .from('organization_memberships')
             .select(`
-                *,
+                id,
+                organization_id,
+                user_id,
+                role,
+                invited_by,
+                invited_at,
+                accepted_at,
+                is_active,
+                created_at,
                 profile:profiles (id, first_name, last_name, display_name, email, avatar_url)
             `)
             .eq('organization_id', organizationId)
@@ -271,7 +340,28 @@ export const organizationService = {
             console.error('Error fetching members:', error);
             return [];
         }
-        return data || [];
+
+        return (data || []) as (OrganizationMembership & { profile: any })[];
+    },
+
+    async hasCompletedOnboarding(): Promise<boolean> {
+        const organizations = await this.getUserOrganizations();
+        return organizations.length > 0;
+    },
+
+    async completeOnboarding(organizationId?: string): Promise<boolean> {
+        try {
+            if (!organizationId) {
+                const org = await this.getCurrentOrganization();
+                organizationId = org?.id;
+            }
+
+            if (!organizationId) return false;
+            return await this.switchOrganization(organizationId);
+        } catch (error) {
+            console.error('Error completing onboarding:', error);
+            return false;
+        }
     },
 
     async updateMemberRole(membershipId: string, newRole: OrgRole): Promise<boolean> {
@@ -292,8 +382,6 @@ export const organizationService = {
         return !error;
     },
 
-    // ─── UPDATE ──────────────────────────────────────────────────────────
-
     async updateOrganization(
         id: string,
         updates: Partial<Organization>
@@ -309,10 +397,8 @@ export const organizationService = {
             console.error('Error updating organization:', error);
             return null;
         }
-        return data;
+        return data as Organization;
     },
-
-    // ─── SWITCH ──────────────────────────────────────────────────────────
 
     async switchOrganization(organizationId: string): Promise<boolean> {
         try {
@@ -330,3 +416,4 @@ export const organizationService = {
         }
     },
 };
+
