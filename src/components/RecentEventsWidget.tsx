@@ -1,12 +1,9 @@
-// src/components/RecentEventsWidget.tsx
-// Compatible with Next.js Pages Router
-
-import { useEffect, useState } from 'react';
-import { MachineEventService } from '@/services/machineEventsService';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Clock } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { machineEventsService, type MachineEvent } from "@/services/machineEventsService";
 
 interface RecentEventsWidgetProps {
     organizationId: string;
@@ -21,51 +18,90 @@ function formatTimeAgo(dateString: string): string {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'ora';
+    if (diffMins < 1) return "ora";
     if (diffMins < 60) return `${diffMins}m fa`;
     if (diffHours < 24) return `${diffHours}h fa`;
     return `${diffDays}g fa`;
 }
 
-export function RecentEventsWidget({
-    organizationId,
-    limit = 10,
-}: RecentEventsWidgetProps) {
-    const [events, setEvents] = useState < any[] > ([]);
+function getEventLabel(eventType: string): string {
+    const [, rawLabel] = eventType.split(".");
+    return (rawLabel || eventType).replace(/_/g, " ");
+}
+
+function getPayloadText(payload: Record<string, any> | null | undefined, key: string): string | null {
+    const value = payload?.[key];
+    return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function getMachineDisplayName(event: MachineEvent): string {
+    return (
+        getPayloadText(event.payload, "machine_name") ||
+        getPayloadText(event.payload, "machineCode") ||
+        getPayloadText(event.payload, "machine_code") ||
+        event.machine_id ||
+        "Macchina senza nome"
+    );
+}
+
+function getSerialNumber(event: MachineEvent): string | null {
+    return (
+        getPayloadText(event.payload, "serial_number") ||
+        getPayloadText(event.payload, "serialNumber") ||
+        null
+    );
+}
+
+function getActorName(event: MachineEvent): string | null {
+    return (
+        getPayloadText(event.payload, "actor_name") ||
+        getPayloadText(event.payload, "performed_by") ||
+        event.actor_id ||
+        null
+    );
+}
+
+export function RecentEventsWidget({ organizationId, limit = 10 }: RecentEventsWidgetProps) {
+    const [events, setEvents] = useState<MachineEvent[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadEvents();
+        let active = true;
 
-        // Auto-refresh ogni 30 secondi
-        const interval = setInterval(loadEvents, 30000);
-        return () => clearInterval(interval);
+        const loadEvents = async () => {
+            try {
+                const data = await machineEventsService.getOrganizationEvents(organizationId, { limit });
+                if (!active) return;
+                setEvents(data);
+            } catch (error) {
+                console.error("Failed to load recent events:", error);
+                if (active) setEvents([]);
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        void loadEvents();
+        const interval = window.setInterval(() => {
+            void loadEvents();
+        }, 30000);
+
+        return () => {
+            active = false;
+            window.clearInterval(interval);
+        };
     }, [organizationId, limit]);
-
-    async function loadEvents() {
-        try {
-            const data = await MachineEventService.getRecentEvents(
-                organizationId,
-                limit
-            );
-            setEvents(data);
-        } catch (error) {
-            console.error('Failed to load recent events:', error);
-        } finally {
-            setLoading(false);
-        }
-    }
 
     if (loading) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>Eventi Recenti</CardTitle>
+                    <CardTitle>Eventi recenti</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="animate-pulse space-y-3">
                         {[...Array(3)].map((_, i) => (
-                            <div key={i} className="h-16 bg-muted rounded" />
+                            <div key={i} className="h-16 rounded bg-muted" />
                         ))}
                     </div>
                 </CardContent>
@@ -78,48 +114,49 @@ export function RecentEventsWidget({
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
-                    Eventi Recenti
+                    Eventi recenti
                 </CardTitle>
             </CardHeader>
             <CardContent>
                 {events.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-4">
-                        Nessun evento recente
-                    </p>
+                    <p className="py-4 text-center text-muted-foreground">Nessun evento recente</p>
                 ) : (
                     <ScrollArea className="h-[400px]">
                         <div className="space-y-3">
-                            {events.map((event) => (
-                                <div
-                                    key={event.event_id}
-                                    className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                                >
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <Badge variant="outline" className="text-xs">
-                                                {event.event_type.split('.')[1]?.replace(/_/g, ' ') ||
-                                                    event.event_type}
-                                            </Badge>
+                            {events.map((event) => {
+                                const machineName = getMachineDisplayName(event);
+                                const serialNumber = getSerialNumber(event);
+                                const actorName = getActorName(event);
+
+                                return (
+                                    <div
+                                        key={event.id}
+                                        className="flex items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-1 flex items-center gap-2">
+                                                <Badge variant="outline" className="text-xs">
+                                                    {getEventLabel(event.event_type)}
+                                                </Badge>
+                                            </div>
+
+                                            <p className="truncate text-sm font-medium">{machineName}</p>
+
+                                            {serialNumber && (
+                                                <p className="text-xs text-muted-foreground">S/N: {serialNumber}</p>
+                                            )}
+
+                                            {actorName && (
+                                                <p className="mt-1 text-xs text-muted-foreground">Da: {actorName}</p>
+                                            )}
                                         </div>
-                                        <p className="text-sm font-medium truncate">
-                                            {event.machine_name || 'Macchina senza nome'}
-                                        </p>
-                                        {event.serial_number && (
-                                            <p className="text-xs text-muted-foreground">
-                                                S/N: {event.serial_number}
-                                            </p>
-                                        )}
-                                        {event.actor_name && (
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                Da: {event.actor_name}
-                                            </p>
-                                        )}
+
+                                        <div className="whitespace-nowrap text-xs text-muted-foreground">
+                                            {formatTimeAgo(event.created_at)}
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                        {formatTimeAgo(event.created_at)}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </ScrollArea>
                 )}
@@ -127,3 +164,4 @@ export function RecentEventsWidget({
         </Card>
     );
 }
+
