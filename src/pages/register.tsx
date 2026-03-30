@@ -304,6 +304,7 @@ export default function RegisterPage() {
     const selectedPlanLabel = `${pricingPlans[selectedPlan].name} - €${billingPeriod === "yearly" ? pricingPlans[selectedPlan].yearlyPrice : pricingPlans[selectedPlan].monthlyPrice}/${billingPeriod === "yearly" ? "yr" : "mo"}`;
 
     const summaryOrgLabel = orgType === "manufacturer" ? text.manufacturer : orgType === "customer" ? text.customer : "—";
+    const darkInputClass = "border-slate-700 bg-slate-950 text-white placeholder:text-slate-500 autofill:border-slate-700 autofill:[-webkit-text-fill-color:rgb(255,255,255)] autofill:shadow-[inset_0_0_0px_1000px_rgb(2,6,23)]";
 
     if (success) {
         return (
@@ -400,8 +401,8 @@ export default function RegisterPage() {
                                 <Badge className="border-slate-700 bg-slate-900 text-slate-300">{selectedPlanLabel}</Badge>
                             </div>
 
-                            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-                                <Card className="rounded-[2rem] border-slate-800 bg-slate-900/90 text-white shadow-2xl shadow-black/20">
+                            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                                <Card className="min-w-0 rounded-[2rem] border-slate-800 bg-slate-900/90 text-white shadow-2xl shadow-black/20">
                                     <CardHeader>
                                         <CardTitle className="text-2xl text-white">{text.title}</CardTitle>
                                         <CardDescription className="text-slate-400">{text.subtitle}</CardDescription>
@@ -452,7 +453,7 @@ export default function RegisterPage() {
                                             <div className="space-y-4">
                                                 <div className="space-y-2">
                                                     <Label className="text-slate-200">{text.companyName}</Label>
-                                                    <Input value={companyName} onChange={(event) => setCompanyName(event.target.value)} required className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500" />
+                                                    <Input value={companyName} onChange={(event) => setCompanyName(event.target.value)} required className={darkInputClass} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label className="text-slate-200">{text.industry}</Label>
@@ -505,20 +506,20 @@ export default function RegisterPage() {
                                             <form onSubmit={handleRegister} className="space-y-4">
                                                 <div className="space-y-2">
                                                     <Label className="text-slate-200">{text.fullName}</Label>
-                                                    <Input value={fullName} onChange={(event) => setFullName(event.target.value)} required className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500" />
+                                                    <Input value={fullName} onChange={(event) => setFullName(event.target.value)} required className={darkInputClass} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label className="text-slate-200">{text.email}</Label>
-                                                    <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500" />
+                                                    <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required className={darkInputClass} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label className="text-slate-200">{text.password}</Label>
-                                                    <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500" />
+                                                    <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} className={darkInputClass} />
                                                     <p className="text-xs text-slate-500">{text.passwordHint}</p>
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label className="text-slate-200">{text.confirmPassword}</Label>
-                                                    <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={8} className="border-slate-700 bg-slate-950 text-white placeholder:text-slate-500" />
+                                                    <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={8} className={darkInputClass} />
                                                 </div>
                                                 <div className="flex gap-3">
                                                     <Button type="button" variant="outline" className="border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800" onClick={() => setStep(1)}>{text.back}</Button>
@@ -532,32 +533,32 @@ export default function RegisterPage() {
                                     </CardContent>
                                 </Card>
 
-                                <Card className="rounded-[2rem] border-slate-800 bg-slate-900/90 text-white shadow-xl shadow-black/10">
+                                <Card className="min-w-0 rounded-[2rem] border-slate-800 bg-slate-900/90 text-white shadow-xl shadow-black/10">
                                     <CardHeader>
                                         <CardTitle className="text-white">{text.summaryTitle}</CardTitle>
                                         <CardDescription className="text-slate-400">{text.summaryDescription}</CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4 text-sm">
-                                        <div className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4">
+                                        <div className="flex min-w-0 items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4">
                                             {orgType === "manufacturer" ? <Factory className="h-5 w-5 text-orange-300" /> : <Building2 className="h-5 w-5 text-orange-300" />}
-                                            <div>
+                                            <div className="min-w-0">
                                                 <div className="font-medium text-white">{text.summaryOrg}</div>
                                                 <div className="text-slate-400">{summaryOrgLabel}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4">
+                                        <div className="flex min-w-0 items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4">
                                             <Shield className="h-5 w-5 text-orange-300" />
-                                            <div>
+                                            <div className="min-w-0">
                                                 <div className="font-medium text-white">{text.summaryPlan}</div>
                                                 <div className="text-slate-400">{pricingPlans[selectedPlan].name} · {billingPeriod === "yearly" ? text.yearly : text.monthly}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4">
+                                        <div className="flex min-w-0 items-center gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4">
                                             <User className="h-5 w-5 text-orange-300" />
-                                            <div>
+                                            <div className="min-w-0">
                                                 <div className="font-medium text-white">{text.summaryAdmin}</div>
                                                 <div className="text-slate-400">{fullName || "—"}</div>
-                                                <div className="text-slate-500">{email || "—"}</div>
+                                                <div className="max-w-full break-all text-slate-500">{email || "—"}</div>
                                             </div>
                                         </div>
                                     </CardContent>
@@ -577,4 +578,3 @@ export default function RegisterPage() {
         </>
     );
 }
-
