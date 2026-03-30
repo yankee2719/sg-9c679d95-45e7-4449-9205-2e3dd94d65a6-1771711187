@@ -53,14 +53,13 @@ export interface SaveChecklistTemplateResult {
     created_new_version: boolean;
 }
 
-// Use the compatibility plural routes, which now forward server-side to the
-// active singular handlers. This avoids stale client chunks hitting the legacy
-// dynamic route /api/checklists/[id].
+// Hard fix: call the real singular routes that already exist in the project.
+// This avoids the legacy 410/Gone path /api/checklists/[id] swallowing "templates".
 export const checklistTemplateApi = {
-    list: () => apiFetch < { rows: ChecklistTemplateCatalogRow[] } > ("/api/checklists/templates"),
-    get: (id: string) => apiFetch < ChecklistTemplateDetail > (`/api/checklists/templates/${id}`),
+    list: () => apiFetch < { rows: ChecklistTemplateCatalogRow[] } > ("/api/checklists/template"),
+    get: (id: string) => apiFetch < ChecklistTemplateDetail > (`/api/checklists/template/${id}`),
     save: (payload: SaveChecklistTemplatePayload) =>
-        apiFetch < SaveChecklistTemplateResult > ("/api/checklists/templates/save", {
+        apiFetch < SaveChecklistTemplateResult > ("/api/checklists/template/save", {
             method: "POST",
             body: JSON.stringify(payload),
         }),
