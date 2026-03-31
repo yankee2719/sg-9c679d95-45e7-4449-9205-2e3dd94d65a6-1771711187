@@ -36,7 +36,6 @@ type MachineRow = {
 type PlantRow = {
     id: string;
     name: string | null;
-    type: string | null;
 };
 
 type UserRow = {
@@ -117,7 +116,7 @@ export default function MaintenancePlanNewPage() {
                         .order("name", { ascending: true }),
                     supabase
                         .from("plants")
-                        .select("id, name, type")
+                        .select("id, name")
                         .eq("organization_id", organization.id)
                         .order("name", { ascending: true }),
                     supabase
