@@ -14,20 +14,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Camera, Plus, Save, Trash2 } from "lucide-react";
+import {
+    buildChecklistItemDescription,
+    type ChecklistItemResponseType,
+} from "@/lib/checklistItemMeta";
 
 type MachineLite = { id: string; name: string | null; internal_code: string | null; plant_id: string | null; area: string | null };
-type PlantLite = { id: string; name: string | null; type: string | null };
+type PlantLite = { id: string; name: string | null };
 
 type ItemDraft = {
     localId: string;
     title: string;
     description: string;
     is_required: boolean;
+    responseType: ChecklistItemResponseType;
     expected_value: string;
     measurement_unit: string;
     min_value: string;
     max_value: string;
+    allowPhoto: boolean;
 };
 
 function makeItem(): ItemDraft {
@@ -36,6 +42,19 @@ function makeItem(): ItemDraft {
         title: "",
         description: "",
         is_required: true,
+        responseType: "boolean",
+        expected_value: "",
+        measurement_unit: "",
+        min_value: "",
+        max_value: "",
+        allowPhoto: false,
+    };
+}
+
+function resetMeasurementFields(item: ItemDraft, responseType: ChecklistItemResponseType): ItemDraft {
+    if (responseType === "numeric") return item;
+    return {
+        ...item,
         expected_value: "",
         measurement_unit: "",
         min_value: "",
@@ -103,7 +122,9 @@ export default function NewChecklistPage() {
             }
         };
         void load();
-        return () => { active = false; };
+        return () => {
+            active = false;
+        };
     }, [authLoading, organization?.id, toast]);
 
     const machineOptions = useMemo(() => {
@@ -116,7 +137,13 @@ export default function NewChecklistPage() {
     }, [isManufacturer, machines, plants]);
 
     const updateItem = (localId: string, patch: Partial<ItemDraft>) => {
-        setItems((current) => current.map((item) => (item.localId === localId ? { ...item, ...patch } : item)));
+        setItems((current) =>
+            current.map((item) => {
+                if (item.localId !== localId) return item;
+                const next = { ...item, ...patch };
+                return patch.responseType ? resetMeasurementFields(next, patch.responseType) : next;
+            }),
+        );
     };
 
     const moveItem = (localId: string, direction: -1 | 1) => {
@@ -138,8 +165,18 @@ export default function NewChecklistPage() {
 
     const handleSave = async () => {
         if (!organization?.id || !canManage) return;
+
         const cleanTitle = title.trim();
-        const cleanItems = items.map((item) => ({ ...item, title: item.title.trim(), description: item.description.trim(), measurement_unit: item.measurement_unit.trim(), expected_value: item.expected_value.trim(), min_value: item.min_value.trim(), max_value: item.max_value.trim() }));
+        const cleanItems = items.map((item) => ({
+            ...item,
+            title: item.title.trim(),
+            description: item.description.trim(),
+            measurement_unit: item.measurement_unit.trim(),
+            expected_value: item.expected_value.trim(),
+            min_value: item.min_value.trim(),
+            max_value: item.max_value.trim(),
+        }));
+
         if (!cleanTitle) {
             toast({ title: "Titolo obbligatorio", description: "Inserisci il titolo della checklist.", variant: "destructive" });
             return;
@@ -170,13 +207,13 @@ export default function NewChecklistPage() {
             const rows = cleanItems.map((item, index) => ({
                 checklist_id: checklistRow.id,
                 title: item.title,
-                description: item.description || null,
+                description: buildChecklistItemDescription(item.description, { responseType: item.responseType, allowPhoto: item.allowPhoto }),
                 item_order: index,
                 is_required: item.is_required,
-                expected_value: item.expected_value || null,
-                measurement_unit: item.measurement_unit || null,
-                min_value: item.min_value ? Number(item.min_value) : null,
-                max_value: item.max_value ? Number(item.max_value) : null,
+                expected_value: item.responseType === "numeric" ? item.expected_value || null : null,
+                measurement_unit: item.responseType === "numeric" ? item.measurement_unit || null : null,
+                min_value: item.responseType === "numeric" && item.min_value ? Number(item.min_value) : null,
+                max_value: item.responseType === "numeric" && item.max_value ? Number(item.max_value) : null,
             }));
 
             const { error: itemsError } = await supabase.from("checklist_items").insert(rows);
@@ -195,7 +232,7 @@ export default function NewChecklistPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`Nuova checklist - MACHINA`} />
+                <SEO title="Nuova checklist - MACHINA" />
                 <div className="px-5 py-6 lg:px-8 lg:py-8">
                     <div className="mx-auto max-w-6xl space-y-6">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -205,7 +242,9 @@ export default function NewChecklistPage() {
                                     Torna alla lista
                                 </Button>
                                 <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Nuova checklist</h1>
-                                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">Crea un template checklist associato a una macchina o generico per più contesti operativi.</p>
+                                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                                    Crea un template checklist associato a una macchina o generico. I campi numerici sono opzionali e compaiono solo se scegli un controllo numerico.
+                                </p>
                             </div>
                             <Button onClick={handleSave} disabled={saving || loading || !canManage} className="rounded-2xl">
                                 <Save className="mr-2 h-4 w-4" />
@@ -214,7 +253,9 @@ export default function NewChecklistPage() {
                         </div>
 
                         {!canManage ? (
-                            <Card className="rounded-2xl"><CardContent className="p-6 text-sm text-muted-foreground">Solo admin e supervisor possono creare checklist.</CardContent></Card>
+                            <Card className="rounded-2xl">
+                                <CardContent className="p-6 text-sm text-muted-foreground">Solo admin e supervisor possono creare checklist.</CardContent>
+                            </Card>
                         ) : null}
 
                         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -282,7 +323,7 @@ export default function NewChecklistPage() {
                             <Card className="rounded-2xl">
                                 <CardHeader>
                                     <CardTitle>Builder punti di controllo</CardTitle>
-                                    <CardDescription>Aggiungi, riordina e configura i punti che il tecnico dovrà verificare.</CardDescription>
+                                    <CardDescription>Per ogni punto scegli il tipo di risposta e se il tecnico può allegare una foto.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     {loading ? <div className="text-sm text-muted-foreground">Caricamento contesto...</div> : null}
@@ -304,24 +345,48 @@ export default function NewChecklistPage() {
                                                 <Label>Descrizione</Label>
                                                 <Textarea rows={3} value={item.description} onChange={(event) => updateItem(item.localId, { description: event.target.value })} placeholder="Dettagli operativi, metodo di verifica, strumento..." />
                                             </div>
-                                            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                            <div className="grid gap-3 md:grid-cols-2">
                                                 <div className="space-y-2">
-                                                    <Label>Valore atteso</Label>
-                                                    <Input value={item.expected_value} onChange={(event) => updateItem(item.localId, { expected_value: event.target.value })} placeholder="Es. 200" />
+                                                    <Label>Tipo risposta</Label>
+                                                    <Select value={item.responseType} onValueChange={(value: ChecklistItemResponseType) => updateItem(item.localId, { responseType: value })}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="boolean">Conferma semplice</SelectItem>
+                                                            <SelectItem value="numeric">Valore numerico</SelectItem>
+                                                            <SelectItem value="text">Testo / note</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <Label>Unità misura</Label>
-                                                    <Input value={item.measurement_unit} onChange={(event) => updateItem(item.localId, { measurement_unit: event.target.value })} placeholder="bar, °C, mm" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Min</Label>
-                                                    <Input type="number" value={item.min_value} onChange={(event) => updateItem(item.localId, { min_value: event.target.value })} placeholder="Min" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Max</Label>
-                                                    <Input type="number" value={item.max_value} onChange={(event) => updateItem(item.localId, { max_value: event.target.value })} placeholder="Max" />
+                                                <div className="flex items-center gap-3 rounded-2xl border border-border px-4 py-3">
+                                                    <Checkbox checked={item.allowPhoto} onCheckedChange={(value) => updateItem(item.localId, { allowPhoto: Boolean(value) })} />
+                                                    <div>
+                                                        <div className="flex items-center gap-2 text-sm font-medium text-foreground"><Camera className="h-4 w-4" />Foto opzionale</div>
+                                                        <div className="text-xs text-muted-foreground">Mostra il campo upload foto durante l'esecuzione.</div>
+                                                    </div>
                                                 </div>
                                             </div>
+
+                                            {item.responseType === "numeric" ? (
+                                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Valore atteso</Label>
+                                                        <Input value={item.expected_value} onChange={(event) => updateItem(item.localId, { expected_value: event.target.value })} placeholder="Es. 200" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Unità misura</Label>
+                                                        <Input value={item.measurement_unit} onChange={(event) => updateItem(item.localId, { measurement_unit: event.target.value })} placeholder="bar, °C, mm" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Min</Label>
+                                                        <Input type="number" value={item.min_value} onChange={(event) => updateItem(item.localId, { min_value: event.target.value })} placeholder="Min" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Max</Label>
+                                                        <Input type="number" value={item.max_value} onChange={(event) => updateItem(item.localId, { max_value: event.target.value })} placeholder="Max" />
+                                                    </div>
+                                                </div>
+                                            ) : null}
+
                                             <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
                                                 <Checkbox checked={item.is_required} onCheckedChange={(value) => updateItem(item.localId, { is_required: Boolean(value) })} />
                                                 <div>
@@ -344,4 +409,3 @@ export default function NewChecklistPage() {
         </OrgContextGuard>
     );
 }
-
