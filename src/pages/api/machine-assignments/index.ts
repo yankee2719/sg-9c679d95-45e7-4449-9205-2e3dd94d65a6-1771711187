@@ -37,8 +37,9 @@ async function listMachineAssignments(req: AuthenticatedRequest, res: NextApiRes
       serviceSupabase
         .from("organizations")
         .select("id, name, city, email")
-        .eq("manufacturer_id", orgId)
+        .eq("manufacturer_org_id", orgId)
         .eq("type", "customer")
+        .or("is_deleted.is.null,is_deleted.eq.false")
         .order("name", { ascending: true }),
     ]);
 
@@ -143,7 +144,7 @@ async function createMachineAssignment(req: AuthenticatedRequest, res: NextApiRe
       .maybeSingle(),
     serviceSupabase
       .from("organizations")
-      .select("id, manufacturer_id, type")
+      .select("id, manufacturer_org_id, type, is_deleted")
       .eq("id", customerOrgId)
       .maybeSingle(),
     serviceSupabase
@@ -163,12 +164,20 @@ async function createMachineAssignment(req: AuthenticatedRequest, res: NextApiRe
   if (!machineRes.data) {
     return res.status(404).json({ error: "Machine not found" });
   }
+
   if (machineRes.data.is_archived || machineRes.data.is_deleted === true) {
     return res.status(409).json({ error: "Cannot assign an archived machine" });
   }
-  if (!customerRes.data || customerRes.data.type !== "customer" || customerRes.data.manufacturer_id !== orgId) {
+
+  if (
+    !customerRes.data ||
+    customerRes.data.type !== "customer" ||
+    customerRes.data.manufacturer_org_id !== orgId ||
+    customerRes.data.is_deleted === true
+  ) {
     return res.status(404).json({ error: "Customer not found in active manufacturer context" });
   }
+
   if (duplicateRes.data?.id) {
     return res.status(409).json({ error: "This machine is already assigned to the selected customer" });
   }
