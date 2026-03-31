@@ -3,13 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { mfaService, type AuthenticatorLevel } from "@/services/mfaService";
 
 export function useMfaGuard() {
-    const {
-        loading: authLoading,
-        isAuthenticated,
-        shouldEnforceMfa,
-        membership,
-        isPlatformAdmin,
-    } = useAuth();
+    const { loading: authLoading, isAuthenticated, membership, isPlatformAdmin } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [aal, setAal] = useState < AuthenticatorLevel > (null);
@@ -33,13 +27,11 @@ export function useMfaGuard() {
                 setLoading(true);
                 const status = await mfaService.getStatus();
                 if (!mounted) return;
-
                 setAal(status.currentLevel);
                 setHasAuthenticator(status.hasMfaEnabled);
             } catch (error) {
                 console.error("useMfaGuard error:", error);
                 if (!mounted) return;
-
                 setAal("aal1");
                 setHasAuthenticator(false);
             } finally {
@@ -47,7 +39,7 @@ export function useMfaGuard() {
             }
         };
 
-        load();
+        void load();
 
         return () => {
             mounted = false;
@@ -55,7 +47,8 @@ export function useMfaGuard() {
     }, [authLoading, isAuthenticated]);
 
     const isAal2 = aal === "aal2";
-    const needsMfa = shouldEnforceMfa && (!hasAuthenticator || !isAal2);
+    const mustEnforceMfa = hasAuthenticator || isPlatformAdmin;
+    const needsMfa = hasAuthenticator && !isAal2;
 
     return {
         loading: authLoading || loading,
@@ -64,7 +57,7 @@ export function useMfaGuard() {
         userRole: membership?.role ?? null,
         isPlatformAdmin,
         hasAuthenticator,
-        mustEnforceMfa: shouldEnforceMfa,
+        mustEnforceMfa,
         needsMfa,
     };
 }
