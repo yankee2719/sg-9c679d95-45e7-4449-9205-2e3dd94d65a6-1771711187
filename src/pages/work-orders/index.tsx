@@ -182,14 +182,14 @@ export default function WorkOrdersIndexPage() {
     const { toast } = useToast();
 
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState < WorkOrderRow[] > ([]);
-    const [profiles, setProfiles] = useState < Record < string, ProfileLite>> ({});
+    const [rows, setRows] = useState<WorkOrderRow[]>([]);
+    const [profiles, setProfiles] = useState<Record<string, ProfileLite>>({});
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState < string > ("all");
-    const [machineFilter, setMachineFilter] = useState < string > ("all");
-    const [assignedFilter, setAssignedFilter] = useState < string > ("all");
-    const [priorityFilter, setPriorityFilter] = useState < string > ("all");
-    const [viewMode, setViewMode] = useState < "kanban" | "list" > ("kanban");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [machineFilter, setMachineFilter] = useState<string>("all");
+    const [assignedFilter, setAssignedFilter] = useState<string>("all");
+    const [priorityFilter, setPriorityFilter] = useState<string>("all");
+    const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
     useEffect(() => {
         if (authLoading) return;
@@ -222,7 +222,7 @@ export default function WorkOrdersIndexPage() {
                         created_at,
                         updated_at,
                         machine:machines(id, name, internal_code, area),
-                        plant:plants(id, name, type)
+                        plant:plants(id, name)
                     `)
                     .eq("organization_id", organization.id)
                     .order("scheduled_date", { ascending: true })
@@ -272,7 +272,7 @@ export default function WorkOrdersIndexPage() {
     }, [authLoading, organization?.id, toast]);
 
     const machineOptions = useMemo(() => {
-        const map = new Map < string, string> ();
+        const map = new Map<string, string>();
         rows.forEach((row) => {
             const machine = unwrapRelation(row.machine);
             if (!machine) return;
@@ -282,7 +282,7 @@ export default function WorkOrdersIndexPage() {
     }, [rows]);
 
     const assigneeOptions = useMemo(() => {
-        const map = new Map < string, string> ();
+        const map = new Map<string, string>();
         rows.forEach((row) => {
             if (!row.assigned_to) return;
             map.set(row.assigned_to, formatAssignee(profiles[row.assigned_to]));
@@ -461,7 +461,7 @@ export default function WorkOrdersIndexPage() {
                                 </div>
                             </div>
 
-                            <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "kanban" | "list")}>
+                            <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "kanban" | "list") }>
                                 <TabsList>
                                     <TabsTrigger value="kanban">Kanban</TabsTrigger>
                                     <TabsTrigger value="list">Lista</TabsTrigger>
@@ -597,4 +597,3 @@ export default function WorkOrdersIndexPage() {
         </OrgContextGuard>
     );
 }
-
