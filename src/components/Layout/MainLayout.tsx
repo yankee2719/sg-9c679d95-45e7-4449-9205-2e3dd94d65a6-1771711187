@@ -143,7 +143,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/equipment", labelKey: "nav.equipment", label: "Macchine", icon: Factory },
         { href: "/maintenance", labelKey: "nav.maintenance", label: "Manutenzione", icon: Wrench },
         { href: "/work-orders", labelKey: "nav.workOrders", label: "Ordini di lavoro", icon: ClipboardList },
-        { href: "/checklists/templates", labelKey: "nav.checklists", label: checklistsLabel, icon: CheckSquare },
+        { href: "/checklists", labelKey: "nav.checklists", label: checklistsLabel, icon: CheckSquare },
         { href: "/scanner", labelKey: "nav.scanner", label: "Scanner QR", icon: QrCode },
         { href: "/analytics", labelKey: "nav.analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
         { href: "/compliance", labelKey: "nav.compliance", label: "Compliance", icon: ShieldCheck },
