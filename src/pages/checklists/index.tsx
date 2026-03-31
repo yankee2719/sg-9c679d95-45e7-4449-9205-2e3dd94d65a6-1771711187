@@ -40,7 +40,6 @@ type MachineLite = {
 type PlantLite = {
     id: string;
     name: string | null;
-    type: string | null;
 };
 
 type ExecutionLite = {
@@ -174,7 +173,7 @@ export default function ChecklistsIndexPage() {
                     if (plantIds.length > 0) {
                         const { data: plantRows, error: plantError } = await supabase
                             .from("plants")
-                            .select("id, name, type")
+                            .select("id, name")
                             .in("id", plantIds);
                         if (plantError) throw plantError;
                         plantMap = Object.fromEntries(((plantRows ?? []) as PlantLite[]).map((row) => [row.id, row]));

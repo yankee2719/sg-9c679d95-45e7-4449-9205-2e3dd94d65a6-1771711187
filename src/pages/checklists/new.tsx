@@ -86,7 +86,7 @@ export default function NewChecklistPage() {
                 const plantIds = Array.from(new Set(machineList.map((row) => row.plant_id).filter(Boolean))) as string[];
                 let plantMap: Record<string, PlantLite> = {};
                 if (plantIds.length > 0) {
-                    const { data: plantRows, error: plantError } = await supabase.from("plants").select("id, name, type").in("id", plantIds);
+                    const { data: plantRows, error: plantError } = await supabase.from("plants").select("id, name").in("id", plantIds);
                     if (plantError) throw plantError;
                     plantMap = Object.fromEntries(((plantRows ?? []) as PlantLite[]).map((row) => [row.id, row]));
                 }
