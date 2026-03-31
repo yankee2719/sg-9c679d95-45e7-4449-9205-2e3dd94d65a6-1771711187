@@ -1,242 +1,143 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { supabase } from "@/integrations/supabase/client";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgType } from "@/hooks/useOrgType";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Wrench } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-type FrequencyType = "hours" | "days" | "weeks" | "months" | "cycles";
-type PlanPriority = "low" | "medium" | "high" | "critical";
-
-type MachineRow = {
-    id: string;
-    name: string | null;
-    internal_code: string | null;
-    plant_id: string | null;
-    area: string | null;
-};
-
-type PlantRow = {
-    id: string;
-    name: string | null;
-    type: string | null;
-};
-
-type UserRow = {
-    id: string;
-    displayName: string;
-    role: string | null;
-};
-
-type PlanRow = {
-    id: string;
-    machine_id: string | null;
-    title: string;
-    description: string | null;
-    frequency_type: FrequencyType;
-    frequency_value: number;
-    estimated_duration_minutes: number | null;
-    required_skills: string[] | null;
-    instructions: string | null;
-    safety_notes: string | null;
-    default_assignee_id: string | null;
-    priority: PlanPriority | null;
-    next_due_date: string | null;
-    is_active: boolean | null;
-};
-
-type FormState = {
-    machine_id: string;
-    title: string;
-    description: string;
-    frequency_type: FrequencyType;
-    frequency_value: string;
-    priority: PlanPriority;
-    estimated_duration_minutes: string;
-    instructions: string;
-    safety_notes: string;
-    required_skills: string;
-    default_assignee_id: string;
-    next_due_date: string;
-};
-
-const emptyForm: FormState = {
-    machine_id: "",
-    title: "",
-    description: "",
-    frequency_type: "days",
-    frequency_value: "30",
-    priority: "medium",
-    estimated_duration_minutes: "",
-    instructions: "",
-    safety_notes: "",
-    required_skills: "",
-    default_assignee_id: "",
-    next_due_date: "",
-};
-
-function machineLabel(machine: MachineRow, plantMap: Map<string, PlantRow>, machineContextLabel: string) {
-    const plantName = machine.plant_id ? plantMap.get(machine.plant_id)?.name ?? "Senza contesto" : "Senza contesto";
-    const machineName = machine.name?.trim() || machine.internal_code?.trim() || "Macchina senza nome";
-    const area = machine.area?.trim();
-    return `${machineContextLabel}: ${plantName} → ${machineName}${area ? ` · ${area}` : ""}`;
+function isoDate(value?: string | null) {
+    if (!value) return "";
+    return value.slice(0, 10);
 }
 
-export default function MaintenancePlanEditPage() {
+type MachineOption = { id: string; name: string | null; internal_code: string | null; plant_id: string | null; plants?: { name: string | null } | null };
+type UserOption = { id: string; first_name: string | null; last_name: string | null; display_name: string | null; email: string | null };
+
+export default function EditMaintenancePlanPage() {
     const router = useRouter();
     const { id } = router.query;
-    const { organization, membership, loading: authLoading } = useAuth();
     const { toast } = useToast();
-    const { machineContextLabel, plantLabel, canManageMaintenance, isManufacturer } = useOrgType();
+    const { user, membership } = useAuth();
+    const { plantLabel, machineContextLabel } = useOrgType();
+    const userRole = membership?.role ?? "viewer";
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [machines, setMachines] = useState < MachineRow[] > ([]);
-    const [plants, setPlants] = useState < PlantRow[] > ([]);
-    const [users, setUsers] = useState < UserRow[] > ([]);
-    const [form, setForm] = useState < FormState > (emptyForm);
-    const [planActive, setPlanActive] = useState(true);
-
-    const plantMap = useMemo(() => new Map(plants.map((plant) => [plant.id, plant])), [plants]);
+    const [organizationId, setOrganizationId] = useState < string | null > (null);
+    const [machines, setMachines] = useState < MachineOption[] > ([]);
+    const [users, setUsers] = useState < UserOption[] > ([]);
+    const [form, setForm] = useState({
+        machine_id: "",
+        title: "",
+        description: "",
+        frequency_type: "days",
+        frequency_value: 30,
+        estimated_duration_minutes: "",
+        priority: "medium",
+        instructions: "",
+        safety_notes: "",
+        default_assignee_id: "",
+        next_due_date: "",
+        required_skills: "",
+        is_active: true,
+    });
 
     useEffect(() => {
-        if (authLoading) return;
-        if (!organization?.id || typeof id !== "string") {
-            if (!authLoading) setLoading(false);
-            return;
-        }
-
+        if (!user || !id || typeof id !== "string") return;
         let active = true;
-
         const load = async () => {
             setLoading(true);
             try {
-                const [{ data: planRow, error: planError }, { data: machineRows, error: machineError }, { data: plantRows, error: plantError }, { data: membershipRows, error: membershipError }] = await Promise.all([
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("default_organization_id")
+                    .eq("id", user.id)
+                    .maybeSingle();
+
+                const orgId = (profile as any)?.default_organization_id ?? null;
+                if (!orgId) throw new Error("Organizzazione attiva non trovata.");
+
+                const [{ data: planData, error: planError }, { data: machineData, error: machineError }, { data: memberships, error: membersError }] = await Promise.all([
                     supabase
                         .from("maintenance_plans")
-                        .select("id, machine_id, title, description, frequency_type, frequency_value, estimated_duration_minutes, required_skills, instructions, safety_notes, default_assignee_id, priority, next_due_date, is_active")
-                        .eq("organization_id", organization.id)
+                        .select("id, machine_id, title, description, frequency_type, frequency_value, estimated_duration_minutes, priority, instructions, safety_notes, default_assignee_id, next_due_date, required_skills, is_active")
                         .eq("id", id)
-                        .single(),
+                        .maybeSingle(),
                     supabase
                         .from("machines")
-                        .select("id, name, internal_code, plant_id, area")
-                        .eq("organization_id", organization.id)
-                        .order("name", { ascending: true }),
-                    supabase
-                        .from("plants")
-                        .select("id, name, type")
-                        .eq("organization_id", organization.id)
-                        .order("name", { ascending: true }),
+                        .select("id, name, internal_code, plant_id, plants(name)")
+                        .eq("organization_id", orgId)
+                        .order("name"),
                     supabase
                         .from("organization_memberships")
-                        .select("user_id, role")
-                        .eq("organization_id", organization.id)
+                        .select("user_id")
+                        .eq("organization_id", orgId)
                         .eq("is_active", true),
                 ]);
 
                 if (planError) throw planError;
                 if (machineError) throw machineError;
-                if (plantError) throw plantError;
-                if (membershipError) throw membershipError;
+                if (membersError) throw membersError;
 
-                const userIds = Array.from(new Set((membershipRows ?? []).map((row: any) => row.user_id).filter(Boolean)));
-                let profileMap = new Map < string, any> ();
-                if (userIds.length > 0) {
-                    const { data: profileRows, error: profileError } = await supabase
-                        .from("profiles")
-                        .select("id, display_name, first_name, last_name, email")
-                        .in("id", userIds);
-                    if (profileError) throw profileError;
-                    profileMap = new Map((profileRows ?? []).map((profile: any) => [profile.id, profile]));
-                }
+                const userIds = Array.from(new Set((memberships ?? []).map((m: any) => m.user_id).filter(Boolean)));
+                const { data: usersData, error: usersError } = userIds.length
+                    ? await supabase.from("profiles").select("id, first_name, last_name, display_name, email").in("id", userIds).order("display_name")
+                    : { data: [], error: null as any };
 
-                const normalizedUsers: UserRow[] = (membershipRows ?? []).map((row: any) => {
-                    const profile = profileMap.get(row.user_id);
-                    return {
-                        id: row.user_id,
-                        displayName:
-                            profile?.display_name?.trim() ||
-                            `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ||
-                            profile?.email ||
-                            row.user_id,
-                        role: row.role ?? null,
-                    };
-                });
-
-                const detail = planRow as PlanRow;
-
+                if (usersError) throw usersError;
                 if (!active) return;
-                setMachines((machineRows ?? []) as MachineRow[]);
-                setPlants((plantRows ?? []) as PlantRow[]);
-                setUsers(normalizedUsers.sort((a, b) => a.displayName.localeCompare(b.displayName, "it")));
-                setPlanActive(detail.is_active ?? true);
+
+                setOrganizationId(orgId);
+                setMachines((machineData as any) ?? []);
+                setUsers((usersData as any) ?? []);
                 setForm({
-                    machine_id: detail.machine_id || "",
-                    title: detail.title || "",
-                    description: detail.description || "",
-                    frequency_type: detail.frequency_type || "days",
-                    frequency_value: String(detail.frequency_value ?? 30),
-                    priority: (detail.priority as PlanPriority) || "medium",
-                    estimated_duration_minutes: detail.estimated_duration_minutes ? String(detail.estimated_duration_minutes) : "",
-                    instructions: detail.instructions || "",
-                    safety_notes: detail.safety_notes || "",
-                    required_skills: (detail.required_skills ?? []).join(", "),
-                    default_assignee_id: detail.default_assignee_id || "",
-                    next_due_date: detail.next_due_date || "",
+                    machine_id: (planData as any)?.machine_id ?? "",
+                    title: (planData as any)?.title ?? "",
+                    description: (planData as any)?.description ?? "",
+                    frequency_type: (planData as any)?.frequency_type ?? "days",
+                    frequency_value: Number((planData as any)?.frequency_value ?? 30),
+                    estimated_duration_minutes: (planData as any)?.estimated_duration_minutes ? String((planData as any).estimated_duration_minutes) : "",
+                    priority: (planData as any)?.priority ?? "medium",
+                    instructions: (planData as any)?.instructions ?? "",
+                    safety_notes: (planData as any)?.safety_notes ?? "",
+                    default_assignee_id: (planData as any)?.default_assignee_id ?? "",
+                    next_due_date: isoDate((planData as any)?.next_due_date),
+                    required_skills: Array.isArray((planData as any)?.required_skills) ? (planData as any).required_skills.join(", ") : "",
+                    is_active: Boolean((planData as any)?.is_active ?? true),
                 });
             } catch (error: any) {
-                console.error("maintenance edit load error:", error);
-                if (active) {
-                    toast({
-                        title: "Errore caricamento piano",
-                        description: error?.message || "Impossibile caricare il piano da modificare.",
-                        variant: "destructive",
-                    });
-                }
+                toast({ variant: "destructive", title: "Errore caricamento piano", description: error?.message ?? "Impossibile aprire il piano." });
             } finally {
                 if (active) setLoading(false);
             }
         };
-
         void load();
         return () => {
             active = false;
         };
-    }, [authLoading, id, organization?.id, toast]);
+    }, [id, toast, user]);
 
-    const selectedMachine = useMemo(() => machines.find((machine) => machine.id === form.machine_id) ?? null, [form.machine_id, machines]);
-    const selectedPlant = selectedMachine?.plant_id ? plantMap.get(selectedMachine.plant_id) ?? null : null;
-
-    const handleChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-        setForm((prev) => ({ ...prev, [key]: value }));
-    };
+    const machineOptions = useMemo(
+        () =>
+            machines.map((machine) => ({
+                value: machine.id,
+                label: `${machine.plants?.name || plantLabel} â†’ ${machine.name || machine.internal_code || machine.id}`,
+            })),
+        [machines, plantLabel]
+    );
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!organization?.id || typeof id !== "string") return;
-        if (!canManageMaintenance) {
-            toast({ title: "Operazione non consentita", description: "Non hai i permessi per modificare piani di manutenzione.", variant: "destructive" });
-            return;
-        }
-
+        if (!id || typeof id !== "string") return;
         setSaving(true);
         try {
             const payload = {
@@ -244,223 +145,129 @@ export default function MaintenancePlanEditPage() {
                 title: form.title.trim(),
                 description: form.description.trim() || null,
                 frequency_type: form.frequency_type,
-                frequency_value: Number(form.frequency_value),
+                frequency_value: Number(form.frequency_value || 0),
                 estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
-                required_skills: form.required_skills
-                    ? form.required_skills.split(",").map((skill) => skill.trim()).filter(Boolean)
-                    : [],
+                priority: form.priority,
                 instructions: form.instructions.trim() || null,
                 safety_notes: form.safety_notes.trim() || null,
                 default_assignee_id: form.default_assignee_id || null,
-                priority: form.priority,
                 next_due_date: form.next_due_date || null,
-                is_active: planActive,
+                required_skills: form.required_skills
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean),
+                is_active: form.is_active,
                 updated_at: new Date().toISOString(),
             };
 
-            const { error } = await supabase
-                .from("maintenance_plans")
-                .update(payload)
-                .eq("organization_id", organization.id)
-                .eq("id", id);
-
+            const { error } = await supabase.from("maintenance_plans").update(payload).eq("id", id);
             if (error) throw error;
-
-            toast({
-                title: "Piano aggiornato",
-                description: "Le modifiche al piano di manutenzione sono state salvate.",
-            });
+            toast({ title: "Piano aggiornato" });
             router.push(`/maintenance/${id}`);
         } catch (error: any) {
-            console.error("maintenance edit save error:", error);
-            toast({
-                title: "Errore aggiornamento piano",
-                description: error?.message || "Impossibile aggiornare il piano di manutenzione.",
-                variant: "destructive",
-            });
+            toast({ variant: "destructive", title: "Errore salvataggio", description: error?.message ?? "Impossibile salvare il piano." });
         } finally {
             setSaving(false);
         }
     };
 
-    const pageTitle = isManufacturer ? "Modifica piano per macchina venduta" : "Modifica piano di manutenzione";
-
     return (
         <OrgContextGuard>
-            <MainLayout userRole={membership?.role ?? undefined}>
-                <SEO title={`${pageTitle} - MACHINA`} />
-                <div className="container mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
-                    <div className="mb-6 space-y-2">
-                        <Link href={typeof id === "string" ? `/maintenance/${id}` : "/maintenance"} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                            <ArrowLeft className="h-4 w-4" />
-                            Torna al dettaglio piano
-                        </Link>
-                        <div className="flex items-center gap-3">
-                            <div className="rounded-2xl border border-border bg-card p-3">
-                                <Wrench className="h-6 w-6 text-foreground" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-semibold tracking-tight text-foreground">{pageTitle}</h1>
-                                <p className="text-sm text-muted-foreground">Aggiorna frequenza, priorità, note e contesto della macchina collegata al piano.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <form className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]" onSubmit={handleSubmit}>
-                        <Card className="rounded-2xl">
-                            <CardHeader>
-                                <CardTitle>Modifica dati piano</CardTitle>
-                                <CardDescription>Intervieni solo sui campi reali della tabella maintenance_plans.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                {loading ? (
-                                    <div className="flex min-h-[240px] items-center justify-center text-sm text-muted-foreground">
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Caricamento dati...
-                                    </div>
-                                ) : (
+            <MainLayout userRole={userRole}>
+                <SEO title="Modifica piano - MACHINA" />
+                <div className="mx-auto max-w-4xl px-4 py-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Modifica piano di manutenzione</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {loading ? (
+                                <div className="text-sm text-muted-foreground">Caricamento...</div>
+                            ) : (
+                                <form className="space-y-6" onSubmit={handleSubmit}>
                                     <div className="grid gap-4 md:grid-cols-2">
                                         <div className="space-y-2 md:col-span-2">
-                                            <Label>{machineContextLabel}</Label>
-                                            <Select value={form.machine_id} onValueChange={(value) => handleChange("machine_id", value)}>
-                                                <SelectTrigger className="min-h-11">
-                                                    <SelectValue placeholder="Seleziona una macchina" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {machines.map((machine) => (
-                                                        <SelectItem key={machine.id} value={machine.id}>
-                                                            {machineLabel(machine, plantMap, machineContextLabel)}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <Label htmlFor="machine_id">{machineContextLabel}</Label>
+                                            <select id="machine_id" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.machine_id} onChange={(e) => setForm((prev) => ({ ...prev, machine_id: e.target.value }))}>
+                                                <option value="">Template generico</option>
+                                                {machineOptions.map((option) => (
+                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                ))}
+                                            </select>
                                         </div>
-
                                         <div className="space-y-2 md:col-span-2">
                                             <Label htmlFor="title">Titolo</Label>
-                                            <Input id="title" value={form.title} onChange={(e) => handleChange("title", e.target.value)} className="min-h-11" required />
+                                            <Input id="title" value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} required />
                                         </div>
-
                                         <div className="space-y-2 md:col-span-2">
                                             <Label htmlFor="description">Descrizione</Label>
-                                            <Textarea id="description" value={form.description} onChange={(e) => handleChange("description", e.target.value)} rows={3} />
+                                            <Textarea id="description" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} />
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label>Tipo frequenza</Label>
-                                            <Select value={form.frequency_type} onValueChange={(value: FrequencyType) => handleChange("frequency_type", value)}>
-                                                <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="hours">Ore</SelectItem>
-                                                    <SelectItem value="days">Giorni</SelectItem>
-                                                    <SelectItem value="weeks">Settimane</SelectItem>
-                                                    <SelectItem value="months">Mesi</SelectItem>
-                                                    <SelectItem value="cycles">Cicli</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <Label htmlFor="frequency_type">Tipo frequenza</Label>
+                                            <select id="frequency_type" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.frequency_type} onChange={(e) => setForm((prev) => ({ ...prev, frequency_type: e.target.value }))}>
+                                                <option value="hours">Ore</option>
+                                                <option value="days">Giorni</option>
+                                                <option value="weeks">Settimane</option>
+                                                <option value="months">Mesi</option>
+                                                <option value="cycles">Cicli</option>
+                                            </select>
                                         </div>
-
                                         <div className="space-y-2">
                                             <Label htmlFor="frequency_value">Valore frequenza</Label>
-                                            <Input id="frequency_value" type="number" min={1} value={form.frequency_value} onChange={(e) => handleChange("frequency_value", e.target.value)} className="min-h-11" required />
+                                            <Input id="frequency_value" type="number" min={1} value={form.frequency_value} onChange={(e) => setForm((prev) => ({ ...prev, frequency_value: Number(e.target.value || 1) }))} required />
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label>Priorità</Label>
-                                            <Select value={form.priority} onValueChange={(value: PlanPriority) => handleChange("priority", value)}>
-                                                <SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="low">Bassa</SelectItem>
-                                                    <SelectItem value="medium">Media</SelectItem>
-                                                    <SelectItem value="high">Alta</SelectItem>
-                                                    <SelectItem value="critical">Critica</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <Label htmlFor="priority">PrioritÃ </Label>
+                                            <select id="priority" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.priority} onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}>
+                                                <option value="low">Bassa</option>
+                                                <option value="medium">Media</option>
+                                                <option value="high">Alta</option>
+                                                <option value="critical">Critica</option>
+                                            </select>
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label htmlFor="duration">Durata stimata (min)</Label>
-                                            <Input id="duration" type="number" min={0} value={form.estimated_duration_minutes} onChange={(e) => handleChange("estimated_duration_minutes", e.target.value)} className="min-h-11" />
+                                            <Label htmlFor="estimated_duration_minutes">Durata stimata (min)</Label>
+                                            <Input id="estimated_duration_minutes" type="number" min={0} value={form.estimated_duration_minutes} onChange={(e) => setForm((prev) => ({ ...prev, estimated_duration_minutes: e.target.value }))} />
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label htmlFor="assignee">Assegnatario predefinito</Label>
-                                            <Select value={form.default_assignee_id || "__none"} onValueChange={(value) => handleChange("default_assignee_id", value === "__none" ? "" : value)}>
-                                                <SelectTrigger id="assignee" className="min-h-11"><SelectValue placeholder="Nessun assegnatario" /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="__none">Nessun assegnatario</SelectItem>
-                                                    {users.map((orgUser) => (
-                                                        <SelectItem key={orgUser.id} value={orgUser.id}>
-                                                            {orgUser.displayName}{orgUser.role ? ` · ${orgUser.role}` : ""}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <Label htmlFor="default_assignee_id">Assegnatario predefinito</Label>
+                                            <select id="default_assignee_id" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.default_assignee_id} onChange={(e) => setForm((prev) => ({ ...prev, default_assignee_id: e.target.value }))}>
+                                                <option value="">Nessuno</option>
+                                                {users.map((entry) => {
+                                                    const label = entry.display_name || `${entry.first_name ?? ""} ${entry.last_name ?? ""}`.trim() || entry.email || entry.id;
+                                                    return <option key={entry.id} value={entry.id}>{label}</option>;
+                                                })}
+                                            </select>
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label htmlFor="due">Prossima scadenza</Label>
-                                            <Input id="due" type="date" value={form.next_due_date} onChange={(e) => handleChange("next_due_date", e.target.value)} className="min-h-11" />
+                                            <Label htmlFor="next_due_date">Prossima scadenza</Label>
+                                            <Input id="next_due_date" type="date" value={form.next_due_date} onChange={(e) => setForm((prev) => ({ ...prev, next_due_date: e.target.value }))} />
                                         </div>
-
                                         <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="skills">Competenze richieste</Label>
-                                            <Input id="skills" value={form.required_skills} onChange={(e) => handleChange("required_skills", e.target.value)} placeholder="Es. meccanica, pneumatica, elettrica" className="min-h-11" />
+                                            <Label htmlFor="required_skills">Competenze richieste</Label>
+                                            <Input id="required_skills" value={form.required_skills} onChange={(e) => setForm((prev) => ({ ...prev, required_skills: e.target.value }))} placeholder="elettrico, meccanico, oleodinamica" />
                                         </div>
-
                                         <div className="space-y-2 md:col-span-2">
                                             <Label htmlFor="instructions">Istruzioni operative</Label>
-                                            <Textarea id="instructions" value={form.instructions} onChange={(e) => handleChange("instructions", e.target.value)} rows={5} />
+                                            <Textarea id="instructions" rows={5} value={form.instructions} onChange={(e) => setForm((prev) => ({ ...prev, instructions: e.target.value }))} />
                                         </div>
-
                                         <div className="space-y-2 md:col-span-2">
                                             <Label htmlFor="safety_notes">Note di sicurezza</Label>
-                                            <Textarea id="safety_notes" value={form.safety_notes} onChange={(e) => handleChange("safety_notes", e.target.value)} rows={4} />
+                                            <Textarea id="safety_notes" rows={4} value={form.safety_notes} onChange={(e) => setForm((prev) => ({ ...prev, safety_notes: e.target.value }))} />
                                         </div>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
 
-                        <div className="space-y-6">
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle>Riepilogo contesto</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 text-sm">
-                                    <div>
-                                        <p className="text-muted-foreground">{plantLabel}</p>
-                                        <p className="font-medium text-foreground">{selectedPlant?.name || "—"}</p>
+                                    <div className="flex flex-wrap justify-end gap-3">
+                                        <Button asChild variant="outline">
+                                            <Link href={id ? `/maintenance/${id}` : "/maintenance"}>Annulla</Link>
+                                        </Button>
+                                        <Button type="submit" disabled={saving || !organizationId}>{saving ? "Salvataggio..." : "Salva modifiche"}</Button>
                                     </div>
-                                    <div>
-                                        <p className="text-muted-foreground">Macchina</p>
-                                        <p className="font-medium text-foreground">{selectedMachine?.name || selectedMachine?.internal_code || "—"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-muted-foreground">Area / linea</p>
-                                        <p className="font-medium text-foreground">{selectedMachine?.area || "—"}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-muted-foreground">Stato piano</p>
-                                        <p className="font-medium text-foreground">{planActive ? "Attivo" : "Inattivo"}</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                                <Button type="submit" className="min-h-11 flex-1" disabled={loading || saving || !canManageMaintenance}>
-                                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Salva modifiche
-                                </Button>
-                                <Button type="button" variant="outline" className="min-h-11 flex-1" onClick={() => setPlanActive((prev) => !prev)} disabled={loading || saving}>
-                                    {planActive ? "Segna come inattivo" : "Segna come attivo"}
-                                </Button>
-                                <Button type="button" variant="outline" className="min-h-11 flex-1" asChild>
-                                    <Link href={typeof id === "string" ? `/maintenance/${id}` : "/maintenance"}>Annulla</Link>
-                                </Button>
-                            </div>
-                        </div>
-                    </form>
+                                </form>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </MainLayout>
         </OrgContextGuard>
