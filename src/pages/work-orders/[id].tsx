@@ -1,41 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ArrowRight, CheckSquare, ClipboardList, Factory, PlayCircle, Save, Wrench } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgType } from "@/hooks/useOrgType";
-import { supabase } from "@/integrations/supabase/client";
-
-function formatDateTime(value: string | null | undefined) {
-    if (!value) return "—";
-    try {
-        return new Date(value).toLocaleString("it-IT", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    } catch {
-        return value;
-    }
-}
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, Loader2, Play, Save, User, Wrench } from "lucide-react";
 
 type WorkOrderRow = {
     id: string;
     organization_id: string;
     machine_id: string;
-    plant_id: string;
+    plant_id: string | null;
     maintenance_plan_id: string | null;
     title: string;
     description: string | null;
@@ -55,290 +41,320 @@ type WorkOrderRow = {
     cost_labor: number | null;
     cost_parts: number | null;
     notes: string | null;
-    machines?: { id: string; name: string | null; internal_code: string | null; plants?: { name: string | null } | null } | null;
-    plants?: { id: string; name: string | null } | null;
+    created_at?: string | null;
+    updated_at?: string | null;
 };
 
-type ChecklistRow = { id: string; title: string; checklist_type: string | null; is_template: boolean | null; machine_id: string | null; is_active: boolean | null };
-type ExecutionRow = { id: string; checklist_id: string; completed_at: string | null; overall_status: string | null; checklists?: { id: string; title: string | null } | null };
+type MachineRow = { id: string; name: string | null; internal_code: string | null; area: string | null; plant_id?: string | null };
+type PlantRow = { id: string; name: string | null };
+type ProfileRow = { id: string; display_name: string | null; first_name: string | null; last_name: string | null; email: string | null };
+type ChecklistRow = { id: string; title: string | null; checklist_type: string | null; machine_id: string | null };
+type ExecutionRow = { id: string; checklist_id: string; executed_at: string | null; completed_at: string | null; overall_status: string | null; notes: string | null };
+
+const statusOptions = [
+    { value: "draft", label: "Bozza" },
+    { value: "scheduled", label: "Pianificato" },
+    { value: "in_progress", label: "In corso" },
+    { value: "pending_review", label: "In revisione" },
+    { value: "completed", label: "Completato" },
+    { value: "cancelled", label: "Annullato" },
+];
+
+function formatDate(value: string | null | undefined) {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d);
+}
+
+function formatDateOnly(value: string | null | undefined) {
+    if (!value) return "—";
+    const d = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return "—";
+    return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+}
+
+function profileLabel(profile: ProfileRow | null) {
+    if (!profile) return "Non assegnato";
+    const display = profile.display_name?.trim();
+    if (display) return display;
+    const name = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+    return name || profile.email || "Utente";
+}
 
 export default function WorkOrderDetailPage() {
     const router = useRouter();
     const { id } = router.query;
-    const { membership } = useAuth();
+    const { loading: authLoading, organization, membership } = useAuth();
+    const { canExecuteChecklist, plantLabel } = useOrgType();
     const { toast } = useToast();
-    const { canExecuteChecklist, isManufacturer, plantLabel } = useOrgType();
-    const userRole = membership?.role ?? "viewer";
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [order, setOrder] = useState < WorkOrderRow | null > (null);
+    const [row, setRow] = useState < WorkOrderRow | null > (null);
+    const [machine, setMachine] = useState < MachineRow | null > (null);
+    const [plant, setPlant] = useState < PlantRow | null > (null);
+    const [assignee, setAssignee] = useState < ProfileRow | null > (null);
     const [checklists, setChecklists] = useState < ChecklistRow[] > ([]);
     const [executions, setExecutions] = useState < ExecutionRow[] > ([]);
-    const [form, setForm] = useState({
-        status: "draft",
-        work_performed: "",
-        root_cause: "",
-        notes: "",
-        actual_duration_minutes: "",
-        cost_labor: "",
-        cost_parts: "",
-    });
+
+    const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
+    const userRole = membership?.role ?? "viewer";
+    const canEdit = ["admin", "supervisor", "technician", "owner"].includes(userRole);
 
     useEffect(() => {
-        if (!id || typeof id !== "string") return;
+        if (authLoading || !organization?.id || !resolvedId) return;
         let active = true;
+
         const load = async () => {
             setLoading(true);
             try {
-                const [{ data: orderData, error: orderError }, { data: executionData, error: executionError }] = await Promise.all([
-                    supabase
-                        .from("work_orders")
-                        .select(`
-              id, organization_id, machine_id, plant_id, maintenance_plan_id, title, description, work_type, priority,
-              status, scheduled_date, scheduled_start_time, due_date, assigned_to, started_at, completed_at,
-              actual_duration_minutes, work_performed, root_cause, parts_used, cost_labor, cost_parts, notes,
-              machines(id, name, internal_code, plants(name)),
-              plants(id, name)
-            `)
-                        .eq("id", id)
-                        .maybeSingle(),
-                    supabase
-                        .from("checklist_executions")
-                        .select("id, checklist_id, completed_at, overall_status, checklists(id, title)")
-                        .eq("work_order_id", id)
-                        .order("executed_at", { ascending: false }),
-                ]);
+                const { data: orderRow, error: orderError } = await supabase
+                    .from("work_orders")
+                    .select(`
+            id,
+            organization_id,
+            machine_id,
+            plant_id,
+            maintenance_plan_id,
+            title,
+            description,
+            work_type,
+            priority,
+            status,
+            scheduled_date,
+            scheduled_start_time,
+            due_date,
+            assigned_to,
+            started_at,
+            completed_at,
+            actual_duration_minutes,
+            work_performed,
+            root_cause,
+            parts_used,
+            cost_labor,
+            cost_parts,
+            notes,
+            created_at,
+            updated_at
+          `)
+                    .eq("organization_id", organization.id)
+                    .eq("id", resolvedId)
+                    .single();
+
                 if (orderError) throw orderError;
-                if (executionError) throw executionError;
+                const workOrder = orderRow as WorkOrderRow;
 
-                const machineId = (orderData as any)?.machine_id ?? null;
-                const { data: checklistData, error: checklistError } = machineId
-                    ? await supabase
-                        .from("checklists")
-                        .select("id, title, checklist_type, is_template, machine_id, is_active")
-                        .eq("organization_id", (orderData as any)?.organization_id)
-                        .eq("is_active", true)
-                        .or(`machine_id.eq.${machineId},machine_id.is.null`)
-                        .order("title")
-                    : { data: [], error: null as any };
-                if (checklistError) throw checklistError;
+                const tasks = [
+                    supabase.from("machines").select("id, name, internal_code, area, plant_id").eq("id", workOrder.machine_id).maybeSingle(),
+                    workOrder.plant_id ? supabase.from("plants").select("id, name").eq("id", workOrder.plant_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
+                    workOrder.assigned_to ? supabase.from("profiles").select("id, display_name, first_name, last_name, email").eq("id", workOrder.assigned_to).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
+                    supabase.from("checklists").select("id, title, checklist_type, machine_id").eq("organization_id", organization.id).eq("is_active", true).or(`machine_id.eq.${workOrder.machine_id},machine_id.is.null`).order("title", { ascending: true }),
+                    supabase.from("checklist_executions").select("id, checklist_id, executed_at, completed_at, overall_status, notes").eq("work_order_id", resolvedId).order("executed_at", { ascending: false }),
+                ];
+
+                const [machineRes, plantRes, assigneeRes, checklistRes, executionRes] = await Promise.all(tasks as any);
+                if (machineRes.error) throw machineRes.error;
+                if (plantRes?.error) throw plantRes.error;
+                if (assigneeRes?.error) throw assigneeRes.error;
+                if (checklistRes.error) throw checklistRes.error;
+                if (executionRes.error) throw executionRes.error;
+
                 if (!active) return;
-
-                const row = (orderData as any) ?? null;
-                setOrder(row);
-                setExecutions((executionData as any) ?? []);
-                setChecklists((checklistData as any) ?? []);
-                setForm({
-                    status: row?.status ?? "draft",
-                    work_performed: row?.work_performed ?? "",
-                    root_cause: row?.root_cause ?? "",
-                    notes: row?.notes ?? "",
-                    actual_duration_minutes: row?.actual_duration_minutes ? String(row.actual_duration_minutes) : "",
-                    cost_labor: row?.cost_labor != null ? String(row.cost_labor) : "",
-                    cost_parts: row?.cost_parts != null ? String(row.cost_parts) : "",
-                });
+                setRow(workOrder);
+                setMachine((machineRes.data ?? null) as MachineRow | null);
+                setPlant((plantRes?.data ?? null) as PlantRow | null);
+                setAssignee((assigneeRes?.data ?? null) as ProfileRow | null);
+                setChecklists((checklistRes.data ?? []) as ChecklistRow[]);
+                setExecutions((executionRes.data ?? []) as ExecutionRow[]);
             } catch (error: any) {
                 console.error("work order detail load error", error);
-                if (active) toast({ variant: "destructive", title: "Errore caricamento ordine", description: error?.message ?? "Impossibile aprire l'ordine di lavoro." });
+                toast({ title: "Errore caricamento ordine", description: error?.message || "Impossibile aprire il dettaglio ordine.", variant: "destructive" });
+                if (active) setRow(null);
             } finally {
                 if (active) setLoading(false);
             }
         };
+
         void load();
-        return () => {
-            active = false;
-        };
-    }, [id, toast]);
+        return () => { active = false; };
+    }, [authLoading, organization?.id, resolvedId, toast]);
 
-    const statusActions = useMemo(() => {
-        const current = form.status;
-        if (current === "draft") return ["scheduled", "in_progress"];
-        if (current === "scheduled") return ["in_progress", "cancelled"];
-        if (current === "in_progress") return ["pending_review", "completed"];
-        if (current === "pending_review") return ["completed"];
-        return [] as string[];
-    }, [form.status]);
-
-    const handleSave = async () => {
-        if (!order) return;
+    const handlePatch = async (patch: Partial<WorkOrderRow>) => {
+        if (!row || !resolvedId) return;
         setSaving(true);
         try {
-            const nextPayload: Record<string, any> = {
-                status: form.status,
-                work_performed: form.work_performed.trim() || null,
-                root_cause: form.root_cause.trim() || null,
-                notes: form.notes.trim() || null,
-                actual_duration_minutes: form.actual_duration_minutes ? Number(form.actual_duration_minutes) : null,
-                cost_labor: form.cost_labor ? Number(form.cost_labor) : null,
-                cost_parts: form.cost_parts ? Number(form.cost_parts) : null,
-                updated_at: new Date().toISOString(),
-            };
-            if (form.status === "in_progress" && !order.started_at) nextPayload.started_at = new Date().toISOString();
-            if (form.status === "completed") nextPayload.completed_at = new Date().toISOString();
-            const { data, error } = await supabase.from("work_orders").update(nextPayload).eq("id", order.id).select().maybeSingle();
+            const { data, error } = await supabase
+                .from("work_orders")
+                .update({ ...patch, updated_at: new Date().toISOString() })
+                .eq("id", resolvedId)
+                .select(`
+          id, organization_id, machine_id, plant_id, maintenance_plan_id, title, description,
+          work_type, priority, status, scheduled_date, scheduled_start_time, due_date, assigned_to,
+          started_at, completed_at, actual_duration_minutes, work_performed, root_cause, parts_used,
+          cost_labor, cost_parts, notes, created_at, updated_at
+        `)
+                .single();
             if (error) throw error;
-            setOrder((prev) => (prev ? { ...prev, ...(data as any) } : prev));
-            toast({ title: "Ordine aggiornato" });
+            setRow(data as WorkOrderRow);
+            toast({ title: "Ordine aggiornato", description: "Le modifiche sono state salvate." });
         } catch (error: any) {
-            toast({ variant: "destructive", title: "Errore salvataggio", description: error?.message ?? "Impossibile aggiornare l'ordine." });
+            console.error("work order update error", error);
+            toast({ title: "Errore salvataggio", description: error?.message || "Impossibile salvare l'ordine.", variant: "destructive" });
         } finally {
             setSaving(false);
         }
     };
 
+    if (authLoading || loading) {
+        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">Caricamento ordine di lavoro...</div></MainLayout>;
+    }
+
+    if (!row) {
+        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">Ordine di lavoro non trovato.</div></MainLayout>;
+    }
+
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${order?.title ?? "Ordine di lavoro"} - MACHINA`} />
+                <SEO title={`${row.title || "Ordine di lavoro"} - MACHINA`} />
                 <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                            <div className="mb-2 flex flex-wrap gap-2">
-                                <Badge variant="outline">{form.status}</Badge>
-                                <Badge>{order?.priority ?? "medium"}</Badge>
-                                <Badge variant="secondary">{order?.work_type ?? "preventive"}</Badge>
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight text-foreground">{order?.title ?? "Ordine di lavoro"}</h1>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                {plantLabel}: {order?.plants?.name ?? "—"} · Macchina: {order?.machines?.name ?? order?.machines?.internal_code ?? "—"}
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                            <Button asChild variant="outline"><Link href="/work-orders">Torna alla lista</Link></Button>
-                            <Button type="button" onClick={handleSave} disabled={saving}><Save className="mr-2 h-4 w-4" />Salva</Button>
-                        </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Link href="/work-orders"><Button variant="outline" className="rounded-2xl"><ArrowLeft className="mr-2 h-4 w-4" /> Ordini di lavoro</Button></Link>
+                        {canEdit && <Button onClick={() => handlePatch({})} disabled={saving} className="rounded-2xl">{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Salva</Button>}
                     </div>
 
-                    {loading ? (
-                        <div className="text-sm text-muted-foreground">Caricamento ordine...</div>
-                    ) : !order ? (
-                        <Card><CardContent className="p-6 text-sm text-muted-foreground">Ordine non trovato.</CardContent></Card>
-                    ) : (
-                        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
-                            <div className="space-y-6">
-                                <Card>
-                                    <CardHeader><CardTitle>Dettaglio ordine</CardTitle></CardHeader>
-                                    <CardContent className="grid gap-4 md:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label>Stato</Label>
-                                            <select className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}>
-                                                <option value="draft">draft</option>
-                                                <option value="scheduled">scheduled</option>
-                                                <option value="in_progress">in_progress</option>
-                                                <option value="pending_review">pending_review</option>
-                                                <option value="completed">completed</option>
-                                                <option value="cancelled">cancelled</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Prossime azioni rapide</Label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {statusActions.length === 0 ? <span className="text-sm text-muted-foreground">Nessuna</span> : statusActions.map((status) => (
-                                                    <Button key={status} type="button" variant="outline" size="sm" onClick={() => setForm((prev) => ({ ...prev, status }))}>{status}</Button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label>Descrizione</Label>
-                                            <div className="rounded-xl border border-border bg-muted/20 p-3 text-sm text-foreground">{order.description || "—"}</div>
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label>Lavoro eseguito</Label>
-                                            <Textarea rows={5} value={form.work_performed} onChange={(e) => setForm((prev) => ({ ...prev, work_performed: e.target.value }))} placeholder="Descrivi le attività eseguite..." />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Causa radice</Label>
-                                            <Textarea rows={4} value={form.root_cause} onChange={(e) => setForm((prev) => ({ ...prev, root_cause: e.target.value }))} placeholder="Se applicabile" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Note</Label>
-                                            <Textarea rows={4} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Durata effettiva (min)</Label>
-                                            <Input type="number" min={0} value={form.actual_duration_minutes} onChange={(e) => setForm((prev) => ({ ...prev, actual_duration_minutes: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Costo manodopera</Label>
-                                            <Input type="number" step="0.01" min={0} value={form.cost_labor} onChange={(e) => setForm((prev) => ({ ...prev, cost_labor: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Costo ricambi</Label>
-                                            <Input type="number" step="0.01" min={0} value={form.cost_parts} onChange={(e) => setForm((prev) => ({ ...prev, cost_parts: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Date</Label>
-                                            <div className="rounded-xl border border-border bg-muted/20 p-3 text-sm text-foreground">
-                                                Programmazione: {formatDateTime(order.scheduled_start_time || order.scheduled_date)}<br />
-                                                Scadenza: {formatDateTime(order.due_date)}<br />
-                                                Avvio: {formatDateTime(order.started_at)}<br />
-                                                Completamento: {formatDateTime(order.completed_at)}
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                    <Card className="rounded-3xl border-border/70 shadow-sm">
+                        <CardContent className="space-y-6 p-6">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="rounded-full">{row.status || "draft"}</Badge>
+                                <Badge variant="outline" className="rounded-full">{row.priority || "medium"}</Badge>
+                                <Badge variant="outline" className="rounded-full">{row.work_type}</Badge>
                             </div>
-
-                            <div className="space-y-6">
-                                <Card>
-                                    <CardHeader><CardTitle>Checklist compatibili</CardTitle></CardHeader>
-                                    <CardContent className="space-y-3">
-                                        {checklists.length === 0 ? (
-                                            <div className="text-sm text-muted-foreground">Nessuna checklist attiva trovata per questa macchina.</div>
-                                        ) : (
-                                            checklists.map((checklist) => (
-                                                <div key={checklist.id} className="rounded-2xl border border-border p-4">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <div className="truncate font-semibold text-foreground">{checklist.title}</div>
-                                                            <div className="mt-1 text-sm text-muted-foreground">Tipo: {checklist.checklist_type || "inspection"}</div>
-                                                        </div>
-                                                        <Badge variant="outline">{checklist.machine_id ? "Macchina" : "Generica"}</Badge>
-                                                    </div>
-                                                    <div className="mt-3 flex flex-wrap gap-2">
-                                                        <Button asChild variant="outline" size="sm">
-                                                            <Link href={`/checklists/${checklist.id}`}>Apri</Link>
-                                                        </Button>
-                                                        {!isManufacturer && canExecuteChecklist && (
-                                                            <Button asChild size="sm">
-                                                                <Link href={`/checklists/execute/${checklist.id}?work_order_id=${order.id}`}>
-                                                                    <PlayCircle className="mr-2 h-4 w-4" />
-                                                                    Esegui checklist
-                                                                </Link>
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader><CardTitle>Esecuzioni già registrate</CardTitle></CardHeader>
-                                    <CardContent className="space-y-3">
-                                        {executions.length === 0 ? (
-                                            <div className="text-sm text-muted-foreground">Nessuna checklist eseguita su questo ordine.</div>
-                                        ) : executions.map((execution) => (
-                                            <div key={execution.id} className="rounded-2xl border border-border p-4">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="min-w-0">
-                                                        <div className="truncate font-semibold text-foreground">{execution.checklists?.title || "Checklist"}</div>
-                                                        <div className="mt-1 text-sm text-muted-foreground">Completata: {formatDateTime(execution.completed_at)}</div>
-                                                    </div>
-                                                    <Badge variant="outline">{execution.overall_status || "pending"}</Badge>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
+                            <div className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label>Titolo</Label>
+                                        <Input value={row.title ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, title: e.target.value } : prev)} className="mt-2 rounded-2xl" disabled={!canEdit} />
+                                    </div>
+                                    <div>
+                                        <Label>Descrizione</Label>
+                                        <Textarea value={row.description ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, description: e.target.value } : prev)} className="mt-2 min-h-[120px] rounded-2xl" disabled={!canEdit} />
+                                    </div>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                                    <InfoBox label="Macchina" value={machine?.name || machine?.internal_code || row.machine_id} icon={<Wrench className="h-4 w-4" />} />
+                                    <InfoBox label={plantLabel} value={plant?.name || "—"} icon={<CalendarDays className="h-4 w-4" />} />
+                                    <InfoBox label="Area / linea" value={machine?.area?.trim() || "—"} icon={<ClipboardCheck className="h-4 w-4" />} />
+                                    <InfoBox label="Assegnatario" value={profileLabel(assignee)} icon={<User className="h-4 w-4" />} />
+                                    <InfoBox label="Data programmata" value={formatDateOnly(row.scheduled_date)} icon={<CalendarDays className="h-4 w-4" />} />
+                                    <InfoBox label="Scadenza" value={formatDateOnly(row.due_date)} icon={<CalendarDays className="h-4 w-4" />} />
+                                </div>
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                        <Card className="rounded-3xl border-border/70 shadow-sm">
+                            <CardHeader>
+                                <CardTitle>Avanzamento lavoro</CardTitle>
+                                <CardDescription>Stato operativo, note e consuntivo.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <Label>Stato</Label>
+                                        <Select value={row.status || "draft"} onValueChange={(value) => setRow((prev) => prev ? { ...prev, status: value } : prev)} disabled={!canEdit}>
+                                            <SelectTrigger className="mt-2 rounded-2xl"><SelectValue /></SelectTrigger>
+                                            <SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div>
+                                        <Label>Durata effettiva (min)</Label>
+                                        <Input type="number" value={row.actual_duration_minutes ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, actual_duration_minutes: e.target.value ? Number(e.target.value) : null } : prev)} className="mt-2 rounded-2xl" disabled={!canEdit} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label>Lavoro eseguito</Label>
+                                    <Textarea value={row.work_performed ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, work_performed: e.target.value } : prev)} className="mt-2 min-h-[120px] rounded-2xl" disabled={!canEdit} />
+                                </div>
+                                <div>
+                                    <Label>Causa radice</Label>
+                                    <Textarea value={row.root_cause ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, root_cause: e.target.value } : prev)} className="mt-2 min-h-[90px] rounded-2xl" disabled={!canEdit} />
+                                </div>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <Label>Costo manodopera</Label>
+                                        <Input type="number" step="0.01" value={row.cost_labor ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, cost_labor: e.target.value ? Number(e.target.value) : null } : prev)} className="mt-2 rounded-2xl" disabled={!canEdit} />
+                                    </div>
+                                    <div>
+                                        <Label>Costo ricambi</Label>
+                                        <Input type="number" step="0.01" value={row.cost_parts ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, cost_parts: e.target.value ? Number(e.target.value) : null } : prev)} className="mt-2 rounded-2xl" disabled={!canEdit} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label>Note</Label>
+                                    <Textarea value={row.notes ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, notes: e.target.value } : prev)} className="mt-2 min-h-[100px] rounded-2xl" disabled={!canEdit} />
+                                </div>
+                                {canEdit && (
+                                    <div className="flex flex-wrap gap-3">
+                                        <Button type="button" variant="outline" className="rounded-2xl" onClick={() => handlePatch({ status: "in_progress", started_at: row.started_at || new Date().toISOString() })}><Play className="mr-2 h-4 w-4" /> Inizia lavoro</Button>
+                                        <Button type="button" className="rounded-2xl" onClick={() => handlePatch({ status: "completed", completed_at: new Date().toISOString() })}><CheckCircle2 className="mr-2 h-4 w-4" /> Completa ordine</Button>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <div className="space-y-6">
+                            <Card className="rounded-3xl border-border/70 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle>Checklist compatibili</CardTitle>
+                                    <CardDescription>Template attivi per la macchina selezionata o generici.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {checklists.length === 0 ? <div className="rounded-2xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Nessuna checklist disponibile per questa macchina.</div> : checklists.map((item) => (
+                                        <div key={item.id} className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <div className="font-medium text-foreground">{item.title || "Checklist"}</div>
+                                                <div className="text-sm text-muted-foreground">Tipo: {item.checklist_type || "inspection"}</div>
+                                            </div>
+                                            {canExecuteChecklist ? <Link href={`/checklists/execute/${item.id}?work_order_id=${row.id}`}><Button size="sm" className="rounded-2xl">Esegui checklist</Button></Link> : <Badge variant="outline" className="rounded-full">Read-only</Badge>}
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-3xl border-border/70 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle>Storico esecuzioni</CardTitle>
+                                    <CardDescription>Checklist già compilate dentro questo ordine di lavoro.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {executions.length === 0 ? <div className="rounded-2xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Nessuna esecuzione checklist collegata a questo ordine.</div> : executions.map((execution) => (
+                                        <div key={execution.id} className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="font-medium text-foreground">Esecuzione {execution.id.slice(0, 8)}</div>
+                                                <Badge variant="outline" className="rounded-full">{execution.overall_status || "pending"}</Badge>
+                                            </div>
+                                            <div className="mt-2 text-sm text-muted-foreground">Eseguita: {formatDate(execution.executed_at)} · Completata: {formatDate(execution.completed_at)}</div>
+                                            {execution.notes ? <p className="mt-3 text-sm text-foreground">{execution.notes}</p> : null}
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
                         </div>
-                    )}
+                    </div>
                 </div>
             </MainLayout>
         </OrgContextGuard>
     );
 }
 
+function InfoBox({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+    return (
+        <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">{icon}<span>{label}</span></div>
+            <div className="mt-2 text-base font-semibold text-foreground break-words">{value}</div>
+        </div>
+    );
+}
