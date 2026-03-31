@@ -1,273 +1,361 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { CalendarClock, ClipboardList, Factory, Pencil, PlusCircle, ShieldAlert, TimerReset } from "lucide-react";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgType } from "@/hooks/useOrgType";
 import { supabase } from "@/integrations/supabase/client";
 
-function isoDate(value?: string | null) {
-    if (!value) return "";
-    return value.slice(0, 10);
+function formatDate(value: string | null | undefined) {
+    if (!value) return "—";
+    try {
+        return new Date(value).toLocaleDateString("it-IT");
+    } catch {
+        return value;
+    }
 }
 
-type MachineOption = { id: string; name: string | null; internal_code: string | null; plant_id: string | null; plants?: { name: string | null } | null };
-type UserOption = { id: string; first_name: string | null; last_name: string | null; display_name: string | null; email: string | null };
+function formatFrequency(type: string | null | undefined, value: number | null | undefined) {
+    if (!type || !value) return "—";
+    const map: Record<string, string> = {
+        hours: value === 1 ? "ora" : "ore",
+        days: value === 1 ? "giorno" : "giorni",
+        weeks: value === 1 ? "settimana" : "settimane",
+        months: value === 1 ? "mese" : "mesi",
+        cycles: value === 1 ? "ciclo" : "cicli",
+    };
+    return `Ogni ${value} ${map[type] ?? type}`;
+}
 
-export default function EditMaintenancePlanPage() {
+function priorityTone(priority: string | null | undefined) {
+    const key = String(priority ?? "medium").toLowerCase();
+    if (key === "critical") return "destructive" as const;
+    if (key === "high") return "default" as const;
+    if (key === "low") return "secondary" as const;
+    return "outline" as const;
+}
+
+type PlanRow = {
+    id: string;
+    organization_id: string;
+    machine_id: string | null;
+    title: string;
+    description: string | null;
+    frequency_type: string;
+    frequency_value: number;
+    estimated_duration_minutes: number | null;
+    required_skills: string[] | null;
+    spare_parts: any;
+    instructions: string | null;
+    safety_notes: string | null;
+    default_assignee_id: string | null;
+    priority: string | null;
+    is_active: boolean;
+    next_due_date: string | null;
+    last_executed_at: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    machines?: {
+        id: string;
+        name: string | null;
+        internal_code: string | null;
+        area: string | null;
+        plant_id: string | null;
+        plants?: {
+            id: string;
+            name: string | null;
+            plant_type: string | null;
+        } | null;
+    } | null;
+};
+
+type WorkOrderRow = {
+    id: string;
+    title: string | null;
+    status: string | null;
+    priority: string | null;
+    due_date: string | null;
+    scheduled_date: string | null;
+    assigned_to: string | null;
+    created_at: string | null;
+};
+
+export default function MaintenancePlanDetailPage() {
     const router = useRouter();
     const { id } = router.query;
     const { toast } = useToast();
-    const { user, membership } = useAuth();
-    const { plantLabel, machineContextLabel } = useOrgType();
+    const { membership, loading: authLoading } = useAuth();
+    const { plantLabel, machineContextLabel, canManageMaintenance } = useOrgType();
     const userRole = membership?.role ?? "viewer";
 
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [organizationId, setOrganizationId] = useState < string | null > (null);
-    const [machines, setMachines] = useState < MachineOption[] > ([]);
-    const [users, setUsers] = useState < UserOption[] > ([]);
-    const [form, setForm] = useState({
-        machine_id: "",
-        title: "",
-        description: "",
-        frequency_type: "days",
-        frequency_value: 30,
-        estimated_duration_minutes: "",
-        priority: "medium",
-        instructions: "",
-        safety_notes: "",
-        default_assignee_id: "",
-        next_due_date: "",
-        required_skills: "",
-        is_active: true,
-    });
+    const [plan, setPlan] = useState < PlanRow | null > (null);
+    const [orders, setOrders] = useState < WorkOrderRow[] > ([]);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        if (!user || !id || typeof id !== "string") return;
+        if (authLoading || !id || typeof id !== "string") return;
         let active = true;
+
         const load = async () => {
             setLoading(true);
             try {
-                const { data: profile } = await supabase
-                    .from("profiles")
-                    .select("default_organization_id")
-                    .eq("id", user.id)
+                const { data: planData, error: planError } = await supabase
+                    .from("maintenance_plans")
+                    .select(`
+            id, organization_id, machine_id, title, description, frequency_type, frequency_value,
+            estimated_duration_minutes, required_skills, spare_parts, instructions, safety_notes,
+            default_assignee_id, priority, is_active, next_due_date, last_executed_at, created_at, updated_at,
+            machines (
+              id, name, internal_code, area, plant_id,
+              plants ( id, name, plant_type )
+            )
+          `)
+                    .eq("id", id)
                     .maybeSingle();
 
-                const orgId = (profile as any)?.default_organization_id ?? null;
-                if (!orgId) throw new Error("Organizzazione attiva non trovata.");
-
-                const [{ data: planData, error: planError }, { data: machineData, error: machineError }, { data: memberships, error: membersError }] = await Promise.all([
-                    supabase
-                        .from("maintenance_plans")
-                        .select("id, machine_id, title, description, frequency_type, frequency_value, estimated_duration_minutes, priority, instructions, safety_notes, default_assignee_id, next_due_date, required_skills, is_active")
-                        .eq("id", id)
-                        .maybeSingle(),
-                    supabase
-                        .from("machines")
-                        .select("id, name, internal_code, plant_id, plants(name)")
-                        .eq("organization_id", orgId)
-                        .order("name"),
-                    supabase
-                        .from("organization_memberships")
-                        .select("user_id")
-                        .eq("organization_id", orgId)
-                        .eq("is_active", true),
-                ]);
-
                 if (planError) throw planError;
-                if (machineError) throw machineError;
-                if (membersError) throw membersError;
 
-                const userIds = Array.from(new Set((memberships ?? []).map((m: any) => m.user_id).filter(Boolean)));
-                const { data: usersData, error: usersError } = userIds.length
-                    ? await supabase.from("profiles").select("id, first_name, last_name, display_name, email").in("id", userIds).order("display_name")
-                    : { data: [], error: null as any };
+                const { data: ordersData, error: ordersError } = await supabase
+                    .from("work_orders")
+                    .select("id, title, status, priority, due_date, scheduled_date, assigned_to, created_at")
+                    .eq("maintenance_plan_id", id)
+                    .order("created_at", { ascending: false });
 
-                if (usersError) throw usersError;
+                if (ordersError) throw ordersError;
+
                 if (!active) return;
-
-                setOrganizationId(orgId);
-                setMachines((machineData as any) ?? []);
-                setUsers((usersData as any) ?? []);
-                setForm({
-                    machine_id: (planData as any)?.machine_id ?? "",
-                    title: (planData as any)?.title ?? "",
-                    description: (planData as any)?.description ?? "",
-                    frequency_type: (planData as any)?.frequency_type ?? "days",
-                    frequency_value: Number((planData as any)?.frequency_value ?? 30),
-                    estimated_duration_minutes: (planData as any)?.estimated_duration_minutes ? String((planData as any).estimated_duration_minutes) : "",
-                    priority: (planData as any)?.priority ?? "medium",
-                    instructions: (planData as any)?.instructions ?? "",
-                    safety_notes: (planData as any)?.safety_notes ?? "",
-                    default_assignee_id: (planData as any)?.default_assignee_id ?? "",
-                    next_due_date: isoDate((planData as any)?.next_due_date),
-                    required_skills: Array.isArray((planData as any)?.required_skills) ? (planData as any).required_skills.join(", ") : "",
-                    is_active: Boolean((planData as any)?.is_active ?? true),
-                });
+                setPlan((planData as any) ?? null);
+                setOrders((ordersData as any) ?? []);
             } catch (error: any) {
-                toast({ variant: "destructive", title: "Errore caricamento piano", description: error?.message ?? "Impossibile aprire il piano." });
+                console.error("maintenance detail load error", error);
+                if (active) {
+                    toast({
+                        variant: "destructive",
+                        title: "Errore caricamento piano",
+                        description: error?.message ?? "Impossibile leggere il piano di manutenzione.",
+                    });
+                }
             } finally {
                 if (active) setLoading(false);
             }
         };
+
         void load();
         return () => {
             active = false;
         };
-    }, [id, toast, user]);
+    }, [authLoading, id, toast]);
 
-    const machineOptions = useMemo(
-        () =>
-            machines.map((machine) => ({
-                value: machine.id,
-                label: `${machine.plants?.name || plantLabel} â†’ ${machine.name || machine.internal_code || machine.id}`,
-            })),
-        [machines, plantLabel]
-    );
+    const machineLabel = useMemo(() => {
+        const plantName = plan?.machines?.plants?.name || "—";
+        const machineName = plan?.machines?.name || "Macchina generica";
+        return `${plantName} → ${machineName}`;
+    }, [plan]);
 
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        if (!id || typeof id !== "string") return;
-        setSaving(true);
+    const handleGenerateWorkOrder = async () => {
+        if (!plan) return;
+        if (!plan.machine_id) {
+            toast({ variant: "destructive", title: "Piano senza macchina", description: "Assegna una macchina al piano prima di generare un ordine." });
+            return;
+        }
+        router.push(`/work-orders/new?plan_id=${plan.id}`);
+    };
+
+    const handleToggleActive = async () => {
+        if (!plan) return;
+        setSubmitting(true);
         try {
-            const payload = {
-                machine_id: form.machine_id || null,
-                title: form.title.trim(),
-                description: form.description.trim() || null,
-                frequency_type: form.frequency_type,
-                frequency_value: Number(form.frequency_value || 0),
-                estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
-                priority: form.priority,
-                instructions: form.instructions.trim() || null,
-                safety_notes: form.safety_notes.trim() || null,
-                default_assignee_id: form.default_assignee_id || null,
-                next_due_date: form.next_due_date || null,
-                required_skills: form.required_skills
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean),
-                is_active: form.is_active,
-                updated_at: new Date().toISOString(),
-            };
-
-            const { error } = await supabase.from("maintenance_plans").update(payload).eq("id", id);
+            const { error } = await supabase
+                .from("maintenance_plans")
+                .update({ is_active: !plan.is_active, updated_at: new Date().toISOString() })
+                .eq("id", plan.id);
             if (error) throw error;
-            toast({ title: "Piano aggiornato" });
-            router.push(`/maintenance/${id}`);
+            setPlan((prev) => (prev ? { ...prev, is_active: !prev.is_active } : prev));
+            toast({ title: plan.is_active ? "Piano disattivato" : "Piano riattivato" });
         } catch (error: any) {
-            toast({ variant: "destructive", title: "Errore salvataggio", description: error?.message ?? "Impossibile salvare il piano." });
+            toast({ variant: "destructive", title: "Errore aggiornamento", description: error?.message ?? "Operazione non completata." });
         } finally {
-            setSaving(false);
+            setSubmitting(false);
         }
     };
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title="Modifica piano - MACHINA" />
-                <div className="mx-auto max-w-4xl px-4 py-8">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Modifica piano di manutenzione</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {loading ? (
-                                <div className="text-sm text-muted-foreground">Caricamento...</div>
-                            ) : (
-                                <form className="space-y-6" onSubmit={handleSubmit}>
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="machine_id">{machineContextLabel}</Label>
-                                            <select id="machine_id" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.machine_id} onChange={(e) => setForm((prev) => ({ ...prev, machine_id: e.target.value }))}>
-                                                <option value="">Template generico</option>
-                                                {machineOptions.map((option) => (
-                                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="title">Titolo</Label>
-                                            <Input id="title" value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} required />
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="description">Descrizione</Label>
-                                            <Textarea id="description" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="frequency_type">Tipo frequenza</Label>
-                                            <select id="frequency_type" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.frequency_type} onChange={(e) => setForm((prev) => ({ ...prev, frequency_type: e.target.value }))}>
-                                                <option value="hours">Ore</option>
-                                                <option value="days">Giorni</option>
-                                                <option value="weeks">Settimane</option>
-                                                <option value="months">Mesi</option>
-                                                <option value="cycles">Cicli</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="frequency_value">Valore frequenza</Label>
-                                            <Input id="frequency_value" type="number" min={1} value={form.frequency_value} onChange={(e) => setForm((prev) => ({ ...prev, frequency_value: Number(e.target.value || 1) }))} required />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="priority">PrioritÃ </Label>
-                                            <select id="priority" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.priority} onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}>
-                                                <option value="low">Bassa</option>
-                                                <option value="medium">Media</option>
-                                                <option value="high">Alta</option>
-                                                <option value="critical">Critica</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="estimated_duration_minutes">Durata stimata (min)</Label>
-                                            <Input id="estimated_duration_minutes" type="number" min={0} value={form.estimated_duration_minutes} onChange={(e) => setForm((prev) => ({ ...prev, estimated_duration_minutes: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="default_assignee_id">Assegnatario predefinito</Label>
-                                            <select id="default_assignee_id" className="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm" value={form.default_assignee_id} onChange={(e) => setForm((prev) => ({ ...prev, default_assignee_id: e.target.value }))}>
-                                                <option value="">Nessuno</option>
-                                                {users.map((entry) => {
-                                                    const label = entry.display_name || `${entry.first_name ?? ""} ${entry.last_name ?? ""}`.trim() || entry.email || entry.id;
-                                                    return <option key={entry.id} value={entry.id}>{label}</option>;
-                                                })}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="next_due_date">Prossima scadenza</Label>
-                                            <Input id="next_due_date" type="date" value={form.next_due_date} onChange={(e) => setForm((prev) => ({ ...prev, next_due_date: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="required_skills">Competenze richieste</Label>
-                                            <Input id="required_skills" value={form.required_skills} onChange={(e) => setForm((prev) => ({ ...prev, required_skills: e.target.value }))} placeholder="elettrico, meccanico, oleodinamica" />
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="instructions">Istruzioni operative</Label>
-                                            <Textarea id="instructions" rows={5} value={form.instructions} onChange={(e) => setForm((prev) => ({ ...prev, instructions: e.target.value }))} />
-                                        </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="safety_notes">Note di sicurezza</Label>
-                                            <Textarea id="safety_notes" rows={4} value={form.safety_notes} onChange={(e) => setForm((prev) => ({ ...prev, safety_notes: e.target.value }))} />
-                                        </div>
-                                    </div>
+                <SEO title={`${plan?.title ?? "Piano manutenzione"} - MACHINA`} />
+                <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <Badge variant={priorityTone(plan?.priority)}>{plan?.priority ?? "medium"}</Badge>
+                                <Badge variant={plan?.is_active ? "secondary" : "outline"}>{plan?.is_active ? "Attivo" : "Inattivo"}</Badge>
+                            </div>
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground">{plan?.title ?? "Piano di manutenzione"}</h1>
+                            <p className="mt-2 text-sm text-muted-foreground">{machineContextLabel}: {machineLabel}</p>
+                        </div>
 
-                                    <div className="flex flex-wrap justify-end gap-3">
-                                        <Button asChild variant="outline">
-                                            <Link href={id ? `/maintenance/${id}` : "/maintenance"}>Annulla</Link>
-                                        </Button>
-                                        <Button type="submit" disabled={saving || !organizationId}>{saving ? "Salvataggio..." : "Salva modifiche"}</Button>
-                                    </div>
-                                </form>
+                        <div className="flex flex-wrap gap-3">
+                            <Button asChild variant="outline">
+                                <Link href="/maintenance">Torna alla lista</Link>
+                            </Button>
+                            {canManageMaintenance && (
+                                <>
+                                    <Button asChild variant="outline">
+                                        <Link href={`/maintenance/edit/${id}`}>
+                                            <Pencil className="mr-2 h-4 w-4" />
+                                            Modifica
+                                        </Link>
+                                    </Button>
+                                    <Button type="button" onClick={handleGenerateWorkOrder}>
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Genera ordine di lavoro
+                                    </Button>
+                                </>
                             )}
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
+
+                    {loading ? (
+                        <div className="text-sm text-muted-foreground">Caricamento piano...</div>
+                    ) : !plan ? (
+                        <Card>
+                            <CardContent className="p-6 text-sm text-muted-foreground">Piano non trovato.</CardContent>
+                        </Card>
+                    ) : (
+                        <>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                <Card>
+                                    <CardContent className="flex items-start gap-3 p-5">
+                                        <TimerReset className="mt-0.5 h-5 w-5 text-orange-500" />
+                                        <div>
+                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Frequenza</div>
+                                            <div className="mt-1 font-semibold">{formatFrequency(plan.frequency_type, plan.frequency_value)}</div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardContent className="flex items-start gap-3 p-5">
+                                        <CalendarClock className="mt-0.5 h-5 w-5 text-orange-500" />
+                                        <div>
+                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Prossima scadenza</div>
+                                            <div className="mt-1 font-semibold">{formatDate(plan.next_due_date)}</div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardContent className="flex items-start gap-3 p-5">
+                                        <Factory className="mt-0.5 h-5 w-5 text-orange-500" />
+                                        <div>
+                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">{plantLabel}</div>
+                                            <div className="mt-1 font-semibold">{plan.machines?.plants?.name ?? "—"}</div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardContent className="flex items-start gap-3 p-5">
+                                        <ClipboardList className="mt-0.5 h-5 w-5 text-orange-500" />
+                                        <div>
+                                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Ordini generati</div>
+                                            <div className="mt-1 font-semibold">{orders.length}</div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Dettaglio piano</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-5 text-sm">
+                                        <div>
+                                            <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Descrizione</div>
+                                            <p className="whitespace-pre-wrap text-foreground">{plan.description || "—"}</p>
+                                        </div>
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            <div>
+                                                <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Durata stimata</div>
+                                                <div>{plan.estimated_duration_minutes ? `${plan.estimated_duration_minutes} min` : "—"}</div>
+                                            </div>
+                                            <div>
+                                                <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Ultima esecuzione</div>
+                                                <div>{formatDate(plan.last_executed_at)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Competenze richieste</div>
+                                                <div>{plan.required_skills?.length ? plan.required_skills.join(", ") : "—"}</div>
+                                            </div>
+                                            <div>
+                                                <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Macchina</div>
+                                                <div>{plan.machines?.name ?? "Template generico"}</div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Istruzioni operative</div>
+                                            <p className="whitespace-pre-wrap text-foreground">{plan.instructions || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                                                <ShieldAlert className="h-3.5 w-3.5" />
+                                                Note di sicurezza
+                                            </div>
+                                            <p className="whitespace-pre-wrap text-foreground">{plan.safety_notes || "—"}</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Storico ordini di lavoro</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
+                                        {orders.length === 0 ? (
+                                            <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                                                Nessun ordine di lavoro ancora generato da questo piano.
+                                            </div>
+                                        ) : (
+                                            orders.map((order) => (
+                                                <Link key={order.id} href={`/work-orders/${order.id}`} className="block rounded-2xl border border-border p-4 transition hover:bg-muted/40">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <div className="truncate font-semibold text-foreground">{order.title || "Ordine senza titolo"}</div>
+                                                            <div className="mt-1 text-sm text-muted-foreground">Scadenza: {formatDate(order.due_date || order.scheduled_date)}</div>
+                                                        </div>
+                                                        <div className="flex shrink-0 gap-2">
+                                                            <Badge variant="outline">{order.status || "draft"}</Badge>
+                                                        </div>
+                                                    </div>
+                                                </Link>
+                                            ))
+                                        )}
+
+                                        {canManageMaintenance && (
+                                            <div className="pt-2">
+                                                <Button type="button" className="w-full" onClick={handleGenerateWorkOrder}>
+                                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                                    Genera ordine di lavoro ora
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {canManageMaintenance && (
+                                            <Button type="button" variant="outline" className="w-full" disabled={submitting} onClick={handleToggleActive}>
+                                                {plan.is_active ? "Disattiva piano" : "Riattiva piano"}
+                                            </Button>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </>
+                    )}
                 </div>
             </MainLayout>
         </OrgContextGuard>
