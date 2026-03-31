@@ -516,8 +516,8 @@ export default function MaintenancePlansIndexPage() {
                                 return (
                                     <Card key={plan.id} className="rounded-2xl border-border/70">
                                         <CardContent className="p-6">
-                                            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                                                <div className="min-w-0 flex-1 space-y-4">
+                                            <div className="flex flex-col gap-5">
+                                                <div className="min-w-0 space-y-4">
                                                     <div className="flex flex-wrap items-start gap-3">
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex flex-wrap items-center gap-2">
@@ -533,7 +533,7 @@ export default function MaintenancePlansIndexPage() {
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                                         <div className="rounded-2xl border border-border bg-muted/20 p-3">
                                                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{machineContextLabel}</p>
                                                             <p className="mt-1 text-sm font-medium text-foreground">{machine?.name ?? "Template generico"}</p>
@@ -557,21 +557,21 @@ export default function MaintenancePlansIndexPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex w-full flex-col gap-2 xl:w-auto xl:min-w-[220px]">
-                                                    <Button asChild variant="outline" className="justify-between">
+                                                <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-3">
+                                                    <Button asChild variant="outline" className="justify-between min-w-0">
                                                         <Link href={`/maintenance/${plan.id}`}>
                                                             Apri dettaglio
                                                             <ArrowRight className="h-4 w-4" />
                                                         </Link>
                                                     </Button>
-                                                    <Button asChild>
-                                                        <Link href={`/work-orders/create?plan_id=${plan.id}`}>
+                                                    <Button asChild className="min-w-0">
+                                                        <Link href={`/work-orders/create?plan_id=${plan.id}`} className="min-w-0">
                                                             <CalendarDays className="mr-2 h-4 w-4" />
                                                             Genera ordine di lavoro
                                                         </Link>
                                                     </Button>
                                                     {canManageMaintenance && isManager && (
-                                                        <Button asChild variant="ghost" className="justify-between">
+                                                        <Button asChild variant="ghost" className="justify-between min-w-0">
                                                             <Link href={`/maintenance/edit/${plan.id}`}>
                                                                 Modifica piano
                                                                 <ArrowRight className="h-4 w-4" />
