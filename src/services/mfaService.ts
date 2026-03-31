@@ -57,7 +57,6 @@ function mapFactor(factor: MfaFactorRow): MfaFactor {
 export async function listMfaFactors(): Promise<MfaFactorRow[]> {
     const { data, error } = await supabase.auth.mfa.listFactors();
     if (error) throw error;
-
     return (data?.all ?? []).map(mapFactorRow);
 }
 
@@ -127,11 +126,7 @@ export async function verifyFactor(params: { factorId: string; challengeId: stri
 
 export async function verifyEnrollment(factorId: string, code: string): Promise<boolean> {
     const challenge = await challengeFactor(factorId);
-    await verifyFactor({
-        factorId,
-        challengeId: challenge.id,
-        code,
-    });
+    await verifyFactor({ factorId, challengeId: challenge.id, code });
     return true;
 }
 
@@ -150,12 +145,13 @@ export async function challengeAndVerify(code: string): Promise<boolean> {
     }
 
     const challenge = await challengeFactor(factor.id);
-    await verifyFactor({
-        factorId: factor.id,
-        challengeId: challenge.id,
-        code,
-    });
+    await verifyFactor({ factorId: factor.id, challengeId: challenge.id, code });
+    return true;
+}
 
+export async function unenrollVerifiedFactorWithCode(factorId: string, code: string): Promise<boolean> {
+    await challengeAndVerify(code);
+    await unenrollFactor(factorId);
     return true;
 }
 
@@ -171,5 +167,6 @@ export const mfaService = {
     verifyEnrollment,
     challengeAndVerify,
     unenrollFactor,
+    unenrollVerifiedFactorWithCode,
     needsVerification,
 };
