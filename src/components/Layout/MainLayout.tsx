@@ -5,8 +5,10 @@ import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrgType } from "@/hooks/useOrgType";
 import { notificationService } from "@/services/notificationService";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
     LayoutDashboard,
     Wrench,
@@ -31,23 +33,19 @@ import {
 } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
-type OrgType = "manufacturer" | "customer" | null;
+
+type NavItem = {
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    roles?: string[];
+    orgTypes?: Array<"manufacturer" | "customer" | "enterprise">;
+    labelKey?: string;
+    label?: string;
+};
 
 interface MainLayoutProps {
     children: React.ReactNode;
     userRole?: UserRole;
-}
-
-interface NavItem {
-    href: string;
-    labelKey: string;
-    icon: React.ComponentType<{ className?: string }>;
-    roles?: string[];
-    orgTypes?: Array<"manufacturer" | "customer">;
-}
-
-function cn(...classes: Array<string | false | null | undefined>) {
-    return classes.filter(Boolean).join(" ");
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
@@ -55,6 +53,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const { t, language, setLanguage } = useLanguage();
     const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
     const { profile, organization, membership, user, signOut } = useAuth();
+    const { orgType, orgTypeLabel, plantsLabel, checklistsLabel } = useOrgType();
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [notificationCount, setNotificationCount] = useState(0);
@@ -66,7 +65,6 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         "Utente";
 
     const profileRole = (membership?.role as string | null) ?? userRole;
-    const orgType = ((organization?.type as OrgType | undefined) ?? null) as OrgType;
     const orgName = organization?.name ?? "Organizzazione";
 
     useEffect(() => {
@@ -141,21 +139,21 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     }, [profileName]);
 
     const navItems: NavItem[] = [
-        { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-        { href: "/equipment", labelKey: "nav.equipment", icon: Factory },
-        { href: "/maintenance", labelKey: "nav.maintenance", icon: Wrench },
-        { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
-        { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
-        { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
-        { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
-        { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
-        { href: "/documents", labelKey: "nav.documents", icon: FileText },
-        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
-        { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
-        { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
-        { href: "/settings", labelKey: "nav.settings", icon: Settings },
+        { href: "/dashboard", labelKey: "nav.dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/equipment", labelKey: "nav.equipment", label: "Macchine", icon: Factory },
+        { href: "/maintenance", labelKey: "nav.maintenance", label: "Manutenzione", icon: Wrench },
+        { href: "/work-orders", labelKey: "nav.workOrders", label: "Ordini di lavoro", icon: ClipboardList },
+        { href: "/checklists/templates", labelKey: "nav.checklists", label: checklistsLabel, icon: CheckSquare },
+        { href: "/scanner", labelKey: "nav.scanner", label: "Scanner QR", icon: QrCode },
+        { href: "/analytics", labelKey: "nav.analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
+        { href: "/compliance", labelKey: "nav.compliance", label: "Compliance", icon: ShieldCheck },
+        { href: "/documents", labelKey: "nav.documents", label: "Documenti", icon: FileText },
+        { href: "/plants", labelKey: "nav.plants", label: plantsLabel, icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer", "enterprise"] },
+        { href: "/users", labelKey: "nav.users", label: "Utenti", icon: Users, roles: ["admin", "supervisor"] },
+        { href: "/customers", labelKey: "nav.customers", label: "Clienti", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/assignments", labelKey: "nav.assignments", label: "Assegnazioni macchine", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/settings/organization", labelKey: "nav.activeOrganization", label: "Organizzazione attiva", icon: Package },
+        { href: "/settings", labelKey: "nav.settings", label: "Impostazioni", icon: Settings },
     ];
 
     const filteredNavItems = navItems.filter((item) => {
@@ -182,27 +180,15 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
 
-    const getOrgTypeLabel = () => {
-        if (orgType === "manufacturer") return t("org.manufacturer");
-        if (orgType === "customer") return t("org.customer");
-        return t("org.platform");
-    };
-
-    const getHeaderContextLabel = () => {
-        if (orgType === "manufacturer") return t("org.manufacturer");
-        if (orgType === "customer") return t("org.customer");
-        return t("org.context");
-    };
-
-    const getCurrentPageKey = () => {
+    const getCurrentPageLabel = () => {
         const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
-        if (exactMatch) return exactMatch.labelKey;
+        if (exactMatch) return exactMatch.label || (exactMatch.labelKey ? t(exactMatch.labelKey) : "Dashboard");
 
         const startsWithMatch = filteredNavItems.find((item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href));
-        return startsWithMatch?.labelKey ?? "nav.dashboard";
+        return startsWithMatch?.label || (startsWithMatch?.labelKey ? t(startsWithMatch.labelKey) : "Dashboard");
     };
 
-    const NavLink = ({ href, labelKey, icon: Icon }: NavItem) => (
+    const NavLink = ({ href, icon: Icon, label, labelKey }: NavItem) => (
         <Link
             href={href}
             onClick={() => setSidebarOpen(false)}
@@ -214,7 +200,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
-            <span className="truncate">{t(labelKey)}</span>
+            <span className="truncate">{label || (labelKey ? t(labelKey) : href)}</span>
         </Link>
     );
 
@@ -227,7 +213,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                     </div>
                     <div className="min-w-0">
                         <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">MACHINA</div>
-                        <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
+                        <div className="truncate text-sm text-muted-foreground">{orgTypeLabel}</div>
                     </div>
                 </div>
             </div>
@@ -289,9 +275,9 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                 </button>
 
                                 <div>
-                                    <div className="text-lg font-semibold">{t(getCurrentPageKey())}</div>
+                                    <div className="text-lg font-semibold">{getCurrentPageLabel()}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        {orgName} · {getHeaderContextLabel()}
+                                        {orgName} · {orgTypeLabel}
                                     </div>
                                 </div>
                             </div>
@@ -386,3 +372,4 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 }
 
 export default MainLayout;
+
