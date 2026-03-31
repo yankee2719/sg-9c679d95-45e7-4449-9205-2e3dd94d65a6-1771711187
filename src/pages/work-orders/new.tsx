@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ClipboardList, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ClipboardList, Loader2, Save } from "lucide-react";
 
 type MachineRow = {
     id: string;
@@ -22,11 +22,6 @@ type MachineRow = {
     internal_code: string | null;
     plant_id: string | null;
     area: string | null;
-    plant: {
-        id: string;
-        name: string | null;
-        type: string | null;
-    } | { id: string; name: string | null; type: string | null }[] | null;
 };
 
 type UserRow = {
@@ -43,7 +38,6 @@ type PlanRow = {
     title: string;
     description: string | null;
     priority: string | null;
-    estimated_duration_minutes: number | null;
     instructions: string | null;
     safety_notes: string | null;
     default_assignee_id: string | null;
@@ -56,6 +50,23 @@ type ChecklistRow = {
     checklist_type: string | null;
     machine_id: string | null;
     is_template: boolean | null;
+};
+
+type AssignmentRow = {
+    machine_id: string;
+    customer_org_id: string | null;
+    assigned_at: string | null;
+};
+
+type CustomerRow = {
+    id: string;
+    name: string | null;
+};
+
+type PlantRow = {
+    id: string;
+    name: string | null;
+    organization_id: string | null;
 };
 
 type FormState = {
@@ -71,11 +82,6 @@ type FormState = {
     due_date: string;
     assigned_to: string;
 };
-
-function unwrapRelation<T>(value: T | T[] | null): T | null {
-    if (!value) return null;
-    return Array.isArray(value) ? value[0] ?? null : value;
-}
 
 function formatUser(user: UserRow) {
     const display = user.display_name?.trim();
@@ -95,6 +101,9 @@ export default function WorkOrdersNewPage() {
     const [machines, setMachines] = useState < MachineRow[] > ([]);
     const [users, setUsers] = useState < UserRow[] > ([]);
     const [checklists, setChecklists] = useState < ChecklistRow[] > ([]);
+    const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
+    const [customers, setCustomers] = useState < CustomerRow[] > ([]);
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
     const [form, setForm] = useState < FormState > ({
         machine_id: "",
         plant_id: "",
@@ -113,6 +122,54 @@ export default function WorkOrdersNewPage() {
     const userRole = membership?.role ?? "viewer";
     const canCreate = ["owner", "admin", "supervisor"].includes(userRole);
 
+    const customerMap = useMemo(() => new Map(customers.map((customer) => [customer.id, customer.name ?? "Cliente"])), [customers]);
+    const activeAssignmentByMachine = useMemo(() => {
+        const map = new Map < string, AssignmentRow> ();
+        const sorted = [...assignments].sort((a, b) => {
+            const aTime = a.assigned_at ? new Date(a.assigned_at).getTime() : 0;
+            const bTime = b.assigned_at ? new Date(b.assigned_at).getTime() : 0;
+            return bTime - aTime;
+        });
+        for (const row of sorted) {
+            if (!map.has(row.machine_id)) map.set(row.machine_id, row);
+        }
+        return map;
+    }, [assignments]);
+    const customerPrimaryPlantByOrg = useMemo(() => {
+        const map = new Map < string, PlantRow> ();
+        for (const plant of plants) {
+            const orgId = plant.organization_id ?? null;
+            if (!orgId) continue;
+            if (!map.has(orgId)) map.set(orgId, plant);
+        }
+        return map;
+    }, [plants]);
+
+    const resolveContext = (machine: MachineRow | null | undefined) => {
+        if (!machine) {
+            return { customerName: null as string | null, resolvedPlantId: "", resolvedPlantName: null as string | null };
+        }
+        const assignment = activeAssignmentByMachine.get(machine.id);
+        const customerName = assignment?.customer_org_id ? customerMap.get(assignment.customer_org_id) ?? "Cliente assegnato" : null;
+        if (machine.plant_id) {
+            const directPlant = plants.find((row) => row.id === machine.plant_id) ?? null;
+            return {
+                customerName,
+                resolvedPlantId: machine.plant_id,
+                resolvedPlantName: directPlant?.name ?? null,
+            };
+        }
+        if (assignment?.customer_org_id) {
+            const customerPlant = customerPrimaryPlantByOrg.get(assignment.customer_org_id) ?? null;
+            return {
+                customerName,
+                resolvedPlantId: customerPlant?.id ?? "",
+                resolvedPlantName: customerPlant?.name ?? null,
+            };
+        }
+        return { customerName, resolvedPlantId: "", resolvedPlantName: null };
+    };
+
     useEffect(() => {
         if (authLoading) return;
         if (!organization?.id) {
@@ -129,59 +186,77 @@ export default function WorkOrdersNewPage() {
         const load = async () => {
             setLoading(true);
             try {
-                const [{ data: machineRows, error: machineError }, { data: userRows, error: userError }] = await Promise.all([
+                const [machineRes, userRes] = await Promise.all([
                     supabase
                         .from("machines")
-                        .select(`
-                            id,
-                            name,
-                            internal_code,
-                            plant_id,
-                            area,
-                            plant:plants(id, name)
-                        `)
+                        .select("id, name, internal_code, plant_id, area")
                         .eq("organization_id", organization.id)
                         .order("name", { ascending: true }),
-                    supabase
-                        .from("profiles")
-                        .select("id, display_name, first_name, last_name, email")
-                        .order("display_name", { ascending: true }),
+                    supabase.from("profiles").select("id, display_name, first_name, last_name, email").order("display_name", { ascending: true }),
                 ]);
+                if (machineRes.error) throw machineRes.error;
+                if (userRes.error) throw userRes.error;
 
-                if (machineError) throw machineError;
-                if (userError) throw userError;
+                let assignmentRows: AssignmentRow[] = [];
+                let customerRows: CustomerRow[] = [];
+                let plantRows: PlantRow[] = [];
+
+                if (isManufacturer) {
+                    const { data: rawAssignments, error: assignmentError } = await supabase
+                        .from("machine_assignments")
+                        .select("machine_id, customer_org_id, assigned_at")
+                        .eq("manufacturer_org_id", organization.id)
+                        .eq("is_active", true);
+                    if (assignmentError) throw assignmentError;
+                    assignmentRows = (rawAssignments ?? []) as AssignmentRow[];
+
+                    const customerIds = Array.from(new Set(assignmentRows.map((row) => row.customer_org_id).filter(Boolean))) as string[];
+                    if (customerIds.length > 0) {
+                        const [{ data: orgRows, error: orgError }, { data: customerPlantRows, error: plantError }] = await Promise.all([
+                            supabase.from("organizations").select("id, name").in("id", customerIds),
+                            supabase.from("plants").select("id, name, organization_id").in("organization_id", customerIds).order("name", { ascending: true }),
+                        ]);
+                        if (orgError) throw orgError;
+                        if (plantError) throw plantError;
+                        customerRows = (orgRows ?? []) as CustomerRow[];
+                        plantRows = (customerPlantRows ?? []) as PlantRow[];
+                    }
+                }
 
                 if (!active) return;
-                setMachines((machineRows ?? []) as MachineRow[]);
-                setUsers((userRows ?? []) as UserRow[]);
+                const machineRows = (machineRes.data ?? []) as MachineRow[];
+                setMachines(machineRows);
+                setUsers((userRes.data ?? []) as UserRow[]);
+                setAssignments(assignmentRows);
+                setCustomers(customerRows);
+                setPlants(plantRows);
 
                 if (planId) {
                     const { data: planRow, error: planError } = await supabase
                         .from("maintenance_plans")
                         .select(`
-                            id,
-                            machine_id,
-                            title,
-                            description,
-                            priority,
-                            estimated_duration_minutes,
-                            instructions,
-                            safety_notes,
-                            default_assignee_id,
-                            next_due_date
-                        `)
+              id,
+              machine_id,
+              title,
+              description,
+              priority,
+              instructions,
+              safety_notes,
+              default_assignee_id,
+              next_due_date
+            `)
                         .eq("organization_id", organization.id)
                         .eq("id", planId)
                         .single();
-
                     if (planError) throw planError;
                     const plan = planRow as PlanRow;
-                    const machine = (machineRows ?? []).find((row: any) => row.id === plan.machine_id) as MachineRow | undefined;
+                    const machine = machineRows.find((row) => row.id === plan.machine_id) ?? null;
+                    const context = resolveContext(machine);
 
                     setForm((current) => ({
                         ...current,
-                        machine_id: plan.machine_id ?? "",
-                        plant_id: machine?.plant_id ?? "",
+                        machine_id: plan.machine_id ?? machineRows[0]?.id ?? current.machine_id,
+                        plant_id: context.resolvedPlantId || machine?.plant_id || "",
                         maintenance_plan_id: plan.id,
                         title: plan.title?.trim() ? `WO · ${plan.title}` : current.title,
                         description: [plan.description, plan.instructions, plan.safety_notes].filter(Boolean).join("\n\n"),
@@ -190,14 +265,24 @@ export default function WorkOrdersNewPage() {
                         due_date: plan.next_due_date || current.due_date,
                         assigned_to: plan.default_assignee_id || current.assigned_to,
                     }));
+                } else {
+                    const firstMachine = machineRows[0] ?? null;
+                    const context = resolveContext(firstMachine);
+                    setForm((current) => ({
+                        ...current,
+                        machine_id: current.machine_id || firstMachine?.id || "",
+                        plant_id: current.plant_id || context.resolvedPlantId || firstMachine?.plant_id || "",
+                    }));
                 }
             } catch (error: any) {
                 console.error("work order create context error:", error);
-                toast({
-                    title: "Errore caricamento contesto",
-                    description: error?.message || "Impossibile caricare macchine e utenti.",
-                    variant: "destructive",
-                });
+                if (active) {
+                    toast({
+                        title: "Errore caricamento contesto",
+                        description: error?.message || "Impossibile caricare macchine e utenti.",
+                        variant: "destructive",
+                    });
+                }
             } finally {
                 if (active) setLoading(false);
             }
@@ -207,16 +292,14 @@ export default function WorkOrdersNewPage() {
         return () => {
             active = false;
         };
-    }, [authLoading, canCreate, organization?.id, planId, toast]);
+    }, [authLoading, canCreate, organization?.id, planId, isManufacturer, toast]);
 
     useEffect(() => {
         if (!organization?.id || !form.machine_id) {
             setChecklists([]);
             return;
         }
-
         let active = true;
-
         const loadChecklists = async () => {
             try {
                 const { data, error } = await supabase
@@ -226,7 +309,6 @@ export default function WorkOrdersNewPage() {
                     .eq("is_active", true)
                     .or(`machine_id.eq.${form.machine_id},machine_id.is.null`)
                     .order("title", { ascending: true });
-
                 if (error) throw error;
                 if (active) setChecklists((data ?? []) as ChecklistRow[]);
             } catch (error) {
@@ -234,33 +316,31 @@ export default function WorkOrdersNewPage() {
                 if (active) setChecklists([]);
             }
         };
-
         void loadChecklists();
         return () => {
             active = false;
         };
     }, [form.machine_id, organization?.id]);
 
-    const selectedMachine = useMemo(
-        () => machines.find((machine) => machine.id === form.machine_id) ?? null,
-        [form.machine_id, machines]
-    );
+    const selectedMachine = useMemo(() => machines.find((machine) => machine.id === form.machine_id) ?? null, [form.machine_id, machines]);
+    const selectedContext = useMemo(() => resolveContext(selectedMachine), [selectedMachine, activeAssignmentByMachine, customerMap, customerPrimaryPlantByOrg, plants]);
 
     const machineOptions = useMemo(() => {
         return machines.map((machine) => {
-            const plant = unwrapRelation(machine.plant);
+            const context = resolveContext(machine);
             const machineName = machine.internal_code?.trim() ? `${machine.internal_code} · ${machine.name ?? "Macchina"}` : machine.name ?? "Macchina";
-            const context = plant?.name ? `${plant.name} → ${machineName}` : machineName;
-            return { value: machine.id, label: context };
+            const contextName = isManufacturer ? context.customerName || "Non assegnata" : context.resolvedPlantName || "Senza stabilimento";
+            return { value: machine.id, label: `${contextName} → ${machineName}${machine.area ? ` · ${machine.area}` : ""}` };
         });
-    }, [machines]);
+    }, [machines, isManufacturer, activeAssignmentByMachine, customerMap, customerPrimaryPlantByOrg, plants]);
 
     const handleChange = <K extends keyof FormState>(key: K, value: FormState[K]) => {
         setForm((current) => {
             const next = { ...current, [key]: value };
             if (key === "machine_id") {
-                const machine = machines.find((row) => row.id === value);
-                next.plant_id = machine?.plant_id ?? "";
+                const machine = machines.find((row) => row.id === value) ?? null;
+                const context = resolveContext(machine);
+                next.plant_id = context.resolvedPlantId || machine?.plant_id || "";
             }
             return next;
         });
@@ -272,8 +352,8 @@ export default function WorkOrdersNewPage() {
             toast({ title: "Titolo obbligatorio", description: "Inserisci un titolo per l'ordine di lavoro.", variant: "destructive" });
             return;
         }
-        if (!form.machine_id || !form.plant_id) {
-            toast({ title: "Macchina obbligatoria", description: "Seleziona una macchina valida con relativo contesto impianto/cliente.", variant: "destructive" });
+        if (!form.machine_id) {
+            toast({ title: "Macchina obbligatoria", description: "Seleziona una macchina valida prima di creare l'ordine.", variant: "destructive" });
             return;
         }
 
@@ -282,7 +362,7 @@ export default function WorkOrdersNewPage() {
             const payload = {
                 organization_id: organization.id,
                 machine_id: form.machine_id,
-                plant_id: form.plant_id,
+                plant_id: form.plant_id || null,
                 maintenance_plan_id: form.maintenance_plan_id || null,
                 title: form.title.trim(),
                 description: form.description.trim() || null,
@@ -295,18 +375,10 @@ export default function WorkOrdersNewPage() {
                 created_by: user.id,
             };
 
-            const { data, error } = await supabase
-                .from("work_orders")
-                .insert(payload)
-                .select("id")
-                .single();
-
+            const { data, error } = await supabase.from("work_orders").insert(payload).select("id").single();
             if (error) throw error;
 
-            toast({
-                title: "Ordine creato",
-                description: "L'ordine di lavoro è stato registrato correttamente.",
-            });
+            toast({ title: "Ordine creato", description: "L'ordine di lavoro è stato registrato correttamente." });
             void router.push(`/work-orders/${data.id}`);
         } catch (error: any) {
             console.error("work order create error:", error);
@@ -333,9 +405,7 @@ export default function WorkOrdersNewPage() {
             <MainLayout userRole={userRole}>
                 <div className="mx-auto max-w-3xl p-8">
                     <Card className="rounded-2xl">
-                        <CardContent className="p-6 text-sm text-muted-foreground">
-                            Solo admin e supervisor possono creare ordini di lavoro.
-                        </CardContent>
+                        <CardContent className="p-6 text-sm text-muted-foreground">Solo admin e supervisor possono creare ordini di lavoro.</CardContent>
                     </Card>
                 </div>
             </MainLayout>
@@ -346,75 +416,67 @@ export default function WorkOrdersNewPage() {
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
                 <SEO title="Nuovo ordine di lavoro - MACHINA" />
-
-                <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-                    <div className="flex items-center justify-between gap-4">
+                <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button asChild variant="outline" className="rounded-xl">
+                            <Link href="/work-orders"><ArrowLeft className="mr-2 h-4 w-4" />Torna agli ordini</Link>
+                        </Button>
                         <div>
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">Nuovo ordine di lavoro</h1>
-                            <p className="mt-1 text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 {isManufacturer
-                                    ? "Crea un ordine da inviare al cliente per una macchina venduta."
-                                    : "Crea un ordine ad-hoc oppure partendo da un piano di manutenzione."}
+                                    ? "Crea un ordine per una macchina venduta e assegnata a un cliente."
+                                    : "Crea un ordine operativo per le tue macchine e assegnalo a un tecnico."}
                             </p>
                         </div>
-                        <Link href="/work-orders">
-                            <Button variant="outline">
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Torna alla lista
-                            </Button>
-                        </Link>
                     </div>
 
-                    <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-                        <Card className="rounded-2xl">
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_420px]">
+                        <Card className="rounded-3xl border-border/70 shadow-sm">
                             <CardHeader>
-                                <CardTitle>Dati ordine</CardTitle>
-                                <CardDescription>
-                                    Compila i dati essenziali dell'ordine. Le checklist restano agganciate alla macchina secondo il modello dati attuale.
-                                </CardDescription>
+                                <CardTitle className="text-xl">Dati ordine</CardTitle>
+                                <CardDescription>Compila i campi principali dell'intervento.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-5">
+                            <CardContent className="space-y-6">
+                                <div className="space-y-2">
+                                    <Label>{machineContextLabel}</Label>
+                                    <Select value={form.machine_id} onValueChange={(value) => handleChange("machine_id", value)}>
+                                        <SelectTrigger className="h-12 rounded-2xl"><SelectValue placeholder="Seleziona macchina" /></SelectTrigger>
+                                        <SelectContent>
+                                            {machineOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 <div className="grid gap-5 md:grid-cols-2">
                                     <div className="space-y-2 md:col-span-2">
-                                        <Label>{machineContextLabel}</Label>
-                                        <Select value={form.machine_id} onValueChange={(value) => handleChange("machine_id", value)}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={`Seleziona ${plantLabel.toLowerCase()} e macchina`} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {machineOptions.map((option) => (
-                                                    <SelectItem key={option.value} value={option.value}>
-                                                        {option.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Label>Titolo ordine</Label>
+                                        <Input value={form.title} onChange={(e) => handleChange("title", e.target.value)} placeholder="Es. Intervento mensile pressa HMS140" className="h-12 rounded-2xl" />
                                     </div>
+
                                     <div className="space-y-2 md:col-span-2">
-                                        <Label htmlFor="wo-title">Titolo</Label>
-                                        <Input id="wo-title" value={form.title} onChange={(event) => handleChange("title", event.target.value)} placeholder="Es. Manutenzione mensile pressa 200T" />
+                                        <Label>Descrizione</Label>
+                                        <Textarea value={form.description} onChange={(e) => handleChange("description", e.target.value)} placeholder="Dettagli operativi, criticità note, richieste del cliente..." className="min-h-[120px] rounded-2xl" />
                                     </div>
-                                    <div className="space-y-2 md:col-span-2">
-                                        <Label htmlFor="wo-description">Descrizione</Label>
-                                        <Textarea id="wo-description" rows={5} value={form.description} onChange={(event) => handleChange("description", event.target.value)} placeholder="Obiettivi, attività previste, istruzioni operative..." />
-                                    </div>
+
                                     <div className="space-y-2">
                                         <Label>Tipo lavoro</Label>
                                         <Select value={form.work_type} onValueChange={(value) => handleChange("work_type", value)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className="h-12 rounded-2xl"><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="preventive">Preventiva</SelectItem>
-                                                <SelectItem value="corrective">Correttiva</SelectItem>
-                                                <SelectItem value="predictive">Predittiva</SelectItem>
+                                                <SelectItem value="preventive">Preventivo</SelectItem>
+                                                <SelectItem value="corrective">Correttivo</SelectItem>
+                                                <SelectItem value="predictive">Predittivo</SelectItem>
                                                 <SelectItem value="inspection">Ispezione</SelectItem>
                                                 <SelectItem value="emergency">Emergenza</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
+
                                     <div className="space-y-2">
                                         <Label>Priorità</Label>
                                         <Select value={form.priority} onValueChange={(value) => handleChange("priority", value)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className="h-12 rounded-2xl"><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="low">Bassa</SelectItem>
                                                 <SelectItem value="medium">Media</SelectItem>
@@ -423,105 +485,84 @@ export default function WorkOrdersNewPage() {
                                             </SelectContent>
                                         </Select>
                                     </div>
+
                                     <div className="space-y-2">
                                         <Label>Data programmata</Label>
-                                        <Input type="date" value={form.scheduled_date} onChange={(event) => handleChange("scheduled_date", event.target.value)} />
+                                        <Input type="date" value={form.scheduled_date} onChange={(e) => handleChange("scheduled_date", e.target.value)} className="h-12 rounded-2xl" />
                                     </div>
+
                                     <div className="space-y-2">
                                         <Label>Scadenza</Label>
-                                        <Input type="date" value={form.due_date} onChange={(event) => handleChange("due_date", event.target.value)} />
+                                        <Input type="date" value={form.due_date} onChange={(e) => handleChange("due_date", e.target.value)} className="h-12 rounded-2xl" />
                                     </div>
-                                    <div className="space-y-2">
+
+                                    <div className="space-y-2 md:col-span-2">
                                         <Label>Assegnatario</Label>
-                                        <Select value={form.assigned_to || "unassigned"} onValueChange={(value) => handleChange("assigned_to", value === "unassigned" ? "" : value)}>
-                                            <SelectTrigger><SelectValue placeholder="Non assegnato" /></SelectTrigger>
+                                        <Select value={form.assigned_to || "__none__"} onValueChange={(value) => handleChange("assigned_to", value === "__none__" ? "" : value)}>
+                                            <SelectTrigger className="h-12 rounded-2xl"><SelectValue placeholder="Nessun assegnatario" /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="unassigned">Non assegnato</SelectItem>
-                                                {users.map((userRow) => (
-                                                    <SelectItem key={userRow.id} value={userRow.id}>{formatUser(userRow)}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Stato iniziale</Label>
-                                        <Select value={form.status} onValueChange={(value) => handleChange("status", value)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="draft">Bozza</SelectItem>
-                                                <SelectItem value="scheduled">Pianificato</SelectItem>
+                                                <SelectItem value="__none__">Nessun assegnatario</SelectItem>
+                                                {users.map((entry) => <SelectItem key={entry.id} value={entry.id}>{formatUser(entry)}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
-                                    <Link href="/work-orders">
-                                        <Button variant="outline">Annulla</Button>
-                                    </Link>
-                                    <Button onClick={handleSave} disabled={saving}>
-                                        <Save className="mr-2 h-4 w-4" />
-                                        {saving ? "Salvataggio..." : "Crea ordine"}
+                                <div className="flex flex-wrap items-center gap-3 pt-2">
+                                    <Button type="button" className="rounded-2xl bg-orange-500 px-6 text-white hover:bg-orange-600" disabled={saving} onClick={handleSave}>
+                                        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Crea ordine di lavoro
                                     </Button>
+                                    <Button asChild type="button" variant="outline" className="rounded-2xl"><Link href="/work-orders">Annulla</Link></Button>
                                 </div>
                             </CardContent>
                         </Card>
 
                         <div className="space-y-6">
-                            <Card className="rounded-2xl">
+                            <Card className="rounded-3xl border-border/70 shadow-sm">
                                 <CardHeader>
-                                    <CardTitle>Contesto macchina</CardTitle>
-                                    <CardDescription>
-                                        Verifica il contesto prima di confermare l'ordine.
-                                    </CardDescription>
+                                    <CardTitle className="text-xl">Contesto macchina</CardTitle>
+                                    <CardDescription>Riepilogo della macchina e del contesto operativo corrente.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-3 text-sm">
-                                    <SummaryRow label={plantLabel} value={unwrapRelation(selectedMachine?.plant)?.name ?? "—"} />
-                                    <SummaryRow label="Macchina" value={selectedMachine?.name ?? "—"} />
-                                    <SummaryRow label="Codice" value={selectedMachine?.internal_code ?? "—"} />
-                                    {!isManufacturer && <SummaryRow label="Area / linea" value={selectedMachine?.area ?? "—"} />}
-                                    <SummaryRow label="Piano origine" value={form.maintenance_plan_id || "Ad-hoc"} />
-                                </CardContent>
-                            </Card>
-
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle>Checklist disponibili</CardTitle>
-                                    <CardDescription>
-                                        Il modello dati attuale non usa una tabella ponte ordine↔checklist: nel dettaglio ordine verranno mostrate le checklist attive compatibili con la macchina selezionata.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {form.machine_id ? (
-                                        checklists.length > 0 ? (
-                                            checklists.map((checklist) => (
-                                                <div key={checklist.id} className="rounded-2xl border border-border px-4 py-3 text-sm">
-                                                    <div className="font-medium text-foreground">{checklist.title}</div>
-                                                    <div className="mt-1 text-xs text-muted-foreground">
-                                                        Tipo: {checklist.checklist_type || "inspection"}
-                                                        {checklist.machine_id ? " · specifica macchina" : " · template generico"}
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                                                Nessuna checklist attiva trovata per questa macchina.
-                                            </div>
-                                        )
-                                    ) : (
-                                        <div className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                                            Seleziona prima una macchina per vedere le checklist collegate.
+                                <CardContent className="space-y-5 text-sm">
+                                    <div>
+                                        <div className="text-muted-foreground">{plantLabel}</div>
+                                        <div className="mt-1 text-lg font-semibold text-foreground">{isManufacturer ? (selectedContext.customerName || "—") : (selectedContext.resolvedPlantName || "—")}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-muted-foreground">Macchina</div>
+                                        <div className="mt-1 text-lg font-semibold text-foreground">{selectedMachine?.name || selectedMachine?.internal_code || "—"}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-muted-foreground">Area / linea</div>
+                                        <div className="mt-1 text-lg font-semibold text-foreground">{selectedMachine?.area?.trim() || "—"}</div>
+                                    </div>
+                                    {isManufacturer && selectedContext.customerName && !selectedContext.resolvedPlantId && (
+                                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
+                                            <div className="mb-2 flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" /> Nessuno stabilimento cliente associato</div>
+                                            <p>
+                                                La macchina è assegnata al cliente, ma non risulta nessuno stabilimento del cliente disponibile. L'ordine può comunque essere creato; il contesto impianto verrà completato quando il cliente avrà almeno uno stabilimento censito.
+                                            </p>
                                         </div>
                                     )}
                                 </CardContent>
                             </Card>
 
-                            <Card className="rounded-2xl">
-                                <CardContent className="flex items-start gap-3 p-5 text-sm text-muted-foreground">
-                                    <ClipboardList className="mt-0.5 h-4 w-4 shrink-0" />
-                                    <div>
-                                        Se arrivi da un piano di manutenzione, titolo, priorità, assegnatario e prima scadenza vengono precompilati. Puoi comunque modificare tutto prima del salvataggio.
-                                    </div>
+                            <Card className="rounded-3xl border-border/70 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-xl"><ClipboardList className="h-5 w-5" /> Checklist compatibili</CardTitle>
+                                    <CardDescription>Template attivi per la macchina selezionata o generici.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
+                                    {checklists.length === 0 ? (
+                                        <div className="rounded-2xl border border-dashed border-border/70 p-4 text-muted-foreground">Nessuna checklist attiva compatibile con questa macchina.</div>
+                                    ) : (
+                                        checklists.map((checklist) => (
+                                            <div key={checklist.id} className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
+                                                <div className="font-semibold text-foreground">{checklist.title}</div>
+                                                <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{checklist.checklist_type || "inspection"}{checklist.machine_id ? " · macchina specifica" : " · template generico"}</div>
+                                            </div>
+                                        ))
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
@@ -529,14 +570,5 @@ export default function WorkOrdersNewPage() {
                 </div>
             </MainLayout>
         </OrgContextGuard>
-    );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="flex items-start justify-between gap-4 border-b border-border pb-3 last:border-b-0 last:pb-0">
-            <div className="text-muted-foreground">{label}</div>
-            <div className="max-w-[60%] text-right font-medium text-foreground">{value || "—"}</div>
-        </div>
     );
 }
