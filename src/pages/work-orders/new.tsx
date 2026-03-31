@@ -539,9 +539,17 @@ export default function WorkOrdersNewPage() {
                                     {isManufacturer && selectedContext.customerName && !selectedContext.resolvedPlantId && (
                                         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
                                             <div className="mb-2 flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" /> Nessuno stabilimento cliente associato</div>
-                                            <p>
-                                                La macchina è assegnata al cliente, ma non risulta nessuno stabilimento del cliente disponibile. L'ordine può comunque essere creato; il contesto impianto verrà completato quando il cliente avrà almeno uno stabilimento censito.
-                                            </p>
+                                            <div className="space-y-2">
+                                                <p>
+                                                    La macchina è assegnata al cliente, ma nel profilo del cliente non risulta ancora nessuno stabilimento censito.
+                                                </p>
+                                                <p>
+                                                    Dove inserirlo: apri l'anagrafica del cliente e crea almeno uno stabilimento associato a quell'organizzazione cliente.
+                                                </p>
+                                                <p>
+                                                    Nota: il campo <strong>Area / linea</strong> non si imposta qui, ma nella scheda macchina (campo <strong>area</strong>).
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
                                 </CardContent>
