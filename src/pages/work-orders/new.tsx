@@ -138,7 +138,7 @@ export default function WorkOrdersNewPage() {
                             internal_code,
                             plant_id,
                             area,
-                            plant:plants(id, name, type)
+                            plant:plants(id, name)
                         `)
                         .eq("organization_id", organization.id)
                         .order("name", { ascending: true }),
@@ -540,4 +540,3 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
         </div>
     );
 }
-
