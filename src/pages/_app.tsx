@@ -1,5 +1,6 @@
 import type { AppProps } from "next/app";
 import Head from "next/head";
+import Script from "next/script";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import "@/styles/globals.css";
@@ -10,6 +11,21 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { PWAProvider } from "@/contexts/PWAProvider";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { AuthProvider } from "@/hooks/useAuth";
+
+const themeBootstrapScript = `
+(function() {
+  try {
+    var stored = window.localStorage.getItem('theme');
+    var theme = stored === 'dark' || stored === 'light'
+      ? stored
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var root = document.documentElement;
+    if (theme === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
+    root.style.colorScheme = theme;
+    root.setAttribute('data-theme', theme);
+  } catch (e) {}
+})();`;
 
 function AppShell({ Component, pageProps }: AppProps) {
     const router = useRouter();
@@ -44,6 +60,9 @@ export default function App(props: AppProps) {
             <Head>
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
             </Head>
+            <Script id="machina-theme-bootstrap" strategy="beforeInteractive">
+                {themeBootstrapScript}
+            </Script>
 
             <ThemeProvider>
                 <LanguageProvider>
