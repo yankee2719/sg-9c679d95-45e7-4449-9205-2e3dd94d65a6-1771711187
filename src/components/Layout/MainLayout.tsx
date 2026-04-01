@@ -5,10 +5,9 @@ import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { useMfaGuard } from "@/hooks/useMfaGuard";
 import { useAuth } from "@/hooks/useAuth";
-import { useOrgType } from "@/hooks/useOrgType";
+import { supabase } from "@/integrations/supabase/client";
 import { notificationService } from "@/services/notificationService";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import {
     LayoutDashboard,
     Wrench,
@@ -33,19 +32,50 @@ import {
 } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
-
-type NavItem = {
-    href: string;
-    icon: React.ComponentType<{ className?: string }>;
-    roles?: string[];
-    orgTypes?: Array<"manufacturer" | "customer" | "enterprise">;
-    labelKey?: string;
-    label?: string;
-};
+type OrgType = "manufacturer" | "customer" | null;
 
 interface MainLayoutProps {
     children: React.ReactNode;
     userRole?: UserRole;
+}
+
+interface NavItem {
+    href: string;
+    labelKey: string;
+    icon: React.ComponentType<{ className?: string }>;
+    roles?: string[];
+    orgTypes?: Array<"manufacturer" | "customer">;
+}
+
+function cn(...classes: Array<string | false | null | undefined>) {
+    return classes.filter(Boolean).join(" ");
+}
+
+function LogoSlot({ orgName, logoUrl, compact = false }: { orgName: string; logoUrl: string | null; compact?: boolean }) {
+    if (!logoUrl) {
+        return (
+            <div className={cn(
+                "flex items-center justify-center rounded-2xl bg-orange-500 shadow-lg",
+                compact ? "h-10 w-10" : "h-11 w-11"
+            )}>
+                <Wrench className={cn("text-white", compact ? "h-4 w-4" : "h-5 w-5")} />
+            </div>
+        );
+    }
+
+    return (
+        <div className={cn(
+            "overflow-hidden rounded-2xl border border-border bg-white shadow-lg",
+            compact ? "h-10 w-10" : "h-11 w-11"
+        )}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={logoUrl}
+                alt={`Logo ${orgName}`}
+                className="h-full w-full object-contain"
+            />
+        </div>
+    );
 }
 
 export function MainLayout({ children, userRole = "technician" }: MainLayoutProps) {
@@ -53,10 +83,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const { t, language, setLanguage } = useLanguage();
     const { loading: mfaLoading, isAal2, mustEnforceMfa } = useMfaGuard();
     const { profile, organization, membership, user, signOut } = useAuth();
-    const { orgType, orgTypeLabel, plantsLabel, checklistsLabel } = useOrgType();
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [notificationCount, setNotificationCount] = useState(0);
+    const [orgLogoUrl, setOrgLogoUrl] = useState < string | null > (null);
 
     const profileName =
         profile?.display_name?.trim() ||
@@ -65,6 +95,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         "Utente";
 
     const profileRole = (membership?.role as string | null) ?? userRole;
+    const orgType = ((organization?.type as OrgType | undefined) ?? null) as OrgType;
     const orgName = organization?.name ?? "Organizzazione";
 
     useEffect(() => {
@@ -127,6 +158,48 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         };
     }, [user?.id]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadOrganizationLogo = async () => {
+            if (!organization?.id) {
+                setOrgLogoUrl(null);
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from("organizations")
+                .select("logo_url")
+                .eq("id", organization.id)
+                .maybeSingle();
+
+            if (cancelled) return;
+
+            if (error) {
+                console.error("MainLayout organization logo load error:", error);
+                setOrgLogoUrl(null);
+                return;
+            }
+
+            setOrgLogoUrl(data?.logo_url ?? null);
+        };
+
+        void loadOrganizationLogo();
+
+        const handleLogoUpdate = (event: Event) => {
+            const customEvent = event as CustomEvent<{ organizationId?: string; logoUrl?: string | null }>;
+            if (customEvent.detail?.organizationId !== organization?.id) return;
+            setOrgLogoUrl(customEvent.detail.logoUrl ?? null);
+        };
+
+        window.addEventListener("machina:organization-logo-updated", handleLogoUpdate as EventListener);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener("machina:organization-logo-updated", handleLogoUpdate as EventListener);
+        };
+    }, [organization?.id]);
+
     const initials = useMemo(() => {
         const parts = (profileName || "Utente")
             .split(" ")
@@ -139,21 +212,21 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     }, [profileName]);
 
     const navItems: NavItem[] = [
-        { href: "/dashboard", labelKey: "nav.dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { href: "/equipment", labelKey: "nav.equipment", label: "Macchine", icon: Factory },
-        { href: "/maintenance", labelKey: "nav.maintenance", label: "Manutenzione", icon: Wrench },
-        { href: "/work-orders", labelKey: "nav.workOrders", label: "Ordini di lavoro", icon: ClipboardList },
-        { href: "/checklists", labelKey: "nav.checklists", label: checklistsLabel, icon: CheckSquare },
-        { href: "/scanner", labelKey: "nav.scanner", label: "Scanner QR", icon: QrCode },
-        { href: "/analytics", labelKey: "nav.analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
-        { href: "/compliance", labelKey: "nav.compliance", label: "Compliance", icon: ShieldCheck },
-        { href: "/documents", labelKey: "nav.documents", label: "Documenti", icon: FileText },
-        { href: "/plants", labelKey: "nav.plants", label: plantsLabel, icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer", "enterprise"] },
-        { href: "/users", labelKey: "nav.users", label: "Utenti", icon: Users, roles: ["admin", "supervisor"] },
-        { href: "/customers", labelKey: "nav.customers", label: "Clienti", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/assignments", labelKey: "nav.assignments", label: "Assegnazioni macchine", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
-        { href: "/settings/organization", labelKey: "nav.activeOrganization", label: "Organizzazione attiva", icon: Package },
-        { href: "/settings", labelKey: "nav.settings", label: "Impostazioni", icon: Settings },
+        { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+        { href: "/equipment", labelKey: "nav.equipment", icon: Factory },
+        { href: "/maintenance", labelKey: "nav.maintenance", icon: Wrench },
+        { href: "/work-orders", labelKey: "nav.workOrders", icon: ClipboardList },
+        { href: "/checklists/templates", labelKey: "nav.checklists", icon: CheckSquare },
+        { href: "/scanner", labelKey: "nav.scanner", icon: QrCode },
+        { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
+        { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
+        { href: "/documents", labelKey: "nav.documents", icon: FileText },
+        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
+        { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
+        { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
+        { href: "/settings/organization", labelKey: "nav.activeOrganization", icon: Package },
+        { href: "/settings", labelKey: "nav.settings", icon: Settings },
     ];
 
     const filteredNavItems = navItems.filter((item) => {
@@ -180,15 +253,27 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const isActive = (href: string) => router.pathname === href || (href !== "/dashboard" && router.pathname.startsWith(href));
 
-    const getCurrentPageLabel = () => {
-        const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
-        if (exactMatch) return exactMatch.label || (exactMatch.labelKey ? t(exactMatch.labelKey) : "Dashboard");
-
-        const startsWithMatch = filteredNavItems.find((item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href));
-        return startsWithMatch?.label || (startsWithMatch?.labelKey ? t(startsWithMatch.labelKey) : "Dashboard");
+    const getOrgTypeLabel = () => {
+        if (orgType === "manufacturer") return t("org.manufacturer");
+        if (orgType === "customer") return t("org.customer");
+        return t("org.platform");
     };
 
-    const NavLink = ({ href, icon: Icon, label, labelKey }: NavItem) => (
+    const getHeaderContextLabel = () => {
+        if (orgType === "manufacturer") return t("org.manufacturer");
+        if (orgType === "customer") return t("org.customer");
+        return t("org.context");
+    };
+
+    const getCurrentPageKey = () => {
+        const exactMatch = filteredNavItems.find((item) => item.href === router.pathname);
+        if (exactMatch) return exactMatch.labelKey;
+
+        const startsWithMatch = filteredNavItems.find((item) => item.href !== "/dashboard" && router.pathname.startsWith(item.href));
+        return startsWithMatch?.labelKey ?? "nav.dashboard";
+    };
+
+    const NavLink = ({ href, labelKey, icon: Icon }: NavItem) => (
         <Link
             href={href}
             onClick={() => setSidebarOpen(false)}
@@ -200,7 +285,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
             )}
         >
             <Icon className="h-5 w-5 shrink-0" />
-            <span className="truncate">{label || (labelKey ? t(labelKey) : href)}</span>
+            <span className="truncate">{t(labelKey)}</span>
         </Link>
     );
 
@@ -208,12 +293,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         <div className="flex h-full flex-col border-r border-border bg-card text-card-foreground">
             <div className="border-b border-border px-4 py-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 shadow-lg">
-                        <Wrench className="h-5 w-5 text-white" />
-                    </div>
+                    <LogoSlot orgName={orgName} logoUrl={orgLogoUrl} />
                     <div className="min-w-0">
                         <div className="text-[1.45rem] leading-none font-bold tracking-tight text-foreground">MACHINA</div>
-                        <div className="truncate text-sm text-muted-foreground">{orgTypeLabel}</div>
+                        <div className="truncate text-sm text-muted-foreground">{getOrgTypeLabel()}</div>
                     </div>
                 </div>
             </div>
@@ -269,15 +352,19 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                 <div className="flex min-w-0 flex-1 flex-col">
                     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
                         <div className="flex items-center justify-between gap-4 px-5 py-4 lg:px-8">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
                                 <button className="rounded-xl p-2 text-foreground transition hover:bg-muted lg:hidden" onClick={() => setSidebarOpen(true)} type="button">
                                     <Menu className="h-5 w-5" />
                                 </button>
 
-                                <div>
-                                    <div className="text-lg font-semibold">{getCurrentPageLabel()}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {orgName} · {orgTypeLabel}
+                                <div className="hidden sm:block">
+                                    <LogoSlot orgName={orgName} logoUrl={orgLogoUrl} compact />
+                                </div>
+
+                                <div className="min-w-0">
+                                    <div className="truncate text-lg font-semibold">{t(getCurrentPageKey())}</div>
+                                    <div className="truncate text-xs text-muted-foreground">
+                                        {orgName} · {getHeaderContextLabel()}
                                     </div>
                                 </div>
                             </div>
@@ -311,18 +398,10 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
                                         aria-label={t("common.language")}
                                         className="rounded-md bg-card text-sm font-medium text-foreground outline-none"
                                     >
-                                        <option value="it" className="bg-card text-foreground">
-                                            IT
-                                        </option>
-                                        <option value="en" className="bg-card text-foreground">
-                                            EN
-                                        </option>
-                                        <option value="fr" className="bg-card text-foreground">
-                                            FR
-                                        </option>
-                                        <option value="es" className="bg-card text-foreground">
-                                            ES
-                                        </option>
+                                        <option value="it" className="bg-card text-foreground">IT</option>
+                                        <option value="en" className="bg-card text-foreground">EN</option>
+                                        <option value="fr" className="bg-card text-foreground">FR</option>
+                                        <option value="es" className="bg-card text-foreground">ES</option>
                                     </select>
                                 </div>
 
@@ -372,4 +451,3 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 }
 
 export default MainLayout;
-
