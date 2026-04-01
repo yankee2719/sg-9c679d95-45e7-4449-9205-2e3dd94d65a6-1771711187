@@ -288,4 +288,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   return res.status(405).json({ error: "Method not allowed" });
 }
 
-export default withAuth(handler, { allowedRoles: ALL_APP_ROLES });
+export default withAuth(ALL_APP_ROLES, handler);
