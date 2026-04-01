@@ -54,6 +54,13 @@ export interface AssignmentListItem {
         serial_number: string | null;
         model: string | null;
         brand: string | null;
+        plant_id: string | null;
+        area: string | null;
+    } | null;
+    machine_plant: {
+        id: string;
+        name: string | null;
+        organization_id: string | null;
     } | null;
     customer: {
         id: string;
@@ -78,12 +85,19 @@ export interface AssignmentOptions {
         serial_number: string | null;
         model: string | null;
         brand: string | null;
+        plant_id: string | null;
+        area: string | null;
     }>;
     customers: Array<{
         id: string;
         name: string | null;
         city: string | null;
         email: string | null;
+    }>;
+    customer_plants: Array<{
+        id: string;
+        name: string | null;
+        organization_id: string | null;
     }>;
 }
 
