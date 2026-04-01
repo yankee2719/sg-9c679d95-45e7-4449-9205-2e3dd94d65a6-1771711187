@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, ArrowLeft, ClipboardList, Loader2, Save } from "lucide-react";
+import { ArrowLeft, ClipboardList, Info, Loader2, Save } from "lucide-react";
 
 type MachineRow = {
     id: string;
@@ -439,7 +439,7 @@ export default function WorkOrdersNewPage() {
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="space-y-2">
-                                    <Label>{machineContextLabel}</Label>
+                                    <Label>{isManufacturer ? "Cliente → Macchina" : machineContextLabel}</Label>
                                     <Select value={form.machine_id} onValueChange={(value) => handleChange("machine_id", value)}>
                                         <SelectTrigger className="h-12 rounded-2xl"><SelectValue placeholder="Seleziona macchina" /></SelectTrigger>
                                         <SelectContent>
@@ -537,17 +537,14 @@ export default function WorkOrdersNewPage() {
                                         <div className="mt-1 text-lg font-semibold text-foreground">{selectedMachine?.area?.trim() || "—"}</div>
                                     </div>
                                     {isManufacturer && selectedContext.customerName && !selectedContext.resolvedPlantId && (
-                                        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
-                                            <div className="mb-2 flex items-center gap-2 font-semibold"><AlertTriangle className="h-4 w-4" /> Nessuno stabilimento cliente associato</div>
+                                        <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                                            <div className="mb-2 flex items-center gap-2 font-semibold text-foreground"><Info className="h-4 w-4" /> Stabilimento cliente opzionale</div>
                                             <div className="space-y-2">
                                                 <p>
-                                                    La macchina è assegnata al cliente, ma nel profilo del cliente non risulta ancora nessuno stabilimento censito.
+                                                    Per creare l'ordine basta selezionare la macchina specifica cliente. Lo stabilimento cliente non è obbligatorio.
                                                 </p>
                                                 <p>
-                                                    Dove inserirlo: apri l'anagrafica del cliente e crea almeno uno stabilimento associato a quell'organizzazione cliente.
-                                                </p>
-                                                <p>
-                                                    Nota: il campo <strong>Area / linea</strong> non si imposta qui, ma nella scheda macchina (campo <strong>area</strong>).
+                                                    Quando vuoi completare il contesto, vai su <strong>Assegnazioni macchine</strong> e imposta uno stabilimento cliente oppure aggiorna il campo <strong>Area / linea</strong> della macchina.
                                                 </p>
                                             </div>
                                         </div>
