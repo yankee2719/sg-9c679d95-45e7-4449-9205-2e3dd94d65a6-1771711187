@@ -1,52 +1,78 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 type Theme = "light" | "dark";
 
 interface ThemeContextType {
     theme: Theme;
+    setTheme: (theme: Theme) => void;
     toggleTheme: () => void;
 }
 
+const STORAGE_KEY = "theme";
 const ThemeContext = createContext < ThemeContextType | undefined > (undefined);
 
-// ─── FIX HYDRATION: legge localStorage in modo sincrono nell'initializer di useState ───
-// Siccome _app.tsx ha il mounted guard (return null finché !mounted),
-// quando ThemeProvider viene montato siamo GIÀ sul client.
-// Quindi possiamo leggere localStorage direttamente nello useState initializer
-// invece di farlo in un useEffect asincrono che causa mismatch.
-function getInitialTheme(): Theme {
+function resolveInitialTheme(): Theme {
     if (typeof window === "undefined") return "dark";
-    const saved = localStorage.getItem("theme");
+
+    const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved === "dark" || saved === "light") return saved;
+
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initial = prefersDark ? "dark" : "light";
-    localStorage.setItem("theme", initial);
-    return initial;
+    return prefersDark ? "dark" : "light";
+}
+
+function applyTheme(theme: Theme) {
+    if (typeof document === "undefined") return;
+
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    root.style.colorScheme = theme;
+    root.setAttribute("data-theme", theme);
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setTheme] = useState < Theme > (getInitialTheme);
+    const [theme, setThemeState] = useState < Theme > (resolveInitialTheme);
 
-    // Applica la classe dark/light al primo mount e ad ogni cambio
     useEffect(() => {
-        if (theme === "dark") {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
+        applyTheme(theme);
+        if (typeof window !== "undefined") {
+            window.localStorage.setItem(STORAGE_KEY, theme);
         }
     }, [theme]);
 
-    const toggleTheme = () => {
-        const newTheme = theme === "dark" ? "light" : "dark";
-        setTheme(newTheme);
-        localStorage.setItem("theme", newTheme);
-    };
+    useEffect(() => {
+        if (typeof window === "undefined") return;
 
-    return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
-            {children}
-        </ThemeContext.Provider>
-    );
+        const onStorage = (event: StorageEvent) => {
+            if (event.key !== STORAGE_KEY) return;
+            if (event.newValue === "dark" || event.newValue === "light") {
+                setThemeState(event.newValue);
+            }
+        };
+
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const onMediaChange = (event: MediaQueryListEvent) => {
+            const saved = window.localStorage.getItem(STORAGE_KEY);
+            if (saved === "dark" || saved === "light") return;
+            setThemeState(event.matches ? "dark" : "light");
+        };
+
+        window.addEventListener("storage", onStorage);
+        media.addEventListener?.("change", onMediaChange);
+
+        return () => {
+            window.removeEventListener("storage", onStorage);
+            media.removeEventListener?.("change", onMediaChange);
+        };
+    }, []);
+
+    const value = useMemo < ThemeContextType > (() => ({
+        theme,
+        setTheme: setThemeState,
+        toggleTheme: () => setThemeState((current) => (current === "dark" ? "light" : "dark")),
+    }), [theme]);
+
+    return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
