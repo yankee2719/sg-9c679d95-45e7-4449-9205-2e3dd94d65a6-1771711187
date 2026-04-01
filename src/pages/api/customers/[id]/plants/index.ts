@@ -1,97 +1,100 @@
 import type { NextApiResponse } from "next";
-import { getServiceSupabase, type AuthenticatedRequest, withAuth } from "@/lib/apiAuth";
+import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 
-interface PlantPayload {
-    name?: string | null;
-    code?: string | null;
-}
+export default withAuth(
+    ["owner", "admin", "supervisor", "viewer"],
+    async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+        const supabase = getServiceSupabase();
+        const manufacturerOrgId = req.user.organizationId;
+        const customerId = typeof req.query.id === "string" ? req.query.id : "";
 
-async function resolveCustomer(
-    req: AuthenticatedRequest,
-    customerId: string,
-) {
-    const serviceSupabase = getServiceSupabase();
-
-    if (!req.user.organizationId || req.user.organizationType !== "manufacturer") {
-        return { serviceSupabase, customer: null, error: "Questa funzione è disponibile solo nel contesto costruttore." };
-    }
-
-    const { data: customer, error } = await serviceSupabase
-        .from("organizations")
-        .select("id, name, type, manufacturer_org_id")
-        .eq("id", customerId)
-        .eq("type", "customer")
-        .eq("manufacturer_org_id", req.user.organizationId)
-        .maybeSingle();
-
-    if (error) {
-        return { serviceSupabase, customer: null, error: error.message };
-    }
-
-    if (!customer) {
-        return { serviceSupabase, customer: null, error: "Cliente non trovato." };
-    }
-
-    return { serviceSupabase, customer, error: null };
-}
-
-async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
-    const customerId = typeof req.query.id === "string" ? req.query.id : "";
-
-    if (!customerId) {
-        return res.status(400).json({ error: "Missing customer id" });
-    }
-
-    const { serviceSupabase, customer, error: customerError } = await resolveCustomer(req, customerId);
-    if (customerError) {
-        return res.status(customerError === "Cliente non trovato." ? 404 : 403).json({ error: customerError });
-    }
-
-    if (req.method === "GET") {
-        const { data, error } = await serviceSupabase
-            .from("plants")
-            .select("id, name, code, organization_id, created_at")
-            .eq("organization_id", customerId)
-            .order("name", { ascending: true });
-
-        if (error) {
-            return res.status(500).json({ error: error.message });
+        if (!manufacturerOrgId || req.user.organizationType !== "manufacturer") {
+            return res.status(403).json({ error: "Customer plants API available only for manufacturer context" });
         }
 
-        return res.status(200).json(data ?? []);
-    }
-
-    if (req.method === "POST") {
-        if (!["owner", "admin", "supervisor"].includes(req.user.role)) {
-            return res.status(403).json({ error: "Permessi insufficienti." });
+        if (!customerId) {
+            return res.status(400).json({ error: "Missing customer id" });
         }
 
-        const payload = (req.body ?? {}) as PlantPayload;
-        const name = String(payload.name ?? "").trim();
-        const code = String(payload.code ?? "").trim();
+        try {
+            const { data: customer, error: customerError } = await supabase
+                .from("organizations")
+                .select("id, name")
+                .eq("id", customerId)
+                .eq("type", "customer")
+                .eq("manufacturer_org_id", manufacturerOrgId)
+                .maybeSingle();
 
-        if (!name) {
-            return res.status(400).json({ error: "Il nome dello stabilimento è obbligatorio." });
+            if (customerError) {
+                return res.status(500).json({ error: customerError.message });
+            }
+
+            if (!customer) {
+                return res.status(404).json({ error: "Customer not found" });
+            }
+
+            if (req.method === "GET") {
+                const { data, error } = await supabase
+                    .from("plants")
+                    .select("id, name, code, organization_id, created_at")
+                    .eq("organization_id", customerId)
+                    .order("name", { ascending: true });
+
+                if (error) {
+                    return res.status(500).json({ error: error.message });
+                }
+
+                return res.status(200).json(data ?? []);
+            }
+
+            if (req.method === "POST") {
+                if (!["owner", "admin", "supervisor"].includes(req.user.role)) {
+                    return res.status(403).json({ error: "Not allowed" });
+                }
+
+                const name = String(req.body?.name ?? "").trim();
+                const code = typeof req.body?.code === "string" ? req.body.code.trim() || null : null;
+
+                if (!name) {
+                    return res.status(400).json({ error: "Plant name is required" });
+                }
+
+                const { data, error } = await supabase
+                    .from("plants")
+                    .insert({
+                        organization_id: customerId,
+                        name,
+                        code,
+                    })
+                    .select("id, name, code, organization_id, created_at")
+                    .single();
+
+                if (error) {
+                    return res.status(500).json({ error: error.message });
+                }
+
+                await supabase.from("audit_logs").insert({
+                    organization_id: manufacturerOrgId,
+                    actor_user_id: req.user.userId,
+                    entity_type: "plant",
+                    entity_id: data.id,
+                    action: "create",
+                    new_data: {
+                        customer_id: customerId,
+                        customer_name: customer.name,
+                        name: data.name,
+                        code: data.code,
+                    },
+                });
+
+                return res.status(201).json(data);
+            }
+
+            return res.status(405).json({ error: "Method not allowed" });
+        } catch (error: any) {
+            console.error("Customer plants API error:", error);
+            return res.status(500).json({ error: error?.message || "Internal server error" });
         }
-
-        const { data, error } = await serviceSupabase
-            .from("plants")
-            .insert({
-                organization_id: customerId,
-                name,
-                code: code || null,
-            })
-            .select("id, name, code, organization_id, created_at")
-            .single();
-
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
-
-        return res.status(201).json(data);
-    }
-
-    return res.status(405).json({ error: "Method not allowed" });
-}
-
-export default withAuth(["owner", "admin", "supervisor", "viewer"], handler);
+    },
+    { allowPlatformAdmin: true },
+);
