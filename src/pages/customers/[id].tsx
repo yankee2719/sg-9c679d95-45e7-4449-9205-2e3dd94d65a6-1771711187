@@ -17,7 +17,13 @@ import {
     Users,
     Wrench,
 } from "lucide-react";
-import { getCustomer, updateCustomer } from "@/services/customerApi";
+import {
+    createCustomerPlant,
+    getCustomer,
+    listCustomerPlants,
+    updateCustomer,
+    type CustomerPlantRow,
+} from "@/services/customerApi";
 import { apiFetch } from "@/services/apiClient";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
@@ -68,25 +74,18 @@ function formatDate(value: string | null | undefined, lang: string) {
     if (!value) return "—";
     try {
         const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
-        return new Date(value).toLocaleString(locale, {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-        });
+        return new Date(value).toLocaleString(locale, { year: "numeric", month: "2-digit", day: "2-digit" });
     } catch {
         return value;
     }
 }
 
-function KpiCard({
-    icon,
-    title,
-    value,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    value: number | string;
-}) {
+function safeText(t: (key: string) => string, key: string, fallback: string) {
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+}
+
+function KpiCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number | string }) {
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
@@ -111,29 +110,30 @@ export default function CustomerDetailPage() {
     const [saving, setSaving] = useState(false);
     const [usersLoading, setUsersLoading] = useState(false);
     const [creatingUser, setCreatingUser] = useState(false);
+    const [creatingPlant, setCreatingPlant] = useState(false);
+    const [plantsLoading, setPlantsLoading] = useState(false);
     const [updatingMembershipId, setUpdatingMembershipId] = useState < string | null > (null);
     const [customer, setCustomer] = useState < CustomerRow | null > (null);
     const [customerUsers, setCustomerUsers] = useState < CustomerUserRow[] > ([]);
     const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
+    const [customerPlants, setCustomerPlants] = useState < CustomerPlantRow[] > ([]);
 
     const [newUserName, setNewUserName] = useState("");
     const [newUserEmail, setNewUserEmail] = useState("");
     const [newUserPassword, setNewUserPassword] = useState("");
     const [newUserRole, setNewUserRole] = useState < "supervisor" | "technician" > ("technician");
+    const [newPlantName, setNewPlantName] = useState("");
+    const [newPlantCode, setNewPlantCode] = useState("");
 
     const userRole = membership?.role ?? "viewer";
     const orgType = organization?.type ?? null;
     const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
     const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
 
-    const activeUsersCount = useMemo(
-        () => customerUsers.filter((row) => row.is_active).length,
-        [customerUsers]
-    );
-
+    const activeUsersCount = useMemo(() => customerUsers.filter((row) => row.is_active).length, [customerUsers]);
     const techniciansCount = useMemo(
         () => customerUsers.filter((row) => row.is_active && row.role === "technician").length,
-        [customerUsers]
+        [customerUsers],
     );
 
     const loadUsersAndAssignments = async (customerId: string) => {
@@ -150,6 +150,19 @@ export default function CustomerDetailPage() {
         }
     };
 
+    const loadCustomerPlants = async (customerId: string) => {
+        setPlantsLoading(true);
+        try {
+            const data = await listCustomerPlants(customerId);
+            setCustomerPlants(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error("Customer plants load error:", error);
+            setCustomerPlants([]);
+        } finally {
+            setPlantsLoading(false);
+        }
+    };
+
     useEffect(() => {
         let active = true;
 
@@ -160,7 +173,7 @@ export default function CustomerDetailPage() {
                 const customerData = await getCustomer(resolvedId);
                 if (!active) return;
                 setCustomer(customerData);
-                await loadUsersAndAssignments(resolvedId);
+                await Promise.all([loadUsersAndAssignments(resolvedId), loadCustomerPlants(resolvedId)]);
             } catch (error) {
                 console.error(error);
                 void router.replace("/customers");
@@ -182,7 +195,6 @@ export default function CustomerDetailPage() {
 
     const handleSave = async () => {
         if (!resolvedId || !customer) return;
-
         setSaving(true);
         try {
             const updated = await updateCustomer(resolvedId, {
@@ -194,17 +206,13 @@ export default function CustomerDetailPage() {
                 phone: customer.phone,
                 subscription_status: customer.subscription_status,
             });
-
             setCustomer(updated);
-            toast({
-                title: t("customers.updated") || "Cliente aggiornato",
-                description: updated.name || t("customers.fallbackTitle") || "Cliente",
-            });
+            toast({ title: safeText(t, "customers.updated", "Cliente aggiornato"), description: updated.name || "Cliente" });
         } catch (error: any) {
             console.error(error);
             toast({
-                title: t("common.error") || "Errore",
-                description: error?.message || t("customers.errorUpdate") || "Errore aggiornamento cliente",
+                title: safeText(t, "common.error", "Errore"),
+                description: error?.message || safeText(t, "customers.errorUpdate", "Errore aggiornamento cliente"),
                 variant: "destructive",
             });
         } finally {
@@ -215,11 +223,7 @@ export default function CustomerDetailPage() {
     const handleCreateUser = async () => {
         if (!resolvedId) return;
         if (!newUserEmail.trim() || !newUserPassword.trim()) {
-            toast({
-                title: t("common.error") || "Errore",
-                description: "Email e password sono obbligatorie.",
-                variant: "destructive",
-            });
+            toast({ title: safeText(t, "common.error", "Errore"), description: "Email e password sono obbligatorie.", variant: "destructive" });
             return;
         }
 
@@ -234,25 +238,39 @@ export default function CustomerDetailPage() {
                     role: newUserRole,
                 }),
             });
-
             setNewUserName("");
             setNewUserEmail("");
             setNewUserPassword("");
             setNewUserRole("technician");
             await loadUsersAndAssignments(resolvedId);
-            toast({
-                title: "Utente cliente creato",
-                description: "Il nuovo utente è stato aggiunto al tenant cliente.",
-            });
+            toast({ title: "Utente cliente creato", description: "Il nuovo utente è stato aggiunto al tenant cliente." });
         } catch (error: any) {
             console.error(error);
-            toast({
-                title: t("common.error") || "Errore",
-                description: error?.message || "Errore creazione utente cliente",
-                variant: "destructive",
-            });
+            toast({ title: safeText(t, "common.error", "Errore"), description: error?.message || "Errore creazione utente cliente", variant: "destructive" });
         } finally {
             setCreatingUser(false);
+        }
+    };
+
+    const handleCreatePlant = async () => {
+        if (!resolvedId) return;
+        if (!newPlantName.trim()) {
+            toast({ title: "Errore", description: "Il nome dello stabilimento è obbligatorio.", variant: "destructive" });
+            return;
+        }
+
+        setCreatingPlant(true);
+        try {
+            await createCustomerPlant(resolvedId, { name: newPlantName.trim(), code: newPlantCode.trim() || null });
+            setNewPlantName("");
+            setNewPlantCode("");
+            await loadCustomerPlants(resolvedId);
+            toast({ title: "Stabilimento creato", description: "Ora potrai selezionarlo in assegnazione macchina e nel contesto cliente." });
+        } catch (error: any) {
+            console.error(error);
+            toast({ title: "Errore", description: error?.message || "Errore creazione stabilimento cliente", variant: "destructive" });
+        } finally {
+            setCreatingPlant(false);
         }
     };
 
@@ -265,17 +283,10 @@ export default function CustomerDetailPage() {
                 body: JSON.stringify({ is_active: !row.is_active }),
             });
             await loadUsersAndAssignments(resolvedId);
-            toast({
-                title: row.is_active ? "Utente disattivato" : "Utente riattivato",
-                description: row.email || row.display_name || "Utente cliente",
-            });
+            toast({ title: row.is_active ? "Utente disattivato" : "Utente riattivato", description: row.email || row.display_name || "Utente cliente" });
         } catch (error: any) {
             console.error(error);
-            toast({
-                title: t("common.error") || "Errore",
-                description: error?.message || "Errore aggiornamento utente cliente",
-                variant: "destructive",
-            });
+            toast({ title: safeText(t, "common.error", "Errore"), description: error?.message || "Errore aggiornamento utente cliente", variant: "destructive" });
         } finally {
             setUpdatingMembershipId(null);
         }
@@ -285,22 +296,12 @@ export default function CustomerDetailPage() {
         if (!resolvedId || row.role === role) return;
         setUpdatingMembershipId(row.membership_id);
         try {
-            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ role }),
-            });
+            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, { method: "PATCH", body: JSON.stringify({ role }) });
             await loadUsersAndAssignments(resolvedId);
-            toast({
-                title: "Ruolo aggiornato",
-                description: row.email || row.display_name || "Utente cliente",
-            });
+            toast({ title: "Ruolo aggiornato", description: row.email || row.display_name || "Utente cliente" });
         } catch (error: any) {
             console.error(error);
-            toast({
-                title: t("common.error") || "Errore",
-                description: error?.message || "Errore aggiornamento ruolo",
-                variant: "destructive",
-            });
+            toast({ title: safeText(t, "common.error", "Errore"), description: error?.message || "Errore aggiornamento ruolo", variant: "destructive" });
         } finally {
             setUpdatingMembershipId(null);
         }
@@ -313,21 +314,12 @@ export default function CustomerDetailPage() {
 
         setUpdatingMembershipId(row.membership_id);
         try {
-            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, {
-                method: "DELETE",
-            });
+            await apiFetch(`/api/customers/${resolvedId}/users/${row.membership_id}`, { method: "DELETE" });
             await loadUsersAndAssignments(resolvedId);
-            toast({
-                title: "Utente rimosso",
-                description: row.email || row.display_name || "Utente cliente",
-            });
+            toast({ title: "Utente rimosso", description: row.email || row.display_name || "Utente cliente" });
         } catch (error: any) {
             console.error(error);
-            toast({
-                title: t("common.error") || "Errore",
-                description: error?.message || "Errore rimozione utente cliente",
-                variant: "destructive",
-            });
+            toast({ title: safeText(t, "common.error", "Errore"), description: error?.message || "Errore rimozione utente cliente", variant: "destructive" });
         } finally {
             setUpdatingMembershipId(null);
         }
@@ -335,27 +327,41 @@ export default function CustomerDetailPage() {
 
     if (authLoading || loading) {
         return (
-            <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">{t("customers.loading") || "Caricamento..."}</div>
-            </MainLayout>
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <div className="p-8 text-sm text-muted-foreground">Caricamento cliente...</div>
+                </MainLayout>
+            </OrgContextGuard>
         );
     }
 
-    if (orgType !== "manufacturer" || !customer) {
+    if (orgType !== "manufacturer") {
         return (
-            <MainLayout userRole={userRole}>
-                <div className="p-8 text-sm text-muted-foreground">{t("customers.noResults") || "Nessun risultato"}</div>
-            </MainLayout>
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <div className="p-8 text-sm text-muted-foreground">Questa pagina è disponibile solo per il costruttore.</div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
+    }
+
+    if (!customer) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <div className="p-8 text-sm text-muted-foreground">Cliente non trovato.</div>
+                </MainLayout>
+            </OrgContextGuard>
         );
     }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${customer.name || t("customers.fallbackTitle") || "Cliente"} - MACHINA`} />
+                <SEO title={`${customer.name || "Cliente"} - MACHINA`} />
 
-                <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-                    <div className="flex items-center justify-between gap-4">
+                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
                             <Link href="/customers">
                                 <Button variant="outline" size="icon">
@@ -363,273 +369,247 @@ export default function CustomerDetailPage() {
                                 </Button>
                             </Link>
                             <div>
-                                <h1 className="text-3xl font-bold">{customer.name || t("customers.fallbackTitle") || "Cliente"}</h1>
+                                <h1 className="text-3xl font-bold tracking-tight text-foreground">{customer.name || "Cliente"}</h1>
                                 <p className="text-sm text-muted-foreground">
-                                    {t("customers.detailTitle") || "Dettaglio cliente"}
+                                    Tenant cliente collegato al costruttore. Da qui gestisci anagrafica, utenti e stabilimenti del cliente finale.
                                 </p>
                             </div>
                         </div>
-
                         {canEdit && (
                             <Button onClick={handleSave} disabled={saving}>
                                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                {saving ? t("common.saving") || "Salvataggio..." : t("common.save") || "Salva"}
+                                {saving ? "Salvataggio..." : "Salva cliente"}
                             </Button>
                         )}
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Users className="h-5 w-5" />} title={t("nav.users") || "Utenti"} value={activeUsersCount} />
-                        <KpiCard icon={<Wrench className="h-5 w-5" />} title={t("customers.machines") || "Macchine"} value={assignments.length} />
-                        <KpiCard icon={<UserCog className="h-5 w-5" />} title="Tecnici attivi" value={techniciansCount} />
-                        <KpiCard icon={<Factory className="h-5 w-5" />} title="Status" value={customer.subscription_status || "—"} />
+                        <KpiCard icon={<Users className="h-5 w-5" />} title="Utenti attivi" value={activeUsersCount} />
+                        <KpiCard icon={<Shield className="h-5 w-5" />} title="Supervisor / Technician" value={techniciansCount} />
+                        <KpiCard icon={<Wrench className="h-5 w-5" />} title="Macchine assegnate" value={assignments.length} />
+                        <KpiCard icon={<MapPin className="h-5 w-5" />} title="Stabilimenti cliente" value={customerPlants.length} />
                     </div>
 
-                    <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
-                        <Card className="rounded-2xl">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Building2 className="h-5 w-5" />
-                                    {t("customers.registry") || "Anagrafica"}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {canEdit ? (
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        <Field
-                                            label={(t("customers.nameLabel") || "Nome").replace(" *", "")}
-                                            value={customer.name}
-                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, name: value } : prev))}
-                                        />
-                                        <Field
-                                            label="Slug"
-                                            value={customer.slug}
-                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, slug: value } : prev))}
-                                        />
-                                        <Field
-                                            label={t("customers.cityLabel") || "Città"}
-                                            value={customer.city}
-                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, city: value } : prev))}
-                                        />
-                                        <Field
-                                            label={t("customers.countryLabel") || "Paese"}
-                                            value={customer.country}
-                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, country: value } : prev))}
-                                        />
-                                        <Field
-                                            label="Email"
-                                            value={customer.email}
-                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, email: value } : prev))}
-                                        />
-                                        <Field
-                                            label={t("customers.phoneLabel") || "Telefono"}
-                                            value={customer.phone}
-                                            onChange={(value) => setCustomer((prev) => (prev ? { ...prev, phone: value } : prev))}
-                                        />
-                                        <div className="space-y-2 md:col-span-2">
-                                            <div className="text-sm font-medium text-foreground">Status</div>
-                                            <select
-                                                value={customer.subscription_status || "trial"}
-                                                onChange={(e) =>
-                                                    setCustomer((prev) =>
-                                                        prev ? { ...prev, subscription_status: e.target.value } : prev
-                                                    )
-                                                }
-                                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                            >
-                                                <option value="trial">trial</option>
-                                                <option value="active">active</option>
-                                                <option value="suspended">suspended</option>
-                                            </select>
+                    <div className="grid gap-6 xl:grid-cols-[2fr,1fr]">
+                        <div className="space-y-6">
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Building2 className="h-5 w-5" />
+                                        Dati cliente
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    {canEdit ? (
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            <Field label="Nome" value={customer.name} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, name: value } : prev))} />
+                                            <Field label="Slug" value={customer.slug} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, slug: value } : prev))} />
+                                            <Field label="Città" value={customer.city} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, city: value } : prev))} />
+                                            <Field label="Paese" value={customer.country} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, country: value } : prev))} />
+                                            <Field label="Email" value={customer.email} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, email: value } : prev))} />
+                                            <Field label="Telefono" value={customer.phone} onChange={(value) => setCustomer((prev) => (prev ? { ...prev, phone: value } : prev))} />
                                         </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <InfoRow label={(t("customers.nameLabel") || "Nome").replace(" *", "")} value={customer.name} />
-                                        <InfoRow label="Slug" value={customer.slug} />
-                                        <InfoRow label={t("customers.cityLabel") || "Città"} value={customer.city} />
-                                        <InfoRow label={t("customers.countryLabel") || "Paese"} value={customer.country} />
-                                        <InfoRow label="Email" value={customer.email} />
-                                        <InfoRow label={t("customers.phoneLabel") || "Telefono"} value={customer.phone} />
-                                        <InfoRow label="Status" value={customer.subscription_status} />
-                                        <InfoRow label={t("documents.uploadedAt") || "Creato il"} value={formatDate(customer.created_at, language)} />
-                                    </>
-                                )}
-
-                                <div className="grid gap-3 pt-2 md:grid-cols-2">
-                                    {customer.email && (
-                                        <a
-                                            href={`mailto:${customer.email}`}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
-                                        >
-                                            <Mail className="h-4 w-4" />
-                                            Email
-                                        </a>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <InfoRow label="Nome" value={customer.name} />
+                                            <InfoRow label="Slug" value={customer.slug} />
+                                            <InfoRow label="Città" value={customer.city} />
+                                            <InfoRow label="Paese" value={customer.country} />
+                                            <InfoRow label="Email" value={customer.email} />
+                                            <InfoRow label="Telefono" value={customer.phone} />
+                                            <InfoRow label="Creato il" value={formatDate(customer.created_at, language)} />
+                                        </div>
                                     )}
+                                </CardContent>
+                            </Card>
 
-                                    {customer.phone && (
-                                        <a
-                                            href={`tel:${customer.phone}`}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-medium transition hover:bg-muted"
-                                        >
-                                            <Phone className="h-4 w-4" />
-                                            {t("customers.phoneLabel") || "Telefono"}
-                                        </a>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <MapPin className="h-5 w-5" />
+                                        Stabilimenti cliente
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                                        Qui inserisci gli <strong className="text-foreground">stabilimenti del cliente finale</strong>. Dopo la creazione potrai selezionarli da <strong className="text-foreground">Assegnazioni macchina</strong>. L&apos;area / linea invece resta un dato della macchina.
+                                    </div>
 
-                        <Card className="rounded-2xl">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <MapPin className="h-5 w-5" />
-                                    {t("customers.quickActions") || "Azioni rapide"}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="rounded-2xl border border-border p-4 text-sm text-muted-foreground">
-                                    Il costruttore gestisce gli utenti del cliente. Supervisor e technician di questo tenant vedranno solo le macchine assegnate a questo cliente.
-                                </div>
-                                <Link href="/customers">
-                                    <Button variant="outline" className="w-full justify-start">
-                                        <Building2 className="mr-2 h-4 w-4" />
-                                        {t("customers.title") || "Clienti"}
-                                    </Button>
-                                </Link>
-                                <Link href="/assignments">
-                                    <Button variant="outline" className="w-full justify-start">
-                                        <Wrench className="mr-2 h-4 w-4" />
-                                        {t("nav.assignments") || "Assegnazioni"}
-                                    </Button>
-                                </Link>
-                                <Link href="/equipment">
-                                    <Button variant="outline" className="w-full justify-start">
-                                        <Factory className="mr-2 h-4 w-4" />
-                                        {t("nav.equipment") || "Macchine"}
-                                    </Button>
-                                </Link>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Users className="h-5 w-5" />
-                                Utenti cliente
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {canEdit && (
-                                <div className="grid gap-4 rounded-2xl border border-border p-4 md:grid-cols-2 xl:grid-cols-4">
-                                    <div className="space-y-2 xl:col-span-1">
-                                        <Label>Nome visualizzato</Label>
-                                        <Input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="Es. Mario Rossi" />
-                                    </div>
-                                    <div className="space-y-2 xl:col-span-1">
-                                        <Label>Email</Label>
-                                        <Input value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="utente@cliente.com" />
-                                    </div>
-                                    <div className="space-y-2 xl:col-span-1">
-                                        <Label>Password iniziale</Label>
-                                        <Input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Password temporanea" />
-                                    </div>
-                                    <div className="space-y-2 xl:col-span-1">
-                                        <Label>Ruolo</Label>
-                                        <select
-                                            value={newUserRole}
-                                            onChange={(e) => setNewUserRole(e.target.value as "supervisor" | "technician")}
-                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        >
-                                            <option value="technician">technician</option>
-                                            <option value="supervisor">supervisor</option>
-                                        </select>
-                                    </div>
-                                    <div className="md:col-span-2 xl:col-span-4">
-                                        <Button onClick={handleCreateUser} disabled={creatingUser}>
-                                            {creatingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                                            {creatingUser ? "Creazione..." : "Crea utente cliente"}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {usersLoading ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Loader2 className="h-4 w-4 animate-spin" /> Caricamento utenti cliente...
-                                </div>
-                            ) : customerUsers.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                                    Nessun utente cliente configurato.
-                                </div>
-                            ) : (
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    {customerUsers.map((row) => {
-                                        const fullName = row.display_name || [row.first_name, row.last_name].filter(Boolean).join(" ") || "Utente cliente";
-                                        const busy = updatingMembershipId === row.membership_id;
-                                        return (
-                                            <div key={row.membership_id} className="rounded-2xl border border-border p-4">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="space-y-1">
-                                                        <div className="font-semibold text-foreground">{fullName}</div>
-                                                        <div className="text-sm text-muted-foreground">{row.email || "—"}</div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            Creato: {formatDate(row.created_at, language)}
-                                                        </div>
-                                                    </div>
-                                                    <Badge variant={row.is_active ? "default" : "outline"}>
-                                                        {row.is_active ? "attivo" : "disattivo"}
-                                                    </Badge>
-                                                </div>
-
-                                                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                                                    <div className="space-y-2">
-                                                        <Label>Ruolo</Label>
-                                                        <select
-                                                            value={row.role || "technician"}
-                                                            onChange={(e) => handleRoleChange(row, e.target.value as "supervisor" | "technician")}
-                                                            disabled={busy}
-                                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                        >
-                                                            <option value="technician">technician</option>
-                                                            <option value="supervisor">supervisor</option>
-                                                        </select>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label>Accesso</Label>
-                                                        <div className="flex gap-2">
-                                                            <Button variant="outline" disabled={busy} onClick={() => handleToggleUser(row)}>
-                                                                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                                                {row.is_active ? "Disattiva" : "Riattiva"}
-                                                            </Button>
-                                                            <Button variant="outline" disabled={busy} onClick={() => handleDeleteUser(row)}>
-                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                Rimuovi
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                    {canEdit && (
+                                        <div className="grid gap-4 rounded-2xl border border-border p-4 md:grid-cols-[1.4fr,1fr,auto]">
+                                            <div className="space-y-2">
+                                                <Label>Nome stabilimento *</Label>
+                                                <Input value={newPlantName} onChange={(e) => setNewPlantName(e.target.value)} placeholder="Es. Stabilimento Verona" />
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                            <div className="space-y-2">
+                                                <Label>Codice</Label>
+                                                <Input value={newPlantCode} onChange={(e) => setNewPlantCode(e.target.value)} placeholder="Es. PLT-VR-01" />
+                                            </div>
+                                            <div className="flex items-end">
+                                                <Button onClick={handleCreatePlant} disabled={creatingPlant} className="w-full md:w-auto">
+                                                    {creatingPlant ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                                                    {creatingPlant ? "Creazione..." : "Crea stabilimento"}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {plantsLoading ? (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Loader2 className="h-4 w-4 animate-spin" /> Caricamento stabilimenti cliente...
+                                        </div>
+                                    ) : customerPlants.length === 0 ? (
+                                        <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                                            Nessuno stabilimento cliente configurato. Creane almeno uno qui, poi potrai collegarlo all&apos;assegnazione macchina.
+                                        </div>
+                                    ) : (
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                            {customerPlants.map((plant) => (
+                                                <div key={plant.id} className="rounded-2xl border border-border p-4">
+                                                    <div className="font-semibold text-foreground">{plant.name || "Stabilimento"}</div>
+                                                    <div className="mt-1 text-sm text-muted-foreground">Codice: {plant.code || "—"}</div>
+                                                    <div className="mt-1 text-xs text-muted-foreground">Creato: {formatDate(plant.created_at, language)}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="space-y-6">
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <MapPin className="h-5 w-5" />
+                                        Azioni rapide
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div className="rounded-2xl border border-border p-4 text-sm text-muted-foreground">
+                                        Prima crea almeno uno <strong className="text-foreground">stabilimento cliente</strong> qui sopra. Poi vai in <strong className="text-foreground">Assegnazioni</strong> per collegare macchina, cliente e stabilimento.
+                                    </div>
+                                    <Link href="/customers">
+                                        <Button variant="outline" className="w-full justify-start">
+                                            <Building2 className="mr-2 h-4 w-4" />
+                                            Clienti
+                                        </Button>
+                                    </Link>
+                                    <Link href="/assignments">
+                                        <Button variant="outline" className="w-full justify-start">
+                                            <Wrench className="mr-2 h-4 w-4" />
+                                            Assegnazioni
+                                        </Button>
+                                    </Link>
+                                    <Link href="/equipment">
+                                        <Button variant="outline" className="w-full justify-start">
+                                            <Factory className="mr-2 h-4 w-4" />
+                                            Macchine
+                                        </Button>
+                                    </Link>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="rounded-2xl">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Users className="h-5 w-5" />
+                                        Utenti cliente
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    {canEdit && (
+                                        <div className="grid gap-4 rounded-2xl border border-border p-4 md:grid-cols-2 xl:grid-cols-1">
+                                            <div className="space-y-2">
+                                                <Label>Nome visualizzato</Label>
+                                                <Input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="Es. Mario Rossi" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Email</Label>
+                                                <Input value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="utente@cliente.com" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Password iniziale</Label>
+                                                <Input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Password temporanea" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Ruolo</Label>
+                                                <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as "supervisor" | "technician")} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                                                    <option value="technician">technician</option>
+                                                    <option value="supervisor">supervisor</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <Button onClick={handleCreateUser} disabled={creatingUser}>
+                                                    {creatingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                                                    {creatingUser ? "Creazione..." : "Crea utente cliente"}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {usersLoading ? (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Loader2 className="h-4 w-4 animate-spin" /> Caricamento utenti cliente...
+                                        </div>
+                                    ) : customerUsers.length === 0 ? (
+                                        <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                                            Nessun utente cliente configurato.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {customerUsers.map((row) => {
+                                                const fullName = row.display_name || [row.first_name, row.last_name].filter(Boolean).join(" ") || "Utente cliente";
+                                                const busy = updatingMembershipId === row.membership_id;
+                                                return (
+                                                    <div key={row.membership_id} className="rounded-2xl border border-border p-4">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="space-y-1">
+                                                                <div className="font-semibold text-foreground">{fullName}</div>
+                                                                <div className="text-sm text-muted-foreground">{row.email || "—"}</div>
+                                                                <div className="text-xs text-muted-foreground">Creato: {formatDate(row.created_at, language)}</div>
+                                                            </div>
+                                                            <Badge variant={row.is_active ? "default" : "outline"}>{row.is_active ? "attivo" : "disattivo"}</Badge>
+                                                        </div>
+
+                                                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                                            <div className="space-y-2">
+                                                                <Label>Ruolo</Label>
+                                                                <select value={row.role || "technician"} onChange={(e) => handleRoleChange(row, e.target.value as "supervisor" | "technician")} disabled={busy} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                                                                    <option value="technician">technician</option>
+                                                                    <option value="supervisor">supervisor</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <Label>Accesso</Label>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    <Button variant="outline" disabled={busy} onClick={() => handleToggleUser(row)}>
+                                                                        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                                        {row.is_active ? "Disattiva" : "Riattiva"}
+                                                                    </Button>
+                                                                    <Button variant="outline" disabled={busy} onClick={() => handleDeleteUser(row)}>
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        Rimuovi
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
                 </div>
             </MainLayout>
         </OrgContextGuard>
     );
 }
 
-function InfoRow({
-    label,
-    value,
-}: {
-    label: string;
-    value: string | null | undefined;
-}) {
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
     return (
         <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
             <div className="text-sm text-muted-foreground">{label}</div>
@@ -638,15 +618,7 @@ function InfoRow({
     );
 }
 
-function Field({
-    label,
-    value,
-    onChange,
-}: {
-    label: string;
-    value: string | null | undefined;
-    onChange: (value: string) => void;
-}) {
+function Field({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (value: string) => void }) {
     return (
         <div className="space-y-2">
             <div className="text-sm font-medium text-foreground">{label}</div>
@@ -654,4 +626,3 @@ function Field({
         </div>
     );
 }
-
