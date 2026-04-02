@@ -1,290 +1,94 @@
 import Link from "next/link";
-import {
-    Building2,
-    Shield,
-    Bell,
-    UserCircle2,
-    Wrench,
-    Layers3,
-    Trash2,
-} from "lucide-react";
+import { Bell, ChevronRight, FlowChart, Settings2, ShieldCheck, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import MainLayout from "@/components/Layout/MainLayout";
-import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
-import { useAuth } from "@/hooks/useAuth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
-const copy = {
-    it: {
-        seo: "Impostazioni - MACHINA",
-        title: "Impostazioni",
-        subtitle:
-            "Centro configurazione della web app. Da qui gestisci contesto, sicurezza e preferenze operative.",
-        activeOrganization: "Organizzazione attiva",
-        currentRole: "Ruolo corrente",
-        profile: "Profilo",
-        security: "Sicurezza",
-        notifications: "Notifiche",
-        organization: "Organizzazione",
-        preferences: "Preferenze",
-        flows: "Flussi operativi",
-        trash: "Cestino di sistema",
-        profileDesc:
-            "Controlla le informazioni principali del tuo account e del contesto attivo.",
-        securityDesc: "Gestisci MFA / 2FA e sicurezza del tuo accesso.",
-        notificationsDesc: "Rivedi lo stato delle notifiche e dei badge operativi.",
-        organizationDesc: "Controlla e cambia il contesto organizzativo attivo.",
-        preferencesDesc:
-            "Area per estensioni future: lingua, vista operativa e opzioni personali.",
-        flowsDesc:
-            "Coordina piani di manutenzione, ordini di lavoro, checklist ed esecuzioni in un flusso unico e leggibile.",
-        trashDesc:
-            "Ripristina entità eliminate logicamente e riduci il rischio di cancellazioni involontarie.",
-        manufacturer: "Costruttore",
-        customer: "Cliente finale",
-        unknown: "—",
-    },
-    en: {
-        seo: "Settings - MACHINA",
-        title: "Settings",
-        subtitle:
-            "Configuration hub of the web app. Manage context, security and operational preferences.",
-        activeOrganization: "Active organization",
-        currentRole: "Current role",
-        profile: "Profile",
-        security: "Security",
-        notifications: "Notifications",
-        organization: "Organization",
-        preferences: "Preferences",
-        flows: "Operational flows",
-        trash: "System trash",
-        profileDesc: "Check core account information and the active context.",
-        securityDesc: "Manage MFA / 2FA and access security.",
-        notificationsDesc: "Review notification status and operational badges.",
-        organizationDesc: "Check and switch the active organizational context.",
-        preferencesDesc:
-            "Area for future extensions: language, operational view and personal options.",
-        flowsDesc:
-            "Coordinate maintenance plans, work orders, checklists and executions in one readable flow.",
-        trashDesc:
-            "Restore logically deleted entities and reduce accidental deletion risk.",
-        manufacturer: "Manufacturer",
-        customer: "Customer",
-        unknown: "—",
-    },
-    fr: {
-        seo: "Paramètres - MACHINA",
-        title: "Paramètres",
-        subtitle:
-            "Centre de configuration de l’application. Gérez le contexte, la sécurité et les préférences.",
-        activeOrganization: "Organisation active",
-        currentRole: "Rôle actuel",
-        profile: "Profil",
-        security: "Sécurité",
-        notifications: "Notifications",
-        organization: "Organisation",
-        preferences: "Préférences",
-        flows: "Flux opérationnels",
-        trash: "Corbeille système",
-        profileDesc: "Vérifiez les informations du compte et du contexte actif.",
-        securityDesc: "Gérez la MFA / 2FA et la sécurité d’accès.",
-        notificationsDesc: "Consultez l’état des notifications et des badges.",
-        organizationDesc: "Contrôlez et changez le contexte organisationnel actif.",
-        preferencesDesc:
-            "Zone pour futures extensions : langue, vue opérationnelle et options personnelles.",
-        flowsDesc:
-            "Coordonnez plans de maintenance, ordres de travail, check-lists et exécutions dans un seul flux.",
-        trashDesc:
-            "Restaurez les éléments supprimés logiquement et réduisez les suppressions accidentelles.",
-        manufacturer: "Constructeur",
-        customer: "Client final",
-        unknown: "—",
-    },
-    es: {
-        seo: "Configuración - MACHINA",
-        title: "Configuración",
-        subtitle:
-            "Centro de configuración de la app. Gestiona contexto, seguridad y preferencias operativas.",
-        activeOrganization: "Organización activa",
-        currentRole: "Rol actual",
-        profile: "Perfil",
-        security: "Seguridad",
-        notifications: "Notificaciones",
-        organization: "Organización",
-        preferences: "Preferencias",
-        flows: "Flujos operativos",
-        trash: "Papelera del sistema",
-        profileDesc: "Revisa la información principal de tu cuenta y del contexto activo.",
-        securityDesc: "Gestiona MFA / 2FA y la seguridad del acceso.",
-        notificationsDesc: "Revisa el estado de notificaciones y badges operativos.",
-        organizationDesc: "Controla y cambia el contexto organizativo activo.",
-        preferencesDesc:
-            "Área para futuras extensiones: idioma, vista operativa y opciones personales.",
-        flowsDesc:
-            "Coordina planes de mantenimiento, órdenes de trabajo, checklists y ejecuciones en un único flujo.",
-        trashDesc:
-            "Restaura entidades eliminadas lógicamente y reduce el riesgo de borrados accidentales.",
-        manufacturer: "Fabricante",
-        customer: "Cliente final",
-        unknown: "—",
-    },
-} as const;
+export default function SettingsIndexPage() {
+  const { t } = useLanguage();
+  const tx = (key: string, fallback: string) => {
+    const value = t(key);
+    return value === key ? fallback : value;
+  };
 
-function SettingLinkCard({
-    href,
-    icon,
-    title,
-    description,
-}: {
-    href: string;
-    icon: React.ReactNode;
-    title: string;
-    description: string;
-}) {
-    return (
-        <Link href={href} className="block">
-            <Card className="h-full rounded-2xl transition hover:-translate-y-0.5 hover:shadow-md">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        {icon}
-                        {title}
-                    </CardTitle>
-                    <CardDescription>{description}</CardDescription>
-                </CardHeader>
-            </Card>
-        </Link>
-    );
+  const items = [
+    {
+      href: "/settings/profile",
+      title: tx("settings.profile", "Profilo"),
+      description: "Dati anagrafici, nome visualizzato e informazioni account.",
+      icon: UserCircle2,
+    },
+    {
+      href: "/settings/preferences",
+      title: tx("settings.preferences", "Preferenze"),
+      description: "Tema, lingua e preferenze d'uso dell'interfaccia.",
+      icon: SlidersHorizontal,
+    },
+    {
+      href: "/settings/notifications",
+      title: tx("settings.notifications", "Notifiche"),
+      description: "Notifiche recenti, stato lettura e pulizia elementi letti.",
+      icon: Bell,
+    },
+    {
+      href: "/settings/security",
+      title: tx("settings.security", "Sicurezza"),
+      description: "Password, 2FA, sessioni e protezione dell'account.",
+      icon: ShieldCheck,
+    },
+    {
+      href: "/settings/organization",
+      title: tx("settings.organization", "Organizzazione attiva"),
+      description: "Dati organizzazione, logo e configurazione aziendale.",
+      icon: Settings2,
+    },
+    {
+      href: "/settings/operational-flows",
+      title: "Flussi operativi",
+      description: "Vista guidata di piani, ordini di lavoro, checklist ed esecuzioni.",
+      icon: FlowChart,
+    },
+  ];
+
+  return (
+    <>
+      <SEO title="Impostazioni" />
+      <MainLayout>
+        <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-6">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Impostazioni</h1>
+            <p className="text-sm text-muted-foreground">
+              Gestisci profilo, preferenze, notifiche, sicurezza e configurazione dell&apos;organizzazione attiva.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href} className="group">
+                  <Card className="h-full rounded-2xl transition-colors hover:border-primary/40">
+                    <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                      <div className="space-y-1">
+                        <CardTitle className="text-base">{item.title}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                      </div>
+                      <div className="rounded-xl border border-border bg-muted/40 p-2">
+                        <Icon className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between text-sm text-primary">
+                      <span>Apri sezione</span>
+                      <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </MainLayout>
+    </>
+  );
 }
-
-export default function SettingsPage() {
-    const { language } = useLanguage();
-    const text = copy[language];
-    const { profile, organization, membership } = useAuth();
-
-    const userRole = membership?.role ?? "technician";
-    const orgType =
-        organization?.type === "manufacturer"
-            ? text.manufacturer
-            : organization?.type === "customer"
-                ? text.customer
-                : text.unknown;
-
-    const profileName =
-        profile?.display_name?.trim() ||
-        `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ||
-        profile?.email ||
-        text.unknown;
-
-    return (
-        <OrgContextGuard>
-            <MainLayout userRole={userRole}>
-                <SEO title={text.seo} />
-
-                <div className="px-5 py-6 lg:px-8 lg:py-8">
-                    <div className="mx-auto max-w-[1380px] space-y-8">
-                        <div className="space-y-2">
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-                                {text.title}
-                            </h1>
-                            <p className="text-base text-muted-foreground">{text.subtitle}</p>
-                        </div>
-
-                        <Card className="rounded-2xl">
-                            <CardHeader>
-                                <CardTitle>{text.profile}</CardTitle>
-                                <CardDescription>{text.profileDesc}</CardDescription>
-                            </CardHeader>
-                            <div className="grid gap-4 px-6 pb-6 md:grid-cols-2 xl:grid-cols-4">
-                                <div className="rounded-xl border border-border bg-muted/30 p-4">
-                                    <div className="text-sm text-muted-foreground">User</div>
-                                    <div className="mt-1 font-semibold text-foreground">
-                                        {profileName}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-border bg-muted/30 p-4">
-                                    <div className="text-sm text-muted-foreground">
-                                        {text.activeOrganization}
-                                    </div>
-                                    <div className="mt-1 font-semibold text-foreground">
-                                        {organization?.name || text.unknown}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-border bg-muted/30 p-4">
-                                    <div className="text-sm text-muted-foreground">
-                                        {text.currentRole}
-                                    </div>
-                                    <div className="mt-1 font-semibold text-foreground capitalize">
-                                        {membership?.role || text.unknown}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-xl border border-border bg-muted/30 p-4">
-                                    <div className="text-sm text-muted-foreground">Context</div>
-                                    <div className="mt-1 flex items-center gap-2 font-semibold text-foreground">
-                                        <Badge variant="outline">{orgType}</Badge>
-                                    </div>
-                                </div>
-                            </div>
-                        </Card>
-
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                            <SettingLinkCard
-                                href="/settings/security"
-                                icon={<Shield className="h-5 w-5" />}
-                                title={text.security}
-                                description={text.securityDesc}
-                            />
-
-                            <SettingLinkCard
-                                href="/notifications"
-                                icon={<Bell className="h-5 w-5" />}
-                                title={text.notifications}
-                                description={text.notificationsDesc}
-                            />
-
-                            <SettingLinkCard
-                                href="/settings/organization"
-                                icon={<Building2 className="h-5 w-5" />}
-                                title={text.organization}
-                                description={text.organizationDesc}
-                            />
-
-                            <SettingLinkCard
-                                href="/settings/trash"
-                                icon={<Trash2 className="h-5 w-5" />}
-                                title={text.trash}
-                                description={text.trashDesc}
-                            />
-
-                            <SettingLinkCard
-                                href="/dashboard"
-                                icon={<UserCircle2 className="h-5 w-5" />}
-                                title={text.profile}
-                                description={text.profileDesc}
-                            />
-
-                            <SettingLinkCard
-                                href="/maintenance"
-                                icon={<Wrench className="h-5 w-5" />}
-                                title={text.preferences}
-                                description={text.preferencesDesc}
-                            />
-
-                            <SettingLinkCard
-                                href="/settings/operational-flows"
-                                icon={<Layers3 className="h-5 w-5" />}
-                                title={text.flows}
-                                description={text.flowsDesc}
-                            />
-                        </div>
-                    </div>
-                </div>
-            </MainLayout>
-        </OrgContextGuard>
-    );
-}
-
