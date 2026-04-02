@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
     AlertTriangle,
     ArrowRight,
-    Building2,
     CheckCircle2,
     CheckSquare,
     ClipboardList,
     Factory,
+    Filter,
     Layers3,
     PlayCircle,
     ShieldCheck,
@@ -18,55 +18,71 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrgType } from "@/hooks/useOrgType";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-interface KpiState {
-    machines: number;
-    plans: number;
-    activePlans: number;
-    overduePlans: number;
-    workOrders: number;
-    openWorkOrders: number;
-    templates: number;
-    activeTemplates: number;
-    executions30d: number;
-}
+type MachineRow = {
+    id: string;
+    name: string | null;
+    internal_code: string | null;
+    plant_id: string | null;
+    area: string | null;
+};
 
-interface PlanPreview {
+type PlantRow = {
+    id: string;
+    name: string | null;
+};
+
+type PlanRow = {
     id: string;
     title: string | null;
-    next_due_date: string | null;
+    machine_id: string | null;
     priority: string | null;
+    next_due_date: string | null;
     is_active: boolean | null;
-}
+};
 
-interface WorkOrderPreview {
+type WorkOrderRow = {
     id: string;
     title: string | null;
+    machine_id: string | null;
+    maintenance_plan_id: string | null;
     status: string | null;
     priority: string | null;
     due_date: string | null;
-    machine: {
-        name: string | null;
-        internal_code: string | null;
-    } | null;
-}
+};
 
-interface ExecutionPreview {
+type ChecklistRow = {
     id: string;
+    title: string | null;
+    machine_id: string | null;
+    checklist_type: string | null;
+    is_active: boolean | null;
+    is_template: boolean | null;
+};
+
+type ExecutionRow = {
+    id: string;
+    checklist_id: string | null;
+    machine_id: string | null;
+    work_order_id: string | null;
     overall_status: string | null;
     executed_at: string | null;
     completed_at: string | null;
-    work_order_id: string | null;
-    checklist: {
-        title: string | null;
-    } | null;
-    machine: {
-        name: string | null;
-    } | null;
-}
+};
+
+type KpiState = {
+    machines: number;
+    plans: number;
+    openWorkOrders: number;
+    activeTemplates: number;
+    executions30d: number;
+};
 
 function formatDate(value: string | null | undefined) {
     if (!value) return "—";
@@ -91,22 +107,12 @@ function getPriorityTone(priority: string | null | undefined) {
 function getStatusTone(status: string | null | undefined) {
     const key = String(status || "").toLowerCase();
     if (["completed", "passed"].includes(key)) return "default" as const;
-    if (["failed", "cancelled", "overdue"].includes(key)) return "destructive" as const;
-    if (["pending_review", "pending", "draft", "scheduled"].includes(key)) return "secondary" as const;
+    if (["failed", "cancelled"].includes(key)) return "destructive" as const;
+    if (["pending_review", "pending", "draft", "scheduled", "in_progress"].includes(key)) return "secondary" as const;
     return "outline" as const;
 }
 
-function KpiCard({
-    title,
-    value,
-    description,
-    icon,
-}: {
-    title: string;
-    value: number;
-    description: string;
-    icon: React.ReactNode;
-}) {
+function KpiCard({ title, value, description, icon }: { title: string; value: number; description: string; icon: React.ReactNode }) {
     return (
         <Card className="rounded-2xl">
             <CardContent className="p-6">
@@ -121,31 +127,34 @@ function KpiCard({
     );
 }
 
+function buildHref(path: string, params: Record<string, string | null | undefined>) {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        if (value) search.set(key, value);
+    });
+    const query = search.toString();
+    return query ? `${path}?${query}` : path;
+}
+
 export default function OperationalFlowsPage() {
-    const { loading: authLoading, organization, membership, user } = useAuth();
-    const userRole = membership?.role ?? "viewer";
+    const { loading: authLoading, organization, membership } = useAuth();
+    const { isManufacturer, canExecuteChecklist, machineContextLabel, maintenanceLabel, checklistsLabel } = useOrgType();
+
     const orgId = organization?.id ?? null;
-    const orgType = organization?.type ?? null;
-    const isManufacturer = orgType === "manufacturer";
-    const canCreate = ["owner", "admin", "supervisor"].includes(userRole);
-    const canExecute = !isManufacturer && ["owner", "admin", "supervisor", "technician"].includes(userRole);
+    const userRole = membership?.role ?? "viewer";
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState < KpiState > ({
-        machines: 0,
-        plans: 0,
-        activePlans: 0,
-        overduePlans: 0,
-        workOrders: 0,
-        openWorkOrders: 0,
-        templates: 0,
-        activeTemplates: 0,
-        executions30d: 0,
-    });
-    const [plans, setPlans] = useState < PlanPreview[] > ([]);
-    const [workOrders, setWorkOrders] = useState < WorkOrderPreview[] > ([]);
-    const [executions, setExecutions] = useState < ExecutionPreview[] > ([]);
     const [loadError, setLoadError] = useState < string | null > (null);
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
+    const [plans, setPlans] = useState < PlanRow[] > ([]);
+    const [workOrders, setWorkOrders] = useState < WorkOrderRow[] > ([]);
+    const [checklists, setChecklists] = useState < ChecklistRow[] > ([]);
+    const [executions, setExecutions] = useState < ExecutionRow[] > ([]);
+    const [selectedMachineId, setSelectedMachineId] = useState < string > ("all");
+    const [selectedPlanId, setSelectedPlanId] = useState < string > ("all");
+    const [selectedWorkOrderId, setSelectedWorkOrderId] = useState < string > ("all");
+    const [selectedChecklistId, setSelectedChecklistId] = useState < string > ("all");
 
     useEffect(() => {
         let active = true;
@@ -155,167 +164,225 @@ export default function OperationalFlowsPage() {
                 if (active) setLoading(false);
                 return;
             }
-
             try {
                 setLoadError(null);
-                const today = new Date().toISOString().slice(0, 10);
                 const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-
                 const [
-                    machinesCount,
-                    plansCount,
-                    activePlansCount,
-                    overduePlansCount,
-                    workOrdersCount,
-                    openWorkOrdersCount,
-                    templatesCount,
-                    activeTemplatesCount,
-                    executionsCount,
-                    planRows,
-                    workOrderRows,
-                    executionRows,
+                    machinesRes,
+                    plantsRes,
+                    plansRes,
+                    workOrdersRes,
+                    checklistsRes,
+                    executionsRes,
                 ] = await Promise.all([
-                    supabase.from("machines").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-                    supabase.from("maintenance_plans").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-                    supabase
-                        .from("maintenance_plans")
-                        .select("id", { count: "exact", head: true })
-                        .eq("organization_id", orgId)
-                        .eq("is_active", true),
-                    supabase
-                        .from("maintenance_plans")
-                        .select("id", { count: "exact", head: true })
-                        .eq("organization_id", orgId)
-                        .eq("is_active", true)
-                        .lt("next_due_date", today),
-                    supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-                    supabase
-                        .from("work_orders")
-                        .select("id", { count: "exact", head: true })
-                        .eq("organization_id", orgId)
-                        .not("status", "in", '("completed","cancelled")'),
-                    supabase.from("checklists").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-                    supabase
-                        .from("checklists")
-                        .select("id", { count: "exact", head: true })
-                        .eq("organization_id", orgId)
-                        .eq("is_active", true),
-                    supabase.from("checklist_executions").select("id", { count: "exact", head: true }).gte("executed_at", since),
-                    supabase
-                        .from("maintenance_plans")
-                        .select("id, title, next_due_date, priority, is_active")
-                        .eq("organization_id", orgId)
-                        .order("next_due_date", { ascending: true, nullsFirst: false })
-                        .limit(6),
-                    supabase
-                        .from("work_orders")
-                        .select("id, title, status, priority, due_date, machine:machines(name, internal_code)")
-                        .eq("organization_id", orgId)
-                        .order("created_at", { ascending: false })
-                        .limit(8),
-                    supabase
-                        .from("checklist_executions")
-                        .select("id, overall_status, executed_at, completed_at, work_order_id, checklist:checklists(title), machine:machines(name)")
-                        .order("executed_at", { ascending: false })
-                        .limit(8),
+                    supabase.from("machines").select("id, name, internal_code, plant_id, area").eq("organization_id", orgId).order("name", { ascending: true }),
+                    supabase.from("plants").select("id, name").eq("organization_id", orgId).order("name", { ascending: true }),
+                    supabase.from("maintenance_plans").select("id, title, machine_id, priority, next_due_date, is_active").eq("organization_id", orgId).order("updated_at", { ascending: false }),
+                    supabase.from("work_orders").select("id, title, machine_id, maintenance_plan_id, status, priority, due_date").eq("organization_id", orgId).order("created_at", { ascending: false }),
+                    supabase.from("checklists").select("id, title, machine_id, checklist_type, is_active, is_template").eq("organization_id", orgId).order("updated_at", { ascending: false }),
+                    supabase.from("checklist_executions").select("id, checklist_id, machine_id, work_order_id, overall_status, executed_at, completed_at").gte("executed_at", since).order("executed_at", { ascending: false }),
                 ]);
 
-                const errors = [
-                    machinesCount.error,
-                    plansCount.error,
-                    activePlansCount.error,
-                    overduePlansCount.error,
-                    workOrdersCount.error,
-                    openWorkOrdersCount.error,
-                    templatesCount.error,
-                    activeTemplatesCount.error,
-                    executionsCount.error,
-                    planRows.error,
-                    workOrderRows.error,
-                    executionRows.error,
-                ].filter(Boolean);
-
-                if (errors.length > 0) {
-                    throw errors[0];
-                }
-
+                const firstError = [machinesRes, plantsRes, plansRes, workOrdersRes, checklistsRes, executionsRes]
+                    .map((res) => res.error)
+                    .find(Boolean);
+                if (firstError) throw firstError;
                 if (!active) return;
 
-                setKpis({
-                    machines: machinesCount.count ?? 0,
-                    plans: plansCount.count ?? 0,
-                    activePlans: activePlansCount.count ?? 0,
-                    overduePlans: overduePlansCount.count ?? 0,
-                    workOrders: workOrdersCount.count ?? 0,
-                    openWorkOrders: openWorkOrdersCount.count ?? 0,
-                    templates: templatesCount.count ?? 0,
-                    activeTemplates: activeTemplatesCount.count ?? 0,
-                    executions30d: executionsCount.count ?? 0,
-                });
-                setPlans((planRows.data ?? []) as PlanPreview[]);
-                setWorkOrders((workOrderRows.data ?? []) as WorkOrderPreview[]);
-                setExecutions((executionRows.data ?? []) as ExecutionPreview[]);
+                const nextMachines = (machinesRes.data ?? []) as MachineRow[];
+                const nextPlans = (plansRes.data ?? []) as PlanRow[];
+                const nextWorkOrders = (workOrdersRes.data ?? []) as WorkOrderRow[];
+                const nextChecklists = (checklistsRes.data ?? []) as ChecklistRow[];
+                const nextExecutions = (executionsRes.data ?? []) as ExecutionRow[];
+
+                setMachines(nextMachines);
+                setPlants((plantsRes.data ?? []) as PlantRow[]);
+                setPlans(nextPlans);
+                setWorkOrders(nextWorkOrders);
+                setChecklists(nextChecklists);
+                setExecutions(nextExecutions);
+
+                if (nextMachines.length > 0 && selectedMachineId === "all") {
+                    setSelectedMachineId(nextMachines[0].id);
+                }
             } catch (error: any) {
-                console.error("Operational flows load error:", error);
-                if (active) setLoadError(error?.message || "Errore durante il caricamento del flusso operativo.");
+                console.error("operational flows context load error", error);
+                if (active) setLoadError(error?.message || "Errore durante il caricamento dei flussi operativi.");
             } finally {
                 if (active) setLoading(false);
             }
         };
 
         if (!authLoading) void load();
-
         return () => {
             active = false;
         };
-    }, [authLoading, orgId]);
+    }, [authLoading, orgId, selectedMachineId]);
 
-    const blockers = useMemo(() => {
-        const items: Array<{ title: string; description: string; href: string; hrefLabel: string }> = [];
+    const plantMap = useMemo(() => new Map(plants.map((row) => [row.id, row])), [plants]);
+    const machineMap = useMemo(() => new Map(machines.map((row) => [row.id, row])), [machines]);
+    const selectedMachine = selectedMachineId !== "all" ? machineMap.get(selectedMachineId) ?? null : null;
 
-        if (kpis.machines === 0) {
-            items.push({
-                title: "Nessuna macchina nel contesto attivo",
-                description: "Senza macchine non puoi agganciare piani di manutenzione, ordini di lavoro o checklist operative.",
+    const machineScopedPlans = useMemo(
+        () => (selectedMachineId === "all" ? plans : plans.filter((row) => row.machine_id === selectedMachineId)),
+        [plans, selectedMachineId]
+    );
+    const machineScopedWorkOrders = useMemo(
+        () => (selectedMachineId === "all" ? workOrders : workOrders.filter((row) => row.machine_id === selectedMachineId)),
+        [workOrders, selectedMachineId]
+    );
+    const machineScopedChecklists = useMemo(
+        () => (selectedMachineId === "all"
+            ? checklists
+            : checklists.filter((row) => row.machine_id === selectedMachineId || row.machine_id === null)),
+        [checklists, selectedMachineId]
+    );
+    const machineScopedExecutions = useMemo(
+        () => (selectedMachineId === "all" ? executions : executions.filter((row) => row.machine_id === selectedMachineId)),
+        [executions, selectedMachineId]
+    );
+
+    useEffect(() => {
+        if (selectedPlanId !== "all" && !machineScopedPlans.some((row) => row.id === selectedPlanId)) {
+            setSelectedPlanId("all");
+        }
+        if (selectedWorkOrderId !== "all" && !machineScopedWorkOrders.some((row) => row.id === selectedWorkOrderId)) {
+            setSelectedWorkOrderId("all");
+        }
+        if (selectedChecklistId !== "all" && !machineScopedChecklists.some((row) => row.id === selectedChecklistId)) {
+            setSelectedChecklistId("all");
+        }
+    }, [machineScopedPlans, machineScopedWorkOrders, machineScopedChecklists, selectedPlanId, selectedWorkOrderId, selectedChecklistId]);
+
+    const selectedPlan = selectedPlanId !== "all" ? machineScopedPlans.find((row) => row.id === selectedPlanId) ?? null : null;
+    const selectedWorkOrder = selectedWorkOrderId !== "all" ? machineScopedWorkOrders.find((row) => row.id === selectedWorkOrderId) ?? null : null;
+    const selectedChecklist = selectedChecklistId !== "all" ? machineScopedChecklists.find((row) => row.id === selectedChecklistId) ?? null : null;
+
+    const kpis = useMemo < KpiState > (() => ({
+        machines: machines.length,
+        plans: plans.filter((row) => row.is_active !== false).length,
+        openWorkOrders: workOrders.filter((row) => !["completed", "cancelled"].includes(String(row.status || "").toLowerCase())).length,
+        activeTemplates: checklists.filter((row) => row.is_active !== false).length,
+        executions30d: executions.length,
+    }), [machines, plans, workOrders, checklists, executions]);
+
+    const machineLabel = useMemo(() => {
+        if (!selectedMachine) return "Nessuna macchina selezionata";
+        const plantName = selectedMachine.plant_id ? plantMap.get(selectedMachine.plant_id)?.name ?? "Senza stabilimento" : "Senza stabilimento";
+        const name = selectedMachine.name?.trim() || selectedMachine.internal_code?.trim() || "Macchina senza nome";
+        const area = selectedMachine.area?.trim() ? ` · ${selectedMachine.area}` : "";
+        return `${plantName} → ${name}${area}`;
+    }, [plantMap, selectedMachine]);
+
+    const recommendedNextStep = useMemo(() => {
+        if (!selectedMachine) {
+            return {
+                title: "Seleziona prima una macchina",
+                description: `Scegli una macchina dal filtro in alto per costruire un flusso contestualizzato ${machineContextLabel.toLowerCase()}.`,
                 href: "/equipment",
-                hrefLabel: "Vai alle macchine",
-            });
+                cta: "Vai alle macchine",
+                icon: <Factory className="h-5 w-5" />,
+            };
         }
-
-        if (kpis.activePlans === 0) {
-            items.push({
-                title: "Nessun piano di manutenzione attivo",
-                description: "I flussi preventivi partono dai piani: senza piani attivi gli ordini saranno solo ad-hoc.",
-                href: "/maintenance/new",
-                hrefLabel: "Crea piano",
-            });
+        if (!selectedPlan) {
+            return {
+                title: "Manca un piano di manutenzione contestualizzato",
+                description: "Il flusso preventivo parte dal piano. Crea o apri un piano per questa macchina e definisci frequenza e priorità.",
+                href: buildHref("/maintenance/new", { machine_id: selectedMachine.id }),
+                cta: "Crea piano per questa macchina",
+                icon: <Wrench className="h-5 w-5" />,
+            };
         }
-
-        if (kpis.activeTemplates === 0) {
-            items.push({
-                title: "Nessuna checklist attiva",
-                description: "Le checklist danno traccia operativa e evidenze sul campo. Senza template attivi perdi controllo esecutivo.",
-                href: "/checklists/new",
-                hrefLabel: "Crea checklist",
-            });
+        if (!selectedWorkOrder) {
+            return {
+                title: "Piano presente: ora genera l’ordine di lavoro",
+                description: "Con un piano selezionato puoi aprire un ordine già precompilato e trasformare la regola in attività concreta.",
+                href: buildHref("/work-orders/new", { plan_id: selectedPlan.id, machine_id: selectedMachine.id }),
+                cta: "Nuovo ordine dal piano",
+                icon: <ClipboardList className="h-5 w-5" />,
+            };
         }
-
-        if (canExecute && kpis.openWorkOrders > 0 && kpis.executions30d === 0) {
-            items.push({
-                title: "Ordini aperti senza esecuzioni recenti",
-                description: "Ci sono ordini operativi ancora aperti ma nessuna compilazione checklist nelle ultime 4 settimane.",
-                href: "/work-orders",
-                hrefLabel: "Apri ordini",
-            });
+        if (!selectedChecklist) {
+            return {
+                title: isManufacturer ? "Associa un template checklist" : "Manca una checklist operativa",
+                description: isManufacturer
+                    ? "Il costruttore dovrebbe definire il template che guiderà il cliente finale durante l’esecuzione."
+                    : "Scegli o crea una checklist operativa compatibile con la macchina per guidare il tecnico sul campo.",
+                href: buildHref("/checklists/new", { machine_id: selectedMachine.id }),
+                cta: isManufacturer ? "Crea template checklist" : "Crea checklist per questa macchina",
+                icon: <CheckSquare className="h-5 w-5" />,
+            };
         }
+        if (canExecuteChecklist) {
+            return {
+                title: "Il flusso è pronto per l’esecuzione",
+                description: "Hai macchina, piano, ordine e checklist. Il tecnico può aprire subito la compilazione con il contesto già pronto.",
+                href: buildHref(`/checklists/execute/${selectedChecklist.id}`, { work_order_id: selectedWorkOrder.id }),
+                cta: "Esegui checklist collegata",
+                icon: <PlayCircle className="h-5 w-5" />,
+            };
+        }
+        return {
+            title: "Il costruttore può monitorare il flusso",
+            description: "Il cliente finale eseguirà la checklist; da qui puoi comunque aprire ordine e risultati per monitorare lo stato operativo.",
+            href: `/work-orders/${selectedWorkOrder.id}`,
+            cta: "Apri ordine collegato",
+            icon: <ShieldCheck className="h-5 w-5" />,
+        };
+    }, [selectedMachine, selectedPlan, selectedWorkOrder, selectedChecklist, canExecuteChecklist, isManufacturer, machineContextLabel]);
 
-        return items;
-    }, [canExecute, kpis]);
-
-    const pageTitle = isManufacturer ? "Flussi operativi costruttore" : "Flussi operativi";
-    const subtitle = isManufacturer
-        ? "Qui controlli come i template e i piani creati dal costruttore diventano attività concrete presso i clienti finali."
-        : "Qui controlli il flusso completo: piano di manutenzione, ordine di lavoro, checklist ed esecuzione sul campo.";
+    const actions = useMemo(() => {
+        const machineId = selectedMachine?.id ?? undefined;
+        const planId = selectedPlan?.id ?? undefined;
+        const workOrderId = selectedWorkOrder?.id ?? undefined;
+        const checklistId = selectedChecklist?.id ?? undefined;
+        return [
+            {
+                title: maintenanceLabel,
+                description: machineId ? `Apri o crea un piano già filtrato sulla macchina selezionata.` : "Apri il dominio manutenzione e filtra i piani attivi.",
+                href: machineId ? buildHref("/maintenance/new", { machine_id: machineId }) : "/maintenance",
+                hrefLabel: machineId ? "Nuovo piano contestualizzato" : "Apri manutenzione",
+            },
+            {
+                title: "Ordini di lavoro",
+                description: planId
+                    ? "Crea un ordine già agganciato al piano scelto."
+                    : machineId
+                        ? "Apri un nuovo ordine già riferito alla macchina scelta."
+                        : "Apri il registro ordini per stato, macchina e priorità.",
+                href: planId ? buildHref("/work-orders/new", { plan_id: planId, machine_id: machineId }) : machineId ? buildHref("/work-orders/new", { machine_id: machineId }) : "/work-orders",
+                hrefLabel: planId ? "Nuovo ordine da piano" : machineId ? "Nuovo ordine per macchina" : "Apri ordini",
+            },
+            {
+                title: checklistsLabel,
+                description: checklistId
+                    ? "Apri il dettaglio della checklist selezionata."
+                    : machineId
+                        ? "Crea o filtra checklist compatibili con la macchina selezionata."
+                        : "Apri il catalogo checklist / template del contesto attivo.",
+                href: checklistId ? `/checklists/${checklistId}` : machineId ? buildHref("/checklists/new", { machine_id: machineId }) : "/checklists",
+                hrefLabel: checklistId ? "Apri checklist" : machineId ? "Nuova checklist contestualizzata" : "Apri checklist",
+            },
+            {
+                title: canExecuteChecklist ? "Esecuzione" : "Monitoraggio",
+                description: canExecuteChecklist
+                    ? checklistId
+                        ? "Apri la compilazione con work order già collegato quando disponibile."
+                        : "Seleziona una checklist per abilitare l’esecuzione contestualizzata."
+                    : workOrderId
+                        ? "Apri l’ordine per monitorare stato, risultati e feedback del cliente."
+                        : "Seleziona un ordine di lavoro per aprire il monitoraggio contestuale.",
+                href: canExecuteChecklist
+                    ? checklistId
+                        ? buildHref(`/checklists/execute/${checklistId}`, { work_order_id: workOrderId })
+                        : "/checklists"
+                    : workOrderId
+                        ? `/work-orders/${workOrderId}`
+                        : "/work-orders",
+                hrefLabel: canExecuteChecklist ? (checklistId ? "Esegui checklist" : "Apri checklist") : (workOrderId ? "Apri ordine" : "Apri ordini"),
+            },
+        ];
+    }, [selectedMachine, selectedPlan, selectedWorkOrder, selectedChecklist, maintenanceLabel, checklistsLabel, canExecuteChecklist]);
 
     if (authLoading || loading) {
         return (
@@ -330,31 +397,30 @@ export default function OperationalFlowsPage() {
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${pageTitle} - MACHINA`} />
+                <SEO title={`Flussi operativi - MACHINA`} />
 
                 <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="outline">{organization?.name ?? "Contesto attivo"}</Badge>
-                                <Badge variant="secondary">{orgType ?? "unknown"}</Badge>
+                                <Badge variant="secondary">{isManufacturer ? "manufacturer" : "enterprise/customer"}</Badge>
                             </div>
-                            <h1 className="text-4xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
-                            <p className="max-w-3xl text-base text-muted-foreground">{subtitle}</p>
+                            <h1 className="text-4xl font-bold tracking-tight text-foreground">Flussi operativi</h1>
+                            <p className="max-w-3xl text-base text-muted-foreground">
+                                Qui non stai guardando solo KPI: scegli una macchina e fai partire il flusso corretto con link già contestualizzati a piani, ordini e checklist.
+                            </p>
                         </div>
 
                         <div className="flex flex-wrap gap-3">
-                            <Link href="/maintenance/new">
-                                <Button variant="outline">
-                                    <Wrench className="mr-2 h-4 w-4" />
-                                    Nuovo piano
+                            <Link href={recommendedNextStep.href}>
+                                <Button>
+                                    {recommendedNextStep.icon}
+                                    <span className="ml-2">{recommendedNextStep.cta}</span>
                                 </Button>
                             </Link>
-                            <Link href="/work-orders/new">
-                                <Button>
-                                    <ClipboardList className="mr-2 h-4 w-4" />
-                                    Nuovo ordine
-                                </Button>
+                            <Link href="/settings">
+                                <Button variant="outline">Torna alle impostazioni</Button>
                             </Link>
                         </div>
                     </div>
@@ -365,224 +431,190 @@ export default function OperationalFlowsPage() {
                         </Card>
                     )}
 
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard
-                            title="Macchine nel contesto"
-                            value={kpis.machines}
-                            description={isManufacturer ? "Macchine del costruttore pronte per assegnazioni e piani." : "Macchine disponibili per manutenzione, ordini e checklist."}
-                            icon={<Factory className="h-5 w-5" />}
-                        />
-                        <KpiCard
-                            title="Piani attivi"
-                            value={kpis.activePlans}
-                            description={kpis.overduePlans > 0 ? `${kpis.overduePlans} già scaduti o da rigenerare.` : "Nessuna scadenza critica rilevata al momento."}
-                            icon={<Wrench className="h-5 w-5" />}
-                        />
-                        <KpiCard
-                            title="Ordini aperti"
-                            value={kpis.openWorkOrders}
-                            description={isManufacturer ? "Attività create dal costruttore e ancora da chiudere o monitorare." : "Ordini in bozza, programmati o in corso sul contesto attivo."}
-                            icon={<ClipboardList className="h-5 w-5" />}
-                        />
-                        <KpiCard
-                            title={isManufacturer ? "Template checklist" : "Esecuzioni ultimi 30 giorni"}
-                            value={isManufacturer ? kpis.activeTemplates : kpis.executions30d}
-                            description={isManufacturer ? "Template attivi per guidare clienti ed esecuzioni." : "Compilazioni registrate con evidenza operativa recente."}
-                            icon={isManufacturer ? <CheckSquare className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
-                        />
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+                        <KpiCard title="Macchine" value={kpis.machines} description="Disponibili nel contesto attivo." icon={<Factory className="h-5 w-5" />} />
+                        <KpiCard title="Piani attivi" value={kpis.plans} description="Regole pronte a generare attività." icon={<Wrench className="h-5 w-5" />} />
+                        <KpiCard title="Ordini aperti" value={kpis.openWorkOrders} description="Da eseguire, monitorare o chiudere." icon={<ClipboardList className="h-5 w-5" />} />
+                        <KpiCard title={isManufacturer ? "Template attivi" : "Checklist attive"} value={kpis.activeTemplates} description="Strumenti operativi disponibili." icon={<CheckSquare className="h-5 w-5" />} />
+                        <KpiCard title="Esecuzioni 30g" value={kpis.executions30d} description="Feedback recenti sul campo." icon={<ShieldCheck className="h-5 w-5" />} />
                     </div>
 
-                    <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+                    <Card className="rounded-2xl">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Filter className="h-5 w-5" />
+                                Contesto operativo rapido
+                            </CardTitle>
+                            <CardDescription>
+                                Scegli una macchina e, se vuoi, restringi il flusso a piano, ordine e checklist. Le CTA sotto si aggiornano automaticamente.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="space-y-2">
+                                <Label>{machineContextLabel}</Label>
+                                <Select value={selectedMachineId} onValueChange={setSelectedMachineId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleziona macchina" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Tutte le macchine</SelectItem>
+                                        {machines.map((row) => {
+                                            const plantName = row.plant_id ? plantMap.get(row.plant_id)?.name ?? "Senza stabilimento" : "Senza stabilimento";
+                                            const machineName = row.name?.trim() || row.internal_code?.trim() || row.id;
+                                            return (
+                                                <SelectItem key={row.id} value={row.id}>
+                                                    {plantName} → {machineName}
+                                                </SelectItem>
+                                            );
+                                        })}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Piano di manutenzione</Label>
+                                <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Tutti i piani" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Tutti i piani</SelectItem>
+                                        {machineScopedPlans.map((row) => (
+                                            <SelectItem key={row.id} value={row.id}>{row.title || row.id}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Ordine di lavoro</Label>
+                                <Select value={selectedWorkOrderId} onValueChange={setSelectedWorkOrderId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Tutti gli ordini" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Tutti gli ordini</SelectItem>
+                                        {machineScopedWorkOrders.map((row) => (
+                                            <SelectItem key={row.id} value={row.id}>{row.title || row.id}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>{checklistsLabel}</Label>
+                                <Select value={selectedChecklistId} onValueChange={setSelectedChecklistId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Tutte le checklist" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Tutte le checklist</SelectItem>
+                                        {machineScopedChecklists.map((row) => (
+                                            <SelectItem key={row.id} value={row.id}>{row.title || row.id}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle>Che cosa deve fare questa sezione</CardTitle>
+                                <CardTitle>Prossimo passo consigliato</CardTitle>
                                 <CardDescription>
-                                    Non sostituisce piani, ordini o checklist: li tiene collegati in un percorso leggibile e operativo.
+                                    Il sistema propone la prossima azione utile in base a ciò che hai già selezionato e a ciò che manca nel flusso.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {[
-                                    {
-                                        n: "1",
-                                        title: "Piano di manutenzione",
-                                        desc: "Definisce periodicità, competenze richieste e priorità. È la regola che genera attività ripetibili.",
-                                        href: "/maintenance",
-                                    },
-                                    {
-                                        n: "2",
-                                        title: "Ordine di lavoro",
-                                        desc: "È l’azione concreta da assegnare, tracciare e chiudere. Può nascere da un piano o essere creato manualmente.",
-                                        href: "/work-orders",
-                                    },
-                                    {
-                                        n: "3",
-                                        title: isManufacturer ? "Template checklist" : "Checklist operativa",
-                                        desc: isManufacturer
-                                            ? "Il costruttore prepara i template che guidano il cliente finale durante l’esecuzione."
-                                            : "La checklist guida il tecnico nei controlli, misure e note da compilare sul campo.",
-                                        href: "/checklists",
-                                    },
-                                    {
-                                        n: "4",
-                                        title: "Esecuzione e feedback",
-                                        desc: isManufacturer
-                                            ? "Il costruttore non esegue direttamente, ma monitora risultati, anomalie e prove raccolte dal cliente."
-                                            : "Il tecnico compila, salva, allega evidenze e aggiorna il flusso fino alla chiusura dell’ordine.",
-                                        href: canExecute ? "/work-orders" : "/checklists",
-                                    },
-                                ].map((step) => (
-                                    <div key={step.n} className="rounded-2xl border border-border bg-muted/20 p-4">
-                                        <div className="flex items-start gap-4">
-                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-sm font-bold text-white">
-                                                {step.n}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                                    <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
-                                                    <Link href={step.href} className="text-sm font-medium text-orange-500 hover:underline">
-                                                        Apri sezione
-                                                    </Link>
-                                                </div>
-                                                <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.desc}</p>
-                                            </div>
+                                <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500">
+                                            {recommendedNextStep.icon}
+                                        </div>
+                                        <div className="min-w-0 flex-1 space-y-2">
+                                            <div className="font-semibold text-foreground">{recommendedNextStep.title}</div>
+                                            <div className="text-sm text-muted-foreground">{recommendedNextStep.description}</div>
+                                            <Link href={recommendedNextStep.href} className="inline-flex items-center gap-2 text-sm font-medium text-orange-500 hover:underline">
+                                                {recommendedNextStep.cta}
+                                                <ArrowRight className="h-4 w-4" />
+                                            </Link>
                                         </div>
                                     </div>
-                                ))}
+                                </div>
+
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    {actions.map((action) => (
+                                        <div key={action.title} className="rounded-2xl border border-border bg-muted/10 p-4">
+                                            <div className="font-medium text-foreground">{action.title}</div>
+                                            <div className="mt-1 text-sm text-muted-foreground">{action.description}</div>
+                                            <Link href={action.href} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-orange-500 hover:underline">
+                                                {action.hrefLabel}
+                                                <ArrowRight className="h-4 w-4" />
+                                            </Link>
+                                        </div>
+                                    ))}
+                                </div>
                             </CardContent>
                         </Card>
 
-                        <div className="space-y-6">
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle>Azioni rapide</CardTitle>
-                                    <CardDescription>
-                                        Entrate dirette ai punti che muovono davvero il flusso operativo.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {canCreate && (
-                                        <Link href="/maintenance/new" className="block">
-                                            <Button variant="outline" className="w-full justify-between">
-                                                <span className="flex items-center gap-2"><Wrench className="h-4 w-4" /> Nuovo piano</span>
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    )}
-                                    {canCreate && (
-                                        <Link href="/work-orders/new" className="block">
-                                            <Button variant="outline" className="w-full justify-between">
-                                                <span className="flex items-center gap-2"><ClipboardList className="h-4 w-4" /> Nuovo ordine di lavoro</span>
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    )}
-                                    {canCreate && (
-                                        <Link href="/checklists/new" className="block">
-                                            <Button variant="outline" className="w-full justify-between">
-                                                <span className="flex items-center gap-2"><CheckSquare className="h-4 w-4" /> Nuova checklist</span>
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    )}
-                                    {isManufacturer ? (
-                                        <>
-                                            <Link href="/customers" className="block">
-                                                <Button variant="outline" className="w-full justify-between">
-                                                    <span className="flex items-center gap-2"><Building2 className="h-4 w-4" /> Clienti</span>
-                                                    <ArrowRight className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
-                                            <Link href="/assignments" className="block">
-                                                <Button variant="outline" className="w-full justify-between">
-                                                    <span className="flex items-center gap-2"><Layers3 className="h-4 w-4" /> Assegnazioni macchina</span>
-                                                    <ArrowRight className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
-                                        </>
-                                    ) : (
-                                        <Link href="/plants" className="block">
-                                            <Button variant="outline" className="w-full justify-between">
-                                                <span className="flex items-center gap-2"><Building2 className="h-4 w-4" /> Stabilimenti</span>
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    )}
-                                    {canExecute && (
-                                        <Link href="/work-orders" className="block">
-                                            <Button className="w-full justify-between">
-                                                <span className="flex items-center gap-2"><PlayCircle className="h-4 w-4" /> Apri coda operativa</span>
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card className="rounded-2xl">
-                                <CardHeader>
-                                    <CardTitle>Blocchi o attenzione</CardTitle>
-                                    <CardDescription>
-                                        Qui vedi subito cosa impedisce al flusso di essere completo.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {blockers.length === 0 ? (
-                                        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
-                                            Nessun blocco strutturale evidente: il flusso ha già macchine, piani, ordini e checklist per lavorare.
-                                        </div>
-                                    ) : (
-                                        blockers.map((item) => (
-                                            <div key={item.title} className="rounded-2xl border border-border bg-muted/20 p-4">
-                                                <div className="flex items-start gap-3">
-                                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="font-medium text-foreground">{item.title}</div>
-                                                        <div className="mt-1 text-sm text-muted-foreground">{item.description}</div>
-                                                        <Link href={item.href} className="mt-3 inline-flex text-sm font-medium text-orange-500 hover:underline">
-                                                            {item.hrefLabel}
-                                                        </Link>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <Card className="rounded-2xl">
+                            <CardHeader>
+                                <CardTitle>Contesto selezionato</CardTitle>
+                                <CardDescription>
+                                    Riepilogo rapido del perimetro con cui stai lavorando in questo momento.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <div className="rounded-2xl border border-border bg-muted/10 p-4">
+                                    <div className="text-sm text-muted-foreground">Macchina</div>
+                                    <div className="mt-1 font-medium text-foreground">{machineLabel}</div>
+                                </div>
+                                <div className="rounded-2xl border border-border bg-muted/10 p-4">
+                                    <div className="text-sm text-muted-foreground">Piano</div>
+                                    <div className="mt-1 font-medium text-foreground">{selectedPlan?.title || "Nessun piano contestuale"}</div>
+                                </div>
+                                <div className="rounded-2xl border border-border bg-muted/10 p-4">
+                                    <div className="text-sm text-muted-foreground">Ordine</div>
+                                    <div className="mt-1 flex items-center gap-2 font-medium text-foreground">
+                                        <span>{selectedWorkOrder?.title || "Nessun ordine contestuale"}</span>
+                                        {selectedWorkOrder?.status && <Badge variant={getStatusTone(selectedWorkOrder.status)}>{selectedWorkOrder.status}</Badge>}
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-border bg-muted/10 p-4">
+                                    <div className="text-sm text-muted-foreground">Checklist</div>
+                                    <div className="mt-1 flex items-center gap-2 font-medium text-foreground">
+                                        <span>{selectedChecklist?.title || "Nessuna checklist contestuale"}</span>
+                                        {selectedChecklist?.checklist_type && <Badge variant="outline">{selectedChecklist.checklist_type}</Badge>}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-2">
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle>Ordini di lavoro recenti</CardTitle>
+                                <CardTitle>Ordini recenti nel contesto</CardTitle>
                                 <CardDescription>
-                                    Gli ordini sono il punto in cui il piano diventa attività concreta.
+                                    Vista rapida di cosa è già stato generato sulla macchina o nel contesto selezionato.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {workOrders.length === 0 ? (
+                                {machineScopedWorkOrders.length === 0 ? (
                                     <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
-                                        Nessun ordine di lavoro disponibile nel contesto attivo.
+                                        Nessun ordine disponibile nel contesto filtrato.
                                     </div>
                                 ) : (
-                                    workOrders.map((row) => (
+                                    machineScopedWorkOrders.slice(0, 8).map((row) => (
                                         <Link key={row.id} href={`/work-orders/${row.id}`} className="block rounded-2xl border border-border bg-muted/10 p-4 transition hover:bg-muted/20">
                                             <div className="flex flex-wrap items-start justify-between gap-3">
-                                                <div className="space-y-1">
+                                                <div>
                                                     <div className="font-medium text-foreground">{row.title || "Ordine senza titolo"}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        {row.machine?.name || "Macchina non collegata"}
-                                                        {row.machine?.internal_code ? ` · ${row.machine.internal_code}` : ""}
-                                                    </div>
+                                                    <div className="mt-1 text-sm text-muted-foreground">Scadenza: {formatDate(row.due_date)}</div>
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <Badge variant={getStatusTone(row.status)}>{row.status || "—"}</Badge>
                                                     <Badge variant={getPriorityTone(row.priority)}>{row.priority || "medium"}</Badge>
                                                 </div>
                                             </div>
-                                            <div className="mt-3 text-sm text-muted-foreground">
-                                                Scadenza: {formatDate(row.due_date)}
-                                            </div>
                                         </Link>
                                     ))
                                 )}
@@ -591,36 +623,32 @@ export default function OperationalFlowsPage() {
 
                         <Card className="rounded-2xl">
                             <CardHeader>
-                                <CardTitle>{isManufacturer ? "Risultati esecuzioni recenti" : "Checklist compilate di recente"}</CardTitle>
+                                <CardTitle>{isManufacturer ? "Feedback recenti" : "Esecuzioni recenti"}</CardTitle>
                                 <CardDescription>
-                                    {isManufacturer
-                                        ? "Come costruttore, qui leggi le evidenze raccolte dal cliente sulle tue macchine vendute."
-                                        : "Qui leggi cosa è stato compilato sul campo e con quale esito operativo."}
+                                    Ultimi riscontri registrati nel contesto corrente, utili per capire se il flusso sta davvero girando.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {executions.length === 0 ? (
+                                {machineScopedExecutions.length === 0 ? (
                                     <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
-                                        Nessuna esecuzione registrata di recente nel contesto attivo.
+                                        Nessuna esecuzione recente nel contesto filtrato.
                                     </div>
                                 ) : (
-                                    executions.map((row) => (
+                                    machineScopedExecutions.slice(0, 8).map((row) => (
                                         <div key={row.id} className="rounded-2xl border border-border bg-muted/10 p-4">
                                             <div className="flex flex-wrap items-start justify-between gap-3">
                                                 <div>
-                                                    <div className="font-medium text-foreground">{row.checklist?.title || "Checklist"}</div>
-                                                    <div className="text-sm text-muted-foreground">{row.machine?.name || "Macchina non collegata"}</div>
+                                                    <div className="font-medium text-foreground">Checklist {row.checklist_id || "—"}</div>
+                                                    <div className="mt-1 text-sm text-muted-foreground">Eseguita: {formatDate(row.completed_at || row.executed_at)}</div>
                                                 </div>
                                                 <Badge variant={getStatusTone(row.overall_status)}>{row.overall_status || "pending"}</Badge>
                                             </div>
-                                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                                                <span>Eseguita: {formatDate(row.completed_at || row.executed_at)}</span>
-                                                {row.work_order_id && (
-                                                    <Link href={`/work-orders/${row.work_order_id}`} className="font-medium text-orange-500 hover:underline">
-                                                        Apri ordine collegato
-                                                    </Link>
-                                                )}
-                                            </div>
+                                            {row.work_order_id && (
+                                                <Link href={`/work-orders/${row.work_order_id}`} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-orange-500 hover:underline">
+                                                    Apri ordine collegato
+                                                    <ArrowRight className="h-4 w-4" />
+                                                </Link>
+                                            )}
                                         </div>
                                     ))
                                 )}
@@ -628,41 +656,19 @@ export default function OperationalFlowsPage() {
                         </Card>
                     </div>
 
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle>Piani prossimi alla scadenza</CardTitle>
-                            <CardDescription>
-                                Punto rapido per capire se il flusso preventivo sta alimentando davvero gli ordini di lavoro.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {plans.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
-                                    Nessun piano disponibile nel contesto attivo.
+                    {selectedMachine && (
+                        <Card className="rounded-2xl border-amber-500/20 bg-amber-500/5">
+                            <CardContent className="flex flex-wrap items-start gap-3 p-5 text-sm text-amber-900 dark:text-amber-200">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <div className="font-medium">Nota di utilizzo</div>
+                                    <div className="mt-1">
+                                        Questa pagina non sostituisce i domini operativi: serve per entrare nel punto giusto con il contesto già pronto e ridurre click inutili tra macchina, piano, ordine e checklist.
+                                    </div>
                                 </div>
-                            ) : (
-                                plans.map((row) => (
-                                    <Link key={row.id} href={`/maintenance/${row.id}`} className="block rounded-2xl border border-border bg-muted/10 p-4 transition hover:bg-muted/20">
-                                        <div className="flex flex-wrap items-start justify-between gap-3">
-                                            <div className="space-y-1">
-                                                <div className="font-medium text-foreground">{row.title || "Piano senza titolo"}</div>
-                                                <div className="text-sm text-muted-foreground">
-                                                    Prossima scadenza: {formatDate(row.next_due_date)}
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                {!row.is_active && <Badge variant="outline">inattivo</Badge>}
-                                                {row.priority && <Badge variant={getPriorityTone(row.priority)}>{row.priority}</Badge>}
-                                                {row.is_active && row.next_due_date && new Date(row.next_due_date).getTime() < Date.now() && (
-                                                    <Badge variant="destructive">scaduto</Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </Link>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </MainLayout>
         </OrgContextGuard>
