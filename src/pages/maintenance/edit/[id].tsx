@@ -93,7 +93,7 @@ export default function MaintenancePlanDetailPage() {
     const { toast } = useToast();
     const { membership, loading: authLoading } = useAuth();
     const { plantLabel, machineContextLabel, canManageMaintenance } = useOrgType();
-    const userRole = membership?.role ?? "viewer";
+    const userRole = membership?.role ?? "technician";
 
     const [loading, setLoading] = useState(true);
     const [plan, setPlan] = useState < PlanRow | null > (null);
@@ -361,4 +361,5 @@ export default function MaintenancePlanDetailPage() {
         </OrgContextGuard>
     );
 }
+
 
