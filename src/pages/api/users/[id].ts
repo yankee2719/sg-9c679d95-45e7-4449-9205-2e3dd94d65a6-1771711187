@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-import { isAdminLikeRole, normalizeRoleForStorage } from "@/lib/roles";
+import { canManageMembers, isWritableOrgRole, normalizeRole, toWritableOrgRole } from "@/lib/roles";
 
 async function ensureAdmin(req: AuthenticatedRequest) {
     const serviceSupabase = getServiceSupabase();
@@ -21,7 +21,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const { serviceSupabase, actorMembership, actorError } = await ensureAdmin(req);
     if (actorError) return res.status(500).json({ error: actorError.message });
-    if (!actorMembership || !isAdminLikeRole(actorMembership.role)) {
+    if (!actorMembership || !canManageMembers(actorMembership.role)) {
         return res.status(403).json({ error: "Only organization admins can manage users" });
     }
 
@@ -36,17 +36,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (req.method === "PATCH") {
         const { display_name, role, is_active } = req.body ?? {};
-        const storedRole = role !== undefined ? normalizeRoleForStorage(role) : undefined;
-        if (role !== undefined && !storedRole) {
-            return res.status(400).json({ error: "Invalid role. Allowed roles: admin, supervisor, technician" });
+        if (role !== undefined && !isWritableOrgRole(toWritableOrgRole(role))) {
+            return res.status(400).json({ error: "Invalid role" });
         }
         if (targetMembership.user_id === req.user.id) {
             if (is_active === false) return res.status(400).json({ error: "You cannot deactivate yourself" });
-            if (storedRole && storedRole !== targetMembership.role) return res.status(400).json({ error: "You cannot change your own role" });
+            if (role && normalizeRole(role, "technician") !== normalizeRole(targetMembership.role, "technician")) {
+                return res.status(400).json({ error: "You cannot change your own role" });
+            }
         }
 
         const membershipUpdate: Record<string, unknown> = {};
-        if (storedRole !== undefined) membershipUpdate.role = storedRole;
+        if (role !== undefined) membershipUpdate.role = toWritableOrgRole(role);
         if (is_active !== undefined) {
             membershipUpdate.is_active = Boolean(is_active);
             membershipUpdate.deactivated_at = Boolean(is_active) ? null : new Date().toISOString();
