@@ -1,137 +1,83 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthenticatedRequest } from "@/lib/apiAuth";
+import type { NextApiResponse } from "next";
+import {
+    withAuth,
+    type AuthenticatedRequest,
+    getServiceSupabase,
+} from "@/lib/apiAuth";
+import {
+    buildQrTokenResponse,
+    canManageMachineQr,
+    getMachineById,
+} from "@/lib/server/machineQrService";
 
-type ApiUser = AuthenticatedRequest["user"];
-
-export const DEFAULT_QR_ALLOWED_VIEWS = [
-    "passport",
-    "events",
-    "documents",
-    "maintenance",
-] as const;
-
-export interface MachineQrRow {
-    id: string;
-    name: string;
-    organization_id: string | null;
-    qr_code_token: string | null;
-    qr_code_generated_at: string | null;
-    updated_at: string | null;
-    is_archived?: boolean | null;
-    is_deleted?: boolean | null;
-}
-
-export function getBaseAppUrl() {
-    const raw =
-        process.env.NEXT_PUBLIC_SITE_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "http://localhost:3000";
-
-    return raw.replace(/\/$/, "");
-}
-
-export async function getMachineById(
-    supabase: SupabaseClient,
-    machineId: string
-): Promise<MachineQrRow | null> {
-    const { data, error } = await supabase
-        .from("machines")
-        .select(
-            "id, name, organization_id, qr_code_token, qr_code_generated_at, updated_at, is_archived, is_deleted"
-        )
-        .eq("id", machineId)
-        .maybeSingle();
-
-    if (error) throw error;
-    return (data as MachineQrRow | null) ?? null;
-}
-
-export async function getMachineByQrToken(
-    supabase: SupabaseClient,
-    token: string
-): Promise<MachineQrRow | null> {
-    const { data, error } = await supabase
-        .from("machines")
-        .select(
-            "id, name, organization_id, qr_code_token, qr_code_generated_at, updated_at, is_archived, is_deleted"
-        )
-        .eq("qr_code_token", token)
-        .maybeSingle();
-
-    if (error) throw error;
-    return (data as MachineQrRow | null) ?? null;
-}
-
-async function hasAssignmentAccess(
-    supabase: SupabaseClient,
-    machineId: string,
-    organizationId: string
-) {
-    const { data, error } = await supabase
-        .from("machine_assignments")
-        .select("id")
-        .eq("machine_id", machineId)
-        .eq("is_active", true)
-        .or(
-            `manufacturer_org_id.eq.${organizationId},customer_org_id.eq.${organizationId}`
-        )
-        .limit(1)
-        .maybeSingle();
-
-    if (error) throw error;
-    return !!data;
-}
-
-export async function canViewMachineViaQr(
-    supabase: SupabaseClient,
-    user: ApiUser,
-    machine: MachineQrRow
-) {
-    if (user.isPlatformAdmin) return true;
-    if (!user.organizationId) return false;
-    if (machine.organization_id === user.organizationId) return true;
-    return hasAssignmentAccess(supabase, machine.id, user.organizationId);
-}
-
-export async function canManageMachineQr(
-    supabase: SupabaseClient,
-    user: ApiUser,
-    machine: MachineQrRow
-) {
-    if (user.isPlatformAdmin) return true;
-    if (!user.organizationId) return false;
-    if (machine.organization_id !== user.organizationId) return false;
-    return ["admin", "supervisor"].includes(user.role);
-}
-
-export function buildQrTokenResponse(machine: MachineQrRow) {
-    if (!machine.qr_code_token) {
-        return [];
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+    const machineId = typeof req.query.id === "string" ? req.query.id : "";
+    if (!machineId) {
+        return res.status(400).json({ error: "Equipment ID is required" });
     }
 
-    return [
-        {
-            id: machine.id,
-            equipment_id: machine.id,
-            token_type: "permanent" as const,
-            token_prefix: machine.qr_code_token.slice(0, 8),
-            qr_label: machine.name ?? null,
-            allowed_views: [...DEFAULT_QR_ALLOWED_VIEWS],
-            requires_auth: true,
-            max_permission_level: "organization_member",
-            expires_at: null,
-            is_active: true,
-            scan_count: 0,
-            last_scanned_at: null,
-            created_at:
-                machine.qr_code_generated_at ||
-                machine.updated_at ||
-                new Date().toISOString(),
-        },
-    ];
+    try {
+        const supabase = getServiceSupabase();
+        const machine = await getMachineById(supabase, machineId);
+
+        if (!machine || machine.is_deleted || machine.is_archived) {
+            return res.status(404).json({ error: "Machine not found" });
+        }
+
+        const allowed = await canManageMachineQr(supabase, req.user, machine);
+        if (!allowed) {
+            return res.status(403).json({ error: "Only the owner organization can manage machine QR tokens" });
+        }
+
+        if (req.method === "GET") {
+            const tokens = buildQrTokenResponse(machine);
+            return res.status(200).json({
+                success: true,
+                tokens,
+                recent_scans: [],
+                active_count: tokens.filter((token) => token.is_active).length,
+                total_scans: 0,
+            });
+        }
+
+        if (req.method === "DELETE") {
+            const { token_id } = req.body || {};
+            if (!token_id || typeof token_id !== "string") {
+                return res.status(400).json({ error: "token_id is required in body" });
+            }
+
+            if (token_id !== machine.id || !machine.qr_code_token) {
+                return res.status(404).json({ error: "QR token not found" });
+            }
+
+            const { error } = await supabase
+                .from("machines")
+                .update({
+                    qr_code_token: null,
+                    qr_code_generated_at: null,
+                    updated_at: new Date().toISOString(),
+                } as any)
+                .eq("id", machine.id);
+
+            if (error) throw error;
+
+            return res.status(200).json({
+                success: true,
+                message: "QR token revoked successfully",
+            });
+        }
+
+        return res.status(405).json({
+            error: "Method not allowed",
+            allowedMethods: ["GET", "DELETE"],
+        });
+    } catch (error) {
+        console.error("QR Equipment API Error:", error);
+        return res.status(500).json({
+            error: error instanceof Error ? error.message : "Operation failed",
+        });
+    }
 }
 
-export function createMachineQrToken() {
-    return crypto.randomUUID().replace(/-/g, "");
-}
+export default withAuth(["admin", "supervisor"], handler);
 
