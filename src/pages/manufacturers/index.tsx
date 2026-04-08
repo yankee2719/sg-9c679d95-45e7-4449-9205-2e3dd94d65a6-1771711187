@@ -58,7 +58,7 @@ export default function ManufacturersPage() {
         load();
     }, [router, t, toast]);
 
-    const isAdmin = userRole === "owner" || userRole === "admin" || userRole === "supervisor";
+    const isAdmin = userRole === "admin" || userRole === "supervisor";
 
     const resetForm = () => {
         setForm({ name: "", country: "", website: "", email: "", phone: "", address: "", notes: "" });
@@ -256,3 +256,4 @@ export default function ManufacturersPage() {
         </MainLayout>
     );
 }
+
