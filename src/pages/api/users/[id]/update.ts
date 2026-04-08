@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-import { isAdminLikeRole, normalizeRoleForStorage } from "@/lib/roles";
+import { canManageMembers, toWritableOrgRole } from "@/lib/roles";
 
 const ALLOWED_ROLES = ["admin", "supervisor", "technician"];
 
@@ -21,9 +21,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(400).json({ error: "No active organization context" });
         }
 
-        const storedRole = role !== undefined ? normalizeRoleForStorage(role) : undefined;
-        if (role !== undefined && (!storedRole || !ALLOWED_ROLES.includes(storedRole))) {
-            return res.status(400).json({ error: "Invalid role. Allowed roles: admin, supervisor, technician" });
+        if (role !== undefined && !ALLOWED_ROLES.includes(String(role))) {
+            return res.status(400).json({ error: "Invalid role" });
         }
 
         const serviceSupabase = getServiceSupabase();
@@ -40,7 +39,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(500).json({ error: actorMembershipError.message });
         }
 
-        if (!actorMembership || !isAdminLikeRole(actorMembership.role)) {
+        if (!actorMembership || !canManageMembers(actorMembership.role)) {
             return res.status(403).json({ error: "Only organization admins can update users" });
         }
 
@@ -67,15 +66,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             if (is_active === false) {
                 return res.status(400).json({ error: "You cannot deactivate yourself" });
             }
-            if (storedRole && storedRole !== targetMembership.role) {
+            if (role && role !== targetMembership.role) {
                 return res.status(400).json({ error: "You cannot change your own role" });
             }
         }
 
         const membershipUpdate: Record<string, unknown> = {};
 
-        if (storedRole !== undefined) {
-            membershipUpdate.role = storedRole;
+        if (role !== undefined) {
+            membershipUpdate.role = toWritableOrgRole(role);
         }
 
         if (is_active !== undefined) {
@@ -133,7 +132,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     target_user_id: targetMembership.user_id,
                 },
                 new_data: {
-                    role: storedRole ?? targetMembership.role,
+                    role: role ?? targetMembership.role,
                     is_active:
                         is_active !== undefined ? Boolean(is_active) : targetMembership.is_active,
                     display_name:
