@@ -25,8 +25,6 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     return (payload?.data ?? payload) as T;
 }
 
-export type CurrentUserRole = "admin" | "supervisor" | "technician";
-
 export interface UserAdminRow {
     id: string;
     membership_id: string;
@@ -35,7 +33,7 @@ export interface UserAdminRow {
     first_name?: string | null;
     last_name?: string | null;
     avatar_url?: string | null;
-    role: CurrentUserRole;
+    role: "admin" | "supervisor" | "technician";
     is_active: boolean;
     created_at?: string | null;
     accepted_at?: string | null;
