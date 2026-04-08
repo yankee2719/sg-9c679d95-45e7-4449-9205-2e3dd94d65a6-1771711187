@@ -1,11 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
-import {
-    type CompatibleOrgRole,
-    type StoredOrgRole,
-    normalizeCompatibleRole,
-    roleSatisfiesAny,
-} from "@/lib/roles";
+import { hasMinimumOrgRole, normalizeOrgRole, type RealOrgRole } from "@/lib/roles";
 
 const getSupabaseAdmin = () => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,8 +18,9 @@ const getSupabaseAdmin = () => {
     });
 };
 
-export type MembershipRole = CompatibleOrgRole;
-export type LegacyRoleType = StoredOrgRole;
+export type MembershipRole = RealOrgRole | "owner" | "plant_manager" | "viewer";
+
+export type LegacyRoleType = "admin" | "supervisor" | "technician";
 
 export interface AuthenticatedUser {
     id: string;
@@ -45,7 +41,7 @@ export type NextApiHandlerWithAuth = (
     res: NextApiResponse
 ) => void | Promise<void>;
 
-export type RoleType = CompatibleOrgRole;
+export type RoleType = LegacyRoleType;
 
 function getAuthToken(req: NextApiRequest): string | null {
     const authHeader = req.headers.authorization;
@@ -66,21 +62,12 @@ function getAuthToken(req: NextApiRequest): string | null {
     return null;
 }
 
-function toStoredRole(role: string | null | undefined): LegacyRoleType {
-    const normalized = normalizeCompatibleRole(role);
-    switch (normalized) {
-        case "owner":
-            return "admin";
-        case "plant_manager":
-            return "supervisor";
-        case "admin":
-        case "supervisor":
-        case "technician":
-            return normalized;
-        case "viewer":
-        default:
-            return "technician";
-    }
+function toLegacyRole(role: string | null | undefined): LegacyRoleType {
+    return normalizeOrgRole(role) ?? "technician";
+}
+
+function hasRequiredRole(actualRole: MembershipRole, allowedRoles: RoleType[]) {
+    return allowedRoles.some((role) => hasMinimumOrgRole(actualRole, role));
 }
 
 async function resolveAuthenticatedUser(
@@ -134,7 +121,7 @@ async function resolveAuthenticatedUser(
             return { user: null, error: "User has no active membership" };
         }
 
-        const membershipRole = normalizeCompatibleRole(activeMembership.role) ?? "technician";
+        const membershipRole = (normalizeOrgRole(activeMembership.role) ?? "technician") as MembershipRole;
         const fullName =
             profile?.display_name ||
             [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
@@ -145,7 +132,7 @@ async function resolveAuthenticatedUser(
             user: {
                 id: authUser.id,
                 email: profile?.email || authUser.email || "",
-                role: toStoredRole(membershipRole),
+                role: toLegacyRole(membershipRole),
                 membership_role: membershipRole,
                 tenant_id: activeMembership.organization_id ?? null,
                 organization_id: activeMembership.organization_id ?? null,
@@ -174,7 +161,7 @@ export function withAuth(
 
         if (
             options?.allowedRoles?.length &&
-            !roleSatisfiesAny(user.membership_role, options.allowedRoles)
+            !hasRequiredRole(user.membership_role, options.allowedRoles)
         ) {
             return res.status(403).json({
                 error: "Forbidden",
