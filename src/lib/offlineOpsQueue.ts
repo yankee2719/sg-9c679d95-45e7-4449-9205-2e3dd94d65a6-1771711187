@@ -23,15 +23,15 @@ export interface OfflineSyncHistoryEntry {
 
 const OPS_KEY = "machina.offline.ops.v1";
 const HISTORY_KEY = "machina.offline.history.v1";
-export const OFFLINE_QUEUE_UPDATED_EVENT = "machina-offline-queue-updated";
+export const OFFLINE_QUEUE_CHANGED_EVENT = "machina-offline-queue-changed";
 
 function isBrowser() {
     return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
-function emitQueueUpdated() {
+function notifyQueueChanged() {
     if (!isBrowser()) return;
-    window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_UPDATED_EVENT));
+    window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_CHANGED_EVENT));
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -45,11 +45,11 @@ function readJson<T>(key: string, fallback: T): T {
     }
 }
 
-function writeJson<T>(key: string, value: T) {
+function writeJson<T>(key: string, value: T, notify = false) {
     if (!isBrowser()) return;
     localStorage.setItem(key, JSON.stringify(value));
-    if (key === OPS_KEY) {
-        emitQueueUpdated();
+    if (notify) {
+        notifyQueueChanged();
     }
 }
 
@@ -62,11 +62,11 @@ export function getOfflineOperationCount(): number {
 }
 
 export function replaceOfflineOperations(operations: OfflineOperation[]) {
-    writeJson(OPS_KEY, operations);
+    writeJson(OPS_KEY, operations, true);
 }
 
 export function clearOfflineOperations() {
-    writeJson(OPS_KEY, []);
+    writeJson(OPS_KEY, [], true);
 }
 
 export function appendSyncHistory(entry: OfflineSyncHistoryEntry) {
