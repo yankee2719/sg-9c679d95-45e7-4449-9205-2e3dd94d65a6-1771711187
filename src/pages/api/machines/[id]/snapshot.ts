@@ -1,8 +1,9 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 import { getAccessibleMachine } from "@/lib/server/machineAccess";
 
-export default withAuth(["owner", "admin", "supervisor", "technician", "viewer"], async function handler(
+export default withAuth(["technician"], async function handler(
     req: AuthenticatedRequest,
     res: NextApiResponse
 ) {
@@ -53,8 +54,8 @@ export default withAuth(["owner", "admin", "supervisor", "technician", "viewer"]
             line: lineRes.data ?? null,
             ownerOrganization: ownerRes.data ?? null,
             assignedCustomerName: (assignmentRes.data as any)?.organizations?.name ?? null,
-            can_edit_machine: ["owner", "admin", "supervisor"].includes(req.user.role) && machine.organization_id === req.user.organizationId,
-            can_delete_machine: ["owner", "admin", "supervisor"].includes(req.user.role) && machine.organization_id === req.user.organizationId,
+            can_edit_machine: hasMinimumCompatibleRole(req.user.role, "supervisor") && machine.organization_id === req.user.organizationId,
+            can_delete_machine: hasMinimumCompatibleRole(req.user.role, "supervisor") && machine.organization_id === req.user.organizationId,
         });
     } catch (error: any) {
         console.error("Machine snapshot API error:", error);
