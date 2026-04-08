@@ -1,276 +1,369 @@
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/router";
-import { ArrowLeft, CalendarDays, ClipboardList, Loader2, MapPin, Route, Save, User, Wrench } from "lucide-react";
-import { getWorkOrder, updateWorkOrder } from "@/services/workOrderApi";
-import { supabase } from "@/integrations/supabase/client";
+import { CheckCircle2, Download, Search, Shield, Users, UserCheck } from "lucide-react";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
-import { hasMinimumOrgRole } from "@/lib/roles";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage, type Language } from "@/contexts/LanguageContext";
+import { downloadCsv } from "@/lib/downloadCsv";
+import { Card, CardContent } from "@/components/ui/card";
+import EmptyState from "@/components/feedback/EmptyState";
+import UserRoleBadge from "@/components/users/UserRoleBadge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import WorkOrderStatusBadge from "@/components/work-orders/WorkOrderStatusBadge";
-import WorkOrderPriorityBadge from "@/components/work-orders/WorkOrderPriorityBadge";
+import { apiFetch } from "@/services/apiClient";
 
-interface WorkOrderRow {
+interface UserListRow {
     id: string;
-    title: string | null;
-    description: string | null;
-    status: string | null;
-    priority: string | null;
-    due_date: string | null;
-    machine_id: string | null;
-    plant_id: string | null;
-    assigned_to: string | null;
-    organization_id: string | null;
+    membership_id: string;
+    email: string;
+    display_name: string | null;
+    avatar_url?: string | null;
     created_at: string | null;
-    updated_at: string | null;
-    work_type?: string | null;
-    scheduled_date?: string | null;
-    notes?: string | null;
+    accepted_at?: string | null;
+    role: string | null;
+    is_active: boolean;
 }
 
-function formatDate(value: string | null | undefined, lang: string) {
+const I18N: Record<Language, Record<string, string>> = {
+    it: {
+        title: "Utenti",
+        subtitlePrefix: "Registro utenti del contesto attivo:",
+        exportCsv: "Esporta CSV",
+        kpiTotal: "Utenti totali",
+        kpiActive: "Utenti attivi",
+        kpiAdmins: "Ruoli gestionali",
+        kpiViewers: "Tecnici",
+        searchPlaceholder: "Cerca per nome, email o ruolo",
+        allRoles: "Tutti i ruoli",
+        allStatuses: "Tutti gli stati",
+        active: "Attivo",
+        inactive: "Inattivo",
+        loading: "Caricamento utenti...",
+        noResults: "Nessun utente trovato.",
+        noResultsDesc: "Nessun utente corrisponde ai filtri selezionati.",
+        loadError: "Impossibile caricare gli utenti.",
+        createdAt: "Creato il",
+        orgFallback: "Organizzazione",
+    },
+    en: {
+        title: "Users",
+        subtitlePrefix: "User registry for the active organization:",
+        exportCsv: "Export CSV",
+        kpiTotal: "Total users",
+        kpiActive: "Active users",
+        kpiAdmins: "Admin roles",
+        kpiViewers: "Technicians",
+        searchPlaceholder: "Search by name, email or role",
+        allRoles: "All roles",
+        allStatuses: "All statuses",
+        active: "Active",
+        inactive: "Inactive",
+        loading: "Loading users...",
+        noResults: "No users found.",
+        noResultsDesc: "No users match the selected filters.",
+        loadError: "Unable to load users.",
+        createdAt: "Created on",
+        orgFallback: "Organization",
+    },
+    fr: {
+        title: "Utilisateurs",
+        subtitlePrefix: "Registre des utilisateurs du contexte actif :",
+        exportCsv: "Exporter CSV",
+        kpiTotal: "Utilisateurs totaux",
+        kpiActive: "Utilisateurs actifs",
+        kpiAdmins: "Rôles de gestion",
+        kpiViewers: "Techniciens",
+        searchPlaceholder: "Rechercher par nom, e-mail ou rôle",
+        allRoles: "Tous les rôles",
+        allStatuses: "Tous les statuts",
+        active: "Actif",
+        inactive: "Inactif",
+        loading: "Chargement des utilisateurs...",
+        noResults: "Aucun utilisateur trouvé.",
+        noResultsDesc: "Aucun utilisateur ne correspond aux filtres sélectionnés.",
+        loadError: "Impossible de charger les utilisateurs.",
+        createdAt: "Créé le",
+        orgFallback: "Organisation",
+    },
+    es: {
+        title: "Usuarios",
+        subtitlePrefix: "Registro de usuarios del contexto activo:",
+        exportCsv: "Exportar CSV",
+        kpiTotal: "Usuarios totales",
+        kpiActive: "Usuarios activos",
+        kpiAdmins: "Roles de gestión",
+        kpiViewers: "Técnicos",
+        searchPlaceholder: "Buscar por nombre, correo o rol",
+        allRoles: "Todos los roles",
+        allStatuses: "Todos los estados",
+        active: "Activo",
+        inactive: "Inactivo",
+        loading: "Cargando usuarios...",
+        noResults: "No se encontraron usuarios.",
+        noResultsDesc: "Ningún usuario coincide con los filtros seleccionados.",
+        loadError: "No se pudieron cargar los usuarios.",
+        createdAt: "Creado el",
+        orgFallback: "Organización",
+    },
+};
+
+function formatDate(value: string | null | undefined, lang: Language) {
     if (!value) return "—";
     try {
         const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
-        return new Date(value).toLocaleString(locale);
+        return new Date(value).toLocaleString(locale, {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
     } catch {
         return value;
     }
 }
 
-export default function WorkOrderDetailPage() {
-    const router = useRouter();
-    const { id } = router.query;
-    const { toast } = useToast();
-    const { loading: authLoading, membership, organization } = useAuth() as any;
-    const { t, language } = useLanguage();
+function displayName(row: UserListRow) {
+    return row.display_name?.trim() || row.email || row.id;
+}
+
+function KpiCard({
+    icon,
+    title,
+    value,
+    tone = "default",
+}: {
+    icon: React.ReactNode;
+    title: string;
+    value: number;
+    tone?: "default" | "success";
+}) {
+    const toneClass = tone === "success" ? "text-green-500" : "text-orange-500";
+    return (
+        <Card className="rounded-2xl">
+            <CardContent className="p-6">
+                <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-current/10 ${toneClass}`}>
+                    {icon}
+                </div>
+                <div className="text-4xl font-bold text-foreground">{value}</div>
+                <div className="mt-2 text-sm text-muted-foreground">{title}</div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default function UsersIndexPage() {
+    const { loading: authLoading, organization, membership } = useAuth();
+    const { language } = useLanguage();
+    const L = I18N[language] || I18N.en;
 
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [row, setRow] = useState < WorkOrderRow | null > (null);
-    const [machineContext, setMachineContext] = useState < { machineName: string | null; internalCode: string | null; customerName: string | null; plantName: string | null; area: string | null } | null > (null);
+    const [rows, setRows] = useState < UserListRow[] > ([]);
+    const [error, setError] = useState < string | null > (null);
+    const [search, setSearch] = useState("");
+    const [roleFilter, setRoleFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("all");
 
+    const orgId = organization?.id ?? null;
+    const orgName = organization?.name ?? L.orgFallback;
     const userRole = membership?.role ?? "technician";
-    const orgType = organization?.type ?? null;
-    const canEdit = hasMinimumOrgRole(userRole, "technician");
-    const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
 
     useEffect(() => {
         let active = true;
+
         const load = async () => {
-            if (!resolvedId || authLoading) return;
+            if (authLoading) return;
+            if (!orgId) {
+                if (active) {
+                    setRows([]);
+                    setLoading(false);
+                }
+                return;
+            }
+
+            setLoading(true);
+            setError(null);
+
             try {
-                setLoading(true);
-                const data = await getWorkOrder(resolvedId);
+                const response = await apiFetch < { users: UserListRow[] } > ("/api/users/list");
                 if (!active) return;
-                setRow(data as WorkOrderRow);
-            } catch (error: any) {
-                console.error("work order detail load error", error);
-                toast({ title: t("common.error") || "Errore", description: error?.message || "Errore caricamento ordine", variant: "destructive" });
-                void router.replace("/work-orders");
+                setRows(response.users ?? []);
+            } catch (err: any) {
+                console.error("Users load error:", err);
+                if (!active) return;
+                setRows([]);
+                setError(err?.message || L.loadError);
             } finally {
                 if (active) setLoading(false);
             }
         };
+
         void load();
         return () => {
             active = false;
         };
-    }, [resolvedId, authLoading, router, t, toast]);
+    }, [authLoading, orgId, L.loadError]);
 
-    useEffect(() => {
-        let active = true;
-        const loadContext = async () => {
-            if (!row?.machine_id) return;
-            try {
-                const { data: machine } = await supabase
-                    .from("machines")
-                    .select("id,name,internal_code,area,plant_id")
-                    .eq("id", row.machine_id)
-                    .maybeSingle();
+    const availableRoles = useMemo(
+        () => Array.from(new Set(rows.map((r) => r.role).filter(Boolean))) as string[],
+        [rows]
+    );
 
-                let customerName: string | null = null;
-                if (machine?.id) {
-                    const { data: assignment } = await supabase
-                        .from("machine_assignments")
-                        .select("customer_org_id, customer:organizations!machine_assignments_customer_org_id_fkey(name)")
-                        .eq("machine_id", machine.id)
-                        .eq("is_active", true)
-                        .order("assigned_at", { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    customerName = (assignment as any)?.customer?.name ?? null;
-                }
+    const filteredRows = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return rows.filter((row) => {
+            const matchesSearch =
+                !q ||
+                [displayName(row), row.email, row.role]
+                    .filter(Boolean)
+                    .some((value) => String(value).toLowerCase().includes(q));
+            const matchesRole = roleFilter === "all" || String(row.role || "").toLowerCase() === roleFilter;
+            const matchesStatus =
+                statusFilter === "all" ||
+                (statusFilter === "active" && row.is_active) ||
+                (statusFilter === "inactive" && !row.is_active);
+            return matchesSearch && matchesRole && matchesStatus;
+        });
+    }, [rows, search, roleFilter, statusFilter]);
 
-                const resolvedPlantId = row.plant_id || machine?.plant_id || null;
-                let plantName: string | null = null;
-                if (resolvedPlantId) {
-                    const { data: plant } = await supabase.from("plants").select("id,name").eq("id", resolvedPlantId).maybeSingle();
-                    plantName = plant?.name ?? null;
-                }
-
-                if (active) {
-                    setMachineContext({
-                        machineName: machine?.name ?? null,
-                        internalCode: machine?.internal_code ?? null,
-                        customerName,
-                        plantName,
-                        area: machine?.area ?? null,
-                    });
-                }
-            } catch (error) {
-                console.error("work order machine context load error", error);
-            }
-        };
-        void loadContext();
-        return () => {
-            active = false;
-        };
-    }, [row?.machine_id, row?.plant_id]);
-
-    const handleSave = async () => {
-        if (!resolvedId || !row) return;
-        setSaving(true);
-        try {
-            const updated = await updateWorkOrder(resolvedId, {
-                title: row.title,
-                description: row.description,
-                status: row.status,
-                priority: row.priority,
-                due_date: row.due_date,
-                machine_id: row.machine_id,
-                assigned_to: row.assigned_to,
-                plant_id: row.plant_id,
-            });
-            setRow(updated);
-            toast({ title: t("workOrders.updated") || "Ordine aggiornato", description: row.title || "Work order" });
-        } catch (error: any) {
-            console.error(error);
-            toast({ title: t("common.error") || "Errore", description: error?.message || t("workOrders.errorUpdate") || "Errore aggiornamento", variant: "destructive" });
-        } finally {
-            setSaving(false);
-        }
-    };
+    const stats = useMemo(
+        () => ({
+            total: rows.length,
+            active: rows.filter((row) => row.is_active).length,
+            admins: rows.filter((row) => ["admin", "supervisor"].includes(String(row.role || "").toLowerCase())).length,
+            viewers: rows.filter((row) => String(row.role || "").toLowerCase() === "technician").length,
+        }),
+        [rows]
+    );
 
     if (authLoading || loading) {
-        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("workOrders.loading") || "Caricamento..."}</div></MainLayout>;
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title={`${L.title} - MACHINA`} />
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <Card className="rounded-2xl">
+                            <CardContent className="py-10 text-center text-muted-foreground">{L.loading}</CardContent>
+                        </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
     }
-
-    if (!row) {
-        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("workOrders.noResults") || "Nessun risultato"}</div></MainLayout>;
-    }
-
-    const missingPlant = orgType === "manufacturer" && machineContext?.customerName && !machineContext?.plantName;
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${row.title || "Work Order"} - MACHINA`} />
-                <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-                    <div className="flex items-center justify-between gap-4">
-                        <Link href="/work-orders">
-                            <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />{t("workOrders.title") || "Ordini di lavoro"}</Button>
-                        </Link>
-                        {canEdit && (
-                            <Button onClick={handleSave} disabled={saving}>
-                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                {saving ? (t("common.saving") || "Salvataggio...") : (t("common.save") || "Salva")}
-                            </Button>
-                        )}
+                <SEO title={`${L.title} - MACHINA`} />
+                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-2">
+                            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{L.title}</h1>
+                            <p className="text-sm text-muted-foreground">
+                                {L.subtitlePrefix} <span className="font-medium text-foreground">{orgName}</span>
+                            </p>
+                        </div>
+
+                        <Button
+                            variant="outline"
+                            className="rounded-2xl"
+                            onClick={() =>
+                                downloadCsv(
+                                    "machina-users.csv",
+                                    filteredRows.map((row) => ({
+                                        name: displayName(row),
+                                        email: row.email,
+                                        role: row.role || "",
+                                        status: row.is_active ? L.active : L.inactive,
+                                        created_at: formatDate(row.created_at, language),
+                                    }))
+                                )
+                            }
+                        >
+                            <Download className="mr-2 h-4 w-4" />
+                            {L.exportCsv}
+                        </Button>
                     </div>
 
-                    <Card className="rounded-[28px]">
-                        <CardContent className="p-6">
-                            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-                                <div className="min-w-0 flex-1 space-y-4">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <WorkOrderStatusBadge status={row.status} />
-                                        <WorkOrderPriorityBadge priority={row.priority} />
-                                    </div>
-                                    {canEdit ? (
-                                        <>
-                                            <Input value={row.title ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, title: e.target.value } : prev)} className="text-2xl font-bold" />
-                                            <Textarea value={row.description ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, description: e.target.value } : prev)} rows={5} />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <h1 className="text-3xl font-bold tracking-tight text-foreground">{row.title || "Work order"}</h1>
-                                            <p className="text-sm text-muted-foreground">{row.description || t("workOrders.noDescription") || "Nessuna descrizione disponibile."}</p>
-                                        </>
-                                    )}
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <KpiCard icon={<Users className="h-5 w-5" />} title={L.kpiTotal} value={stats.total} />
+                        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title={L.kpiActive} value={stats.active} tone="success" />
+                        <KpiCard icon={<Shield className="h-5 w-5" />} title={L.kpiAdmins} value={stats.admins} />
+                        <KpiCard icon={<UserCheck className="h-5 w-5" />} title={L.kpiViewers} value={stats.viewers} />
+                    </div>
+
+                    <Card className="rounded-2xl">
+                        <CardContent className="space-y-5 p-5">
+                            <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        placeholder={L.searchPlaceholder}
+                                        className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                                    />
                                 </div>
-                                <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[440px]">
-                                    <InfoPill icon={<CalendarDays className="h-4 w-4" />} label={t("workOrders.dueDate") || "Scadenza"} value={formatDate(row.due_date, language)} />
-                                    <InfoPill icon={<CalendarDays className="h-4 w-4" />} label={t("workOrders.updatedAt") || "Aggiornato"} value={formatDate(row.updated_at, language)} />
-                                    <InfoPill icon={<User className="h-4 w-4" />} label={t("workOrders.assignedTo") || "Assegnato a"} value={row.assigned_to || t("workOrders.unassigned") || "Non assegnato"} />
-                                    <InfoPill icon={<ClipboardList className="h-4 w-4" />} label={t("workOrders.createdAt") || "Creato il"} value={formatDate(row.created_at, language)} />
-                                </div>
+
+                                <select
+                                    value={roleFilter}
+                                    onChange={(event) => setRoleFilter(event.target.value)}
+                                    className="h-12 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
+                                >
+                                    <option value="all">{L.allRoles}</option>
+                                    {availableRoles.map((role) => (
+                                        <option key={role} value={role.toLowerCase()}>
+                                            {role}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <select
+                                    value={statusFilter}
+                                    onChange={(event) => setStatusFilter(event.target.value)}
+                                    className="h-12 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none"
+                                >
+                                    <option value="all">{L.allStatuses}</option>
+                                    <option value="active">{L.active}</option>
+                                    <option value="inactive">{L.inactive}</option>
+                                </select>
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle>Contesto operativo</CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid gap-4 md:grid-cols-3">
-                            <InfoPill icon={<Wrench className="h-4 w-4" />} label="Macchina" value={machineContext?.machineName || row.machine_id || "—"} />
-                            <InfoPill icon={<MapPin className="h-4 w-4" />} label={orgType === "manufacturer" ? "Cliente" : "Stabilimento"} value={machineContext?.customerName || machineContext?.plantName || "—"} />
-                            <InfoPill icon={<Route className="h-4 w-4" />} label="Area / linea" value={machineContext?.area || "—"} />
-                        </CardContent>
-                    </Card>
+                            {error ? (
+                                <Card className="rounded-2xl border-destructive/40">
+                                    <CardContent className="py-10 text-center text-sm text-destructive">{error}</CardContent>
+                                </Card>
+                            ) : filteredRows.length === 0 ? (
+                                <EmptyState title={L.noResults} description={L.noResultsDesc} />
+                            ) : (
+                                <div className="space-y-3">
+                                    {filteredRows.map((row) => (
+                                        <div
+                                            key={row.membership_id}
+                                            className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 md:flex-row md:items-center md:justify-between"
+                                        >
+                                            <div className="space-y-2">
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <div className="text-lg font-semibold text-foreground">{displayName(row)}</div>
+                                                    <UserRoleBadge role={row.role || "technician"} />
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">{row.email}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {L.createdAt}: {formatDate(row.created_at, language)}
+                                                </div>
+                                            </div>
 
-                    {missingPlant && (
-                        <Card className="rounded-2xl border-orange-200 bg-orange-50/60 dark:border-orange-900 dark:bg-orange-950/20">
-                            <CardHeader>
-                                <CardTitle className="text-base">Stabilimento cliente non ancora associato</CardTitle>
-                            </CardHeader>
-                            <CardContent className="text-sm text-muted-foreground">
-                                Per il costruttore questo ordine può esistere anche senza stabilimento cliente impostato. Se vuoi completare il contesto, crea prima uno stabilimento nel dettaglio cliente e poi aggiorna l'assegnazione macchina.
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    <Card className="rounded-2xl">
-                        <CardHeader><CardTitle>{t("workOrders.detail") || "Dettaglio ordine"}</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                            <DetailRow label="Status" value={row.status || "—"} />
-                            <DetailRow label={t("workOrders.priorityLabel") || "Priorità"} value={row.priority || "—"} />
-                            <DetailRow label={t("workOrders.machineId") || "Machine ID"} value={row.machine_id || "—"} />
-                            <DetailRow label={t("workOrders.assignedTo") || "Assigned to"} value={row.assigned_to || "—"} />
-                            <DetailRow label={t("workOrders.updatedAt") || "Updated at"} value={formatDate(row.updated_at, language)} />
-                            <DetailRow label="Tipo lavoro" value={row.work_type || "—"} />
-                            <DetailRow label="Data pianificata" value={formatDate(row.scheduled_date, language)} />
+                                            <div className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
+                                                {row.is_active ? L.active : L.inactive}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
             </MainLayout>
         </OrgContextGuard>
-    );
-}
-
-function InfoPill({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-    return (
-        <div className="rounded-2xl border border-border bg-muted/30 p-4">
-            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">{icon}<span>{label}</span></div>
-            <div className="text-sm font-medium text-foreground break-words">{value || "—"}</div>
-        </div>
-    );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="flex items-start justify-between gap-4 border-b border-border pb-3 last:border-b-0 last:pb-0">
-            <div className="text-sm text-muted-foreground">{label}</div>
-            <div className="max-w-[60%] text-right text-sm font-medium text-foreground break-words">{value || "—"}</div>
-        </div>
     );
 }
