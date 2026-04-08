@@ -125,9 +125,9 @@ export default function CustomerDetailPage() {
     const [newPlantName, setNewPlantName] = useState("");
     const [newPlantCode, setNewPlantCode] = useState("");
 
-    const userRole = membership?.role ?? "viewer";
+    const userRole = membership?.role ?? "technician";
     const orgType = organization?.type ?? null;
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const canEdit = ["admin", "supervisor"].includes(userRole);
     const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
 
     const activeUsersCount = useMemo(() => customerUsers.filter((row) => row.is_active).length, [customerUsers]);
