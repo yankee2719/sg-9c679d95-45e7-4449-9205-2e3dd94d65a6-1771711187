@@ -119,8 +119,8 @@ export default function WorkOrdersNewPage() {
     });
 
     const planId = typeof router.query.plan_id === "string" ? router.query.plan_id : "";
-    const userRole = membership?.role ?? "viewer";
-    const canCreate = ["owner", "admin", "supervisor"].includes(userRole);
+    const userRole = membership?.role ?? "technician";
+    const canCreate = ["admin", "supervisor"].includes(userRole);
 
     const customerMap = useMemo(() => new Map(customers.map((customer) => [customer.id, customer.name ?? "Cliente"])), [customers]);
     const activeAssignmentByMachine = useMemo(() => {
@@ -577,3 +577,4 @@ export default function WorkOrdersNewPage() {
         </OrgContextGuard>
     );
 }
+
