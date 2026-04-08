@@ -1,11 +1,11 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { canManageMembers, normalizeRole } from "@/lib/roles";
 import {
     createOrganizationUser,
     isValidOrganizationUserRole,
     UserProvisioningError,
 } from "@/lib/server/userProvisioning";
-import { isAdminLikeRole } from "@/lib/roles";
 
 async function listUsers(req: AuthenticatedRequest, res: NextApiResponse) {
     if (!req.user.organizationId) {
@@ -45,7 +45,7 @@ async function listUsers(req: AuthenticatedRequest, res: NextApiResponse) {
             avatar_url: profile?.avatar_url || null,
             created_at: membership.created_at,
             accepted_at: membership.accepted_at,
-            role: membership.role,
+            role: normalizeRole(membership.role, "technician"),
             is_active: membership.is_active ?? true,
         };
     });
@@ -54,16 +54,10 @@ async function listUsers(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 async function createUser(req: AuthenticatedRequest, res: NextApiResponse) {
-    const { email, password, full_name, role, organization_id } = req.body ?? {};
-    const targetOrganizationId =
-        typeof organization_id === "string" && organization_id.trim().length > 0
-            ? organization_id.trim()
-            : req.user.organizationId;
-
-    if (!targetOrganizationId) {
+    const { email, password, full_name, role } = req.body ?? {};
+    if (!req.user.organizationId) {
         return res.status(400).json({ error: "No active organization context" });
     }
-
     if (!email || !password || !isValidOrganizationUserRole(role)) {
         return res.status(400).json({ error: "Missing or invalid required fields" });
     }
@@ -73,23 +67,24 @@ async function createUser(req: AuthenticatedRequest, res: NextApiResponse) {
         const { data: actorMembership, error: actorError } = await serviceSupabase
             .from("organization_memberships")
             .select("id, role")
-            .eq("organization_id", targetOrganizationId)
+            .eq("organization_id", req.user.organizationId)
             .eq("user_id", req.user.id)
             .eq("is_active", true)
             .maybeSingle();
 
         if (actorError) return res.status(500).json({ error: actorError.message });
-        if (!req.user.isPlatformAdmin && (!actorMembership || !isAdminLikeRole(actorMembership.role))) {
+        if (!actorMembership && !req.user.isPlatformAdmin) return res.status(403).json({ error: "Forbidden" });
+        if (!req.user.isPlatformAdmin && !canManageMembers(actorMembership?.role)) {
             return res.status(403).json({ error: "Only organization admins can create users" });
         }
 
         const created = await createOrganizationUser(serviceSupabase, {
             actor: req.user,
-            organizationId: targetOrganizationId,
+            organizationId: req.user.organizationId,
             email: String(email),
             password: String(password),
             fullName: typeof full_name === "string" ? full_name : null,
-            role,
+            role: String(role),
         });
 
         return res.status(201).json({
@@ -98,15 +93,15 @@ async function createUser(req: AuthenticatedRequest, res: NextApiResponse) {
                 user_id: created.userId,
                 membership_id: created.membershipId,
                 email: created.email,
+                role: created.role,
             },
         });
     } catch (error) {
         if (error instanceof UserProvisioningError) {
             return res.status(error.statusCode).json({ error: error.message });
         }
-        return res.status(500).json({
-            error: error instanceof Error ? error.message : "Unexpected server error",
-        });
+        console.error("Unexpected /api/users create error:", error);
+        return res.status(500).json({ error: "Failed to create user" });
     }
 }
 
@@ -116,4 +111,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(405).json({ error: "Method not allowed" });
 }
 
-export default withAuth(["technician"], handler, { requireAal2: false });
+export default withAuth(["supervisor"], handler, { requireAal2: false });
