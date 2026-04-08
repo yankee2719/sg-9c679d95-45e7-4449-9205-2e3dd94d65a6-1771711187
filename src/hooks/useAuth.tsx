@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { normalizeOrgRole, type OrgRole } from "@/lib/roles";
-import { organizationService, type MembershipWithOrganization } from "@/services/organizationService";
+import { hasMinimumRole, organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
+import { canExecuteWorkOrders, canManageMachines, canManageMembers, isAdminRole } from "@/lib/roles";
 
 export interface AuthState {
     user: User | null;
@@ -84,7 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .select("id, first_name, last_name, display_name, email, avatar_url, language, default_organization_id")
                 .eq("id", currentUser.id)
                 .maybeSingle(),
-            supabase.from("platform_admins").select("id").eq("user_id", currentUser.id).eq("is_active", true).maybeSingle(),
+            supabase
+                .from("platform_admins")
+                .select("id")
+                .eq("user_id", currentUser.id)
+                .eq("is_active", true)
+                .maybeSingle(),
             organizationService.getActiveMemberships(),
         ]);
 
@@ -97,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMemberships(activeMemberships);
 
         let activeOrgId = profileData?.default_organization_id ?? null;
+
         if (!activeOrgId) {
             activeOrgId = activeMemberships[0]?.organization_id ?? null;
         }
@@ -124,10 +130,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             activeMembership
                 ? {
                     id: activeMembership.id,
-                    role: normalizeOrgRole(activeMembership.role) ?? "technician",
+                    role: activeMembership.role,
                     is_active: activeMembership.is_active,
                 }
-                : null,
+                : null
         );
     }, []);
 
@@ -188,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             await loadAuthContext(user);
         },
-        [loadAuthContext, user],
+        [loadAuthContext, user]
     );
 
     const refresh = useCallback(async () => {
@@ -196,14 +202,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadAuthContext(user);
     }, [loadAuthContext, user]);
 
-    const role = normalizeOrgRole(membership?.role ?? null);
-    const isOwner = false;
-    const isAdmin = role === "admin";
+    const role = membership?.role ?? null;
+    const isOwner = isAdminRole(role);
+    const isAdmin = isAdminRole(role);
     const shouldEnforceMfa = isPlatformAdmin || role === "admin" || role === "supervisor";
-    const canManageMembers = isPlatformAdmin || role === "admin";
-    const canManagePlants = isPlatformAdmin || role === "admin" || role === "supervisor";
-    const canManageMachines = isPlatformAdmin || role === "admin" || role === "supervisor";
-    const canExecuteWorkOrders = isPlatformAdmin || role === "admin" || role === "supervisor" || role === "technician";
+    const canManageMembersValue = canManageMembers(role) || isPlatformAdmin;
+    const canManagePlants = canManageMachines(role) || isPlatformAdmin;
+    const canManageMachinesValue = canManageMachines(role) || isPlatformAdmin;
+    const canExecuteWorkOrdersValue = canExecuteWorkOrders(role) || (role ? hasMinimumRole(role as OrgRole, "technician") : false);
     const canViewOnly = false;
 
     const value: AuthState = {
@@ -219,10 +225,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isOwner,
         isAdmin,
         shouldEnforceMfa,
-        canManageMembers,
+        canManageMembers: canManageMembersValue,
         canManagePlants,
-        canManageMachines,
-        canExecuteWorkOrders,
+        canManageMachines: canManageMachinesValue,
+        canExecuteWorkOrders: canExecuteWorkOrdersValue,
         canViewOnly,
         signOut,
         switchOrganization,
