@@ -1,3 +1,4 @@
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 type ChecklistPageLanguage = "it" | "en" | "fr" | "es";
 
 const texts = {
@@ -544,7 +545,7 @@ export function formatChecklistDate(value: string | null | undefined, language?:
 }
 
 export function canManageChecklists(role: string | null | undefined): boolean {
-    return ["owner", "admin", "supervisor"].includes(role ?? "");
+    return hasMinimumCompatibleRole(role, "supervisor");
 }
 
 const inputTypeLabels: Record<string, Record<string, string>> = {
