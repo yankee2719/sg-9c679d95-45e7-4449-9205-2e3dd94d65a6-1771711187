@@ -5,6 +5,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { hasMinimumOrgRole } from "@/lib/roles";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { listPlantsOverview, type LineRow, type MachineRow, type PlantRow } from "@/services/plantService";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,7 +44,7 @@ export default function PlantsIndexPage() {
 
     const orgType = (organization?.type as OrgType | undefined) ?? null;
     const userRole = membership?.role ?? "technician";
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const canEdit = hasMinimumOrgRole(userRole, "supervisor");
 
     useEffect(() => {
         let active = true;
