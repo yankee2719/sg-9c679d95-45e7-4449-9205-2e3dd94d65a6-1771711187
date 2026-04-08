@@ -408,8 +408,8 @@ export default function DashboardPage() {
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
     const userRole = membership?.role ?? "technician";
-    const canManage = ["owner", "admin", "supervisor"].includes(userRole);
-    const canOperate = ["owner", "admin", "supervisor", "technician"].includes(userRole);
+    const canManage = ["admin", "supervisor"].includes(userRole);
+    const canOperate = ["admin", "supervisor", "technician"].includes(userRole);
 
     const loadDashboard = useMemo(
         () => async () => {
