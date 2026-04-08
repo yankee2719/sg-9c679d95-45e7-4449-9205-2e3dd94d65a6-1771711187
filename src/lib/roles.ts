@@ -72,8 +72,7 @@ export function isTechnicianRole(value: unknown): boolean {
 
 export function isViewOnlyRole(value: unknown): boolean {
   const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "viewer") return true;
-  return false;
+  return raw === "viewer";
 }
 
 export function canManageUsers(value: unknown): boolean {
@@ -88,8 +87,32 @@ export function canManageMachines(value: unknown): boolean {
   return hasMinimumRole(value as string, "supervisor");
 }
 
+export function canManageWorkOrders(value: unknown): boolean {
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canViewWorkOrders(value: unknown): boolean {
+  return hasMinimumRole(value as string, "technician");
+}
+
+export function canCreateWorkOrders(value: unknown): boolean {
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canEditWorkOrders(value: unknown): boolean {
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canDeleteWorkOrders(value: unknown): boolean {
+  return hasMinimumRole(value as string, "admin");
+}
+
 export function canEditDocuments(value: unknown): boolean {
   return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canViewDocuments(value: unknown): boolean {
+  return hasMinimumRole(value as string, "technician");
 }
 
 export function canExecuteWorkOrders(value: unknown): boolean {
@@ -98,6 +121,10 @@ export function canExecuteWorkOrders(value: unknown): boolean {
 
 export function canManageChecklists(value: unknown): boolean {
   return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canExecuteChecklists(value: unknown): boolean {
+  return hasMinimumRole(value as string, "technician");
 }
 
 export function canManagePlants(value: unknown): boolean {
