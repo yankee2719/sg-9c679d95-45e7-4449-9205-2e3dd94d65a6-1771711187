@@ -185,7 +185,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.itemsLabel": "voci",
 
         "documents.title": "Documenti",
-        "documents.subtitle": "Hub documentale coerente con il nuovo modello owner / assignment.",
+        "documents.subtitle": "Hub documentale coerente con il modello organizzativo attivo.",
 
         "documents.card.total.title": "Documenti totali",
         "documents.card.total.description": "Archivio documentale visibile nel contesto organizzativo attivo.",
@@ -394,7 +394,7 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.activeOrgType": "Tipo organizzazione attiva",
         "customers.activeRole": "Ruolo attivo",
         "customers.creating": "Creazione...",
-        "customers.ownerAdminOnly": "Questa pagina è disponibile solo per owner/admin lato costruttore.",
+        "customers.ownerAdminOnly": "Questa pagina è disponibile solo per admin/supervisor lato costruttore.",
         "customers.errorNameRequired": "Inserisci il nome del cliente.",
         "customers.errorPrimaryUserRequired": "Compila i dati dell'utente principale.",
         "customers.created": "Cliente creato",
@@ -699,7 +699,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.itemsLabel": "items",
 
         "documents.title": "Documents",
-        "documents.subtitle": "Document hub aligned with the new owner / assignment model.",
+        "documents.subtitle": "Document hub aligned with the active organization model.",
 
         "documents.card.total.title": "Total documents",
         "documents.card.total.description": "Document archive visible in the active organizational context.",
@@ -909,7 +909,7 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.activeOrgType": "Active organization type",
         "customers.activeRole": "Active role",
         "customers.creating": "Creating...",
-        "customers.ownerAdminOnly": "This page is available only for owner/admin in manufacturer context.",
+        "customers.ownerAdminOnly": "This page is available only for admin/supervisor in manufacturer context.",
         "customers.errorNameRequired": "Please enter the customer name.",
         "customers.errorPrimaryUserRequired": "Please fill in primary user details.",
         "customers.created": "Customer created",
@@ -1210,7 +1210,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.itemsLabel": "éléments",
 
         "documents.title": "Documents",
-        "documents.subtitle": "Hub documentaire cohérent avec le nouveau modèle owner / assignment.",
+        "documents.subtitle": "Hub documentaire cohérent avec le modèle organisationnel actif.",
 
         "documents.card.total.title": "Documents totaux",
         "documents.card.total.description": "Archive documentaire visible dans le contexte organisationnel actif.",
@@ -1420,7 +1420,7 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.activeOrgType": "Type d'organisation active",
         "customers.activeRole": "Rôle actif",
         "customers.creating": "Création...",
-        "customers.ownerAdminOnly": "Cette page est disponible uniquement pour owner/admin côté constructeur.",
+        "customers.ownerAdminOnly": "Cette page est disponible uniquement pour admin/supervisor côté constructeur.",
         "customers.errorNameRequired": "Veuillez saisir le nom du client.",
         "customers.errorPrimaryUserRequired": "Veuillez remplir les données de l'utilisateur principal.",
         "customers.created": "Client créé",
@@ -1647,7 +1647,7 @@ const translations: Record<Language, Record<string, string>> = {
         "checklists.itemsLabel": "elementos",
 
         "documents.title": "Documentos",
-        "documents.subtitle": "Hub documental coherente con el nuevo modelo owner / assignment.",
+        "documents.subtitle": "Hub documental coherente con el modelo organizativo activo.",
 
         "documents.card.total.title": "Documentos totales",
         "documents.card.total.description": "Archivo documental visible en el contexto organizativo activo.",
@@ -1857,7 +1857,7 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.activeOrgType": "Tipo de organización activa",
         "customers.activeRole": "Rol activo",
         "customers.creating": "Creando...",
-        "customers.ownerAdminOnly": "Esta página solo está disponible para owner/admin en contexto fabricante.",
+        "customers.ownerAdminOnly": "Esta página solo está disponible para admin/supervisor en contexto fabricante.",
         "customers.errorNameRequired": "Ingrese el nombre del cliente.",
         "customers.errorPrimaryUserRequired": "Complete los datos del usuario principal.",
         "customers.created": "Cliente creado",
