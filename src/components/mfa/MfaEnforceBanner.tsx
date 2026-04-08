@@ -1,8 +1,3 @@
-// src/components/mfa/MfaEnforceBanner.tsx
-// ============================================================================
-// MFA ENFORCE BANNER — Persistent warning for admin/supervisor without 2FA
-// ============================================================================
-
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/router';
 import { ShieldAlert } from 'lucide-react';
@@ -13,8 +8,6 @@ export function MfaEnforceBanner() {
     const router = useRouter();
 
     if (!shouldEnforceMfa) return null;
-
-    // Non mostrare nella pagina settings stessa
     if (router.pathname.startsWith('/settings')) return null;
 
     const roleLabel = membership?.role === 'supervisor' ? 'supervisore' : 'amministratore';
@@ -26,8 +19,8 @@ export function MfaEnforceBanner() {
                     <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
                     <p className="text-sm text-amber-800">
                         <strong>Sicurezza richiesta:</strong>{' '}
-                        Come {roleLabel} dell'organizzazione, devi attivare
-                        l'autenticazione a due fattori per proteggere i dati.
+                        Come {roleLabel} dell&apos;organizzazione, devi attivare
+                        l&apos;autenticazione a due fattori per proteggere i dati.
                     </p>
                 </div>
                 <Button
@@ -42,5 +35,3 @@ export function MfaEnforceBanner() {
         </div>
     );
 }
-
-
