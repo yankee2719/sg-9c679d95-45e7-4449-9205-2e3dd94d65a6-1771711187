@@ -1,7 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-
-const ALLOWED_ROLES = ["admin", "supervisor", "technician"] as const;
+import { isAdminRole, normalizeRoleForWrite } from "@/lib/roles";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "PATCH") {
@@ -20,7 +19,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(400).json({ error: "No active organization context" });
         }
 
-        if (role !== undefined && !ALLOWED_ROLES.includes(String(role) as (typeof ALLOWED_ROLES)[number])) {
+        const normalizedRole = role === undefined ? undefined : normalizeRoleForWrite(role);
+        if (role !== undefined && !normalizedRole) {
             return res.status(400).json({ error: "Invalid role" });
         }
 
@@ -38,7 +38,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(500).json({ error: actorMembershipError.message });
         }
 
-        if (!actorMembership || String(actorMembership.role) !== "admin") {
+        if (!req.user.isPlatformAdmin && !isAdminRole(actorMembership?.role)) {
             return res.status(403).json({ error: "Only organization admins can update users" });
         }
 
@@ -65,15 +65,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             if (is_active === false) {
                 return res.status(400).json({ error: "You cannot deactivate yourself" });
             }
-            if (role && role !== targetMembership.role) {
+            if (normalizedRole && normalizedRole !== targetMembership.role) {
                 return res.status(400).json({ error: "You cannot change your own role" });
             }
         }
 
         const membershipUpdate: Record<string, unknown> = {};
 
-        if (role !== undefined) {
-            membershipUpdate.role = role;
+        if (normalizedRole !== undefined) {
+            membershipUpdate.role = normalizedRole;
         }
 
         if (is_active !== undefined) {
@@ -131,7 +131,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     target_user_id: targetMembership.user_id,
                 },
                 new_data: {
-                    role: role ?? targetMembership.role,
+                    role: normalizedRole ?? targetMembership.role,
                     is_active:
                         is_active !== undefined ? Boolean(is_active) : targetMembership.is_active,
                     display_name:
