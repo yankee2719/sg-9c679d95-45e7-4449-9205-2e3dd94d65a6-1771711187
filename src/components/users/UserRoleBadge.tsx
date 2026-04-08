@@ -1,12 +1,12 @@
 import { Badge } from "@/components/ui/badge";
-import { normalizeOrgRole } from "@/lib/roles";
+import { getRoleLabel, normalizeAppRole } from "@/lib/roles";
 
 interface UserRoleBadgeProps {
     role: string | null | undefined;
 }
 
 function getRoleClasses(role: string | null | undefined) {
-    switch (normalizeOrgRole(role)) {
+    switch (normalizeAppRole(role)) {
         case "admin":
             return "border-orange-300 bg-orange-100 text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/15 dark:text-orange-300";
         case "supervisor":
@@ -18,20 +18,11 @@ function getRoleClasses(role: string | null | undefined) {
     }
 }
 
-function normalizeRoleLabel(role: string | null | undefined) {
-    switch (normalizeOrgRole(role)) {
-        case "admin":
-            return "Admin";
-        case "supervisor":
-            return "Supervisor";
-        case "technician":
-            return "Technician";
-        default:
-            return role || "Unknown";
-    }
-}
-
 export default function UserRoleBadge({ role }: UserRoleBadgeProps) {
-    return <Badge className={`border ${getRoleClasses(role)}`}>{normalizeRoleLabel(role)}</Badge>;
+    return (
+        <Badge className={`border ${getRoleClasses(role)}`}>
+            {getRoleLabel(role)}
+        </Badge>
+    );
 }
 
