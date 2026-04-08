@@ -6,7 +6,15 @@ import {
     UserProvisioningError,
     type OrganizationUserRole,
 } from "@/lib/server/userProvisioning";
+import { normalizeRoleForStorage } from "@/lib/roles";
 
+/**
+ * Legacy compatibility endpoint.
+ *
+ * Old clients still call /api/admin/create-user with { fullName, role, phone }.
+ * The platform is now organization-based, so this route provisions the user
+ * inside the caller's active organization and mirrors the legacy response shape.
+ */
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
@@ -35,7 +43,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(400).json({ error: "No active organization context" });
     }
 
-    if (!isValidOrganizationUserRole(normalizedRole)) {
+    if (!isValidOrganizationUserRole(normalizedRole) || !normalizeRoleForStorage(normalizedRole)) {
         return res.status(400).json({
             error: "Invalid role. Allowed roles: admin, supervisor, technician",
         });
