@@ -67,4 +67,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(["admin", "supervisor"], handler);
+export default withAuth(["supervisor"], handler);
