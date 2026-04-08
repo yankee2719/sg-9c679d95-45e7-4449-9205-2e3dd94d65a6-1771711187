@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
-import { hasMinimumOrgRole, normalizeOrgRole, type RealOrgRole } from "@/lib/roles";
+import { normalizeRole, roleSatisfiesAny, type AppRole } from "@/lib/roles";
 
 const getSupabaseAdmin = () => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,9 +18,8 @@ const getSupabaseAdmin = () => {
     });
 };
 
-export type MembershipRole = RealOrgRole | "owner" | "plant_manager" | "viewer";
-
-export type LegacyRoleType = "admin" | "supervisor" | "technician";
+export type MembershipRole = AppRole;
+export type LegacyRoleType = "admin" | "supervisor" | "technician" | "viewer";
 
 export interface AuthenticatedUser {
     id: string;
@@ -63,11 +62,11 @@ function getAuthToken(req: NextApiRequest): string | null {
 }
 
 function toLegacyRole(role: string | null | undefined): LegacyRoleType {
-    return normalizeOrgRole(role) ?? "technician";
+    return normalizeRole(role, "technician");
 }
 
 function hasRequiredRole(actualRole: MembershipRole, allowedRoles: RoleType[]) {
-    return allowedRoles.some((role) => hasMinimumOrgRole(actualRole, role));
+    return roleSatisfiesAny(actualRole, allowedRoles);
 }
 
 async function resolveAuthenticatedUser(
@@ -121,7 +120,7 @@ async function resolveAuthenticatedUser(
             return { user: null, error: "User has no active membership" };
         }
 
-        const membershipRole = (normalizeOrgRole(activeMembership.role) ?? "technician") as MembershipRole;
+        const membershipRole = String(activeMembership.role || "technician") as MembershipRole;
         const fullName =
             profile?.display_name ||
             [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
