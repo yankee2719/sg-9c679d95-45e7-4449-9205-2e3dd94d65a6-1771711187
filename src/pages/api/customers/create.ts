@@ -4,6 +4,7 @@ import {
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
+import { isWritableOrgRole, toWritableOrgRole } from "@/lib/roles";
 
 type CustomerCreateBody = {
     name?: string;
@@ -73,7 +74,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const primaryUserName = String(body.primary_user_name ?? "").trim();
         const primaryUserEmail = String(body.primary_user_email ?? "").trim().toLowerCase();
         const primaryUserPassword = String(body.primary_user_password ?? "");
-        const primaryUserRole = String(body.primary_user_role ?? "admin");
+        const primaryUserRole = toWritableOrgRole(String(body.primary_user_role ?? "admin"), "technician");
 
         if (!customerName) {
             return res.status(400).json({ error: "Customer name is required" });
@@ -129,7 +130,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 });
             }
 
-            if (!ALLOWED_PRIMARY_ROLES.includes(primaryUserRole)) {
+            if (!isWritableOrgRole(primaryUserRole) || !ALLOWED_PRIMARY_ROLES.includes(primaryUserRole)) {
                 return res.status(400).json({ error: "Invalid primary user role" });
             }
         }
