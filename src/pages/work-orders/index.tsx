@@ -5,9 +5,9 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { hasMinimumOrgRole } from "@/lib/roles";
 import { useOrgType } from "@/hooks/useOrgType";
 import { useToast } from "@/hooks/use-toast";
-import { hasMinimumCompatibleRole } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -339,7 +339,7 @@ export default function WorkOrdersIndexPage() {
     }, [filteredRows]);
 
     const userRole = membership?.role ?? "technician";
-    const canCreate = hasMinimumCompatibleRole(userRole, "supervisor");
+    const canCreate = hasMinimumOrgRole(userRole, "supervisor");
 
     return (
         <OrgContextGuard>
