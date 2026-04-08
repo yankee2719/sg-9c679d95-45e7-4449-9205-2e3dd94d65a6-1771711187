@@ -70,29 +70,65 @@ export function isTechnicianRole(value: unknown): boolean {
   return normalizeRole(value) === "technician";
 }
 
+export function isViewOnlyRole(value: unknown): boolean {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "viewer") return true;
+  return false;
+}
+
 export function canManageUsers(value: unknown): boolean {
-  return hasMinimumRole(normalizeRole(value), "admin");
+  return hasMinimumRole(value as string, "admin");
+}
+
+export function canManageMembers(value: unknown): boolean {
+  return canManageUsers(value);
 }
 
 export function canManageMachines(value: unknown): boolean {
-  return hasMinimumRole(normalizeRole(value), "supervisor");
+  return hasMinimumRole(value as string, "supervisor");
 }
 
 export function canEditDocuments(value: unknown): boolean {
-  return hasMinimumRole(normalizeRole(value), "supervisor");
+  return hasMinimumRole(value as string, "supervisor");
 }
 
 export function canExecuteWorkOrders(value: unknown): boolean {
-  return hasMinimumRole(normalizeRole(value), "technician");
+  return hasMinimumRole(value as string, "technician");
 }
 
 export function canManageChecklists(value: unknown): boolean {
-  return hasMinimumRole(normalizeRole(value), "supervisor");
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canManagePlants(value: unknown): boolean {
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canManageCustomers(value: unknown): boolean {
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canManageAssignments(value: unknown): boolean {
+  return hasMinimumRole(value as string, "supervisor");
+}
+
+export function canManageBilling(value: unknown): boolean {
+  return hasMinimumRole(value as string, "admin");
+}
+
+export function canViewAdminArea(value: unknown): boolean {
+  return hasMinimumRole(value as string, "admin");
 }
 
 export function roleLabel(value: unknown): string {
-  const role = normalizeRole(value);
+  const raw = String(value ?? "").trim().toLowerCase();
 
+  if (raw === "owner") return "Admin";
+  if (raw === "plant_manager") return "Supervisor";
+  if (raw === "viewer") return "Technician";
+  if (raw === "operator") return "Technician";
+
+  const role = normalizeRole(value);
   if (role === "admin") return "Admin";
   if (role === "supervisor") return "Supervisor";
   return "Technician";
