@@ -1,5 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { isAdminRole } from "@/lib/roles";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "DELETE") {
@@ -31,7 +32,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(500).json({ error: actorMembershipError.message });
         }
 
-        if (!actorMembership || String(actorMembership.role) !== "admin") {
+        if (!actorMembership || !isAdminRole(actorMembership.role)) {
             return res.status(403).json({ error: "Only organization admins can remove users" });
         }
 
@@ -111,4 +112,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(["admin"], handler, { requireAal2: true });
-
