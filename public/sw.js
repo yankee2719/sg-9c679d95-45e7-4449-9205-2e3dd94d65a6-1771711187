@@ -24,6 +24,12 @@ self.addEventListener("activate", (event) => {
     self.clients.claim();
 });
 
+self.addEventListener("message", (event) => {
+    if (event.data?.type === "PING") {
+        event.source?.postMessage?.({ type: "PONG" });
+    }
+});
+
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     const url = new URL(request.url);
@@ -51,13 +57,6 @@ self.addEventListener("fetch", (event) => {
     if (url.origin === self.location.origin) {
         event.respondWith(networkFirst(request, RUNTIME_CACHE, false));
         return;
-    }
-});
-
-self.addEventListener("message", (event) => {
-    const type = event.data?.type;
-    if (type === "PING") {
-        event.source?.postMessage({ type: "PONG" });
     }
 });
 
