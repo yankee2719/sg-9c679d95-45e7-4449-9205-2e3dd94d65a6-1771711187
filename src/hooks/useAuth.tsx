@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { hasMinimumRole, organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
+import { organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
 
 export interface AuthState {
     user: User | null;
@@ -50,6 +50,24 @@ const AuthContext = createContext < AuthState | undefined > (undefined);
 type ProfileRow = AuthState["profile"];
 type OrganizationRow = AuthState["organization"];
 type MembershipRow = AuthState["membership"];
+type CurrentRole = "admin" | "supervisor" | "technician";
+
+function normalizeMembershipRole(role: string | null | undefined): CurrentRole | null {
+    switch (String(role || "").toLowerCase()) {
+        case "owner":
+            return "admin";
+        case "plant_manager":
+            return "supervisor";
+        case "viewer":
+            return "technician";
+        case "admin":
+        case "supervisor":
+        case "technician":
+            return String(role).toLowerCase() as CurrentRole;
+        default:
+            return null;
+    }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState < User | null > (null);
@@ -201,17 +219,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadAuthContext(user);
     }, [loadAuthContext, user]);
 
-    const role = (membership?.role as string | null) ?? null;
-    const isOwner = role === "owner";
-    const isAdmin = ["owner", "admin"].includes(role ?? "");
-    const shouldEnforceMfa = isPlatformAdmin || ["owner", "admin", "supervisor"].includes(role ?? "");
-    const canManageMembers = isAdmin || isPlatformAdmin;
-    const canManagePlants = isAdmin || isPlatformAdmin;
-    const canManageMachines = isAdmin || isPlatformAdmin;
-    const canExecuteWorkOrders =
-        ["owner", "admin", "supervisor", "technician"].includes(role ?? "") ||
-        (role ? hasMinimumRole(role as OrgRole, "technician") : false);
-    const canViewOnly = role === "viewer";
+    const rawRole = (membership?.role as string | null) ?? null;
+    const currentRole = normalizeMembershipRole(rawRole);
+    const isOwner = rawRole === "owner";
+    const isAdmin = isPlatformAdmin || currentRole === "admin";
+    const shouldEnforceMfa = isPlatformAdmin || currentRole === "admin" || currentRole === "supervisor";
+    const canManageMembers = isPlatformAdmin || currentRole === "admin";
+    const canManagePlants = isPlatformAdmin || currentRole === "admin";
+    const canManageMachines = isPlatformAdmin || currentRole === "admin" || currentRole === "supervisor";
+    const canExecuteWorkOrders = isPlatformAdmin || currentRole === "admin" || currentRole === "supervisor" || currentRole === "technician";
+    const canViewOnly = false;
 
     const value: AuthState = {
         user,
