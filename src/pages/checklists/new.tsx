@@ -81,8 +81,8 @@ export default function NewChecklistPage() {
     const [isActive, setIsActive] = useState(true);
     const [items, setItems] = useState < ItemDraft[] > ([makeItem()]);
 
-    const canManage = ["owner", "admin", "supervisor"].includes(membership?.role ?? "");
-    const userRole = membership?.role ?? "viewer";
+    const canManage = ["admin", "supervisor"].includes(membership?.role ?? "");
+    const userRole = membership?.role ?? "technician";
 
     useEffect(() => {
         if (authLoading) return;
