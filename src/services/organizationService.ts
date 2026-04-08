@@ -69,7 +69,25 @@ export interface InviteMemberParams {
 export function hasMinimumRole(userRole: OrgRole, requiredRole: OrgRole): boolean {
     return hasMinimumAppRole(userRole, requiredRole);
 }
+function normalizeOrgType(value: unknown): OrgType {
+    const raw = String(value ?? "").toLowerCase();
 
+    if (raw === "manufacturer") return "manufacturer";
+    if (raw === "enterprise") return "enterprise";
+    if (raw === "customer" || raw === "company") return "customer";
+
+    return "customer";
+}
+
+function normalizeIncomingOrgType(value: unknown): OrgType {
+    const raw = String(value ?? "").toLowerCase();
+
+    if (raw === "manufacturer") return "manufacturer";
+    if (raw === "enterprise") return "enterprise";
+    if (raw === "customer" || raw === "company") return "customer";
+
+    return "customer";
+}
 export const organizationService = {
     async createOrganization(
         params: CreateOrganizationParams
