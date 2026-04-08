@@ -1,6 +1,6 @@
 // src/components/mfa/MfaEnforceBanner.tsx
 // ============================================================================
-// MFA ENFORCE BANNER — Persistent warning for admin/owner without 2FA
+// MFA ENFORCE BANNER — Persistent warning for admin/supervisor without 2FA
 // ============================================================================
 
 import { useAuth } from '@/hooks/useAuth';
@@ -17,7 +17,7 @@ export function MfaEnforceBanner() {
     // Non mostrare nella pagina settings stessa
     if (router.pathname.startsWith('/settings')) return null;
 
-    const roleLabel = membership?.role === 'owner' ? 'proprietario' : 'amministratore';
+    const roleLabel = membership?.role === 'supervisor' ? 'supervisore' : 'amministratore';
 
     return (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
@@ -42,4 +42,5 @@ export function MfaEnforceBanner() {
         </div>
     );
 }
+
 
