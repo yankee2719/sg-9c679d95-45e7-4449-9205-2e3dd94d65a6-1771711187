@@ -6,8 +6,7 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 import {
-    canViewMachineViaQr,
-    DEFAULT_QR_ALLOWED_VIEWS,
+    buildQrValidationPayload,
     getMachineByQrToken,
 } from "@/lib/server/machineQrService";
 
@@ -22,17 +21,39 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     try {
-        const supabase = getServiceSupabase();
-        const machine = await getMachineByQrToken(supabase, token.trim());
+        const serviceSupabase = getServiceSupabase();
+        const machine = await getMachineByQrToken(serviceSupabase, token);
 
-        if (!machine || machine.is_deleted || machine.is_archived) {
+        if (!machine) {
             return res.status(403).json({
                 success: false,
-                denial_reason: "access_denied",
+                denial_reason: "not_found",
             });
         }
 
-        const allowed = await canViewMachineViaQr(supabase, req.user, machine);
+        let allowed = false;
+
+        if (req.user.isPlatformAdmin) {
+            allowed = true;
+        } else if (req.user.organizationId && machine.organization_id === req.user.organizationId) {
+            allowed = true;
+        } else if (req.user.organizationId) {
+            const { data: assignment, error: assignmentError } = await serviceSupabase
+                .from("machine_assignments")
+                .select("id")
+                .eq("machine_id", machine.id)
+                .eq("customer_org_id", req.user.organizationId)
+                .eq("is_active", true)
+                .limit(1)
+                .maybeSingle();
+
+            if (assignmentError) {
+                throw assignmentError;
+            }
+
+            allowed = !!assignment;
+        }
+
         if (!allowed) {
             return res.status(403).json({
                 success: false,
@@ -42,17 +63,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         return res.status(200).json({
             success: true,
-            equipment_id: machine.id,
-            allowed_views: [...DEFAULT_QR_ALLOWED_VIEWS],
-            max_permission_level: req.user.role,
+            ...buildQrValidationPayload(machine.id, req.user.role),
         });
     } catch (error) {
         console.error("QR Validate Error:", error);
         return res.status(500).json({
-            error: error instanceof Error ? error.message : "Failed to validate QR token",
+            error: "Failed to validate QR token",
+            message: error instanceof Error ? error.message : "Unknown error",
         });
     }
 }
 
 export default withAuth(ALL_APP_ROLES, handler);
-
