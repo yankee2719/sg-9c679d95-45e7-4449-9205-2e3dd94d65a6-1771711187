@@ -6,6 +6,7 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 import { getMachineVisibilityForUser } from "@/lib/server/machineVisibilityService";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "GET") {
@@ -60,8 +61,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             });
         }
 
-        const isManager = ["owner", "admin", "supervisor"].includes(req.user.role);
-        const canExecute = isManager || req.user.role === "technician";
+        const isManager = hasMinimumCompatibleRole(req.user.role, "supervisor");
+        const canExecute = isManager || hasMinimumCompatibleRole(req.user.role, "technician");
 
         return res.status(200).json({
             access: {
