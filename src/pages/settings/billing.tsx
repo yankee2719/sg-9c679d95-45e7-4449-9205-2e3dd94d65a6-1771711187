@@ -30,7 +30,7 @@ const copy = {
         title: "Fatturazione e abbonamento",
         subtitle: "Stato piano e limiti del contesto organizzativo attivo.",
         accessTitle: "Accesso limitato",
-        accessDescription: "Solo owner e admin possono consultare questa sezione.",
+        accessDescription: "Solo gli admin possono consultare questa sezione.",
         currentPlan: "Piano attuale",
         usage: "Utilizzo",
         limits: "Limiti inclusi",
@@ -69,7 +69,7 @@ const copy = {
         title: "Billing and subscription",
         subtitle: "Plan status and limits for the active organization context.",
         accessTitle: "Restricted access",
-        accessDescription: "Only owners and admins can view this section.",
+        accessDescription: "Only admins can view this section.",
         currentPlan: "Current plan",
         usage: "Usage",
         limits: "Included limits",
@@ -108,7 +108,7 @@ const copy = {
         title: "Facturation et abonnement",
         subtitle: "État du plan et limites du contexte organisationnel actif.",
         accessTitle: "Accès limité",
-        accessDescription: "Seuls les owners et admins peuvent voir cette section.",
+        accessDescription: "Seuls les admins peuvent voir cette section.",
         currentPlan: "Plan actuel",
         usage: "Utilisation",
         limits: "Limites incluses",
@@ -147,7 +147,7 @@ const copy = {
         title: "Facturación y suscripción",
         subtitle: "Estado del plan y límites del contexto organizativo activo.",
         accessTitle: "Acceso limitado",
-        accessDescription: "Solo owners y admins pueden ver esta sección.",
+        accessDescription: "Solo los admins pueden ver esta sección.",
         currentPlan: "Plan actual",
         usage: "Uso",
         limits: "Límites incluidos",
@@ -272,7 +272,7 @@ export default function BillingSettings() {
         load();
     }, [organization?.id, toast]);
 
-    const isAllowed = membership?.role === "owner" || membership?.role === "admin";
+    const isAllowed = membership?.role === "admin";
 
     const locale = language === "it" ? "it-IT" : language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : "en-GB";
     const statusKey = (billing?.subscription_status as keyof typeof text.status) || "unknown";
@@ -420,3 +420,4 @@ export default function BillingSettings() {
         </MainLayout>
     );
 }
+
