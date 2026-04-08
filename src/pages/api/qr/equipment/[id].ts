@@ -1,6 +1,10 @@
 import type { NextApiResponse } from "next";
-import { withAuth, type AuthenticatedRequest, type AppRole } from "@/lib/apiAuth";
-import { getQrTokenService } from "@/services/offlineAndQrService";
+import { withAuth, type AuthenticatedRequest, type AppRole, getServiceSupabase } from "@/lib/apiAuth";
+import {
+    getMachineForQrAccess,
+    revokeMachineQrToken,
+    toLegacyQrToken,
+} from "@/lib/server/machineQrService";
 
 const ALLOWED_ROLES: AppRole[] = ["owner", "admin", "supervisor"];
 
@@ -10,29 +14,43 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(400).json({ error: "Equipment ID is required" });
     }
 
-    const qrService = getQrTokenService();
-
     try {
+        const serviceSupabase = getServiceSupabase();
+        const machine = await getMachineForQrAccess(
+            serviceSupabase,
+            id,
+            req.user.organizationId,
+            req.user.isPlatformAdmin
+        );
+
+        if (!machine) {
+            return res.status(404).json({ error: "Machine not found" });
+        }
+
         if (req.method === "GET") {
-            const tokens = await qrService.getEquipmentTokens(id);
-            const history = await qrService.getScanHistory(id, 20);
+            const tokens = toLegacyQrToken(machine);
 
             return res.status(200).json({
                 success: true,
                 tokens,
-                recent_scans: history,
-                active_count: tokens.filter((token: any) => token.is_active).length,
-                total_scans: tokens.reduce((sum: number, token: any) => sum + Number(token.scan_count || 0), 0),
+                recent_scans: [],
+                active_count: tokens.filter((token) => token.is_active).length,
+                total_scans: 0,
             });
         }
 
         if (req.method === "DELETE") {
-            const { token_id, reason } = req.body || {};
+            const { token_id } = req.body || {};
+
             if (!token_id || typeof token_id !== "string") {
                 return res.status(400).json({ error: "token_id is required in body" });
             }
 
-            await qrService.revokeToken(token_id, req.user.userId, reason);
+            if (token_id !== machine.id) {
+                return res.status(400).json({ error: "token_id does not belong to this machine" });
+            }
+
+            await revokeMachineQrToken(serviceSupabase, machine.id);
 
             return res.status(200).json({
                 success: true,
@@ -46,7 +64,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         });
     } catch (error) {
         console.error("QR Equipment API Error:", error);
-        return res.status(500).json({ error: "Operation failed" });
+        return res.status(500).json({
+            error: "Operation failed",
+            message: error instanceof Error ? error.message : "Unknown error",
+        });
     }
 }
 
