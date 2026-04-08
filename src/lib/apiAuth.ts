@@ -1,11 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
-import { ALL_APP_ROLES, roleSatisfies, normalizeStoredRole, type AppRole } from "@/lib/roles";
+import { normalizeAppRole, type AppRole, type CanonicalOrgRole } from "@/lib/roles";
 
-export type { AppRole } from "@/lib/roles";
-export { ALL_APP_ROLES } from "@/lib/roles";
+export type { AppRole, CanonicalOrgRole } from "@/lib/roles";
 
-function getServiceSupabase() {
+export const ALL_APP_ROLES: AppRole[] = [
+    "owner",
+    "admin",
+    "supervisor",
+    "technician",
+    "viewer",
+    "plant_manager",
+    "operator",
+];
+
+export function getServiceSupabase() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -14,7 +23,10 @@ function getServiceSupabase() {
     }
 
     return createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+        },
     });
 }
 
@@ -28,6 +40,7 @@ function getJwtPayload(token: string): Record<string, unknown> | null {
     try {
         const parts = token.split(".");
         if (parts.length < 2) return null;
+
         const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
         const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
         return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
@@ -38,7 +51,9 @@ function getJwtPayload(token: string): Record<string, unknown> | null {
 
 function getAalFromToken(token: string): "aal1" | "aal2" | null {
     const payload = getJwtPayload(token);
-    const value = payload?.aal ?? payload?.session_level ?? payload?.authenticator_assurance_level ?? null;
+    const value =
+        payload?.aal ?? payload?.session_level ?? payload?.authenticator_assurance_level ?? null;
+
     return value === "aal1" || value === "aal2" ? value : null;
 }
 
@@ -47,7 +62,7 @@ export interface AuthenticatedRequest extends NextApiRequest {
         id: string;
         userId: string;
         email: string;
-        role: AppRole;
+        role: CanonicalOrgRole;
         organizationId: string | null;
         organizationType: string | null;
         membershipId: string | null;
@@ -74,13 +89,14 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
             .eq("is_active", true)
             .maybeSingle();
 
-        const normalizedRole = normalizeStoredRole(defaultMembership?.role);
+        const normalizedRole = normalizeAppRole(defaultMembership?.role);
         if (defaultMembership && normalizedRole) {
             const { data: org } = await serviceSupabase
                 .from("organizations")
                 .select("type")
                 .eq("id", defaultMembership.organization_id)
                 .maybeSingle();
+
             return {
                 membershipId: defaultMembership.id,
                 organizationId: defaultMembership.organization_id,
@@ -98,13 +114,14 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
         .limit(1)
         .maybeSingle();
 
-    const fallbackRole = normalizeStoredRole(fallbackMembership?.role);
+    const fallbackRole = normalizeAppRole(fallbackMembership?.role);
     if (fallbackMembership && fallbackRole) {
         const { data: org } = await serviceSupabase
             .from("organizations")
             .select("type")
             .eq("id", fallbackMembership.organization_id)
             .maybeSingle();
+
         return {
             membershipId: fallbackMembership.id,
             organizationId: fallbackMembership.organization_id,
@@ -113,26 +130,49 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
         };
     }
 
-    return { membershipId: null, organizationId: defaultOrganizationId, organizationType: null, role: null };
+    return {
+        membershipId: null,
+        organizationId: defaultOrganizationId,
+        organizationType: null,
+        role: null,
+    };
 }
 
-export async function authenticateRequest(req: NextApiRequest): Promise<{ user: AuthenticatedRequest["user"] | null; error?: string }> {
+export async function authenticateRequest(
+    req: NextApiRequest
+): Promise<{ user: AuthenticatedRequest["user"] | null; error?: string }> {
     try {
         const token = getBearerToken(req);
-        if (!token) return { user: null, error: "Missing or invalid authorization header" };
+        if (!token) {
+            return { user: null, error: "Missing or invalid authorization header" };
+        }
 
         const serviceSupabase = getServiceSupabase();
-        const { data: { user }, error } = await serviceSupabase.auth.getUser(token);
-        if (error || !user) return { user: null, error: "Invalid or expired token" };
+        const {
+            data: { user },
+            error,
+        } = await serviceSupabase.auth.getUser(token);
+
+        if (error || !user) {
+            return { user: null, error: "Invalid or expired token" };
+        }
 
         const [{ data: platformAdmin }, membershipContext] = await Promise.all([
-            serviceSupabase.from("platform_admins").select("id").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
+            serviceSupabase
+                .from("platform_admins")
+                .select("id")
+                .eq("user_id", user.id)
+                .eq("is_active", true)
+                .maybeSingle(),
             resolveMembershipContext(serviceSupabase, user.id),
         ]);
 
         const isPlatformAdmin = !!platformAdmin;
         const resolvedRole = membershipContext.role ?? (isPlatformAdmin ? "admin" : null);
-        if (!resolvedRole) return { user: null, error: "User has no active membership" };
+
+        if (!resolvedRole) {
+            return { user: null, error: "User has no active membership" };
+        }
 
         return {
             user: {
@@ -153,20 +193,36 @@ export async function authenticateRequest(req: NextApiRequest): Promise<{ user: 
     }
 }
 
+function isAllowedForRole(userRole: CanonicalOrgRole, allowedRoles: AppRole[]) {
+    return allowedRoles.some((role) => normalizeAppRole(role) === userRole);
+}
+
 export function withAuth(
-    allowedRoles: readonly AppRole[],
+    allowedRoles: AppRole[],
     handler: (req: AuthenticatedRequest, res: NextApiResponse) => Promise<unknown>,
-    options?: { requireAal2?: boolean; allowPlatformAdmin?: boolean }
+    options?: {
+        requireAal2?: boolean;
+        allowPlatformAdmin?: boolean;
+    }
 ) {
     const requireAal2 = options?.requireAal2 ?? false;
     const allowPlatformAdmin = options?.allowPlatformAdmin ?? true;
 
     return async (req: NextApiRequest, res: NextApiResponse) => {
         const { user, error } = await authenticateRequest(req);
-        if (error || !user) return res.status(401).json({ error: error || "Unauthorized" });
 
-        const allowed = allowPlatformAdmin && user.isPlatformAdmin ? true : roleSatisfies(user.role, allowedRoles);
-        if (!allowed) return res.status(403).json({ error: "Forbidden: insufficient permissions" });
+        if (error || !user) {
+            return res.status(401).json({ error: error || "Unauthorized" });
+        }
+
+        const allowed = allowPlatformAdmin && user.isPlatformAdmin
+            ? true
+            : isAllowedForRole(user.role, allowedRoles);
+
+        if (!allowed) {
+            return res.status(403).json({ error: "Forbidden: Insufficient permissions" });
+        }
+
         if (requireAal2 && user.aal !== "aal2") {
             return res.status(403).json({ error: "AAL2 required. Complete MFA verification first." });
         }
@@ -175,6 +231,4 @@ export function withAuth(
         return handler(req as AuthenticatedRequest, res);
     };
 }
-
-export { getServiceSupabase };
 
