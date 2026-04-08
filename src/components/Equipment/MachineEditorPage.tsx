@@ -7,6 +7,7 @@ import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export default function MachineEditorPage({ mode, machineId = null }: MachineEdi
     const orgName = organization?.name ?? "—";
     const orgType = (organization?.type as OrgType | undefined) ?? null;
     const userRole = membership?.role ?? "technician";
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const canEdit = hasMinimumCompatibleRole(userRole, "supervisor");
 
     const pageTitle = mode === "create" ? (t("equipment.new") || "Nuova macchina") : tx("equipment.editMachine", "Modifica macchina");
     const pageSubtitle = mode === "create" ? tx("equipment.createSubtitle", "Inserisci i dati principali della macchina nel contesto organizzativo attivo.") : tx("equipment.editSubtitle", "Aggiorna i dati principali della macchina nel contesto organizzativo attivo.");
