@@ -1,7 +1,8 @@
 import { supabase } from '@/integrations/supabase/client';
-import { hasMinimumOrgRole, normalizeOrgRole, type RealOrgRole as OrgRole, type RoleLike } from '@/lib/roles';
+import { hasMinimumRole as hasMinimumAppRole, normalizeRole, toWritableOrgRole, type AppRole } from '@/lib/roles';
 
 export type OrgType = 'manufacturer' | 'customer' | 'enterprise';
+export type OrgRole = AppRole;
 
 export interface Organization {
     id: string;
@@ -65,23 +66,8 @@ export interface InviteMemberParams {
     role: OrgRole;
 }
 
-function normalizeOrgType(value: string): OrgType {
-    if (value === 'manufacturer' || value === 'customer' || value === 'enterprise') {
-        return value;
-    }
-    return 'customer';
-}
-
-function normalizeIncomingOrgType(value: string): OrgType {
-    const raw = String(value ?? '').toLowerCase();
-    if (raw === 'manufacturer') return 'manufacturer';
-    if (raw === 'enterprise') return 'enterprise';
-    if (raw === 'company' || raw === 'customer') return 'customer';
-    return 'customer';
-}
-
-export function hasMinimumRole(userRole: RoleLike, requiredRole: OrgRole): boolean {
-    return hasMinimumOrgRole(userRole, requiredRole);
+export function hasMinimumRole(userRole: OrgRole, requiredRole: OrgRole): boolean {
+    return hasMinimumAppRole(userRole, requiredRole);
 }
 
 export const organizationService = {
@@ -220,7 +206,7 @@ export const organizationService = {
                     id: row.id,
                     organization_id: row.organization_id,
                     user_id: row.user_id,
-                    role: (normalizeOrgRole(row.role) ?? "technician") as OrgRole,
+                    role: normalizeRole(row.role, 'technician') as OrgRole,
                     invited_by: row.invited_by,
                     invited_at: row.invited_at,
                     accepted_at: row.accepted_at,
@@ -263,7 +249,7 @@ export const organizationService = {
                 id: row.id,
                 organization_id: row.organization_id,
                 user_id: row.user_id,
-                role: (normalizeOrgRole(row.role) ?? "technician") as OrgRole,
+                role: normalizeRole(row.role, 'technician') as OrgRole,
                 invited_by: row.invited_by,
                 invited_at: row.invited_at,
                 accepted_at: row.accepted_at,
@@ -298,7 +284,7 @@ export const organizationService = {
                 .single();
 
             if (error) return null;
-            return data ? ({ ...data, role: (normalizeOrgRole(data.role) ?? "technician") as OrgRole } as OrganizationMembership) : null;
+            return data as OrganizationMembership;
         } catch {
             return null;
         }
@@ -306,7 +292,7 @@ export const organizationService = {
 
     async getUserRole(organizationId: string): Promise<OrgRole | null> {
         const membership = await this.getCurrentMembership(organizationId);
-        return membership?.role ?? null;
+        return membership?.role ? (normalizeRole(membership.role, 'technician') as OrgRole) : null;
     },
 
     async getOrganizationMembers(organizationId: string): Promise<(OrganizationMembership & { profile: any })[]> {
@@ -359,7 +345,7 @@ export const organizationService = {
     async updateMemberRole(membershipId: string, newRole: OrgRole): Promise<boolean> {
         const { error } = await supabase
             .from('organization_memberships')
-            .update({ role: newRole })
+            .update({ role: toWritableOrgRole(newRole) })
             .eq('id', membershipId);
 
         return !error;
