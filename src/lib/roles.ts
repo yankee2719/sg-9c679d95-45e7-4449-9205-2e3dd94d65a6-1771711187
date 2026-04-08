@@ -1,475 +1,435 @@
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import {
-    Building2,
-    Download,
-    Factory,
-    Loader2,
-    MapPin,
-    Plus,
-    Search,
-    Trash2,
-    UserCheck,
-    Users,
-} from "lucide-react";
-import { downloadCsv } from "@/lib/downloadCsv";
+import { useRouter } from "next/router";
+import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { Card, CardContent } from "@/components/ui/card";
+import { useOrgType } from "@/hooks/useOrgType";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { userAdminApi, type AssignmentListItem, type AssignmentOptions } from "@/services/userAdminApi";
-import EmptyState from "@/components/feedback/EmptyState";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowDown, ArrowLeft, ArrowUp, Camera, Plus, Save, Trash2 } from "lucide-react";
+import {
+    buildChecklistItemDescription,
+    inferChecklistItemMeta,
+    parseChecklistItemDescription,
+    type ChecklistItemResponseType,
+} from "@/lib/checklistItemMeta";
 
-type OrgType = "manufacturer" | "customer" | "enterprise" | null;
-type AssignmentRow = AssignmentListItem;
-type MachineRow = AssignmentOptions["machines"][number];
-type CustomerRow = AssignmentOptions["customers"][number];
-type CustomerPlantRow = AssignmentOptions["customer_plants"][number];
+type MachineLite = { id: string; name: string | null; internal_code: string | null; plant_id: string | null; area: string | null };
+type PlantLite = { id: string; name: string | null };
+type ChecklistRow = { id: string; title: string; description: string | null; checklist_type: string | null; machine_id: string | null; is_template: boolean | null; is_active: boolean | null };
+type ChecklistItemRow = { id: string; title: string; description: string | null; item_order: number | null; is_required: boolean | null; expected_value: string | null; measurement_unit: string | null; min_value: number | null; max_value: number | null };
 
-const copy = {
-    it: {
-        title: "Assegnazioni macchine",
-        subtitle: "Registro delle macchine assegnate ai clienti nel contesto costruttore attivo.",
-        loading: "Caricamento assegnazioni...",
-        onlyManufacturer: "Il registro assegnazioni è disponibile nel contesto costruttore.",
-        newAssignment: "Nuova assegnazione",
-        exportCsv: "Export CSV",
-        activeAssignments: "Assegnazioni attive",
-        customersServed: "Clienti serviti",
-        machinesAssigned: "Macchine assegnate",
-        last30days: "Ultimi 30 giorni",
-        searchPlaceholder: "Cerca macchina, cliente, stabilimento, area o assegnatario...",
-        noResults: "Nessuna assegnazione trovata",
-        noResultsDesc: "Non ci sono assegnazioni attive oppure nessun elemento corrisponde alla ricerca.",
-        openCustomers: "Apri clienti",
-        openMachines: "Apri macchine",
-        customer: "Cliente",
-        plant: "Stabilimento cliente",
-        area: "Area / linea",
-        assignedBy: "Assegnato da",
-        assignedDate: "Data assegnazione",
-        modelLabel: "Modello",
-        brandLabel: "Marca",
-        openMachine: "Apri macchina",
-        openCustomer: "Apri cliente",
-        remove: "Rimuovi",
-        removeConfirm: "Sei sicuro di voler rimuovere questa assegnazione?",
-        dialogTitle: "Nuova assegnazione",
-        dialogDesc: "Seleziona macchina e cliente. Stabilimento e area/linea sono opzionali ma utili per ordini e contesto operativo.",
-        selectMachine: "Seleziona macchina",
-        selectCustomer: "Seleziona cliente",
-        selectPlant: "Stabilimento cliente (opzionale)",
-        areaPlaceholder: "Es. Linea 1 · Reparto presse",
-        assign: "Assegna",
-        assigning: "Assegnazione...",
-        successTitle: "Assegnazione salvata",
-        successDesc: "Macchina assegnata correttamente. Il contesto cliente/macchina è stato aggiornato.",
-        errorTitle: "Errore",
-        removedTitle: "Assegnazione rimossa",
-        removedDesc: "L'assegnazione è stata disattivata.",
-        machineContextNote: "Questo contesto verrà poi riutilizzato anche nei nuovi ordini di lavoro.",
-    },
-} as const;
+type ItemDraft = {
+    localId: string;
+    title: string;
+    description: string;
+    is_required: boolean;
+    responseType: ChecklistItemResponseType;
+    expected_value: string;
+    measurement_unit: string;
+    min_value: string;
+    max_value: string;
+    allowPhoto: boolean;
+};
 
-function getLocale(language: string) {
-    if (language === "en") return "en-GB";
-    if (language === "fr") return "fr-FR";
-    return "it-IT";
+function makeItem(): ItemDraft {
+    return {
+        localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: "",
+        description: "",
+        is_required: true,
+        responseType: "boolean",
+        expected_value: "",
+        measurement_unit: "",
+        min_value: "",
+        max_value: "",
+        allowPhoto: false,
+    };
 }
 
-function formatDate(value: string | null | undefined, locale: string) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+function resetMeasurementFields(item: ItemDraft, responseType: ChecklistItemResponseType): ItemDraft {
+    if (responseType === "numeric") return item;
+    return { ...item, expected_value: "", measurement_unit: "", min_value: "", max_value: "" };
 }
 
-function KpiCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number }) {
-    return (
-        <Card className="rounded-2xl">
-            <CardContent className="flex items-center justify-between p-5">
-                <div>
-                    <div className="text-sm text-muted-foreground">{title}</div>
-                    <div className="mt-1 text-3xl font-semibold text-foreground">{value}</div>
-                </div>
-                <div className="rounded-2xl bg-muted p-3 text-muted-foreground">{icon}</div>
-            </CardContent>
-        </Card>
-    );
-}
-
-export default function AssignmentsIndexPage() {
-    const { organization, membership, loading: authLoading } = useAuth();
-    const { language } = useLanguage();
+export default function EditChecklistPage() {
+    const router = useRouter();
+    const checklistId = typeof router.query.id === "string" ? router.query.id : null;
+    const { user, organization, membership, loading: authLoading } = useAuth();
     const { toast } = useToast();
-    const text = copy.it;
-    const locale = getLocale(language || "it");
+    const { isManufacturer, machineContextLabel } = useOrgType();
 
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState < AssignmentRow[] > ([]);
-    const [search, setSearch] = useState("");
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [allMachines, setAllMachines] = useState < MachineRow[] > ([]);
-    const [allCustomers, setAllCustomers] = useState < CustomerRow[] > ([]);
-    const [allCustomerPlants, setAllCustomerPlants] = useState < CustomerPlantRow[] > ([]);
-    const [selectedMachineId, setSelectedMachineId] = useState("");
-    const [selectedCustomerId, setSelectedCustomerId] = useState("");
-    const [selectedCustomerPlantId, setSelectedCustomerPlantId] = useState("");
-    const [areaLine, setAreaLine] = useState("");
-    const [assigning, setAssigning] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [machines, setMachines] = useState < MachineLite[] > ([]);
+    const [plants, setPlants] = useState < Record < string, PlantLite>> ({});
 
-    const orgId = organization?.id ?? null;
-    const orgType = (organization?.type as OrgType | undefined) ?? null;
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [checklistType, setChecklistType] = useState("inspection");
+    const [machineId, setMachineId] = useState < string > ("generic");
+    const [isTemplate, setIsTemplate] = useState(true);
+    const [isActive, setIsActive] = useState(true);
+    const [items, setItems] = useState < ItemDraft[] > ([makeItem()]);
+
+    const canManage = ["admin", "supervisor"].includes(membership?.role ?? "");
     const userRole = membership?.role ?? "technician";
-    const canManage = ["admin", "supervisor"].includes(userRole);
-
-    const loadAssignments = async () => {
-        if (!orgId || orgType !== "manufacturer") {
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-        try {
-            const assignmentRows = await userAdminApi.listAssignments();
-            setRows(Array.isArray(assignmentRows) ? assignmentRows : []);
-        } catch (error) {
-            console.error("Assignments load error:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     useEffect(() => {
-        if (!authLoading) void loadAssignments();
-    }, [authLoading, orgId, orgType]);
+        if (authLoading || !organization?.id || !checklistId) return;
+        let active = true;
 
-    const customerPlantsForSelectedCustomer = useMemo(
-        () => allCustomerPlants.filter((plant) => plant.organization_id === selectedCustomerId),
-        [allCustomerPlants, selectedCustomerId]
-    );
+        const load = async () => {
+            setLoading(true);
+            try {
+                const { data: machineRows, error: machineError } = await supabase
+                    .from("machines")
+                    .select("id, name, internal_code, plant_id, area")
+                    .eq("organization_id", organization.id)
+                    .order("name", { ascending: true });
+                if (machineError) throw machineError;
+                const machineList = (machineRows ?? []) as MachineLite[];
+                const plantIds = Array.from(new Set(machineList.map((row) => row.plant_id).filter(Boolean))) as string[];
+                let plantMap: Record<string, PlantLite> = {};
+                if (plantIds.length > 0) {
+                    const { data: plantRows, error: plantError } = await supabase.from("plants").select("id, name").in("id", plantIds);
+                    if (plantError) throw plantError;
+                    plantMap = Object.fromEntries(((plantRows ?? []) as PlantLite[]).map((row) => [row.id, row]));
+                }
 
-    const selectedMachine = useMemo(
-        () => allMachines.find((machine) => machine.id === selectedMachineId) ?? null,
-        [allMachines, selectedMachineId]
-    );
+                const { data: checklistRow, error: checklistError } = await supabase
+                    .from("checklists")
+                    .select("id, title, description, checklist_type, machine_id, is_template, is_active")
+                    .eq("id", checklistId)
+                    .eq("organization_id", organization.id)
+                    .single();
+                if (checklistError) throw checklistError;
 
-    const openDialog = async () => {
-        setDialogOpen(true);
-        setSelectedMachineId("");
-        setSelectedCustomerId("");
-        setSelectedCustomerPlantId("");
-        setAreaLine("");
+                const { data: itemRows, error: itemsError } = await supabase
+                    .from("checklist_items")
+                    .select("id, title, description, item_order, is_required, expected_value, measurement_unit, min_value, max_value")
+                    .eq("checklist_id", checklistId)
+                    .order("item_order", { ascending: true });
+                if (itemsError) throw itemsError;
 
-        try {
-            const options = await userAdminApi.getAssignmentOptions();
-            setAllMachines(options.machines ?? []);
-            setAllCustomers(options.customers ?? []);
-            setAllCustomerPlants(options.customer_plants ?? []);
-        } catch (error) {
-            console.error("Error loading dialog data:", error);
-            toast({ title: text.errorTitle, description: "Impossibile caricare macchine e clienti.", variant: "destructive" });
-        }
+                if (!active) return;
+                const c = checklistRow as ChecklistRow;
+                const mapped = ((itemRows ?? []) as ChecklistItemRow[]).map((row, index) => {
+                    const parsed = parseChecklistItemDescription(row.description);
+                    const meta = inferChecklistItemMeta({
+                        description: row.description,
+                        expected_value: row.expected_value,
+                        measurement_unit: row.measurement_unit,
+                        min_value: row.min_value,
+                        max_value: row.max_value,
+                    });
+                    return {
+                        localId: row.id ?? `${index}`,
+                        title: row.title ?? "",
+                        description: parsed.cleanDescription,
+                        is_required: row.is_required !== false,
+                        responseType: meta.responseType,
+                        expected_value: row.expected_value ?? "",
+                        measurement_unit: row.measurement_unit ?? "",
+                        min_value: row.min_value === null || row.min_value === undefined ? "" : String(row.min_value),
+                        max_value: row.max_value === null || row.max_value === undefined ? "" : String(row.max_value),
+                        allowPhoto: meta.allowPhoto,
+                    } satisfies ItemDraft;
+                });
+
+                setMachines(machineList);
+                setPlants(plantMap);
+                setTitle(c.title ?? "");
+                setDescription(c.description ?? "");
+                setChecklistType(c.checklist_type ?? "inspection");
+                setMachineId(c.machine_id ?? "generic");
+                setIsTemplate(Boolean(c.is_template));
+                setIsActive(c.is_active !== false);
+                setItems(mapped.length > 0 ? mapped : [makeItem()]);
+            } catch (error: any) {
+                console.error("Checklist edit load error:", error);
+                if (active) {
+                    toast({ title: "Errore caricamento", description: error?.message ?? "Impossibile caricare la checklist.", variant: "destructive" });
+                    router.replace("/checklists");
+                }
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        void load();
+        return () => { active = false; };
+    }, [authLoading, checklistId, organization?.id, router, toast]);
+
+    const machineOptions = useMemo(() => {
+        return machines.map((machine) => {
+            const plant = machine.plant_id ? plants[machine.plant_id] : null;
+            const left = plant?.name ?? (isManufacturer ? "Cliente" : "Stabilimento");
+            const right = machine.name ?? "Macchina";
+            return { id: machine.id, label: `${left} → ${right}${machine.internal_code ? ` · ${machine.internal_code}` : ""}` };
+        });
+    }, [isManufacturer, machines, plants]);
+
+    const updateItem = (localId: string, patch: Partial<ItemDraft>) => {
+        setItems((current) => current.map((item) => {
+            if (item.localId !== localId) return item;
+            const next = { ...item, ...patch };
+            return patch.responseType ? resetMeasurementFields(next, patch.responseType) : next;
+        }));
     };
 
-    const handleMachineChange = (value: string) => {
-        setSelectedMachineId(value);
-        const machine = allMachines.find((entry) => entry.id === value) ?? null;
-        setAreaLine(machine?.area ?? "");
-    };
-
-    const handleCustomerChange = (value: string) => {
-        setSelectedCustomerId(value);
-        setSelectedCustomerPlantId((current) => {
-            const stillValid = allCustomerPlants.some((plant) => plant.id === current && plant.organization_id === value);
-            return stillValid ? current : "";
+    const moveItem = (localId: string, direction: -1 | 1) => {
+        setItems((current) => {
+            const index = current.findIndex((item) => item.localId === localId);
+            if (index < 0) return current;
+            const target = index + direction;
+            if (target < 0 || target >= current.length) return current;
+            const next = [...current];
+            const [item] = next.splice(index, 1);
+            next.splice(target, 0, item);
+            return next;
         });
     };
 
-    const handleAssign = async () => {
-        if (!selectedMachineId || !selectedCustomerId) return;
+    const removeItem = (localId: string) => {
+        setItems((current) => (current.length === 1 ? current : current.filter((item) => item.localId !== localId)));
+    };
 
-        setAssigning(true);
+    const handleSave = async () => {
+        if (!organization?.id || !checklistId || !canManage) return;
+        const cleanTitle = title.trim();
+        const cleanItems = items.map((item) => ({
+            ...item,
+            title: item.title.trim(),
+            description: item.description.trim(),
+            measurement_unit: item.measurement_unit.trim(),
+            expected_value: item.expected_value.trim(),
+            min_value: item.min_value.trim(),
+            max_value: item.max_value.trim(),
+        }));
+
+        if (!cleanTitle) {
+            toast({ title: "Titolo obbligatorio", description: "Inserisci il titolo della checklist.", variant: "destructive" });
+            return;
+        }
+        if (cleanItems.some((item) => !item.title)) {
+            toast({ title: "Punti incompleti", description: "Ogni punto di controllo deve avere un titolo.", variant: "destructive" });
+            return;
+        }
+
+        setSaving(true);
         try {
-            await userAdminApi.createAssignment({
-                machine_id: selectedMachineId,
-                customer_org_id: selectedCustomerId,
-                customer_plant_id: selectedCustomerPlantId || null,
-                area: areaLine,
-            });
+            const { error: checklistError } = await supabase
+                .from("checklists")
+                .update({
+                    machine_id: machineId === "generic" ? null : machineId,
+                    title: cleanTitle,
+                    description: description.trim() || null,
+                    checklist_type: checklistType,
+                    is_template: isTemplate,
+                    is_active: isActive,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", checklistId)
+                .eq("organization_id", organization.id);
+            if (checklistError) throw checklistError;
 
-            toast({ title: text.successTitle, description: text.successDesc });
-            setDialogOpen(false);
-            await loadAssignments();
+            const { error: deleteError } = await supabase.from("checklist_items").delete().eq("checklist_id", checklistId);
+            if (deleteError) throw deleteError;
+
+            const rows = cleanItems.map((item, index) => ({
+                checklist_id: checklistId,
+                title: item.title,
+                description: buildChecklistItemDescription(item.description, { responseType: item.responseType, allowPhoto: item.allowPhoto }),
+                item_order: index,
+                is_required: item.is_required,
+                expected_value: item.responseType === "numeric" ? item.expected_value || null : null,
+                measurement_unit: item.responseType === "numeric" ? item.measurement_unit || null : null,
+                min_value: item.responseType === "numeric" && item.min_value ? Number(item.min_value) : null,
+                max_value: item.responseType === "numeric" && item.max_value ? Number(item.max_value) : null,
+            }));
+            const { error: itemsError } = await supabase.from("checklist_items").insert(rows);
+            if (itemsError) throw itemsError;
+
+            toast({ title: "Checklist aggiornata", description: "Le modifiche sono state salvate." });
+            router.push(`/checklists/${checklistId}`);
         } catch (error: any) {
-            toast({ title: text.errorTitle, description: error?.message, variant: "destructive" });
+            console.error("Checklist update error:", error);
+            toast({ title: "Errore salvataggio", description: error?.message ?? "Impossibile salvare la checklist.", variant: "destructive" });
         } finally {
-            setAssigning(false);
+            setSaving(false);
         }
     };
-
-    const handleRemove = async (assignmentId: string) => {
-        if (!window.confirm(text.removeConfirm)) return;
-        try {
-            await userAdminApi.deleteAssignment(assignmentId);
-            toast({ title: text.removedTitle, description: text.removedDesc });
-            await loadAssignments();
-        } catch (error: any) {
-            toast({ title: text.errorTitle, description: error?.message, variant: "destructive" });
-        }
-    };
-
-    const filteredRows = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return rows;
-        return rows.filter((row) => {
-            const machine = row.machine;
-            const customer = row.customer;
-            const user = row.assigned_user;
-            const assignedByLabel = user?.display_name?.trim() || `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || user?.email || "";
-            return [
-                machine?.name,
-                machine?.internal_code,
-                machine?.serial_number,
-                machine?.model,
-                machine?.brand,
-                machine?.area,
-                row.machine_plant?.name,
-                customer?.name,
-                customer?.city,
-                customer?.email,
-                assignedByLabel,
-            ]
-                .filter(Boolean)
-                .some((v) => String(v).toLowerCase().includes(q));
-        });
-    }, [rows, search]);
-
-    const stats = useMemo(
-        () => ({
-            total: rows.length,
-            customers: new Set(rows.map((r) => r.customer_org_id).filter(Boolean)).size,
-            machines: new Set(rows.map((r) => r.machine_id)).size,
-            recent30d: rows.filter((r) => r.assigned_at && Date.now() - new Date(r.assigned_at).getTime() <= 30 * 86400000).length,
-        }),
-        [rows]
-    );
-
-    const exportRows = filteredRows.map((row) => ({
-        macchina: row.machine?.name || "",
-        codice: row.machine?.internal_code || "",
-        cliente: row.customer?.name || "",
-        stabilimento_cliente: row.machine_plant?.name || "",
-        area_linea: row.machine?.area || "",
-        assegnato_da: row.assigned_user?.display_name || row.assigned_user?.email || "",
-        assegnato_il: row.assigned_at || "",
-    }));
-
-    if (authLoading || loading) {
-        return (
-            <OrgContextGuard>
-                <MainLayout userRole={userRole}>
-                    <SEO title={`${text.title} - MACHINA`} />
-                    <div className="mx-auto max-w-7xl px-4 py-8">
-                        <Card className="rounded-2xl"><CardContent className="py-10 text-center text-muted-foreground">{text.loading}</CardContent></Card>
-                    </div>
-                </MainLayout>
-            </OrgContextGuard>
-        );
-    }
-
-    if (!orgId || orgType !== "manufacturer") {
-        return (
-            <OrgContextGuard>
-                <MainLayout userRole={userRole}>
-                    <SEO title={`${text.title} - MACHINA`} />
-                    <div className="mx-auto max-w-5xl px-4 py-8">
-                        <EmptyState title={text.onlyManufacturer} description="" icon={<Factory className="h-10 w-10" />} />
-                    </div>
-                </MainLayout>
-            </OrgContextGuard>
-        );
-    }
 
     return (
         <OrgContextGuard>
             <MainLayout userRole={userRole}>
-                <SEO title={`${text.title} - MACHINA`} />
-                <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-foreground">{text.title}</h1>
-                            <p className="mt-2 text-sm text-muted-foreground">{text.subtitle}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                            <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv(exportRows, "assignments.csv")}>
-                                <Download className="mr-2 h-4 w-4" />{text.exportCsv}
-                            </Button>
-                            {canManage && (
-                                <Button className="rounded-2xl bg-orange-500 text-white hover:bg-orange-600" onClick={openDialog}>
-                                    <Plus className="mr-2 h-4 w-4" />{text.newAssignment}
+                <SEO title="Modifica checklist - MACHINA" />
+                <div className="px-5 py-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-6xl space-y-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <Button variant="ghost" onClick={() => router.push(checklistId ? `/checklists/${checklistId}` : "/checklists")} className="mb-2 -ml-3 px-3">
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Torna alla checklist
                                 </Button>
-                            )}
+                                <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Modifica checklist</h1>
+                                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">Aggiorna il template checklist e i suoi punti di controllo.</p>
+                            </div>
+                            <Button onClick={handleSave} disabled={saving || loading || !canManage} className="rounded-2xl">
+                                <Save className="mr-2 h-4 w-4" />
+                                {saving ? "Salvataggio..." : "Salva modifiche"}
+                            </Button>
                         </div>
-                    </div>
 
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <KpiCard icon={<Factory className="h-5 w-5" />} title={text.activeAssignments} value={stats.total} />
-                        <KpiCard icon={<Building2 className="h-5 w-5" />} title={text.customersServed} value={stats.customers} />
-                        <KpiCard icon={<Users className="h-5 w-5" />} title={text.machinesAssigned} value={stats.machines} />
-                        <KpiCard icon={<UserCheck className="h-5 w-5" />} title={text.last30days} value={stats.recent30d} />
-                    </div>
-
-                    <Card className="rounded-2xl">
-                        <CardContent className="p-6">
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={text.searchPlaceholder} className="h-11 rounded-2xl pl-11" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="rounded-2xl">
-                        <CardContent className="p-6">
-                            {filteredRows.length === 0 ? (
-                                <EmptyState
-                                    title={text.noResults}
-                                    description={text.noResultsDesc}
-                                    icon={<Factory className="h-10 w-10" />}
-                                    actionLabel={text.openCustomers}
-                                    actionHref="/customers"
-                                    secondaryActionLabel={text.openMachines}
-                                    secondaryActionHref="/equipment"
-                                />
-                            ) : (
-                                <div className="space-y-4">
-                                    {filteredRows.map((row) => {
-                                        const machine = row.machine;
-                                        const customer = row.customer;
-                                        const user = row.assigned_user;
-                                        const assignedByLabel = user?.display_name?.trim() || `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || user?.email || "—";
-
-                                        return (
-                                            <div key={row.id} className="rounded-2xl border border-border p-4 transition hover:bg-muted/30">
-                                                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                                                    <div className="min-w-0 space-y-3">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <div className="text-lg font-semibold text-foreground">{machine?.name || "—"}</div>
-                                                            <Badge variant="outline">{machine?.internal_code || "—"}</Badge>
-                                                            {machine?.serial_number && <Badge variant="secondary">{machine.serial_number}</Badge>}
-                                                        </div>
-                                                        <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
-                                                            <div><span className="font-medium text-foreground">{text.customer}:</span> {customer?.name || "—"}</div>
-                                                            <div><span className="font-medium text-foreground">{text.plant}:</span> {row.machine_plant?.name || "—"}</div>
-                                                            <div><span className="font-medium text-foreground">{text.area}:</span> {machine?.area?.trim() || "—"}</div>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                                            <span>{text.assignedBy}: {assignedByLabel}</span>
-                                                            <span>{text.assignedDate}: {formatDate(row.assigned_at, locale)}</span>
-                                                            {machine?.model && <span>{text.modelLabel}: {machine.model}</span>}
-                                                            {machine?.brand && <span>{text.brandLabel}: {machine.brand}</span>}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-wrap gap-2">
-                                                        <Link href={`/equipment/${row.machine_id}`}><Button variant="outline" size="sm">{text.openMachine}</Button></Link>
-                                                        {row.customer_org_id && <Link href={`/customers/${row.customer_org_id}`}><Button variant="outline" size="sm">{text.openCustomer}</Button></Link>}
-                                                        {canManage && (
-                                                            <Button variant="outline" size="sm" onClick={() => handleRemove(row.id)}>
-                                                                <Trash2 className="mr-1 h-3 w-3" />{text.remove}
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                        <Card className="rounded-3xl border-border/70 bg-card/90 shadow-sm">
+                            <CardHeader>
+                                <CardTitle>Dati checklist</CardTitle>
+                                <CardDescription>Definisci ambito, tipo e contesto macchina del template.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid gap-5 md:grid-cols-2">
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label htmlFor="title">Titolo</Label>
+                                    <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Es. Controllo mensile pressa 200T" />
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                    <DialogContent className="sm:max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>{text.dialogTitle}</DialogTitle>
-                            <DialogDescription>{text.dialogDesc}</DialogDescription>
-                        </DialogHeader>
-
-                        <div className="space-y-4 py-2">
-                            <div className="space-y-2">
-                                <Label>{text.selectMachine}</Label>
-                                <Select value={selectedMachineId} onValueChange={handleMachineChange}>
-                                    <SelectTrigger><SelectValue placeholder={text.selectMachine} /></SelectTrigger>
-                                    <SelectContent>
-                                        {allMachines.map((m) => (
-                                            <SelectItem key={m.id} value={m.id}>
-                                                {m.name || "—"} {m.internal_code ? `(${m.internal_code})` : ""}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>{text.selectCustomer}</Label>
-                                <Select value={selectedCustomerId} onValueChange={handleCustomerChange}>
-                                    <SelectTrigger><SelectValue placeholder={text.selectCustomer} /></SelectTrigger>
-                                    <SelectContent>
-                                        {allCustomers.map((c) => (
-                                            <SelectItem key={c.id} value={c.id}>
-                                                {c.name || "—"} {c.city ? `(${c.city})` : ""}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label htmlFor="description">Descrizione</Label>
+                                    <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Scopo, note operative, contesto d'uso..." rows={4} />
+                                </div>
                                 <div className="space-y-2">
-                                    <Label>{text.selectPlant}</Label>
-                                    <Select value={selectedCustomerPlantId || "__none__"} onValueChange={(value) => setSelectedCustomerPlantId(value === "__none__" ? "" : value)}>
-                                        <SelectTrigger><SelectValue placeholder={text.selectPlant} /></SelectTrigger>
+                                    <Label>Tipo checklist</Label>
+                                    <Select value={checklistType} onValueChange={setChecklistType}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="__none__">Nessuno stabilimento</SelectItem>
-                                            {customerPlantsForSelectedCustomer.map((plant) => (
-                                                <SelectItem key={plant.id} value={plant.id}>{plant.name || "—"}</SelectItem>
-                                            ))}
+                                            <SelectItem value="inspection">Ispezione</SelectItem>
+                                            <SelectItem value="startup">Avviamento</SelectItem>
+                                            <SelectItem value="shutdown">Arresto</SelectItem>
+                                            <SelectItem value="safety">Sicurezza</SelectItem>
+                                            <SelectItem value="quality">Qualità</SelectItem>
+                                            <SelectItem value="custom">Personalizzata</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>{text.area}</Label>
-                                    <Input value={areaLine} onChange={(e) => setAreaLine(e.target.value)} placeholder={text.areaPlaceholder} />
+                                    <Label>{machineContextLabel}</Label>
+                                    <Select value={machineId} onValueChange={setMachineId}>
+                                        <SelectTrigger><SelectValue placeholder="Seleziona macchina" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="generic">Template generico</SelectItem>
+                                            {machineOptions.map((option) => <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </div>
-
-                            {selectedMachine && (
-                                <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                                    <div className="flex items-center gap-2 font-medium text-foreground"><MapPin className="h-4 w-4" /> Contesto macchina corrente</div>
-                                    <div className="mt-2 grid gap-1">
-                                        <div>Stabilimento attuale: <span className="font-medium text-foreground">{selectedMachine.plant_id ? "già impostato" : "non impostato"}</span></div>
-                                        <div>Area / linea attuale: <span className="font-medium text-foreground">{selectedMachine.area?.trim() || "—"}</span></div>
-                                        <div className="pt-1 text-xs">{text.machineContextNote}</div>
+                                <div className="flex items-start gap-3 rounded-2xl border border-border/70 p-4">
+                                    <Checkbox checked={isTemplate} onCheckedChange={(value) => setIsTemplate(Boolean(value))} id="isTemplate" />
+                                    <div>
+                                        <Label htmlFor="isTemplate">È un template</Label>
+                                        <p className="text-sm text-muted-foreground">Mantieni il comportamento da template riutilizzabile.</p>
                                     </div>
                                 </div>
-                            )}
+                                <div className="flex items-start gap-3 rounded-2xl border border-border/70 p-4">
+                                    <Checkbox checked={isActive} onCheckedChange={(value) => setIsActive(Boolean(value))} id="isActive" />
+                                    <div>
+                                        <Label htmlFor="isActive">Checklist attiva</Label>
+                                        <p className="text-sm text-muted-foreground">Se disattiva, non viene proposta nei flussi operativi.</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                            <Button onClick={handleAssign} disabled={!selectedMachineId || !selectedCustomerId || assigning} className="w-full">
-                                {assigning ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />{text.assigning}</>) : text.assign}
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
+                        <Card className="rounded-3xl border-border/70 bg-card/90 shadow-sm">
+                            <CardHeader className="flex flex-row items-center justify-between gap-4">
+                                <div>
+                                    <CardTitle>Punti di controllo</CardTitle>
+                                    <CardDescription>Definisci il tipo di risposta e se il punto può raccogliere una foto.</CardDescription>
+                                </div>
+                                <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setItems((current) => [...current, makeItem()])}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Aggiungi punto
+                                </Button>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {items.map((item, index) => (
+                                    <div key={item.localId} className="rounded-3xl border border-border/70 bg-background/70 p-5 shadow-sm">
+                                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                                            <h3 className="font-medium text-foreground">Punto {index + 1}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => moveItem(item.localId, -1)} disabled={index === 0}><ArrowUp className="h-4 w-4" /></Button>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => moveItem(item.localId, 1)} disabled={index === items.length - 1}><ArrowDown className="h-4 w-4" /></Button>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(item.localId)} disabled={items.length === 1}><Trash2 className="h-4 w-4" /></Button>
+                                            </div>
+                                        </div>
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label>Titolo</Label>
+                                                <Input value={item.title} onChange={(e) => updateItem(item.localId, { title: e.target.value })} placeholder="Es. Verifica pressione circuito" />
+                                            </div>
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label>Descrizione</Label>
+                                                <Textarea value={item.description} onChange={(e) => updateItem(item.localId, { description: e.target.value })} placeholder="Dettagli operativi, metodo di verifica, strumento..." rows={3} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Tipo risposta</Label>
+                                                <Select value={item.responseType} onValueChange={(value) => updateItem(item.localId, { responseType: value as ChecklistItemResponseType })}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="boolean">Conferma semplice</SelectItem>
+                                                        <SelectItem value="numeric">Valore numerico</SelectItem>
+                                                        <SelectItem value="text">Testo / note</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex items-start gap-3 rounded-2xl border border-border/70 p-4">
+                                                <Checkbox checked={item.allowPhoto} onCheckedChange={(value) => updateItem(item.localId, { allowPhoto: Boolean(value) })} id={`photo-${item.localId}`} />
+                                                <div>
+                                                    <Label htmlFor={`photo-${item.localId}`} className="inline-flex items-center gap-2"><Camera className="h-4 w-4" /> Foto opzionale</Label>
+                                                    <p className="text-sm text-muted-foreground">In esecuzione il tecnico potrà allegare una foto su questo punto.</p>
+                                                </div>
+                                            </div>
+
+                                            {item.responseType === "numeric" ? (
+                                                <>
+                                                    <div className="space-y-2">
+                                                        <Label>Valore atteso</Label>
+                                                        <Input value={item.expected_value} onChange={(e) => updateItem(item.localId, { expected_value: e.target.value })} placeholder="Es. 200" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Unità misura</Label>
+                                                        <Input value={item.measurement_unit} onChange={(e) => updateItem(item.localId, { measurement_unit: e.target.value })} placeholder="bar, °C, mm" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Min</Label>
+                                                        <Input value={item.min_value} onChange={(e) => updateItem(item.localId, { min_value: e.target.value })} placeholder="Min" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Max</Label>
+                                                        <Input value={item.max_value} onChange={(e) => updateItem(item.localId, { max_value: e.target.value })} placeholder="Max" />
+                                                    </div>
+                                                </>
+                                            ) : null}
+
+                                            <div className="md:col-span-2 flex items-start gap-3 rounded-2xl border border-border/70 p-4">
+                                                <Checkbox checked={item.is_required} onCheckedChange={(value) => updateItem(item.localId, { is_required: Boolean(value) })} id={`required-${item.localId}`} />
+                                                <div>
+                                                    <Label htmlFor={`required-${item.localId}`}>Punto obbligatorio</Label>
+                                                    <p className="text-sm text-muted-foreground">Se non compilato, la checklist non potrà essere completata.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
             </MainLayout>
         </OrgContextGuard>
     );
