@@ -23,7 +23,17 @@ export interface OfflineSyncHistoryEntry {
 
 const OPS_KEY = "machina.offline.ops.v1";
 const HISTORY_KEY = "machina.offline.history.v1";
+
+/**
+ * Nuovo nome usato dai batch più recenti.
+ */
 export const OFFLINE_QUEUE_CHANGED_EVENT = "machina-offline-queue-changed";
+
+/**
+ * Alias retrocompatibile per batch/file più vecchi che importano ancora
+ * OFFLINE_QUEUE_UPDATED_EVENT.
+ */
+export const OFFLINE_QUEUE_UPDATED_EVENT = OFFLINE_QUEUE_CHANGED_EVENT;
 
 function isBrowser() {
     return typeof window !== "undefined" && typeof localStorage !== "undefined";
@@ -36,6 +46,7 @@ function notifyQueueChanged() {
 
 function readJson<T>(key: string, fallback: T): T {
     if (!isBrowser()) return fallback;
+
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return fallback;
@@ -47,14 +58,16 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson<T>(key: string, value: T, notify = false) {
     if (!isBrowser()) return;
+
     localStorage.setItem(key, JSON.stringify(value));
+
     if (notify) {
         notifyQueueChanged();
     }
 }
 
 export function listOfflineOperations(): OfflineOperation[] {
-    return readJson < OfflineOperation[] > (OPS_KEY, []);
+    return readJson<OfflineOperation[]>(OPS_KEY, []);
 }
 
 export function getOfflineOperationCount(): number {
@@ -70,13 +83,13 @@ export function clearOfflineOperations() {
 }
 
 export function appendSyncHistory(entry: OfflineSyncHistoryEntry) {
-    const current = readJson < OfflineSyncHistoryEntry[] > (HISTORY_KEY, []);
+    const current = readJson<OfflineSyncHistoryEntry[]>(HISTORY_KEY, []);
     const next = [entry, ...current].slice(0, 30);
     writeJson(HISTORY_KEY, next);
 }
 
 export function listSyncHistory(): OfflineSyncHistoryEntry[] {
-    return readJson < OfflineSyncHistoryEntry[] > (HISTORY_KEY, []);
+    return readJson<OfflineSyncHistoryEntry[]>(HISTORY_KEY, []);
 }
 
 export function clearSyncHistory() {
@@ -86,12 +99,14 @@ export function clearSyncHistory() {
 function openLegacyDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open("maintops-offline", 1);
+
         request.onupgradeneeded = () => {
             const db = request.result;
             if (!db.objectStoreNames.contains("mutations")) {
                 db.createObjectStore("mutations", { keyPath: "id", autoIncrement: true });
             }
         };
+
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
@@ -106,7 +121,7 @@ export async function getLegacyMutationCount(): Promise<number> {
         const store = tx.objectStore("mutations");
         const request = store.count();
 
-        return await new Promise < number > ((resolve, reject) => {
+        return await new Promise<number>((resolve, reject) => {
             request.onsuccess = () => resolve(request.result ?? 0);
             request.onerror = () => reject(request.error);
         });
@@ -122,10 +137,9 @@ export async function clearLegacyMutations(): Promise<void> {
     const tx = db.transaction("mutations", "readwrite");
     tx.objectStore("mutations").clear();
 
-    await new Promise < void> ((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
     });
 }
-
