@@ -31,7 +31,7 @@ import {
     Globe,
 } from "lucide-react";
 
-type UserRole = "admin" | "supervisor" | "technician" | "operator" | "viewer" | string;
+type UserRole = "admin" | "supervisor" | "technician" | string;
 type OrgType = "manufacturer" | "customer" | null;
 
 interface MainLayoutProps {
@@ -451,3 +451,4 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 }
 
 export default MainLayout;
+
