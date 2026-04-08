@@ -1,83 +1,53 @@
-export type StoredOrgRole = "admin" | "supervisor" | "technician";
-export type LegacyOrgRoleAlias = "owner" | "plant_manager" | "viewer";
-export type CompatibleOrgRole = StoredOrgRole | LegacyOrgRoleAlias;
+import type { Database } from "@/integrations/supabase/database.types";
 
-export const STORED_ORG_ROLES: StoredOrgRole[] = ["admin", "supervisor", "technician"];
-export const LEGACY_ORG_ROLE_ALIASES: LegacyOrgRoleAlias[] = ["owner", "plant_manager", "viewer"];
-export const COMPATIBLE_ORG_ROLES: CompatibleOrgRole[] = [
-    ...STORED_ORG_ROLES,
-    ...LEGACY_ORG_ROLE_ALIASES,
-];
+export type RealOrgRole = Database["public"]["Enums"]["org_role"];
+export type LegacyOrgRoleAlias = "owner" | "plant_manager" | "viewer" | "operator";
+export type RoleLike = RealOrgRole | LegacyOrgRoleAlias | string | null | undefined;
 
-const ROLE_RANK: Record<CompatibleOrgRole, number> = {
-    viewer: 0,
-    technician: 1,
-    plant_manager: 2,
-    supervisor: 2,
-    owner: 3,
-    admin: 3,
-};
-
-export function normalizeCompatibleRole(value: unknown): CompatibleOrgRole | null {
-    const raw = String(value ?? "").trim().toLowerCase();
-    if ((COMPATIBLE_ORG_ROLES as string[]).includes(raw)) {
-        return raw as CompatibleOrgRole;
-    }
-    return null;
-}
-
-export function normalizeRoleForStorage(value: unknown): StoredOrgRole | null {
-    const normalized = normalizeCompatibleRole(value);
-    if (!normalized) return null;
-
-    switch (normalized) {
+export function normalizeOrgRole(role: RoleLike): RealOrgRole | null {
+    switch (String(role ?? "").toLowerCase()) {
         case "owner":
+        case "admin":
             return "admin";
         case "plant_manager":
+        case "supervisor":
             return "supervisor";
-        case "viewer":
-            return null;
+        case "operator":
+        case "technician":
+            return "technician";
         default:
-            return normalized;
+            return null;
     }
 }
 
-export function hasMinimumCompatibleRole(
-    actualRole: unknown,
-    requiredRole: CompatibleOrgRole
-): boolean {
-    const actual = normalizeCompatibleRole(actualRole);
-    return !!actual && ROLE_RANK[actual] >= ROLE_RANK[requiredRole];
+export function isLegacyReadOnlyRole(role: RoleLike): boolean {
+    return String(role ?? "").toLowerCase() === "viewer";
 }
 
-export function roleSatisfiesAny(
-    actualRole: unknown,
-    allowedRoles: readonly CompatibleOrgRole[]
-): boolean {
-    const actual = normalizeCompatibleRole(actualRole);
-    if (!actual) return false;
-    return allowedRoles.some((allowedRole) => ROLE_RANK[actual] >= ROLE_RANK[allowedRole]);
+export function hasMinimumOrgRole(role: RoleLike, minimum: RealOrgRole): boolean {
+    const normalized = normalizeOrgRole(role);
+    if (!normalized) return false;
+    const rank: Record<RealOrgRole, number> = { admin: 3, supervisor: 2, technician: 1 };
+    return rank[normalized] >= rank[minimum];
 }
 
-export function isManagementRole(role: unknown): boolean {
-    return hasMinimumCompatibleRole(role, "supervisor");
+export function canManageOrg(role: RoleLike): boolean {
+    return hasMinimumOrgRole(role, "supervisor");
 }
 
-export function isAdminLikeRole(role: unknown): boolean {
-    return hasMinimumCompatibleRole(role, "admin");
+export function canAdminOrg(role: RoleLike): boolean {
+    return hasMinimumOrgRole(role, "admin");
 }
 
-export function getRoleLabel(role: unknown): string {
-    const normalized = normalizeCompatibleRole(role);
-    switch (normalized) {
+export function getRoleDisplayLabel(role: RoleLike): string {
+    switch (String(role ?? "").toLowerCase()) {
         case "owner":
-            return "Owner";
         case "admin":
             return "Admin";
         case "plant_manager":
-            return "Plant manager";
         case "supervisor":
             return "Supervisor";
+        case "operator":
         case "technician":
             return "Technician";
         case "viewer":
