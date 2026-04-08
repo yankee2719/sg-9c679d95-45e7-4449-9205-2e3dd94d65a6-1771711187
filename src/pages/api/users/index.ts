@@ -1,7 +1,11 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-import { createOrganizationUser, isValidOrganizationUserRole, UserProvisioningError } from "@/lib/server/userProvisioning";
-import { isAdminRole } from "@/lib/roles";
+import {
+    createOrganizationUser,
+    isValidOrganizationUserRole,
+    UserProvisioningError,
+} from "@/lib/server/userProvisioning";
+import { isAdminLikeRole } from "@/lib/roles";
 
 async function listUsers(req: AuthenticatedRequest, res: NextApiResponse) {
     if (!req.user.organizationId) {
@@ -50,23 +54,38 @@ async function listUsers(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 async function createUser(req: AuthenticatedRequest, res: NextApiResponse) {
-    const { email, password, full_name, role } = req.body ?? {};
-    if (!req.user.organizationId) {
+    const { email, password, full_name, role, organization_id } = req.body ?? {};
+    const targetOrganizationId =
+        typeof organization_id === "string" && organization_id.trim().length > 0
+            ? organization_id.trim()
+            : req.user.organizationId;
+
+    if (!targetOrganizationId) {
         return res.status(400).json({ error: "No active organization context" });
     }
+
     if (!email || !password || !isValidOrganizationUserRole(role)) {
         return res.status(400).json({ error: "Missing or invalid required fields" });
     }
 
-    if (!req.user.isPlatformAdmin && !isAdminRole(req.user.role)) {
-        return res.status(403).json({ error: "Only organization admins can create users" });
-    }
-
     try {
         const serviceSupabase = getServiceSupabase();
+        const { data: actorMembership, error: actorError } = await serviceSupabase
+            .from("organization_memberships")
+            .select("id, role")
+            .eq("organization_id", targetOrganizationId)
+            .eq("user_id", req.user.id)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (actorError) return res.status(500).json({ error: actorError.message });
+        if (!req.user.isPlatformAdmin && (!actorMembership || !isAdminLikeRole(actorMembership.role))) {
+            return res.status(403).json({ error: "Only organization admins can create users" });
+        }
+
         const created = await createOrganizationUser(serviceSupabase, {
             actor: req.user,
-            organizationId: req.user.organizationId,
+            organizationId: targetOrganizationId,
             email: String(email),
             password: String(password),
             fullName: typeof full_name === "string" ? full_name : null,
@@ -82,11 +101,12 @@ async function createUser(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
     } catch (error) {
-        console.error("Error creating organization user:", error);
         if (error instanceof UserProvisioningError) {
             return res.status(error.statusCode).json({ error: error.message });
         }
-        return res.status(500).json({ error: error instanceof Error ? error.message : "Internal server error" });
+        return res.status(500).json({
+            error: error instanceof Error ? error.message : "Unexpected server error",
+        });
     }
 }
 
@@ -96,5 +116,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(405).json({ error: "Method not allowed" });
 }
 
-export default withAuth(["admin", "supervisor", "technician"], handler, { requireAal2: false });
-
+export default withAuth(["technician"], handler, { requireAal2: false });
