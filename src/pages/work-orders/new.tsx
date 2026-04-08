@@ -6,9 +6,9 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
-import { hasMinimumOrgRole } from "@/lib/roles";
 import { useOrgType } from "@/hooks/useOrgType";
 import { useToast } from "@/hooks/use-toast";
+import { canManageWorkOrders, normalizeRole } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -120,8 +120,8 @@ export default function WorkOrdersNewPage() {
     });
 
     const planId = typeof router.query.plan_id === "string" ? router.query.plan_id : "";
-    const userRole = membership?.role ?? "technician";
-    const canCreate = hasMinimumOrgRole(userRole, "supervisor");
+    const userRole = normalizeRole(membership?.role ?? null, "technician");
+    const canCreate = canManageWorkOrders(userRole);
 
     const customerMap = useMemo(() => new Map(customers.map((customer) => [customer.id, customer.name ?? "Cliente"])), [customers]);
     const activeAssignmentByMachine = useMemo(() => {
