@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { canAdminOrg, canManageOrg, hasMinimumOrgRole, isLegacyReadOnlyRole, normalizeOrgRole, type RealOrgRole as OrgRole } from "@/lib/roles";
-import { organizationService, type MembershipWithOrganization } from "@/services/organizationService";
+import { organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
+import { canExecuteWorkOrders, canManageMachines, canManageMembers, isViewOnlyRole, normalizeRole } from "@/lib/roles";
 
 export interface AuthState {
     user: User | null;
@@ -202,16 +202,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadAuthContext(user);
     }, [loadAuthContext, user]);
 
-    const role = (membership?.role as string | null) ?? null;
-    const normalizedRole = normalizeOrgRole(role);
-    const isOwner = role === "owner" || normalizedRole === "admin";
-    const isAdmin = canAdminOrg(role);
-    const shouldEnforceMfa = isPlatformAdmin || canManageOrg(role);
-    const canManageMembers = isAdmin || isPlatformAdmin;
-    const canManagePlants = canManageOrg(role) || isPlatformAdmin;
-    const canManageMachines = canManageOrg(role) || isPlatformAdmin;
-    const canExecuteWorkOrders = hasMinimumOrgRole(role, "technician") || isPlatformAdmin;
-    const canViewOnly = isLegacyReadOnlyRole(role);
+    const role = normalizeRole(membership?.role ?? null, "viewer");
+    const isOwner = role === "admin";
+    const isAdmin = role === "admin";
+    const shouldEnforceMfa = isPlatformAdmin || role === "admin" || role === "supervisor";
+    const canManageMembersValue = isPlatformAdmin || canManageMembers(role);
+    const canManagePlants = isPlatformAdmin || canManageMachines(role);
+    const canManageMachinesValue = isPlatformAdmin || canManageMachines(role);
+    const canExecuteWorkOrdersValue = isPlatformAdmin || canExecuteWorkOrders(role);
+    const canViewOnly = isViewOnlyRole(role);
 
     const value: AuthState = {
         user,
@@ -226,10 +225,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isOwner,
         isAdmin,
         shouldEnforceMfa,
-        canManageMembers,
+        canManageMembers: canManageMembersValue,
         canManagePlants,
-        canManageMachines,
-        canExecuteWorkOrders,
+        canManageMachines: canManageMachinesValue,
+        canExecuteWorkOrders: canExecuteWorkOrdersValue,
         canViewOnly,
         signOut,
         switchOrganization,
