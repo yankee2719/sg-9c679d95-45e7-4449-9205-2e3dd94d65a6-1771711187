@@ -6,19 +6,7 @@ import {
     UserProvisioningError,
 } from "@/lib/server/userProvisioning";
 
-type ApiSuccess = {
-    ok: true;
-    user_id: string;
-    membership_id: string;
-    email: string;
-};
-
-type ApiError = {
-    ok: false;
-    error: string;
-};
-
-async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSuccess | ApiError>) {
+async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ ok: false, error: "Method not allowed" });
     }
@@ -42,7 +30,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSucces
             email: String(email),
             password: String(password),
             fullName: typeof full_name === "string" ? full_name : null,
-            role,
+            role: String(role),
         });
 
         return res.status(200).json({
@@ -50,21 +38,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSucces
             user_id: created.userId,
             membership_id: created.membershipId,
             email: created.email,
+            role: created.role,
         });
     } catch (error) {
         console.error("API /users/create error:", error);
 
         if (error instanceof UserProvisioningError) {
-            return res.status(error.statusCode).json({
-                ok: false,
-                error: error.message,
-            });
+            return res.status(error.statusCode).json({ ok: false, error: error.message });
         }
 
-        return res.status(500).json({
-            ok: false,
-            error: error instanceof Error ? error.message : "Unexpected server error",
-        });
+        return res.status(500).json({ ok: false, error: "Unexpected server error" });
     }
 }
 
