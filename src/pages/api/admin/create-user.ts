@@ -7,13 +7,6 @@ import {
     type OrganizationUserRole,
 } from "@/lib/server/userProvisioning";
 
-/**
- * Legacy compatibility endpoint.
- *
- * Old clients still call /api/admin/create-user with { fullName, role, phone }.
- * The platform is now organization-based, so this route provisions the user
- * inside the caller's active organization and mirrors the legacy response shape.
- */
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed" });
@@ -42,9 +35,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(400).json({ error: "No active organization context" });
     }
 
-    if (!isValidOrganizationUserRole(normalizedRole) || normalizedRole === "owner") {
+    if (!isValidOrganizationUserRole(normalizedRole)) {
         return res.status(400).json({
-            error: "Invalid role. Allowed roles: admin, supervisor, technician, viewer",
+            error: "Invalid role. Allowed roles: admin, supervisor, technician",
         });
     }
 
@@ -92,7 +85,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(["owner", "admin"], handler, {
+export default withAuth(["admin"], handler, {
     requireAal2: true,
     allowPlatformAdmin: true,
 });
