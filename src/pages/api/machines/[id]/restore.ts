@@ -9,7 +9,7 @@ import {
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
-const ALLOWED_ROLES: AppRole[] = ["owner", "admin", "supervisor"];
+const ALLOWED_ROLES: AppRole[] = ["supervisor"];
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
