@@ -6,6 +6,7 @@ import MainLayout from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
+import { hasMinimumOrgRole } from "@/lib/roles";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +49,7 @@ export default function PlantDetailPage() {
     const resolvedId = typeof id === "string" ? id : null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
     const userRole = membership?.role ?? "technician";
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const canEdit = hasMinimumOrgRole(userRole, "supervisor");
 
     const loadPlant = async (plantId: string) => {
         const data = await getPlantDetail(plantId);
