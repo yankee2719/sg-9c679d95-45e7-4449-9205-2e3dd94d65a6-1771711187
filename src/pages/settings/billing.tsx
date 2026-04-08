@@ -1,600 +1,422 @@
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { supabase } from "@/integrations/supabase/client";
-import MainLayout from "@/components/Layout/MainLayout";
-import OrgContextGuard from "@/components/Auth/OrgContextGuard";
-import { SEO } from "@/components/SEO";
-import { useAuth } from "@/hooks/useAuth";
-import { useOrgType } from "@/hooks/useOrgType";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
+import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-    AlertTriangle,
-    CalendarDays,
-    CheckCircle2,
-    ClipboardList,
-    Clock3,
-    Plus,
-    Search,
-    User,
-    Wrench,
-} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/integrations/supabase/client";
+import { CreditCard, Calendar, Users, Package, Loader2, AlertCircle, ShieldAlert } from "lucide-react";
 
-type WorkOrderStatus = "draft" | "scheduled" | "in_progress" | "pending_review" | "completed" | "cancelled" | string;
-type WorkOrderPriority = "low" | "medium" | "high" | "critical" | string;
-type WorkType = "preventive" | "corrective" | "predictive" | "inspection" | "emergency" | string;
-
-type WorkOrderRow = {
+interface BillingOrganization {
     id: string;
-    title: string;
-    description: string | null;
-    work_type: WorkType;
-    priority: WorkOrderPriority | null;
-    status: WorkOrderStatus | null;
-    scheduled_date: string | null;
-    due_date: string | null;
-    assigned_to: string | null;
-    machine_id: string;
-    plant_id: string;
-    maintenance_plan_id: string | null;
-    created_at: string | null;
-    updated_at: string | null;
-    machine: {
-        id: string;
-        name: string | null;
-        internal_code: string | null;
-        area: string | null;
-    } | { id: string; name: string | null; internal_code: string | null; area: string | null }[] | null;
-    plant: {
-        id: string;
-        name: string | null;
-        type: string | null;
-    } | { id: string; name: string | null; type: string | null }[] | null;
-};
-
-type ProfileLite = {
-    id: string;
-    display_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-};
-
-const STATUS_COLUMNS: Array<{ key: WorkOrderStatus; label: string }> = [
-    { key: "draft", label: "Bozza" },
-    { key: "scheduled", label: "Pianificati" },
-    { key: "in_progress", label: "In corso" },
-    { key: "pending_review", label: "In revisione" },
-    { key: "completed", label: "Completati" },
-];
-
-const PRIORITY_LABELS: Record<string, string> = {
-    low: "Bassa",
-    medium: "Media",
-    high: "Alta",
-    critical: "Critica",
-};
-
-const PRIORITY_CLASSES: Record<string, string> = {
-    low: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    medium: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    high: "border-orange-500/20 bg-orange-500/10 text-orange-700 dark:text-orange-300",
-    critical: "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-    draft: "Bozza",
-    scheduled: "Pianificato",
-    in_progress: "In corso",
-    pending_review: "In revisione",
-    completed: "Completato",
-    cancelled: "Annullato",
-};
-
-const STATUS_CLASSES: Record<string, string> = {
-    draft: "border-border bg-muted text-muted-foreground",
-    scheduled: "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    in_progress: "border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
-    pending_review: "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300",
-    completed: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    cancelled: "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-};
-
-function unwrapRelation<T>(value: T | T[] | null): T | null {
-    if (!value) return null;
-    return Array.isArray(value) ? value[0] ?? null : value;
+    name: string;
+    subscription_plan: string | null;
+    subscription_status: string | null;
+    max_users: number | null;
+    max_machines: number | null;
+    settings: Record<string, unknown> | null;
 }
 
-function formatDate(value: string | null) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return new Intl.DateTimeFormat("it-IT", {
-        day: "2-digit",
-        month: "2-digit",
+interface UsageStats {
+    currentUsers: number;
+    currentMachines: number;
+}
+
+const copy = {
+    it: {
+        title: "Fatturazione e abbonamento",
+        subtitle: "Stato piano e limiti del contesto organizzativo attivo.",
+        accessTitle: "Accesso limitato",
+        accessDescription: "Solo admin e supervisor possono consultare questa sezione.",
+        currentPlan: "Piano attuale",
+        usage: "Utilizzo",
+        limits: "Limiti inclusi",
+        renewal: "Rinnovo / scadenza",
+        paymentNoticeTitle: "Portale pagamenti non collegato",
+        paymentNoticeDescription: "Nel modello organizations corrente questa pagina è stata riallineata in sola lettura. Il collegamento Stripe legacy basato su tenants non è stato mantenuto qui per evitare errori di schema.",
+        status: {
+            active: "Attivo",
+            trial: "Trial",
+            suspended: "Sospeso",
+            cancelled: "Cancellato",
+            unknown: "Non disponibile",
+        },
+        plan: {
+            starter: "Starter",
+            professional: "Professional",
+            enterprise: "Enterprise",
+            free: "Free",
+            fallback: "Piano non definito",
+        },
+        metrics: {
+            users: "Utenti",
+            machines: "Macchine",
+        },
+        labels: {
+            includedUsers: "Utenti inclusi",
+            includedMachines: "Macchine incluse",
+            currentOrg: "Organizzazione attiva",
+            openSettings: "Apri impostazioni",
+            currentPeriodEnd: "Fine periodo corrente",
+            trial: "Trial",
+        },
+        dateNotAvailable: "Non disponibile",
+    },
+    en: {
+        title: "Billing and subscription",
+        subtitle: "Plan status and limits for the active organization context.",
+        accessTitle: "Restricted access",
+        accessDescription: "Only admins and supervisors can view this section.",
+        currentPlan: "Current plan",
+        usage: "Usage",
+        limits: "Included limits",
+        renewal: "Renewal / expiry",
+        paymentNoticeTitle: "Payments portal not connected",
+        paymentNoticeDescription: "In the current organizations model this page has been realigned as read-only. The legacy Stripe flow based on tenants was not kept here to avoid schema errors.",
+        status: {
+            active: "Active",
+            trial: "Trial",
+            suspended: "Suspended",
+            cancelled: "Cancelled",
+            unknown: "Unavailable",
+        },
+        plan: {
+            starter: "Starter",
+            professional: "Professional",
+            enterprise: "Enterprise",
+            free: "Free",
+            fallback: "Plan not defined",
+        },
+        metrics: {
+            users: "Users",
+            machines: "Machines",
+        },
+        labels: {
+            includedUsers: "Included users",
+            includedMachines: "Included machines",
+            currentOrg: "Active organization",
+            openSettings: "Open settings",
+            currentPeriodEnd: "Current period end",
+            trial: "Trial",
+        },
+        dateNotAvailable: "Unavailable",
+    },
+    fr: {
+        title: "Facturation et abonnement",
+        subtitle: "État du plan et limites du contexte organisationnel actif.",
+        accessTitle: "Accès limité",
+        accessDescription: "Seuls les admins et superviseurs peuvent voir cette section.",
+        currentPlan: "Plan actuel",
+        usage: "Utilisation",
+        limits: "Limites incluses",
+        renewal: "Renouvellement / expiration",
+        paymentNoticeTitle: "Portail de paiement non connecté",
+        paymentNoticeDescription: "Dans le modèle organizations actuel, cette page a été réalignée en lecture seule. Le flux Stripe legacy basé sur tenants n’a pas été conservé ici pour éviter les erreurs de schéma.",
+        status: {
+            active: "Actif",
+            trial: "Essai",
+            suspended: "Suspendu",
+            cancelled: "Annulé",
+            unknown: "Indisponible",
+        },
+        plan: {
+            starter: "Starter",
+            professional: "Professional",
+            enterprise: "Enterprise",
+            free: "Free",
+            fallback: "Plan non défini",
+        },
+        metrics: {
+            users: "Utilisateurs",
+            machines: "Machines",
+        },
+        labels: {
+            includedUsers: "Utilisateurs inclus",
+            includedMachines: "Machines incluses",
+            currentOrg: "Organisation active",
+            openSettings: "Ouvrir les paramètres",
+            currentPeriodEnd: "Fin de période actuelle",
+            trial: "Essai",
+        },
+        dateNotAvailable: "Indisponible",
+    },
+    es: {
+        title: "Facturación y suscripción",
+        subtitle: "Estado del plan y límites del contexto organizativo activo.",
+        accessTitle: "Acceso limitado",
+        accessDescription: "Solo admins y supervisores pueden ver esta sección.",
+        currentPlan: "Plan actual",
+        usage: "Uso",
+        limits: "Límites incluidos",
+        renewal: "Renovación / vencimiento",
+        paymentNoticeTitle: "Portal de pagos no conectado",
+        paymentNoticeDescription: "En el modelo actual de organizations esta página se ha reajustado en modo solo lectura. El flujo Stripe legacy basado en tenants no se mantuvo aquí para evitar errores de esquema.",
+        status: {
+            active: "Activo",
+            trial: "Trial",
+            suspended: "Suspendido",
+            cancelled: "Cancelado",
+            unknown: "No disponible",
+        },
+        plan: {
+            starter: "Starter",
+            professional: "Professional",
+            enterprise: "Enterprise",
+            free: "Free",
+            fallback: "Plan no definido",
+        },
+        metrics: {
+            users: "Usuarios",
+            machines: "Máquinas",
+        },
+        labels: {
+            includedUsers: "Usuarios incluidos",
+            includedMachines: "Máquinas incluidas",
+            currentOrg: "Organización activa",
+            openSettings: "Abrir configuración",
+            currentPeriodEnd: "Fin del periodo actual",
+            trial: "Trial",
+        },
+        dateNotAvailable: "No disponible",
+    },
+} as const;
+
+function formatDate(value: string | null, locale: string, fallback: string) {
+    if (!value) return fallback;
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return fallback;
+
+    return parsed.toLocaleDateString(locale, {
         year: "numeric",
-    }).format(date);
+        month: "short",
+        day: "numeric",
+    });
 }
 
-function isClosedStatus(status: string | null | undefined) {
-    const key = String(status ?? "").toLowerCase();
-    return key === "completed" || key === "cancelled";
+function getSettingsDate(settings: Record<string, unknown> | null | undefined, keys: string[]) {
+    if (!settings || typeof settings !== "object") return null;
+
+    for (const key of keys) {
+        const value = settings[key];
+        if (typeof value === "string" && value.trim()) {
+            return value;
+        }
+    }
+
+    return null;
 }
 
-function isLate(row: WorkOrderRow) {
-    if (!row.due_date || isClosedStatus(row.status)) return false;
-    const due = new Date(`${row.due_date}T00:00:00`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return due.getTime() < today.getTime();
-}
-
-function formatAssignee(profile: ProfileLite | null | undefined) {
-    if (!profile) return "Non assegnato";
-    const display = profile.display_name?.trim();
-    if (display) return display;
-    const fallback = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
-    return fallback || profile.email || "Utente";
-}
-
-function MetricCard({
-    title,
-    value,
-    icon: Icon,
-    tone = "default",
-}: {
-    title: string;
-    value: number;
-    icon: React.ComponentType<{ className?: string }>;
-    tone?: "default" | "warning" | "danger" | "success";
-}) {
-    const toneClass = {
-        default: "text-foreground",
-        warning: "text-amber-700 dark:text-amber-300",
-        danger: "text-rose-700 dark:text-rose-300",
-        success: "text-emerald-700 dark:text-emerald-300",
-    }[tone];
-
-    return (
-        <Card className="rounded-2xl">
-            <CardContent className="flex items-center justify-between p-5">
-                <div>
-                    <p className="text-sm text-muted-foreground">{title}</p>
-                    <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-                </div>
-                <div className={`rounded-2xl border border-border bg-muted/40 p-3 ${toneClass}`}>
-                    <Icon className="h-5 w-5" />
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
-export default function WorkOrdersIndexPage() {
-    const { loading: authLoading, organization, membership } = useAuth();
-    const { plantLabel, plantsLabel, isManufacturer, canExecuteChecklist } = useOrgType();
+export default function BillingSettings() {
     const { toast } = useToast();
+    const { language } = useLanguage();
+    const text = useMemo(() => copy[language], [language]);
+    const { organization, membership, loading: authLoading } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState < WorkOrderRow[] > ([]);
-    const [profiles, setProfiles] = useState < Record < string, ProfileLite>> ({});
-    const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState < string > ("all");
-    const [machineFilter, setMachineFilter] = useState < string > ("all");
-    const [assignedFilter, setAssignedFilter] = useState < string > ("all");
-    const [priorityFilter, setPriorityFilter] = useState < string > ("all");
-    const [viewMode, setViewMode] = useState < "kanban" | "list" > ("kanban");
+    const [billing, setBilling] = useState < BillingOrganization | null > (null);
+    const [usage, setUsage] = useState < UsageStats > ({ currentUsers: 0, currentMachines: 0 });
 
     useEffect(() => {
-        if (authLoading) return;
-        if (!organization?.id) {
-            setLoading(false);
-            setRows([]);
-            return;
-        }
-
-        let active = true;
-
         const load = async () => {
-            setLoading(true);
+            if (!organization?.id) {
+                setLoading(false);
+                return;
+            }
+
             try {
-                const { data, error } = await supabase
-                    .from("work_orders")
-                    .select(`
-                        id,
-                        title,
-                        description,
-                        work_type,
-                        priority,
-                        status,
-                        scheduled_date,
-                        due_date,
-                        assigned_to,
-                        machine_id,
-                        plant_id,
-                        maintenance_plan_id,
-                        created_at,
-                        updated_at,
-                        machine:machines(id, name, internal_code, area),
-                        plant:plants(id, name)
-                    `)
-                    .eq("organization_id", organization.id)
-                    .order("scheduled_date", { ascending: true })
-                    .order("due_date", { ascending: true })
-                    .order("created_at", { ascending: false });
+                const [
+                    { data: orgData, error: orgError },
+                    { count: usersCount },
+                    { count: machinesCount },
+                ] = await Promise.all([
+                    supabase
+                        .from("organizations")
+                        .select("id, name, subscription_plan, subscription_status, max_users, max_machines, settings")
+                        .eq("id", organization.id)
+                        .maybeSingle(),
+                    supabase
+                        .from("organization_memberships")
+                        .select("*", { count: "exact", head: true })
+                        .eq("organization_id", organization.id)
+                        .eq("is_active", true),
+                    supabase
+                        .from("machines")
+                        .select("*", { count: "exact", head: true })
+                        .eq("organization_id", organization.id)
+                        .eq("is_archived", false),
+                ]);
 
-                if (error) throw error;
+                if (orgError) throw orgError;
 
-                const orderRows = (data ?? []) as WorkOrderRow[];
-                const assigneeIds = Array.from(new Set(orderRows.map((row) => row.assigned_to).filter(Boolean))) as string[];
-
-                let profileMap: Record<string, ProfileLite> = {};
-                if (assigneeIds.length > 0) {
-                    const { data: profileRows, error: profilesError } = await supabase
-                        .from("profiles")
-                        .select("id, display_name, first_name, last_name, email")
-                        .in("id", assigneeIds);
-
-                    if (profilesError) throw profilesError;
-                    profileMap = Object.fromEntries(((profileRows ?? []) as ProfileLite[]).map((row) => [row.id, row]));
-                }
-
-                if (active) {
-                    setRows(orderRows);
-                    setProfiles(profileMap);
-                }
+                setBilling((orgData as BillingOrganization | null) ?? null);
+                setUsage({
+                    currentUsers: usersCount || 0,
+                    currentMachines: machinesCount || 0,
+                });
             } catch (error: any) {
-                console.error("work orders load error:", error);
+                console.error("Error loading billing data:", error);
                 toast({
-                    title: "Errore caricamento ordini",
-                    description: error?.message || "Impossibile caricare gli ordini di lavoro.",
+                    title: "Error",
+                    description: error?.message || "Unable to load billing data",
                     variant: "destructive",
                 });
-                if (active) {
-                    setRows([]);
-                    setProfiles({});
-                }
             } finally {
-                if (active) setLoading(false);
+                setLoading(false);
             }
         };
 
-        void load();
-        return () => {
-            active = false;
-        };
-    }, [authLoading, organization?.id, toast]);
+        load();
+    }, [organization?.id, toast]);
 
-    const machineOptions = useMemo(() => {
-        const map = new Map < string, string> ();
-        rows.forEach((row) => {
-            const machine = unwrapRelation(row.machine);
-            if (!machine) return;
-            map.set(row.machine_id, machine.internal_code?.trim() ? `${machine.internal_code} · ${machine.name ?? "Macchina"}` : machine.name ?? "Macchina");
-        });
-        return Array.from(map.entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "it"));
-    }, [rows]);
+    const isAllowed = membership?.role === "admin" || membership?.role === "supervisor";
 
-    const assigneeOptions = useMemo(() => {
-        const map = new Map < string, string> ();
-        rows.forEach((row) => {
-            if (!row.assigned_to) return;
-            map.set(row.assigned_to, formatAssignee(profiles[row.assigned_to]));
-        });
-        return Array.from(map.entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "it"));
-    }, [profiles, rows]);
+    const locale = language === "it" ? "it-IT" : language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : "en-GB";
+    const statusKey = (billing?.subscription_status as keyof typeof text.status) || "unknown";
+    const statusLabel = text.status[statusKey] || text.status.unknown;
+    const planKey = (billing?.subscription_plan as keyof typeof text.plan) || "fallback";
+    const planLabel = text.plan[planKey] || text.plan.fallback;
+    const currentPeriodEnd = getSettingsDate(billing?.settings, ["current_period_end", "renewal_date"]);
+    const trialEndsAt = getSettingsDate(billing?.settings, ["trial_ends_at", "trial_end"]);
 
-    const filteredRows = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        return rows.filter((row) => {
-            const machine = unwrapRelation(row.machine);
-            const plant = unwrapRelation(row.plant);
-            const assigneeLabel = row.assigned_to ? formatAssignee(profiles[row.assigned_to]) : "";
+    const getStatusBadgeClass = (status: string | null | undefined) => {
+        switch (status) {
+            case "active":
+                return "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300";
+            case "trial":
+                return "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300";
+            case "suspended":
+                return "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300";
+            case "cancelled":
+                return "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300";
+            default:
+                return "bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300";
+        }
+    };
 
-            const matchesSearch = !query || [
-                row.title,
-                row.description,
-                row.work_type,
-                machine?.name,
-                machine?.internal_code,
-                machine?.area,
-                plant?.name,
-                assigneeLabel,
-            ]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(query));
+    if (authLoading || loading) {
+        return (
+            <MainLayout>
+                <div className="flex h-[60vh] items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </MainLayout>
+        );
+    }
 
-            const matchesStatus = statusFilter === "all" || row.status === statusFilter;
-            const matchesMachine = machineFilter === "all" || row.machine_id === machineFilter;
-            const matchesAssigned = assignedFilter === "all" || row.assigned_to === assignedFilter;
-            const matchesPriority = priorityFilter === "all" || row.priority === priorityFilter;
-
-            return matchesSearch && matchesStatus && matchesMachine && matchesAssigned && matchesPriority;
-        });
-    }, [assignedFilter, machineFilter, priorityFilter, profiles, rows, search, statusFilter]);
-
-    const stats = useMemo(() => ({
-        total: rows.length,
-        open: rows.filter((row) => !isClosedStatus(row.status)).length,
-        late: rows.filter((row) => isLate(row)).length,
-        completedThisWeek: rows.filter((row) => {
-            if (row.status !== "completed" || !row.updated_at) return false;
-            const updated = new Date(row.updated_at).getTime();
-            return Date.now() - updated <= 7 * 86400000;
-        }).length,
-    }), [rows]);
-
-    const groupedByStatus = useMemo(() => {
-        return STATUS_COLUMNS.map((column) => ({
-            ...column,
-            rows: filteredRows.filter((row) => row.status === column.key),
-        }));
-    }, [filteredRows]);
-
-    const userRole = membership?.role ?? "technician";
-    const canCreate = ["admin", "supervisor"].includes(userRole);
+    if (!isAllowed) {
+        return (
+            <MainLayout>
+                <div className="flex h-[60vh] items-center justify-center px-4">
+                    <Card className="max-w-md">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <AlertCircle className="h-5 w-5 text-yellow-500" />
+                                {text.accessTitle}
+                            </CardTitle>
+                            <CardDescription>{text.accessDescription}</CardDescription>
+                        </CardHeader>
+                    </Card>
+                </div>
+            </MainLayout>
+        );
+    }
 
     return (
-        <OrgContextGuard>
-            <MainLayout userRole={userRole}>
-                <SEO title="Ordini di lavoro - MACHINA" />
+        <MainLayout>
+            <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
+                <div>
+                    <h1 className="text-2xl font-bold">{text.title}</h1>
+                    <p className="text-muted-foreground">{text.subtitle}</p>
+                </div>
 
-                <div className="mx-auto max-w-7xl space-y-8 px-4 py-8">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-2">
-                            <h1 className="text-3xl font-bold tracking-tight text-foreground">Ordini di lavoro</h1>
-                            <p className="max-w-3xl text-sm text-muted-foreground">
-                                {isManufacturer
-                                    ? `Monitora e programma gli ordini per le macchine vendute ai tuoi ${plantsLabel.toLowerCase()}.`
-                                    : "Gestisci gli ordini di lavoro interni, assegnali ai tecnici e controlla l'avanzamento delle attività."}
-                            </p>
-                        </div>
-
-                        {canCreate && (
-                            <Link href="/work-orders/new">
-                                <Button>
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Nuovo ordine di lavoro
-                                </Button>
-                            </Link>
-                        )}
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <MetricCard title="Totale ordini" value={stats.total} icon={ClipboardList} />
-                        <MetricCard title="Aperti" value={stats.open} icon={Wrench} />
-                        <MetricCard title="In ritardo" value={stats.late} icon={AlertTriangle} tone="danger" />
-                        <MetricCard title="Completati 7 giorni" value={stats.completedThisWeek} icon={CheckCircle2} tone="success" />
-                    </div>
-
-                    <Card className="rounded-2xl">
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <Card className="lg:col-span-2">
                         <CardHeader>
-                            <CardTitle className="text-base">Filtri e vista</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <CreditCard className="h-5 w-5" />
+                                {text.currentPlan}
+                            </CardTitle>
                             <CardDescription>
-                                Filtra per stato, macchina, assegnatario e priorità. La vista Kanban è comoda per il flusso operativo, la lista per il controllo rapido.
+                                {text.labels.currentOrg}: {billing?.name || organization?.name || "-"}
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-5">
-                            <div className="grid gap-4 lg:grid-cols-[1.6fr_repeat(4,minmax(0,1fr))]">
-                                <div className="space-y-2 lg:col-span-1">
-                                    <Label htmlFor="wo-search">Cerca</Label>
-                                    <div className="relative">
-                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
-                                            id="wo-search"
-                                            value={search}
-                                            onChange={(event) => setSearch(event.target.value)}
-                                            placeholder="Titolo, macchina, area, assegnatario..."
-                                            className="pl-9"
-                                        />
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="text-lg font-semibold">{planLabel}</div>
+                                    <div className="text-sm text-muted-foreground">{text.renewal}</div>
+                                </div>
+                                <Badge className={getStatusBadgeClass(billing?.subscription_status)}>{statusLabel}</Badge>
+                            </div>
+                            <Separator />
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="rounded-xl border p-4">
+                                    <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Users className="h-4 w-4" />
+                                        {text.metrics.users}
                                     </div>
+                                    <div className="text-2xl font-semibold">
+                                        {usage.currentUsers} / {billing?.max_users ?? "-"}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">{text.labels.includedUsers}</div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Stato</Label>
-                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Tutti" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Tutti</SelectItem>
-                                            {STATUS_COLUMNS.map((status) => (
-                                                <SelectItem key={status.key} value={status.key}>
-                                                    {status.label}
-                                                </SelectItem>
-                                            ))}
-                                            <SelectItem value="cancelled">Annullati</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Macchina</Label>
-                                    <Select value={machineFilter} onValueChange={setMachineFilter}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Tutte" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Tutte</SelectItem>
-                                            {machineOptions.map((option) => (
-                                                <SelectItem key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Assegnatario</Label>
-                                    <Select value={assignedFilter} onValueChange={setAssignedFilter}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Tutti" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Tutti</SelectItem>
-                                            {assigneeOptions.map((option) => (
-                                                <SelectItem key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Priorità</Label>
-                                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Tutte" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Tutte</SelectItem>
-                                            <SelectItem value="low">Bassa</SelectItem>
-                                            <SelectItem value="medium">Media</SelectItem>
-                                            <SelectItem value="high">Alta</SelectItem>
-                                            <SelectItem value="critical">Critica</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="rounded-xl border p-4">
+                                    <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Package className="h-4 w-4" />
+                                        {text.metrics.machines}
+                                    </div>
+                                    <div className="text-2xl font-semibold">
+                                        {usage.currentMachines} / {billing?.max_machines ?? "-"}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">{text.labels.includedMachines}</div>
                                 </div>
                             </div>
-
-                            <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "kanban" | "list")}>
-                                <TabsList>
-                                    <TabsTrigger value="kanban">Kanban</TabsTrigger>
-                                    <TabsTrigger value="list">Lista</TabsTrigger>
-                                </TabsList>
-                            </Tabs>
                         </CardContent>
                     </Card>
 
-                    {loading ? (
-                        <Card className="rounded-2xl">
-                            <CardContent className="p-6 text-sm text-muted-foreground">Caricamento ordini di lavoro...</CardContent>
-                        </Card>
-                    ) : filteredRows.length === 0 ? (
-                        <Card className="rounded-2xl border-dashed">
-                            <CardContent className="flex flex-col items-start gap-3 p-8 text-sm text-muted-foreground">
-                                <ClipboardList className="h-8 w-8 text-muted-foreground" />
-                                <div>
-                                    <div className="font-medium text-foreground">Nessun ordine trovato</div>
-                                    <div>Prova a cambiare filtri oppure crea un nuovo ordine di lavoro.</div>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Calendar className="h-5 w-5" />
+                                {text.renewal}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div>
+                                <div className="text-sm text-muted-foreground">{text.labels.currentPeriodEnd}</div>
+                                <div className="font-medium">
+                                    {formatDate(currentPeriodEnd, locale, text.dateNotAvailable)}
                                 </div>
-                            </CardContent>
-                        </Card>
-                    ) : viewMode === "kanban" ? (
-                        <div className="grid gap-4 xl:grid-cols-5">
-                            {groupedByStatus.map((column) => (
-                                <div key={column.key} className="rounded-2xl border border-border bg-card/70 p-3">
-                                    <div className="mb-3 flex items-center justify-between gap-2 px-1">
-                                        <div>
-                                            <div className="text-sm font-semibold text-foreground">{column.label}</div>
-                                            <div className="text-xs text-muted-foreground">{column.rows.length} ordini</div>
-                                        </div>
-                                        <Badge variant="outline">{column.rows.length}</Badge>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {column.rows.length === 0 ? (
-                                            <div className="rounded-2xl border border-dashed border-border p-4 text-xs text-muted-foreground">
-                                                Nessun ordine in questa colonna.
-                                            </div>
-                                        ) : (
-                                            column.rows.map((row) => {
-                                                const machine = unwrapRelation(row.machine);
-                                                const plant = unwrapRelation(row.plant);
-                                                const priorityKey = String(row.priority ?? "medium").toLowerCase();
-                                                const assignee = row.assigned_to ? formatAssignee(profiles[row.assigned_to]) : "Non assegnato";
-                                                return (
-                                                    <Link key={row.id} href={`/work-orders/${row.id}`} className="block rounded-2xl border border-border bg-background p-4 transition hover:border-primary/30 hover:shadow-sm">
-                                                        <div className="space-y-3">
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="min-w-0">
-                                                                    <div className="truncate text-sm font-semibold text-foreground">{row.title}</div>
-                                                                    <div className="mt-1 text-xs text-muted-foreground">{machine?.name ?? "Macchina"}</div>
-                                                                </div>
-                                                                <Badge className={PRIORITY_CLASSES[priorityKey] ?? PRIORITY_CLASSES.medium} variant="outline">
-                                                                    {PRIORITY_LABELS[priorityKey] ?? priorityKey}
-                                                                </Badge>
-                                                            </div>
-                                                            <div className="space-y-2 text-xs text-muted-foreground">
-                                                                <div className="flex items-center gap-2">
-                                                                    <CalendarDays className="h-3.5 w-3.5" />
-                                                                    <span>Scadenza {formatDate(row.due_date)}</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <User className="h-3.5 w-3.5" />
-                                                                    <span className="truncate">{assignee}</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Clock3 className="h-3.5 w-3.5" />
-                                                                    <span>{isManufacturer ? `${plantLabel}: ${plant?.name ?? "—"}` : `${plant?.name ?? "—"}${machine?.area ? ` · ${machine.area}` : ""}`}</span>
-                                                                </div>
-                                                            </div>
-                                                            {isLate(row) && (
-                                                                <Badge variant="outline" className="border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300">
-                                                                    In ritardo
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </Link>
-                                                );
-                                            })
-                                        )}
-                                    </div>
+                            </div>
+                            <div>
+                                <div className="text-sm text-muted-foreground">{text.labels.trial}</div>
+                                <div className="font-medium">
+                                    {formatDate(trialEndsAt, locale, text.dateNotAvailable)}
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="grid gap-4">
-                            {filteredRows.map((row) => {
-                                const machine = unwrapRelation(row.machine);
-                                const plant = unwrapRelation(row.plant);
-                                const priorityKey = String(row.priority ?? "medium").toLowerCase();
-                                const statusKey = String(row.status ?? "draft").toLowerCase();
-                                const assignee = row.assigned_to ? formatAssignee(profiles[row.assigned_to]) : "Non assegnato";
-                                return (
-                                    <Link key={row.id} href={`/work-orders/${row.id}`}>
-                                        <Card className="rounded-2xl transition hover:border-primary/30 hover:shadow-sm">
-                                            <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-                                                <div className="min-w-0 space-y-2">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <div className="text-base font-semibold text-foreground">{row.title}</div>
-                                                        <Badge variant="outline" className={STATUS_CLASSES[statusKey] ?? STATUS_CLASSES.draft}>{STATUS_LABELS[statusKey] ?? statusKey}</Badge>
-                                                        <Badge variant="outline" className={PRIORITY_CLASSES[priorityKey] ?? PRIORITY_CLASSES.medium}>{PRIORITY_LABELS[priorityKey] ?? priorityKey}</Badge>
-                                                    </div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        {machine?.internal_code?.trim() ? `${machine.internal_code} · ` : ""}{machine?.name ?? "Macchina"}
-                                                        {plant?.name ? ` · ${plantLabel} ${plant.name}` : ""}
-                                                        {!isManufacturer && machine?.area ? ` · ${machine.area}` : ""}
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-                                                        <span>Tipo: {row.work_type || "preventive"}</span>
-                                                        <span>Assegnato a: {assignee}</span>
-                                                        <span>Scadenza: {formatDate(row.due_date)}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    {isLate(row) && (
-                                                        <Badge variant="outline" className="border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300">In ritardo</Badge>
-                                                    )}
-                                                    {canExecuteChecklist && statusKey !== "completed" && statusKey !== "cancelled" && (
-                                                        <Badge variant="outline" className="border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
-                                                            Eseguibile
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    )}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-            </MainLayout>
-        </OrgContextGuard>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <ShieldAlert className="h-5 w-5" />
+                            {text.paymentNoticeTitle}
+                        </CardTitle>
+                        <CardDescription>{text.paymentNoticeDescription}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button variant="outline" disabled>
+                            {text.labels.openSettings}
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        </MainLayout>
     );
 }
-
