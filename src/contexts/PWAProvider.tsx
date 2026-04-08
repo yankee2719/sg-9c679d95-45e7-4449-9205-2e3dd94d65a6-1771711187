@@ -1,5 +1,7 @@
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useRef, useState, createContext, useContext } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { getOfflineOperationCount, OFFLINE_QUEUE_UPDATED_EVENT } from "@/lib/offlineOpsQueue";
+import { runOfflineSync } from "@/lib/offlineSyncClient";
 
 interface PWAContextType {
     isOnline: boolean;
@@ -17,8 +19,6 @@ const PWAContext = createContext < PWAContextType > ({
 
 export const usePWA = () => useContext(PWAContext);
 
-// ─── FIX HYDRATION: legge navigator.onLine in modo sincrono ───
-// _app.tsx ha il mounted guard, quindi qui siamo già sul client.
 function getInitialOnline(): boolean {
     if (typeof window === "undefined") return true;
     return navigator.onLine;
@@ -30,15 +30,55 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
     const [isInstallable, setIsInstallable] = useState(false);
     const [pendingSync, setPendingSync] = useState(0);
     const [deferredPrompt, setDeferredPrompt] = useState < any > (null);
+    const isSyncingRef = useRef(false);
 
     useEffect(() => {
-        // Register Service Worker
+        const refreshPendingSync = () => {
+            setPendingSync(getOfflineOperationCount());
+        };
+
+        async function syncNow() {
+            if (isSyncingRef.current) return;
+            if (!navigator.onLine) return;
+            const currentPending = getOfflineOperationCount();
+            setPendingSync(currentPending);
+            if (currentPending === 0) return;
+
+            isSyncingRef.current = true;
+            try {
+                const summary = await runOfflineSync();
+                setPendingSync(getOfflineOperationCount());
+
+                if (summary.total > 0) {
+                    toast({
+                        title: summary.failed === 0 && summary.conflicts === 0 ? "Sincronizzazione completata" : "Sincronizzazione completata con errori",
+                        description:
+                            summary.failed === 0 && summary.conflicts === 0
+                                ? `${summary.synced} operazioni offline sincronizzate.`
+                                : `${summary.synced} sincronizzate, ${summary.failed} fallite, ${summary.conflicts} conflitti.`,
+                        variant: summary.failed === 0 && summary.conflicts === 0 ? "default" : "destructive",
+                    });
+                }
+            } catch (error) {
+                console.error("[PWA] Offline sync failed:", error);
+                setPendingSync(getOfflineOperationCount());
+                toast({
+                    title: "Sincronizzazione offline fallita",
+                    description: error instanceof Error ? error.message : "Impossibile sincronizzare le operazioni offline.",
+                    variant: "destructive",
+                });
+            } finally {
+                isSyncingRef.current = false;
+            }
+        }
+
+        refreshPendingSync();
+
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker
                 .register("/sw.js")
                 .then((registration) => {
                     console.log("[PWA] Service Worker registered:", registration.scope);
-
                     registration.addEventListener("updatefound", () => {
                         const newWorker = registration.installing;
                         if (newWorker) {
@@ -56,58 +96,57 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
                 .catch((err) => {
                     console.error("[PWA] SW registration failed:", err);
                 });
-
-            navigator.serviceWorker.addEventListener("message", (event) => {
-                if (event.data?.type === "SYNC_COMPLETE") {
-                    toast({
-                        title: "Sincronizzazione completata",
-                        description: "Le operazioni offline sono state sincronizzate.",
-                    });
-                    setPendingSync(0);
-                }
-            });
         }
 
-        // Online/Offline handlers
         const handleOnline = () => {
             setIsOnline(true);
             toast({
                 title: "Sei online",
-                description: "Connessione ripristinata. Sincronizzazione in corso...",
+                description: "Connessione ripristinata. Verifico le operazioni offline in coda.",
             });
-
-            if (navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({ type: "SYNC_OFFLINE" });
-            }
+            void syncNow();
         };
 
         const handleOffline = () => {
             setIsOnline(false);
+            refreshPendingSync();
             toast({
                 title: "Sei offline",
-                description: "Le operazioni verranno salvate e sincronizzate quando torni online.",
+                description: "Le operazioni verranno messe in coda e sincronizzate quando torni online.",
                 variant: "destructive",
             });
         };
 
-        window.addEventListener("online", handleOnline);
-        window.addEventListener("offline", handleOffline);
-
-        // PWA install prompt
         const handleBeforeInstall = (e: Event) => {
             e.preventDefault();
             setDeferredPrompt(e);
             setIsInstallable(true);
         };
 
+        const handleStorage = (event: StorageEvent) => {
+            if (!event.key || event.key.startsWith("machina.offline.")) {
+                refreshPendingSync();
+            }
+        };
+
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
         window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+        window.addEventListener("storage", handleStorage);
+        window.addEventListener(OFFLINE_QUEUE_UPDATED_EVENT, refreshPendingSync as EventListener);
+
+        if (navigator.onLine) {
+            void syncNow();
+        }
 
         return () => {
             window.removeEventListener("online", handleOnline);
             window.removeEventListener("offline", handleOffline);
             window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+            window.removeEventListener("storage", handleStorage);
+            window.removeEventListener(OFFLINE_QUEUE_UPDATED_EVENT, refreshPendingSync as EventListener);
         };
-    }, []);
+    }, [toast]);
 
     const installApp = async () => {
         if (!deferredPrompt) return;
@@ -125,3 +164,4 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
         </PWAContext.Provider>
     );
 }
+
