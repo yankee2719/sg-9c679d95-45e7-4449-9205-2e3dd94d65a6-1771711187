@@ -1,25 +1,16 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
-import { normalizeOrgRole, type AnyAppRole, type OrgRole } from "@/lib/roles";
+import { type AppRole, type DbOrgRole, normalizeStoredRole, roleSatisfies } from "@/lib/roles";
 
 const getSupabaseAdmin = () => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-        throw new Error("Missing Supabase environment variables");
-    }
-
-    return createClient(supabaseUrl, supabaseServiceKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-        },
-    });
+    if (!supabaseUrl || !supabaseServiceKey) throw new Error("Missing Supabase environment variables");
+    return createClient(supabaseUrl, supabaseServiceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 };
 
-export type MembershipRole = AnyAppRole;
-export type LegacyRoleType = OrgRole;
+export type MembershipRole = AppRole;
+export type LegacyRoleType = DbOrgRole;
 
 export interface AuthenticatedUser {
     id: string;
@@ -31,103 +22,61 @@ export interface AuthenticatedUser {
     full_name: string | null;
 }
 
-export interface AuthenticatedRequest extends NextApiRequest {
-    user: AuthenticatedUser;
-}
-
+export interface AuthenticatedRequest extends NextApiRequest { user: AuthenticatedUser; }
 export type NextApiHandlerWithAuth = (req: AuthenticatedRequest, res: NextApiResponse) => void | Promise<void>;
-export type RoleType = MembershipRole;
+export type RoleType = AppRole;
 
 function getAuthToken(req: NextApiRequest): string | null {
     const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith("Bearer ")) {
-        return authHeader.substring(7);
-    }
-
+    if (authHeader?.startsWith("Bearer ")) return authHeader.substring(7);
     const cookies = req.headers.cookie?.split(";") || [];
     for (const cookie of cookies) {
         const [name, ...rest] = cookie.trim().split("=");
         const value = rest.join("=");
         if (!value) continue;
-        if (name === "sb-access-token" || name.includes("auth-token")) {
-            return decodeURIComponent(value);
-        }
+        if (name === "sb-access-token" || name.includes("auth-token")) return decodeURIComponent(value);
     }
-
     return null;
-}
-
-function hasRequiredRole(actualRole: MembershipRole, allowedRoles: RoleType[]) {
-    const normalizedActual = normalizeOrgRole(actualRole);
-    if (!normalizedActual) return false;
-
-    const normalizedAllowed = new Set(allowedRoles.map((role) => normalizeOrgRole(role)).filter(Boolean));
-    return normalizedAllowed.has(normalizedActual);
 }
 
 async function resolveAuthenticatedUser(req: NextApiRequest): Promise<{ user: AuthenticatedUser | null; error?: string }> {
     try {
         const token = getAuthToken(req);
-        if (!token) {
-            return { user: null, error: "Missing bearer token" };
-        }
+        if (!token) return { user: null, error: "Missing bearer token" };
 
         const supabaseAdmin = getSupabaseAdmin();
-        const {
-            data: { user: authUser },
-            error: authError,
-        } = await supabaseAdmin.auth.getUser(token);
-
-        if (authError || !authUser) {
-            return { user: null, error: "Invalid or expired token" };
-        }
+        const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        if (authError || !authUser) return { user: null, error: "Invalid or expired token" };
 
         const { data: profile, error: profileError } = await supabaseAdmin
             .from("profiles")
             .select("id, email, display_name, first_name, last_name, default_organization_id")
             .eq("id", authUser.id)
             .maybeSingle();
-
-        if (profileError) {
-            return { user: null, error: profileError.message };
-        }
+        if (profileError) return { user: null, error: profileError.message };
 
         const { data: memberships, error: membershipError } = await supabaseAdmin
             .from("organization_memberships")
             .select("organization_id, role, is_active")
             .eq("user_id", authUser.id)
             .eq("is_active", true);
-
-        if (membershipError) {
-            return { user: null, error: membershipError.message };
-        }
+        if (membershipError) return { user: null, error: membershipError.message };
 
         const membershipRows = memberships ?? [];
         const defaultOrgId = profile?.default_organization_id ?? null;
         const activeMembership = membershipRows.find((m) => m.organization_id === defaultOrgId) ?? membershipRows[0] ?? null;
+        if (!activeMembership) return { user: null, error: "User has no active membership" };
 
-        if (!activeMembership) {
-            return { user: null, error: "User has no active membership" };
-        }
+        const normalizedRole = normalizeStoredRole(activeMembership.role);
+        if (!normalizedRole) return { user: null, error: "User membership role is invalid" };
 
-        const membershipRole = (activeMembership.role || "technician") as MembershipRole;
-        const normalizedRole = normalizeOrgRole(membershipRole);
-        if (!normalizedRole) {
-            return { user: null, error: "User membership role is invalid" };
-        }
-
-        const fullName =
-            profile?.display_name ||
-            [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
-            authUser.email ||
-            null;
-
+        const fullName = profile?.display_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || authUser.email || null;
         return {
             user: {
                 id: authUser.id,
                 email: profile?.email || authUser.email || "",
                 role: normalizedRole,
-                membership_role: membershipRole,
+                membership_role: normalizedRole,
                 tenant_id: activeMembership.organization_id ?? null,
                 organization_id: activeMembership.organization_id ?? null,
                 full_name: fullName,
@@ -142,40 +91,19 @@ async function resolveAuthenticatedUser(req: NextApiRequest): Promise<{ user: Au
 export function withAuth(handler: NextApiHandlerWithAuth, options?: { allowedRoles?: RoleType[] }) {
     return async (req: NextApiRequest, res: NextApiResponse) => {
         const { user, error } = await resolveAuthenticatedUser(req);
-
         if (!user || error) {
-            return res.status(401).json({
-                error: "Unauthorized",
-                message: error || "Authentication failed",
-            });
+            return res.status(401).json({ error: "Unauthorized", message: error || "Authentication failed" });
         }
-
-        if (options?.allowedRoles?.length && !hasRequiredRole(user.membership_role, options.allowedRoles)) {
-            return res.status(403).json({
-                error: "Forbidden",
-                message: "Insufficient permissions for this action",
-            });
+        if (options?.allowedRoles?.length && !roleSatisfies(user.role, options.allowedRoles)) {
+            return res.status(403).json({ error: "Forbidden", message: "Insufficient permissions for this action" });
         }
-
         (req as AuthenticatedRequest).user = user;
         return handler(req as AuthenticatedRequest, res);
     };
 }
 
-export function withAdminAuth(handler: NextApiHandlerWithAuth) {
-    return withAuth(handler, { allowedRoles: ["admin"] });
-}
-
-export function withSupervisorAuth(handler: NextApiHandlerWithAuth) {
-    return withAuth(handler, { allowedRoles: ["admin", "supervisor"] });
-}
-
-export function getTenantFilter(user: AuthenticatedUser) {
-    if (!user.organization_id) {
-        return null;
-    }
-    return { organization_id: user.organization_id };
-}
-
+export function withAdminAuth(handler: NextApiHandlerWithAuth) { return withAuth(handler, { allowedRoles: ["admin", "owner"] }); }
+export function withSupervisorAuth(handler: NextApiHandlerWithAuth) { return withAuth(handler, { allowedRoles: ["admin", "owner", "supervisor", "plant_manager"] }); }
+export function getTenantFilter(user: AuthenticatedUser) { return user.organization_id ? { organization_id: user.organization_id } : null; }
 export { getSupabaseAdmin };
 
