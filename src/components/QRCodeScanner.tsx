@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import { Button } from "@/components/ui/button";
 import { Camera, ScanLine, X } from "lucide-react";
 
@@ -15,6 +16,7 @@ interface QRCodeScannerProps {
 }
 
 export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
+    const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const frameRef = useRef<number | null>(null);
@@ -23,12 +25,6 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     const [error, setError] = useState("");
     const [status, setStatus] = useState<"idle" | "starting" | "scanning">("idle");
     const [cameraReady, setCameraReady] = useState(false);
-
-    const safeClose = useCallback(() => {
-        if (typeof onClose === "function") {
-            onClose();
-        }
-    }, [onClose]);
 
     const stopCamera = useCallback(() => {
         if (frameRef.current) {
@@ -48,6 +44,22 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
         setCameraReady(false);
         setStatus("idle");
     }, []);
+
+    const safeClose = useCallback(() => {
+        stopCamera();
+
+        if (typeof onClose === "function") {
+            onClose();
+            return;
+        }
+
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        void router.push("/scanner");
+    }, [onClose, router, stopCamera]);
 
     const startDetection = useCallback(async () => {
         const BarcodeDetectorClass = (window as Window & { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
@@ -152,6 +164,17 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
         };
     }, [startCamera, stopCamera]);
 
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                safeClose();
+            }
+        };
+
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [safeClose]);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
             <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
@@ -159,10 +182,7 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
                     variant="ghost"
                     size="icon"
                     className="absolute right-3 top-3 z-10 rounded-xl bg-background/70 hover:bg-background"
-                    onClick={() => {
-                        stopCamera();
-                        safeClose();
-                    }}
+                    onClick={safeClose}
                 >
                     <X className="h-5 w-5" />
                 </Button>
@@ -211,6 +231,12 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
                             Posiziona il codice QR all'interno del riquadro e tieni il dispositivo fermo per un istante.
                         </div>
                     )}
+
+                    <div className="flex justify-end">
+                        <Button variant="outline" onClick={safeClose}>
+                            Chiudi
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
