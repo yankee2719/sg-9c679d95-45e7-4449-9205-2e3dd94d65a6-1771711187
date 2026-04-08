@@ -230,7 +230,7 @@ export default function UsersIndexPage() {
         () => ({
             total: rows.length,
             active: rows.filter((row) => row.is_active).length,
-            admins: rows.filter((row) => ["admin", "supervisor"].includes(String(row.role || "").toLowerCase())).length,
+            admins: rows.filter((row) => ["owner", "admin", "plant_manager", "supervisor"].includes(String(row.role || "").toLowerCase())).length,
             viewers: rows.filter((row) => String(row.role || "").toLowerCase() === "technician").length,
         }),
         [rows]
@@ -367,4 +367,3 @@ export default function UsersIndexPage() {
         </OrgContextGuard>
     );
 }
-
