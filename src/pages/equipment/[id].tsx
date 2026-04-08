@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ArrowLeft, Building2, Factory, FileText, History, Loader2, Pencil, Trash2, MapPin, Route } from "lucide-react";
+import { ArrowLeft, Building2, FileText, History, Loader2, Pencil, Trash2, MapPin, Route } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import OrgContextGuard from "@/components/Auth/OrgContextGuard";
@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/services/apiClient";
 import { getMachineSnapshot } from "@/lib/machineWorkspaceApi";
 import MachineQuickActions from "@/components/Equipment/MachineQuickActions";
-import { MachineSummaryHero } from "@/components/Equipment/MachineSummaryHero";
+import MachineSummaryHero from "@/components/Equipment/MachineSummaryHero";
 
 type OrgType = "manufacturer" | "customer" | "enterprise";
 
@@ -38,8 +38,10 @@ export default function EquipmentDetailPage() {
 
   useEffect(() => {
     let active = true;
+
     const load = async () => {
       if (!resolvedId || authLoading) return;
+
       try {
         setLoading(true);
         const data = await getMachineSnapshot(resolvedId);
@@ -47,13 +49,19 @@ export default function EquipmentDetailPage() {
         setSnapshot(data);
       } catch (error: any) {
         console.error(error);
-        toast({ title: t("common.error") || "Errore", description: error?.message || t("equipment.loadError") || "Errore caricamento macchina", variant: "destructive" });
+        toast({
+          title: t("common.error") || "Errore",
+          description: error?.message || t("equipment.loadError") || "Errore caricamento macchina",
+          variant: "destructive",
+        });
         void router.replace("/equipment");
       } finally {
         if (active) setLoading(false);
       }
     };
+
     void load();
+
     return () => {
       active = false;
     };
@@ -61,15 +69,27 @@ export default function EquipmentDetailPage() {
 
   const handleDeleteMachine = async () => {
     if (!snapshot?.machine) return;
-    if (!confirm(`${t("equipment.deleteConfirm") || "Confermi?"} "${snapshot.machine.name || snapshot.machine.id}"`)) return;
+
+    if (!confirm(`${t("equipment.deleteConfirm") || "Confermi?"} "${snapshot.machine.name || snapshot.machine.id}"`)) {
+      return;
+    }
+
     setDeleting(true);
+
     try {
       await apiFetch(`/api/machines/${snapshot.machine.id}/delete`, { method: "DELETE" });
-      toast({ title: t("equipment.movedToTrash") || "Macchina spostata nel cestino", description: snapshot.machine.name || snapshot.machine.id });
+      toast({
+        title: t("equipment.movedToTrash") || "Macchina spostata nel cestino",
+        description: snapshot.machine.name || snapshot.machine.id,
+      });
       void router.push("/equipment");
     } catch (error: any) {
       console.error(error);
-      toast({ title: t("common.error") || "Errore", description: error?.message || "Delete error", variant: "destructive" });
+      toast({
+        title: t("common.error") || "Errore",
+        description: error?.message || "Delete error",
+        variant: "destructive",
+      });
     } finally {
       setDeleting(false);
     }
@@ -100,7 +120,9 @@ export default function EquipmentDetailPage() {
           <SEO title={`${t("machines.title") || "Macchine"} - MACHINA`} />
           <div className="mx-auto max-w-7xl px-4 py-8">
             <Card className="rounded-2xl">
-              <CardContent className="py-10 text-muted-foreground">{t("machines.noResults") || "Nessun risultato"}</CardContent>
+              <CardContent className="py-10 text-muted-foreground">
+                {t("machines.noResults") || "Nessun risultato"}
+              </CardContent>
             </Card>
           </div>
         </MainLayout>
@@ -118,21 +140,31 @@ export default function EquipmentDetailPage() {
     <OrgContextGuard>
       <MainLayout userRole={userRole as any}>
         <SEO title={`${machine.name ?? (t("machines.title") || "Macchine")} - MACHINA`} />
+
         <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <Button variant="outline" onClick={() => router.push("/equipment")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               {t("nav.equipment") || "Macchine"}
             </Button>
+
             <div className="flex flex-wrap gap-2">
               {snapshot.can_edit_machine && (
                 <Link href={`/equipment/${machine.id}/edit`}>
-                  <Button variant="outline"><Pencil className="mr-2 h-4 w-4" />{t("equipment.editMachine") || "Modifica macchina"}</Button>
+                  <Button variant="outline">
+                    <Pencil className="mr-2 h-4 w-4" />
+                    {t("equipment.editMachine") || "Modifica macchina"}
+                  </Button>
                 </Link>
               )}
+
               {snapshot.can_delete_machine && (
                 <Button variant="destructive" onClick={handleDeleteMachine} disabled={deleting}>
-                  {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  {deleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
                   {t("equipment.moveToTrash") || "Sposta nel cestino"}
                 </Button>
               )}
@@ -165,7 +197,12 @@ export default function EquipmentDetailPage() {
                   <MachinePhotoUpload
                     machineId={machine.id}
                     currentPhotoUrl={machine.photo_url ?? null}
-                    onPhotoChange={(url) => setSnapshot((prev: any) => ({ ...prev, machine: { ...prev.machine, photo_url: url } }))}
+                    onPhotoChange={(url) =>
+                      setSnapshot((prev: any) => ({
+                        ...prev,
+                        machine: { ...prev.machine, photo_url: url },
+                      }))
+                    }
                     readonly={!snapshot.can_edit_machine}
                   />
                 </CardContent>
@@ -174,14 +211,22 @@ export default function EquipmentDetailPage() {
               <MachineQuickActions machineId={machine.id} canEdit={snapshot.can_edit_machine} />
 
               <Card className="rounded-2xl">
-                <CardHeader><CardTitle>{t("equipment.quickInfo") || "Info rapide"}</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>{t("equipment.quickInfo") || "Info rapide"}</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
                   <InfoRow label={t("equipment.internalCode") || "Codice interno"} value={machine.internal_code} />
                   <InfoRow label={t("machines.serialNumber") || "Seriale"} value={machine.serial_number} />
                   <InfoRow label={t("machines.manufacturer") || "Costruttore"} value={machine.brand} />
                   <InfoRow label={t("machines.model") || "Modello"} value={machine.model} />
-                  <InfoRow label={orgType === "manufacturer" ? "Cliente" : (t("plants.fallbackPlant") || "Stabilimento")} value={assignedCustomerName || plantName} />
-                  <InfoRow label={orgType === "manufacturer" ? "Stabilimento cliente" : (t("plants.fallbackPlant") || "Stabilimento")} value={plantName} />
+                  <InfoRow
+                    label={orgType === "manufacturer" ? "Cliente" : t("plants.fallbackPlant") || "Stabilimento"}
+                    value={assignedCustomerName || plantName}
+                  />
+                  <InfoRow
+                    label={orgType === "manufacturer" ? "Stabilimento cliente" : t("plants.fallbackPlant") || "Stabilimento"}
+                    value={plantName}
+                  />
                   <InfoRow label="Area / linea" value={areaValue} />
                   <InfoRow label={t("equipment.owner") || "Owner"} value={snapshot.ownerOrganization?.name || organization?.name} />
                 </CardContent>
@@ -199,9 +244,24 @@ export default function EquipmentDetailPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-3">
-                  <ContextCard icon={<Building2 className="h-5 w-5" />} title={orgType === "manufacturer" ? "Cliente assegnato" : "Stabilimento"} value={assignedCustomerName || "—"} tone="blue" />
-                  <ContextCard icon={<MapPin className="h-5 w-5" />} title={orgType === "manufacturer" ? "Stabilimento cliente" : "Plant"} value={plantName || "—"} tone="orange" />
-                  <ContextCard icon={<Route className="h-5 w-5" />} title="Area / linea" value={areaValue || "—"} tone="blue" />
+                  <ContextCard
+                    icon={<Building2 className="h-5 w-5" />}
+                    title={orgType === "manufacturer" ? "Cliente assegnato" : "Stabilimento"}
+                    value={assignedCustomerName || "—"}
+                    tone="blue"
+                  />
+                  <ContextCard
+                    icon={<MapPin className="h-5 w-5" />}
+                    title={orgType === "manufacturer" ? "Stabilimento cliente" : "Plant"}
+                    value={plantName || "—"}
+                    tone="orange"
+                  />
+                  <ContextCard
+                    icon={<Route className="h-5 w-5" />}
+                    title="Area / linea"
+                    value={areaValue || "—"}
+                    tone="blue"
+                  />
                 </CardContent>
               </Card>
 
@@ -210,7 +270,9 @@ export default function EquipmentDetailPage() {
                   <CardHeader>
                     <CardTitle className="text-base">Contesto cliente incompleto</CardTitle>
                     <CardDescription>
-                      La macchina è assegnata a un cliente ma non ha ancora uno stabilimento cliente associato. Puoi completarlo da <strong>Assegnazioni</strong> oppure dal dettaglio <strong>Cliente</strong> creando prima almeno uno stabilimento cliente.
+                      La macchina è assegnata a un cliente ma non ha ancora uno stabilimento cliente associato. Puoi completarlo da{" "}
+                      <strong>Assegnazioni</strong> oppure dal dettaglio <strong>Cliente</strong> creando prima almeno uno
+                      stabilimento cliente.
                     </CardDescription>
                   </CardHeader>
                 </Card>
@@ -222,28 +284,44 @@ export default function EquipmentDetailPage() {
                   <CardDescription>{t("equipment.notesDesc") || "Note macchina"}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">{machine.notes || (t("equipment.noNotes") || "Nessuna nota")}</div>
+                  <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-foreground">
+                    {machine.notes || (t("equipment.noNotes") || "Nessuna nota")}
+                  </div>
                 </CardContent>
               </Card>
 
               <section id="machine-timeline">
                 <Card className="rounded-2xl">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><History className="h-4 w-4" />{t("equipment.timeline") || "Timeline"}</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <History className="h-4 w-4" />
+                      {t("equipment.timeline") || "Timeline"}
+                    </CardTitle>
                     <CardDescription>{t("equipment.timelineDesc") || "Eventi macchina"}</CardDescription>
                   </CardHeader>
-                  <CardContent><MachineEventTimeline machineId={machine.id} limit={50} showIntegrityCheck={true} /></CardContent>
+                  <CardContent>
+                    <MachineEventTimeline machineId={machine.id} limit={50} showIntegrityCheck={true} />
+                  </CardContent>
                 </Card>
               </section>
 
               <section id="machine-documents">
                 <Card className="rounded-2xl">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{t("documents.title") || "Documenti"}</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      {t("documents.title") || "Documenti"}
+                    </CardTitle>
                     <CardDescription>{t("equipment.docsDesc") || "Documentazione tecnica"}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <DocumentManager machineId={machine.id} machineOwnerOrgId={machine.organization_id} currentOrgId={orgId} currentOrgType={orgType as any} currentUserRole={userRole} />
+                    <DocumentManager
+                      machineId={machine.id}
+                      machineOwnerOrgId={machine.organization_id}
+                      currentOrgId={orgId}
+                      currentOrgType={orgType as any}
+                      currentUserRole={userRole}
+                    />
                   </CardContent>
                 </Card>
               </section>
@@ -259,13 +337,24 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
       <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="max-w-[60%] text-right text-sm font-medium text-foreground break-words">{value || "—"}</div>
+      <div className="max-w-[60%] break-words text-right text-sm font-medium text-foreground">{value || "—"}</div>
     </div>
   );
 }
 
-function ContextCard({ icon, title, value, tone }: { icon: React.ReactNode; title: string; value: string; tone: "orange" | "blue" }) {
+function ContextCard({
+  icon,
+  title,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  tone: "orange" | "blue";
+}) {
   const toneClasses = tone === "orange" ? "bg-orange-500/10 text-orange-500" : "bg-blue-500/10 text-blue-500";
+
   return (
     <div className="rounded-2xl border border-border p-4">
       <div className="flex items-start gap-3">
