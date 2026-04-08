@@ -54,7 +54,7 @@ async function getExistingMembership(
     return data;
 }
 
-export default withAuth(["owner", "admin", "supervisor"], async function handler(
+export default withAuth(["supervisor"], async function handler(
     req: AuthenticatedRequest,
     res: NextApiResponse
 ) {
