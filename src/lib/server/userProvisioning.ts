@@ -1,10 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedRequest } from "@/lib/apiAuth";
-import {
-    type CompatibleOrgRole,
-    normalizeRoleForStorage,
-    isAdminLikeRole,
-} from "@/lib/roles";
+import { canManageMembers, toWritableOrgRole, type AppRole, type DatabaseOrgRole } from "@/lib/roles";
 
 export class UserProvisioningError extends Error {
     statusCode: number;
@@ -16,7 +12,7 @@ export class UserProvisioningError extends Error {
     }
 }
 
-export type OrganizationUserRole = CompatibleOrgRole;
+export type OrganizationUserRole = DatabaseOrgRole;
 export type ApiActor = AuthenticatedRequest["user"];
 
 export interface CreateOrganizationUserInput {
@@ -25,7 +21,7 @@ export interface CreateOrganizationUserInput {
     email: string;
     password: string;
     fullName?: string | null;
-    role: OrganizationUserRole;
+    role: AppRole | string;
 }
 
 export interface CreateOrganizationUserResult {
@@ -37,16 +33,9 @@ export interface CreateOrganizationUserResult {
     displayName: string | null;
 }
 
-const VALID_ROLES: OrganizationUserRole[] = [
-    "owner",
-    "admin",
-    "plant_manager",
-    "supervisor",
-    "technician",
-];
-
-export function isValidOrganizationUserRole(value: unknown): value is OrganizationUserRole {
-    return VALID_ROLES.includes(String(value) as OrganizationUserRole);
+export function isValidOrganizationUserRole(value: unknown): value is AppRole {
+    const normalized = toWritableOrgRole(value as string, "technician");
+    return normalized === "admin" || normalized === "supervisor" || normalized === "technician";
 }
 
 function normalizeEmail(email: string) {
@@ -124,11 +113,7 @@ async function assertActorCanManageOrganization(
         throw new UserProvisioningError(error.message, 500);
     }
 
-    if (!actorMembership) {
-        throw new UserProvisioningError("Actor membership not found", 403);
-    }
-
-    if (!isAdminLikeRole(actorMembership.role)) {
+    if (!actorMembership || !canManageMembers(actorMembership.role)) {
         throw new UserProvisioningError(
             "Only organization admins can create users",
             403
@@ -144,13 +129,13 @@ export async function createOrganizationUser(
     const email = normalizeEmail(String(input.email || ""));
     const password = String(input.password || "");
     const displayName = normalizeFullName(input.fullName);
-    const role = normalizeRoleForStorage(input.role);
+    const role = toWritableOrgRole(input.role, "technician");
 
     if (!organizationId) {
         throw new UserProvisioningError("organization_id is required", 400);
     }
 
-    if (!email || !password || !role || !isValidOrganizationUserRole(input.role)) {
+    if (!email || !password || !isValidOrganizationUserRole(input.role)) {
         throw new UserProvisioningError("Missing or invalid required fields", 400);
     }
 
@@ -264,9 +249,8 @@ export async function createOrganizationUser(
         }
 
         throw new UserProvisioningError(
-            error instanceof Error ? error.message : "Unexpected server error",
+            error instanceof Error ? error.message : "Unexpected provisioning error",
             500
         );
     }
 }
-
