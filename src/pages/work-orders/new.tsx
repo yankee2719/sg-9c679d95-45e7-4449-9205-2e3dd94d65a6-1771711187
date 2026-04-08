@@ -8,6 +8,7 @@ import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgType } from "@/hooks/useOrgType";
 import { useToast } from "@/hooks/use-toast";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -120,7 +121,7 @@ export default function WorkOrdersNewPage() {
 
     const planId = typeof router.query.plan_id === "string" ? router.query.plan_id : "";
     const userRole = membership?.role ?? "technician";
-    const canCreate = ["admin", "supervisor"].includes(userRole);
+    const canCreate = hasMinimumCompatibleRole(userRole, "supervisor");
 
     const customerMap = useMemo(() => new Map(customers.map((customer) => [customer.id, customer.name ?? "Cliente"])), [customers]);
     const activeAssignmentByMachine = useMemo(() => {
@@ -577,4 +578,3 @@ export default function WorkOrdersNewPage() {
         </OrgContextGuard>
     );
 }
-
