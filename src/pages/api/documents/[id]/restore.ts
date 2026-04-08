@@ -89,7 +89,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(["owner", "admin", "supervisor"], handler, {
+export default withAuth(["supervisor"], handler, {
     requireAal2: true,
     allowPlatformAdmin: true,
 });
