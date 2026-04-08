@@ -1,7 +1,7 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 
-const ALLOWED_ROLES = ["owner", "admin", "supervisor", "technician", "viewer"];
+const ALLOWED_ROLES = ["admin", "supervisor", "technician"] as const;
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "PATCH") {
@@ -20,7 +20,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(400).json({ error: "No active organization context" });
         }
 
-        if (role !== undefined && !ALLOWED_ROLES.includes(String(role))) {
+        if (role !== undefined && !ALLOWED_ROLES.includes(String(role) as (typeof ALLOWED_ROLES)[number])) {
             return res.status(400).json({ error: "Invalid role" });
         }
 
@@ -38,7 +38,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(500).json({ error: actorMembershipError.message });
         }
 
-        if (!actorMembership || !["owner", "admin"].includes(actorMembership.role)) {
+        if (!actorMembership || String(actorMembership.role) !== "admin") {
             return res.status(403).json({ error: "Only organization admins can update users" });
         }
 
@@ -154,4 +154,5 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(["owner", "admin"], handler, { requireAal2: true });
+export default withAuth(["admin"], handler, { requireAal2: true });
+
