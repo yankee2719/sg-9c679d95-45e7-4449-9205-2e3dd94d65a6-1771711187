@@ -1,5 +1,6 @@
 // src/components/dashboard/DashboardCharts.tsx
 import { useMemo } from "react";
+import type { ReactNode } from "react";
 import {
     BarChart,
     Bar,
@@ -41,15 +42,98 @@ interface DashboardChartsProps {
     };
 }
 
+interface TooltipPayloadRow {
+    name?: string;
+    value?: number | string;
+    color?: string;
+    payload?: {
+        name?: string;
+        value?: number | string;
+    };
+}
+
+interface CustomTooltipProps {
+    active?: boolean;
+    payload?: TooltipPayloadRow[];
+    label?: string | number;
+}
+
 const COLORS = [
-    "hsl(262, 83%, 58%)", // violet
-    "hsl(217, 91%, 60%)", // blue
-    "hsl(152, 69%, 44%)", // emerald
-    "hsl(24, 95%, 53%)",  // orange
-    "hsl(346, 77%, 50%)", // rose
-    "hsl(45, 93%, 47%)",  // amber
-    "hsl(215, 14%, 50%)", // slate
+    "hsl(262, 83%, 58%)",
+    "hsl(217, 91%, 60%)",
+    "hsl(152, 69%, 44%)",
+    "hsl(24, 95%, 53%)",
+    "hsl(346, 77%, 50%)",
+    "hsl(45, 93%, 47%)",
+    "hsl(215, 14%, 50%)",
 ];
+
+function CustomChartTooltip({ active, payload, label }: CustomTooltipProps) {
+    if (!active || !payload || payload.length === 0) {
+        return null;
+    }
+
+    const resolvedTitle =
+        String(label ?? "").trim() ||
+        String(payload[0]?.payload?.name ?? payload[0]?.name ?? "").trim() ||
+        "Dettaglio";
+
+    return (
+        <div
+            className="min-w-[180px] rounded-xl border border-border bg-background px-3 py-2 shadow-xl"
+            style={{
+                color: "hsl(var(--foreground))",
+                boxShadow:
+                    "0 10px 30px rgba(0,0,0,0.18), 0 2px 10px rgba(0,0,0,0.10)",
+            }}
+        >
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {resolvedTitle}
+            </div>
+
+            <div className="space-y-1.5">
+                {payload.map((entry, index) => {
+                    const rowLabel =
+                        String(entry.name ?? entry.payload?.name ?? "Valore").trim() || "Valore";
+
+                    return (
+                        <div
+                            key={`${rowLabel}-${index}`}
+                            className="flex items-center justify-between gap-3 text-sm"
+                        >
+                            <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                    style={{ backgroundColor: entry.color || "hsl(var(--primary))" }}
+                                />
+                                <span className="truncate text-foreground">{rowLabel}</span>
+                            </div>
+                            <span className="shrink-0 font-semibold text-foreground">
+                                {entry.value ?? "—"}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function renderPieLabel({
+    name,
+    percent,
+}: {
+    name?: string;
+    percent?: number;
+}): ReactNode {
+    const safeName = String(name ?? "").trim();
+    const safePercent = typeof percent === "number" ? `${(percent * 100).toFixed(0)}%` : "";
+
+    if (!safeName) return safePercent;
+    if (!safePercent) return safeName;
+
+    return `${safeName} ${safePercent}`;
+}
 
 export default function DashboardCharts({
     kpis,
@@ -84,7 +168,6 @@ export default function DashboardCharts({
             { name: text.activeAssignments, value: kpis.activeAssignments },
         ].filter((d) => d.value > 0);
 
-        // If everything is zero, show a placeholder
         if (items.length === 0) {
             return [{ name: "—", value: 1 }];
         }
@@ -98,7 +181,6 @@ export default function DashboardCharts({
 
     return (
         <div className="grid gap-6 xl:grid-cols-2">
-            {/* Bar Chart — Overview */}
             <Card className="rounded-2xl">
                 <CardHeader>
                     <CardTitle className="text-lg">
@@ -133,13 +215,8 @@ export default function DashboardCharts({
                                 allowDecimals={false}
                             />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "hsl(var(--card))",
-                                    border: "1px solid hsl(var(--border))",
-                                    borderRadius: "12px",
-                                    color: "hsl(var(--foreground))",
-                                    fontSize: 13,
-                                }}
+                                cursor={{ fill: "hsl(var(--muted) / 0.22)" }}
+                                content={<CustomChartTooltip />}
                             />
                             <Bar
                                 dataKey="value"
@@ -155,7 +232,6 @@ export default function DashboardCharts({
                 </CardContent>
             </Card>
 
-            {/* Pie Chart — Distribution */}
             <Card className="rounded-2xl">
                 <CardHeader>
                     <CardTitle className="text-lg">
@@ -173,9 +249,7 @@ export default function DashboardCharts({
                                 outerRadius={100}
                                 paddingAngle={3}
                                 dataKey="value"
-                                label={({ name, percent }) =>
-                                    `${name} ${(percent * 100).toFixed(0)}%`
-                                }
+                                label={renderPieLabel}
                                 labelLine={false}
                             >
                                 {pieData.map((_, index) => (
@@ -185,17 +259,13 @@ export default function DashboardCharts({
                                     />
                                 ))}
                             </Pie>
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "hsl(var(--card))",
-                                    border: "1px solid hsl(var(--border))",
-                                    borderRadius: "12px",
-                                    color: "hsl(var(--foreground))",
-                                    fontSize: 13,
-                                }}
-                            />
+                            <Tooltip content={<CustomChartTooltip />} />
                             <Legend
-                                wrapperStyle={{ fontSize: 12 }}
+                                wrapperStyle={{
+                                    fontSize: 12,
+                                    color: "hsl(var(--foreground))",
+                                    paddingTop: 8,
+                                }}
                             />
                         </PieChart>
                     </ResponsiveContainer>
