@@ -11,7 +11,7 @@ export class UserProvisioningError extends Error {
     }
 }
 
-export type OrganizationUserRole = AppRole;
+export type OrganizationUserRole = Extract<AppRole, "admin" | "supervisor" | "technician">;
 export type ApiActor = AuthenticatedRequest["user"];
 
 export interface CreateOrganizationUserInput {
@@ -32,13 +32,7 @@ export interface CreateOrganizationUserResult {
     displayName: string | null;
 }
 
-const VALID_ROLES: OrganizationUserRole[] = [
-    "owner",
-    "admin",
-    "supervisor",
-    "technician",
-    "viewer",
-];
+const VALID_ROLES: OrganizationUserRole[] = ["admin", "supervisor", "technician"];
 
 export function isValidOrganizationUserRole(value: unknown): value is OrganizationUserRole {
     return VALID_ROLES.includes(String(value) as OrganizationUserRole);
@@ -66,10 +60,7 @@ function splitName(fullName: string | null) {
     };
 }
 
-async function ensureOrganizationExists(
-    serviceSupabase: SupabaseClient,
-    organizationId: string
-) {
+async function ensureOrganizationExists(serviceSupabase: SupabaseClient, organizationId: string) {
     const { data: organization, error } = await serviceSupabase
         .from("organizations")
         .select("id, name")
@@ -123,9 +114,9 @@ async function assertActorCanManageOrganization(
         throw new UserProvisioningError("Actor membership not found", 403);
     }
 
-    if (!["owner", "admin"].includes(String(actorMembership.role))) {
+    if (String(actorMembership.role) !== "admin") {
         throw new UserProvisioningError(
-            "Only organization owners and admins can create users",
+            "Only organization admins can create users",
             403
         );
     }
@@ -259,7 +250,7 @@ export async function createOrganizationUser(
         }
 
         throw new UserProvisioningError(
-            error instanceof Error ? error.message : "Unexpected server error",
+            error instanceof Error ? error.message : "Unexpected user provisioning error",
             500
         );
     }
