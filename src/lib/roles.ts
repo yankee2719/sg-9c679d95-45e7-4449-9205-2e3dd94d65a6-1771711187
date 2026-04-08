@@ -1,11 +1,28 @@
-import type { Database } from "@/integrations/supabase/database.types";
+export type DatabaseOrgRole = "admin" | "supervisor" | "technician";
+export type CompatibilityRole = "owner" | "plant_manager" | "viewer" | "operator";
+export type CanonicalRole = DatabaseOrgRole | "viewer";
+export type AppRole = DatabaseOrgRole | CompatibilityRole;
 
-export type RealOrgRole = Database["public"]["Enums"]["org_role"];
-export type LegacyOrgRoleAlias = "owner" | "plant_manager" | "viewer" | "operator";
-export type RoleLike = RealOrgRole | LegacyOrgRoleAlias | string | null | undefined;
+export const APP_ROLE_VALUES: AppRole[] = [
+    "owner",
+    "admin",
+    "supervisor",
+    "plant_manager",
+    "technician",
+    "operator",
+    "viewer",
+];
 
-export function normalizeOrgRole(role: RoleLike): RealOrgRole | null {
-    switch (String(role ?? "").toLowerCase()) {
+const ROLE_RANK: Record<CanonicalRole, number> = {
+    viewer: 0,
+    technician: 1,
+    supervisor: 2,
+    admin: 3,
+};
+
+export function normalizeRole(role: unknown, fallback: CanonicalRole = "viewer"): CanonicalRole {
+    const value = String(role ?? "").trim().toLowerCase();
+    switch (value) {
         case "owner":
         case "admin":
             return "admin";
@@ -15,44 +32,63 @@ export function normalizeOrgRole(role: RoleLike): RealOrgRole | null {
         case "operator":
         case "technician":
             return "technician";
+        case "viewer":
+            return "viewer";
         default:
-            return null;
+            return fallback;
     }
 }
 
-export function isLegacyReadOnlyRole(role: RoleLike): boolean {
-    return String(role ?? "").toLowerCase() === "viewer";
+export function isWritableOrgRole(role: unknown): role is DatabaseOrgRole {
+    return role === "admin" || role === "supervisor" || role === "technician";
 }
 
-export function hasMinimumOrgRole(role: RoleLike, minimum: RealOrgRole): boolean {
-    const normalized = normalizeOrgRole(role);
-    if (!normalized) return false;
-    const rank: Record<RealOrgRole, number> = { admin: 3, supervisor: 2, technician: 1 };
-    return rank[normalized] >= rank[minimum];
+export function toWritableOrgRole(role: unknown, fallback: DatabaseOrgRole = "technician"): DatabaseOrgRole {
+    const normalized = normalizeRole(role, fallback);
+    return normalized === "viewer" ? fallback : normalized;
 }
 
-export function canManageOrg(role: RoleLike): boolean {
-    return hasMinimumOrgRole(role, "supervisor");
+export function hasMinimumRole(actualRole: unknown, requiredRole: unknown): boolean {
+    const actual = normalizeRole(actualRole);
+    const required = normalizeRole(requiredRole);
+    return ROLE_RANK[actual] >= ROLE_RANK[required];
 }
 
-export function canAdminOrg(role: RoleLike): boolean {
-    return hasMinimumOrgRole(role, "admin");
+export function roleSatisfiesAny(actualRole: unknown, allowedRoles: readonly unknown[]): boolean {
+    if (!allowedRoles.length) return false;
+    return allowedRoles.some((allowedRole) => hasMinimumRole(actualRole, allowedRole));
 }
 
-export function getRoleDisplayLabel(role: RoleLike): string {
-    switch (String(role ?? "").toLowerCase()) {
-        case "owner":
+export function canManageMembers(role: unknown): boolean {
+    return hasMinimumRole(role, "admin");
+}
+
+export function canManageMachines(role: unknown): boolean {
+    return hasMinimumRole(role, "supervisor");
+}
+
+export function canManageWorkOrders(role: unknown): boolean {
+    return hasMinimumRole(role, "supervisor");
+}
+
+export function canExecuteWorkOrders(role: unknown): boolean {
+    return hasMinimumRole(role, "technician");
+}
+
+export function isViewOnlyRole(role: unknown): boolean {
+    return normalizeRole(role) === "viewer";
+}
+
+export function getRoleBadgeLabel(role: unknown): string {
+    const normalized = normalizeRole(role);
+    switch (normalized) {
         case "admin":
             return "Admin";
-        case "plant_manager":
         case "supervisor":
             return "Supervisor";
-        case "operator":
         case "technician":
             return "Technician";
-        case "viewer":
-            return "Viewer";
         default:
-            return String(role || "Unknown");
+            return "Viewer";
     }
 }
