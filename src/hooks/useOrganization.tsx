@@ -1,7 +1,12 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { useRouter } from 'next/router';
-import { organizationService, type Organization, type OrganizationMembership, type OrgRole } from '@/services/organizationService';
-import { normalizeOrgRole } from '@/lib/roles';
+import {
+    organizationService,
+    type Organization,
+    type OrganizationMembership,
+    type OrgRole,
+} from '@/services/organizationService';
+import { canManageMachines, canManageMembers, isAdminRole } from '@/lib/roles';
 
 interface OrganizationContextType {
     organization: Organization | null;
@@ -50,11 +55,11 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         void loadOrganization();
     }, []);
 
-    const role = normalizeOrgRole(membership?.role ?? null);
-    const isOwner = false;
-    const isAdmin = role === 'admin';
-    const canManageMembers = isAdmin;
-    const canManageMachines = role === 'admin' || role === 'supervisor';
+    const role = membership?.role ?? null;
+    const isOwner = isAdminRole(role);
+    const isAdmin = isAdminRole(role);
+    const canManageMembersValue = canManageMembers(role);
+    const canManageMachinesValue = canManageMachines(role);
 
     const value: OrganizationContextType = {
         organization,
@@ -63,8 +68,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         error,
         isOwner,
         isAdmin,
-        canManageMembers,
-        canManageMachines,
+        canManageMembers: canManageMembersValue,
+        canManageMachines: canManageMachinesValue,
         refresh: loadOrganization,
     };
 
@@ -82,16 +87,15 @@ export function useOrganization() {
 export function usePermission(permission: string) {
     const { membership } = useOrganization();
 
-    const role = normalizeOrgRole(membership?.role ?? null);
-    if (!role) return false;
+    if (!membership) return false;
 
     const rolePermissions: Record<OrgRole, string[]> = {
-        admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings', 'assign_machines'],
+        admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings', 'assign_machines', 'view_machines'],
         supervisor: ['manage_machines', 'assign_machines', 'view_machines', 'update_maintenance'],
         technician: ['view_assigned_machines', 'update_maintenance', 'view_machines'],
     };
 
-    return (rolePermissions[role] || []).includes(permission);
+    return (rolePermissions[membership.role] || []).includes(permission);
 }
 
 export function useOrganizationMembers() {
@@ -142,7 +146,9 @@ export function useOnboardingStatus() {
     return { completed, loading };
 }
 
-export function withOnboardingRequired<P extends object>(Component: React.ComponentType<P>) {
+export function withOnboardingRequired<P extends object>(
+    Component: React.ComponentType<P>
+) {
     return function OnboardingGuard(props: P) {
         const router = useRouter();
         const { completed, loading } = useOnboardingStatus();
@@ -162,6 +168,7 @@ export function withOnboardingRequired<P extends object>(Component: React.Compon
         }
 
         if (!completed) return null;
+
         return <Component {...props} />;
     };
 }
@@ -171,13 +178,12 @@ export function withRole(allowedRoles: OrgRole[]) {
         return function RoleGuard(props: P) {
             const router = useRouter();
             const { membership, loading } = useOrganization();
-            const normalizedRole = normalizeOrgRole(membership?.role ?? null);
 
             useEffect(() => {
-                if (!loading && (!normalizedRole || !allowedRoles.includes(normalizedRole))) {
+                if (!loading && (!membership || !allowedRoles.includes(membership.role))) {
                     void router.push('/dashboard');
                 }
-            }, [normalizedRole, loading, router]);
+            }, [membership, loading, router]);
 
             if (loading) {
                 return (
@@ -187,7 +193,7 @@ export function withRole(allowedRoles: OrgRole[]) {
                 );
             }
 
-            if (!normalizedRole || !allowedRoles.includes(normalizedRole)) {
+            if (!membership || !allowedRoles.includes(membership.role)) {
                 return null;
             }
 
