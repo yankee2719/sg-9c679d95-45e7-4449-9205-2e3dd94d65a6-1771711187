@@ -1,6 +1,11 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
-import { normalizeAppRole, type AppRole, type CanonicalOrgRole } from "@/lib/roles";
+import {
+    type CompatibleOrgRole,
+    type StoredOrgRole,
+    normalizeCompatibleRole,
+    roleSatisfiesAny,
+} from "@/lib/roles";
 
 const getSupabaseAdmin = () => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,8 +23,8 @@ const getSupabaseAdmin = () => {
     });
 };
 
-export type MembershipRole = AppRole;
-export type LegacyRoleType = CanonicalOrgRole;
+export type MembershipRole = CompatibleOrgRole;
+export type LegacyRoleType = StoredOrgRole;
 
 export interface AuthenticatedUser {
     id: string;
@@ -40,7 +45,7 @@ export type NextApiHandlerWithAuth = (
     res: NextApiResponse
 ) => void | Promise<void>;
 
-export type RoleType = LegacyRoleType;
+export type RoleType = CompatibleOrgRole;
 
 function getAuthToken(req: NextApiRequest): string | null {
     const authHeader = req.headers.authorization;
@@ -61,13 +66,21 @@ function getAuthToken(req: NextApiRequest): string | null {
     return null;
 }
 
-function toCanonicalRole(role: string | null | undefined): CanonicalOrgRole {
-    return normalizeAppRole(role) ?? "technician";
-}
-
-function hasRequiredRole(actualRole: MembershipRole, allowedRoles: RoleType[]) {
-    const actual = toCanonicalRole(actualRole);
-    return allowedRoles.includes(actual);
+function toStoredRole(role: string | null | undefined): LegacyRoleType {
+    const normalized = normalizeCompatibleRole(role);
+    switch (normalized) {
+        case "owner":
+            return "admin";
+        case "plant_manager":
+            return "supervisor";
+        case "admin":
+        case "supervisor":
+        case "technician":
+            return normalized;
+        case "viewer":
+        default:
+            return "technician";
+    }
 }
 
 async function resolveAuthenticatedUser(
@@ -121,7 +134,7 @@ async function resolveAuthenticatedUser(
             return { user: null, error: "User has no active membership" };
         }
 
-        const membershipRole = (activeMembership.role || "technician") as MembershipRole;
+        const membershipRole = normalizeCompatibleRole(activeMembership.role) ?? "technician";
         const fullName =
             profile?.display_name ||
             [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
@@ -132,7 +145,7 @@ async function resolveAuthenticatedUser(
             user: {
                 id: authUser.id,
                 email: profile?.email || authUser.email || "",
-                role: toCanonicalRole(membershipRole),
+                role: toStoredRole(membershipRole),
                 membership_role: membershipRole,
                 tenant_id: activeMembership.organization_id ?? null,
                 organization_id: activeMembership.organization_id ?? null,
@@ -161,7 +174,7 @@ export function withAuth(
 
         if (
             options?.allowedRoles?.length &&
-            !hasRequiredRole(user.membership_role, options.allowedRoles)
+            !roleSatisfiesAny(user.membership_role, options.allowedRoles)
         ) {
             return res.status(403).json({
                 error: "Forbidden",
@@ -190,4 +203,3 @@ export function getTenantFilter(user: AuthenticatedUser) {
 }
 
 export { getSupabaseAdmin };
-
