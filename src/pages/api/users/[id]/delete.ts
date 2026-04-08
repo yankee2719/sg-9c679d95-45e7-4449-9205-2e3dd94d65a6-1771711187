@@ -31,7 +31,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(500).json({ error: actorMembershipError.message });
         }
 
-        if (!actorMembership || !["owner", "admin"].includes(actorMembership.role)) {
+        if (!actorMembership || String(actorMembership.role) !== "admin") {
             return res.status(403).json({ error: "Only organization admins can remove users" });
         }
 
@@ -110,4 +110,5 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(["owner", "admin"], handler, { requireAal2: true });
+export default withAuth(["admin"], handler, { requireAal2: true });
+
