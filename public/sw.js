@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `machina-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `machina-runtime-${CACHE_VERSION}`;
 
@@ -29,7 +29,6 @@ self.addEventListener("fetch", (event) => {
     const url = new URL(request.url);
     if (!url.protocol.startsWith("http")) return;
 
-    // Never replay raw mutations from the service worker.
     if (request.method !== "GET") {
         return;
     }
@@ -52,6 +51,13 @@ self.addEventListener("fetch", (event) => {
     if (url.origin === self.location.origin) {
         event.respondWith(networkFirst(request, RUNTIME_CACHE, false));
         return;
+    }
+});
+
+self.addEventListener("message", (event) => {
+    const type = event.data?.type;
+    if (type === "PING") {
+        event.source?.postMessage({ type: "PONG" });
     }
 });
 
@@ -92,3 +98,4 @@ async function networkFirst(request, cacheName, allowOfflinePage) {
         });
     }
 }
+
