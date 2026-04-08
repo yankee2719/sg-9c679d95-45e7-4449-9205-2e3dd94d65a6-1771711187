@@ -230,8 +230,8 @@ export default function UsersIndexPage() {
         () => ({
             total: rows.length,
             active: rows.filter((row) => row.is_active).length,
-            admins: rows.filter((row) => ["owner", "admin", "plant_manager", "supervisor"].includes(String(row.role || "").toLowerCase())).length,
-            viewers: rows.filter((row) => String(row.role || "").toLowerCase() === "technician").length,
+            admins: rows.filter((row) => ["admin", "supervisor", "owner", "plant_manager"].includes(String(row.role || "").toLowerCase())).length,
+            viewers: rows.filter((row) => ["technician", "operator"].includes(String(row.role || "").toLowerCase())).length,
         }),
         [rows]
     );
