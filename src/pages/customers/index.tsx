@@ -45,9 +45,9 @@ export default function CustomersIndexPage() {
     const [rows, setRows] = useState < CustomerRow[] > ([]);
     const [search, setSearch] = useState("");
 
-    const userRole = membership?.role ?? "viewer";
+    const userRole = membership?.role ?? "technician";
     const orgType = organization?.type ?? null;
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const canEdit = ["admin", "supervisor"].includes(userRole);
 
     useEffect(() => {
         let active = true;
@@ -188,4 +188,5 @@ export default function CustomersIndexPage() {
         </OrgContextGuard>
     );
 }
+
 
