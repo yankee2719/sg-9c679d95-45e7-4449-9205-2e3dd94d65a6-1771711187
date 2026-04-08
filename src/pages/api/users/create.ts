@@ -69,4 +69,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSucces
 }
 
 export default withAuth(["admin"], handler, { requireAal2: true });
-
