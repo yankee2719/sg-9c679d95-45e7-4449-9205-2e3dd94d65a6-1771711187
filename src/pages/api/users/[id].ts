@@ -1,7 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-
-const ALLOWED_ROLES = ["admin", "supervisor", "technician"] as const;
+import { isAdminRole, normalizeRoleForWrite } from "@/lib/roles";
 
 async function ensureAdmin(req: AuthenticatedRequest) {
     const serviceSupabase = getServiceSupabase();
@@ -22,7 +21,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const { serviceSupabase, actorMembership, actorError } = await ensureAdmin(req);
     if (actorError) return res.status(500).json({ error: actorError.message });
-    if (!actorMembership || String(actorMembership.role) !== "admin") {
+    if (!req.user.isPlatformAdmin && !isAdminRole(actorMembership?.role)) {
         return res.status(403).json({ error: "Only organization admins can manage users" });
     }
 
@@ -37,16 +36,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (req.method === "PATCH") {
         const { display_name, role, is_active } = req.body ?? {};
-        if (role !== undefined && !ALLOWED_ROLES.includes(String(role) as (typeof ALLOWED_ROLES)[number])) {
+        const normalizedRole = role === undefined ? undefined : normalizeRoleForWrite(role);
+        if (role !== undefined && !normalizedRole) {
             return res.status(400).json({ error: "Invalid role" });
         }
         if (targetMembership.user_id === req.user.id) {
             if (is_active === false) return res.status(400).json({ error: "You cannot deactivate yourself" });
-            if (role && role !== targetMembership.role) return res.status(400).json({ error: "You cannot change your own role" });
+            if (normalizedRole && normalizedRole !== targetMembership.role) return res.status(400).json({ error: "You cannot change your own role" });
         }
 
         const membershipUpdate: Record<string, unknown> = {};
-        if (role !== undefined) membershipUpdate.role = role;
+        if (normalizedRole !== undefined) membershipUpdate.role = normalizedRole;
         if (is_active !== undefined) {
             membershipUpdate.is_active = Boolean(is_active);
             membershipUpdate.deactivated_at = Boolean(is_active) ? null : new Date().toISOString();
