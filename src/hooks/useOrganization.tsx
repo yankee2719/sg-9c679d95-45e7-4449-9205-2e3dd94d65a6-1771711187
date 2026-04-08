@@ -1,15 +1,11 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { useRouter } from 'next/router';
+import { canAdminOrg, canManageOrg, hasMinimumOrgRole, normalizeOrgRole, type RealOrgRole as OrgRole } from '@/lib/roles';
 import {
     organizationService,
     type Organization,
     type OrganizationMembership,
-    type OrgRole,
 } from '@/services/organizationService';
-import {
-    hasMinimumCompatibleRole,
-    roleSatisfiesAny,
-} from '@/lib/roles';
 
 interface OrganizationContextType {
     organization: Organization | null;
@@ -59,10 +55,11 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const role = membership?.role ?? null;
-    const isOwner = role === 'owner';
-    const isAdmin = hasMinimumCompatibleRole(role, 'admin');
+    const normalizedRole = normalizeOrgRole(role);
+    const isOwner = role === 'owner' || normalizedRole === 'admin';
+    const isAdmin = canAdminOrg(role);
     const canManageMembers = isAdmin;
-    const canManageMachines = hasMinimumCompatibleRole(role, 'supervisor');
+    const canManageMachines = canManageOrg(role);
 
     const value: OrganizationContextType = {
         organization,
@@ -91,18 +88,15 @@ export function usePermission(permission: string) {
     const { membership } = useOrganization();
 
     if (!membership) return false;
-    if (hasMinimumCompatibleRole(membership.role, 'admin')) return true;
 
-    const rolePermissions: Record<string, string[]> = {
-        owner: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings'],
-        admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings'],
-        plant_manager: ['manage_machines', 'assign_machines', 'view_machines'],
-        supervisor: ['manage_machines', 'assign_machines', 'view_machines'],
+    const rolePermissions: Record<OrgRole, string[]> = {
+        admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings', 'assign_machines', 'view_machines'],
+        supervisor: ['manage_machines', 'assign_machines', 'view_machines', 'view_audit_logs'],
         technician: ['view_assigned_machines', 'update_maintenance', 'view_machines'],
-        viewer: ['view_machines'],
     };
 
-    return (rolePermissions[membership.role] || []).includes(permission);
+    const normalizedRole = normalizeOrgRole(membership.role) ?? 'technician';
+    return (rolePermissions[normalizedRole] || []).includes(permission);
 }
 
 export function useOrganizationMembers() {
@@ -187,10 +181,10 @@ export function withRole(allowedRoles: OrgRole[]) {
             const { membership, loading } = useOrganization();
 
             useEffect(() => {
-                if (!loading && (!membership || !roleSatisfiesAny(membership.role, allowedRoles))) {
+                if (!loading && (!membership || !allowedRoles.some((role) => hasMinimumOrgRole(membership.role, role)))) {
                     void router.push('/dashboard');
                 }
-            }, [membership, loading, router]);
+            }, [membership, loading, router, allowedRoles]);
 
             if (loading) {
                 return (
@@ -200,7 +194,7 @@ export function withRole(allowedRoles: OrgRole[]) {
                 );
             }
 
-            if (!membership || !roleSatisfiesAny(membership.role, allowedRoles)) {
+            if (!membership || !allowedRoles.some((role) => hasMinimumOrgRole(membership.role, role))) {
                 return null;
             }
 
@@ -208,3 +202,4 @@ export function withRole(allowedRoles: OrgRole[]) {
         };
     };
 }
+
