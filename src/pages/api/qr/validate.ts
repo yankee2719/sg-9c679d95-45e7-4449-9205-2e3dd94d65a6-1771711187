@@ -1,13 +1,15 @@
-// ============================================================================
-// API: POST /api/qr/validate
-// ============================================================================
 import type { NextApiResponse } from "next";
 import {
     withAuth,
     ALL_APP_ROLES,
     type AuthenticatedRequest,
+    getServiceSupabase,
 } from "@/lib/apiAuth";
-import { getQrTokenService } from "@/services/offlineAndQrService";
+import {
+    canViewMachineViaQr,
+    DEFAULT_QR_ALLOWED_VIEWS,
+    getMachineByQrToken,
+} from "@/lib/server/machineQrService";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
@@ -20,31 +22,35 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     try {
-        const qrService = getQrTokenService();
-        const result = await qrService.validateToken(
-            token,
-            req.user.userId,
-            req.user.role
-        );
+        const supabase = getServiceSupabase();
+        const machine = await getMachineByQrToken(supabase, token.trim());
 
-        if (!result?.is_valid || !result.equipment_id) {
+        if (!machine || machine.is_deleted || machine.is_archived) {
             return res.status(403).json({
                 success: false,
-                denial_reason: result?.denial_reason || "access_denied",
+                denial_reason: "access_denied",
+            });
+        }
+
+        const allowed = await canViewMachineViaQr(supabase, req.user, machine);
+        if (!allowed) {
+            return res.status(403).json({
+                success: false,
+                denial_reason: "access_denied",
             });
         }
 
         return res.status(200).json({
             success: true,
-            equipment_id: result.equipment_id,
-            allowed_views: result.allowed_views || [],
-            max_permission_level: result.max_permission_level || null,
+            equipment_id: machine.id,
+            allowed_views: [...DEFAULT_QR_ALLOWED_VIEWS],
+            max_permission_level: req.user.role,
         });
     } catch (error) {
         console.error("QR Validate Error:", error);
-        return res
-            .status(500)
-            .json({ error: "Failed to validate QR token" });
+        return res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to validate QR token",
+        });
     }
 }
 
