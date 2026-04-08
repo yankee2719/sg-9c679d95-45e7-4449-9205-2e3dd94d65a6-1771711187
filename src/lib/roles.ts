@@ -1,94 +1,99 @@
-export type DatabaseOrgRole = "admin" | "supervisor" | "technician";
-export type CompatibilityRole = "owner" | "plant_manager" | "viewer" | "operator";
-export type CanonicalRole = DatabaseOrgRole | "viewer";
-export type AppRole = DatabaseOrgRole | CompatibilityRole;
+export const REAL_ORG_ROLES = ["admin", "supervisor", "technician"] as const;
+export const LEGACY_ORG_ROLES = ["owner", "plant_manager", "viewer", "operator"] as const;
 
-export const APP_ROLE_VALUES: AppRole[] = [
-    "owner",
-    "admin",
-    "supervisor",
-    "plant_manager",
-    "technician",
-    "operator",
-    "viewer",
-];
+export type WritableOrgRole = (typeof REAL_ORG_ROLES)[number];
+export type LegacyOrgRole = (typeof LEGACY_ORG_ROLES)[number];
+export type AppRole = WritableOrgRole;
+export type AnyRole = AppRole | LegacyOrgRole | string;
 
-const ROLE_RANK: Record<CanonicalRole, number> = {
-    viewer: 0,
-    technician: 1,
-    supervisor: 2,
-    admin: 3,
+const ROLE_ORDER: Record<AppRole, number> = {
+  technician: 10,
+  supervisor: 20,
+  admin: 30,
 };
 
-export function normalizeRole(role: unknown, fallback: CanonicalRole = "viewer"): CanonicalRole {
-    const value = String(role ?? "").trim().toLowerCase();
-    switch (value) {
-        case "owner":
-        case "admin":
-            return "admin";
-        case "plant_manager":
-        case "supervisor":
-            return "supervisor";
-        case "operator":
-        case "technician":
-            return "technician";
-        case "viewer":
-            return "viewer";
-        default:
-            return fallback;
-    }
+export function isWritableOrgRole(value: unknown): value is WritableOrgRole {
+  return typeof value === "string" && (REAL_ORG_ROLES as readonly string[]).includes(value);
 }
 
-export function isWritableOrgRole(role: unknown): role is DatabaseOrgRole {
-    return role === "admin" || role === "supervisor" || role === "technician";
+export function isLegacyOrgRole(value: unknown): value is LegacyOrgRole {
+  return typeof value === "string" && (LEGACY_ORG_ROLES as readonly string[]).includes(value);
 }
 
-export function toWritableOrgRole(role: unknown, fallback: DatabaseOrgRole = "technician"): DatabaseOrgRole {
-    const normalized = normalizeRole(role, fallback);
-    return normalized === "viewer" ? fallback : normalized;
+export function normalizeRole(value: unknown): AppRole {
+  const raw = String(value ?? "").trim().toLowerCase();
+
+  if (raw === "admin") return "admin";
+  if (raw === "supervisor") return "supervisor";
+  if (raw === "technician") return "technician";
+
+  if (raw === "owner") return "admin";
+  if (raw === "plant_manager") return "supervisor";
+  if (raw === "viewer") return "technician";
+  if (raw === "operator") return "technician";
+
+  return "technician";
 }
 
-export function hasMinimumRole(actualRole: unknown, requiredRole: unknown): boolean {
-    const actual = normalizeRole(actualRole);
-    const required = normalizeRole(requiredRole);
-    return ROLE_RANK[actual] >= ROLE_RANK[required];
+export function toWritableOrgRole(value: unknown): WritableOrgRole {
+  return normalizeRole(value);
 }
 
-export function roleSatisfiesAny(actualRole: unknown, allowedRoles: readonly unknown[]): boolean {
-    if (!allowedRoles.length) return false;
-    return allowedRoles.some((allowedRole) => hasMinimumRole(actualRole, allowedRole));
+export function getRoleRank(value: unknown): number {
+  return ROLE_ORDER[normalizeRole(value)];
 }
 
-export function canManageMembers(role: unknown): boolean {
-    return hasMinimumRole(role, "admin");
+export function hasMinimumRole(
+  userRole: AppRole | string | null | undefined,
+  requiredRole: AppRole
+): boolean {
+  return getRoleRank(userRole) >= getRoleRank(requiredRole);
 }
 
-export function canManageMachines(role: unknown): boolean {
-    return hasMinimumRole(role, "supervisor");
+export function hasMinimumCompatibleRole(
+  userRole: AppRole | string | null | undefined,
+  requiredRole: AppRole
+): boolean {
+  return hasMinimumRole(userRole, requiredRole);
 }
 
-export function canManageWorkOrders(role: unknown): boolean {
-    return hasMinimumRole(role, "supervisor");
+export function isAdminRole(value: unknown): boolean {
+  return normalizeRole(value) === "admin";
 }
 
-export function canExecuteWorkOrders(role: unknown): boolean {
-    return hasMinimumRole(role, "technician");
+export function isSupervisorRole(value: unknown): boolean {
+  const role = normalizeRole(value);
+  return role === "admin" || role === "supervisor";
 }
 
-export function isViewOnlyRole(role: unknown): boolean {
-    return normalizeRole(role) === "viewer";
+export function isTechnicianRole(value: unknown): boolean {
+  return normalizeRole(value) === "technician";
 }
 
-export function getRoleBadgeLabel(role: unknown): string {
-    const normalized = normalizeRole(role);
-    switch (normalized) {
-        case "admin":
-            return "Admin";
-        case "supervisor":
-            return "Supervisor";
-        case "technician":
-            return "Technician";
-        default:
-            return "Viewer";
-    }
+export function canManageUsers(value: unknown): boolean {
+  return hasMinimumRole(normalizeRole(value), "admin");
+}
+
+export function canManageMachines(value: unknown): boolean {
+  return hasMinimumRole(normalizeRole(value), "supervisor");
+}
+
+export function canEditDocuments(value: unknown): boolean {
+  return hasMinimumRole(normalizeRole(value), "supervisor");
+}
+
+export function canExecuteWorkOrders(value: unknown): boolean {
+  return hasMinimumRole(normalizeRole(value), "technician");
+}
+
+export function canManageChecklists(value: unknown): boolean {
+  return hasMinimumRole(normalizeRole(value), "supervisor");
+}
+
+export function roleLabel(value: unknown): string {
+  const role = normalizeRole(value);
+
+  if (role === "admin") return "Admin";
+  if (role === "supervisor") return "Supervisor";
+  return "Technician";
 }
