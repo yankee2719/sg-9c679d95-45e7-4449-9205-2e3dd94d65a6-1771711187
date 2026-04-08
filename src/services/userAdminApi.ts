@@ -1,5 +1,4 @@
 import { authService } from "@/services/authService";
-import type { CompatibleOrgRole } from "@/lib/roles";
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     const session = await authService.getCurrentSession();
@@ -34,7 +33,7 @@ export interface UserAdminRow {
     first_name?: string | null;
     last_name?: string | null;
     avatar_url?: string | null;
-    role: CompatibleOrgRole;
+    role: "admin" | "supervisor" | "technician" | "viewer" | null;
     is_active: boolean;
     created_at?: string | null;
     accepted_at?: string | null;
