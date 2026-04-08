@@ -1,5 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, ALL_APP_ROLES, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 import { canAttachToMachine } from "@/lib/server/documentWorkflow";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -54,7 +55,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         if (error) throw error;
 
-        const canManage = req.user.isPlatformAdmin || ["owner", "admin", "supervisor"].includes(req.user.role);
+        const canManage = req.user.isPlatformAdmin || hasMinimumCompatibleRole(req.user.role, "supervisor");
         const rows = (data ?? []).map((row: any) => ({
             ...row,
             can_manage: canManage && (req.user.isPlatformAdmin || row.organization_id === req.user.organizationId),
