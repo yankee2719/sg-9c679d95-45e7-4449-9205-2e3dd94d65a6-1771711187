@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedRequest } from "@/lib/apiAuth";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 
 type ApiUser = AuthenticatedRequest["user"];
 
@@ -64,7 +65,7 @@ function normalizeItems(items: ChecklistTemplateDraftItem[]) {
 }
 
 function assertCanManageTemplates(user: ApiUser) {
-    if (!["owner", "admin", "supervisor"].includes(user.role)) {
+    if (!hasMinimumCompatibleRole(user.role, "supervisor")) {
         throw new ChecklistTemplateError("Insufficient permissions", 403);
     }
 }
@@ -342,4 +343,3 @@ export async function saveChecklistTemplateVersion(
         );
     }
 }
-
