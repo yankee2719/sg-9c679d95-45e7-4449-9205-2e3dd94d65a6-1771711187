@@ -9,6 +9,7 @@ import OrgContextGuard from "@/components/Auth/OrgContextGuard";
 import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,9 +58,9 @@ export default function WorkOrderDetailPage() {
     const [row, setRow] = useState < WorkOrderRow | null > (null);
     const [machineContext, setMachineContext] = useState < { machineName: string | null; internalCode: string | null; customerName: string | null; plantName: string | null; area: string | null } | null > (null);
 
-    const userRole = membership?.role ?? "viewer";
+    const userRole = membership?.role ?? "technician";
     const orgType = organization?.type ?? null;
-    const canEdit = ["owner", "admin", "supervisor", "technician"].includes(userRole);
+    const canEdit = hasMinimumCompatibleRole(userRole, "technician");
     const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
 
     useEffect(() => {
