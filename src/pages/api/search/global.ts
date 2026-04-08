@@ -205,7 +205,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             assignedMachines = assignedMachinesRes.data ?? [];
         }
 
-        const machineMap = new Map<string, any>();
+        const machineMap = new Map < string, any> ();
         for (const row of ownMachinesRes.data ?? []) machineMap.set(row.id, row);
         for (const row of assignedMachines) machineMap.set(row.id, row);
 
@@ -252,7 +252,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(
-    ["owner", "admin", "supervisor", "technician", "operator", "viewer"],
+    ["technician"],
     handler,
     { allowPlatformAdmin: true }
 );
