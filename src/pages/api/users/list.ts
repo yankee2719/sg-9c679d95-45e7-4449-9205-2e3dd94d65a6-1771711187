@@ -1,5 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { normalizeRole } from "@/lib/roles";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "GET") {
@@ -55,7 +56,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 avatar_url: profile?.avatar_url || null,
                 created_at: membership.created_at,
                 accepted_at: membership.accepted_at,
-                role: membership.role,
+                role: normalizeRole(membership.role, "technician"),
                 is_active: membership.is_active ?? true,
             };
         });
