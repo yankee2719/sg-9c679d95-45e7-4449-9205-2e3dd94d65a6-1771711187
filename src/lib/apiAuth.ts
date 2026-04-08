@@ -1,11 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
-import { hasMinimumOrgRole, normalizeOrgRole, type RealOrgRole } from "@/lib/roles";
+import { APP_ROLE_VALUES, normalizeRole, roleSatisfiesAny, type AppRole } from "@/lib/roles";
 
-export type AppRole = RealOrgRole | "owner" | "plant_manager" | "viewer" | "operator";
-export const ALL_APP_ROLES: AppRole[] = ["owner", "admin", "plant_manager", "supervisor", "technician", "viewer", "operator"];
-
-const VALID_ROLES = new Set < string > (["admin", "supervisor", "technician"]);
+export type { AppRole } from "@/lib/roles";
+export const ALL_APP_ROLES: AppRole[] = [...APP_ROLE_VALUES];
 
 function getServiceSupabase() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,11 +51,11 @@ function getAalFromToken(token: string): "aal1" | "aal2" | null {
 export interface AuthenticatedRequest extends NextApiRequest {
     user: {
         id: string;
-        userId: string; // alias di id — usato da molte route
+        userId: string;
         email: string;
         role: AppRole;
         organizationId: string | null;
-        organizationType: string | null; // "manufacturer" | "customer" | null
+        organizationType: string | null;
         membershipId: string | null;
         isPlatformAdmin: boolean;
         aal: "aal1" | "aal2" | null;
@@ -82,7 +80,7 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
             .eq("is_active", true)
             .maybeSingle();
 
-        if (defaultMembership && VALID_ROLES.has(defaultMembership.role)) {
+        if (defaultMembership?.role) {
             const { data: org } = await serviceSupabase
                 .from("organizations")
                 .select("type")
@@ -93,7 +91,7 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
                 membershipId: defaultMembership.id,
                 organizationId: defaultMembership.organization_id,
                 organizationType: (org?.type as string) ?? null,
-                role: (normalizeOrgRole(defaultMembership.role) ?? "technician") as AppRole,
+                role: normalizeRole(defaultMembership.role, "technician") as AppRole,
             };
         }
     }
@@ -106,7 +104,7 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
         .limit(1)
         .maybeSingle();
 
-    if (fallbackMembership && VALID_ROLES.has(fallbackMembership.role)) {
+    if (fallbackMembership?.role) {
         const { data: org } = await serviceSupabase
             .from("organizations")
             .select("type")
@@ -117,7 +115,7 @@ async function resolveMembershipContext(serviceSupabase: ReturnType<typeof getSe
             membershipId: fallbackMembership.id,
             organizationId: fallbackMembership.organization_id,
             organizationType: (org?.type as string) ?? null,
-            role: (normalizeOrgRole(fallbackMembership.role) ?? "technician") as AppRole,
+            role: normalizeRole(fallbackMembership.role, "technician") as AppRole,
         };
     }
 
@@ -185,7 +183,7 @@ export async function authenticateRequest(
 }
 
 export function withAuth(
-    allowedRoles: AppRole[],
+    allowedRoles: readonly AppRole[],
     handler: (req: AuthenticatedRequest, res: NextApiResponse) => Promise<unknown>,
     options?: {
         requireAal2?: boolean;
@@ -204,7 +202,7 @@ export function withAuth(
 
         const allowed = allowPlatformAdmin && user.isPlatformAdmin
             ? true
-            : allowedRoles.some((role) => hasMinimumOrgRole(user.role, normalizeOrgRole(role) ?? "technician"));
+            : roleSatisfiesAny(user.role, allowedRoles);
 
         if (!allowed) {
             return res.status(403).json({ error: "Forbidden: Insufficient permissions" });
