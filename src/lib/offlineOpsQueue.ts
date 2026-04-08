@@ -23,9 +23,15 @@ export interface OfflineSyncHistoryEntry {
 
 const OPS_KEY = "machina.offline.ops.v1";
 const HISTORY_KEY = "machina.offline.history.v1";
+export const OFFLINE_QUEUE_UPDATED_EVENT = "machina-offline-queue-updated";
 
 function isBrowser() {
     return typeof window !== "undefined" && typeof localStorage !== "undefined";
+}
+
+function emitQueueUpdated() {
+    if (!isBrowser()) return;
+    window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_UPDATED_EVENT));
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -42,6 +48,9 @@ function readJson<T>(key: string, fallback: T): T {
 function writeJson<T>(key: string, value: T) {
     if (!isBrowser()) return;
     localStorage.setItem(key, JSON.stringify(value));
+    if (key === OPS_KEY) {
+        emitQueueUpdated();
+    }
 }
 
 export function listOfflineOperations(): OfflineOperation[] {
@@ -119,3 +128,4 @@ export async function clearLegacyMutations(): Promise<void> {
         tx.onabort = () => reject(tx.error);
     });
 }
+
