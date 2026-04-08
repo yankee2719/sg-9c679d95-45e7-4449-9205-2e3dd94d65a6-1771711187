@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
-import { hasMinimumCompatibleRole } from "@/lib/roles";
+import { canAdminOrg, canManageOrg, hasMinimumOrgRole, isLegacyReadOnlyRole, normalizeOrgRole, type RealOrgRole as OrgRole } from "@/lib/roles";
+import { organizationService, type MembershipWithOrganization } from "@/services/organizationService";
 
 export interface AuthState {
     user: User | null;
@@ -203,14 +203,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, [loadAuthContext, user]);
 
     const role = (membership?.role as string | null) ?? null;
-    const isOwner = role === "owner";
-    const isAdmin = hasMinimumCompatibleRole(role, "admin");
-    const shouldEnforceMfa = isPlatformAdmin || hasMinimumCompatibleRole(role, "supervisor");
+    const normalizedRole = normalizeOrgRole(role);
+    const isOwner = role === "owner" || normalizedRole === "admin";
+    const isAdmin = canAdminOrg(role);
+    const shouldEnforceMfa = isPlatformAdmin || canManageOrg(role);
     const canManageMembers = isAdmin || isPlatformAdmin;
-    const canManagePlants = hasMinimumCompatibleRole(role, "supervisor") || isPlatformAdmin;
-    const canManageMachines = hasMinimumCompatibleRole(role, "supervisor") || isPlatformAdmin;
-    const canExecuteWorkOrders = hasMinimumCompatibleRole(role, "technician") || isPlatformAdmin;
-    const canViewOnly = role === "viewer";
+    const canManagePlants = canManageOrg(role) || isPlatformAdmin;
+    const canManageMachines = canManageOrg(role) || isPlatformAdmin;
+    const canExecuteWorkOrders = hasMinimumOrgRole(role, "technician") || isPlatformAdmin;
+    const canViewOnly = isLegacyReadOnlyRole(role);
 
     const value: AuthState = {
         user,
