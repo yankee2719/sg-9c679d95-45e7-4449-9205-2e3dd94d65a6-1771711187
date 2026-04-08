@@ -1,75 +1,70 @@
-export type DbOrgRole = "admin" | "supervisor" | "technician";
-export type LegacyAliasRole = "owner" | "plant_manager" | "viewer" | "operator";
-export type AppRole = DbOrgRole | LegacyAliasRole;
+import type { Constants } from "@/integrations/supabase/database.types";
 
-export const DB_ORG_ROLES: DbOrgRole[] = ["admin", "supervisor", "technician"];
-export const CREATABLE_ORG_ROLES: DbOrgRole[] = ["admin", "supervisor", "technician"];
-export const ALL_APP_ROLES: AppRole[] = [
-    "admin",
-    "supervisor",
-    "technician",
-    "owner",
-    "plant_manager",
-    "viewer",
-    "operator",
-];
-export const ADMIN_ONLY_ROLES: AppRole[] = ["admin", "owner"];
-export const MANAGER_ROLES: AppRole[] = ["admin", "owner", "supervisor", "plant_manager"];
+export type CanonicalOrgRole = (typeof Constants.public.Enums.org_role)[number];
+export type AppRole = CanonicalOrgRole | "owner" | "plant_manager" | "viewer" | "operator";
 
-export function normalizeStoredRole(value: unknown): DbOrgRole | null {
-    const role = String(value ?? "").trim().toLowerCase();
-    switch (role) {
-        case "owner":
-        case "admin":
-            return "admin";
-        case "plant_manager":
-        case "supervisor":
-            return "supervisor";
-        case "viewer":
-        case "operator":
-        case "technician":
-            return "technician";
-        default:
-            return null;
-    }
+const ROLE_ALIAS_MAP: Record<string, CanonicalOrgRole> = {
+    owner: "admin",
+    admin: "admin",
+    plant_manager: "supervisor",
+    supervisor: "supervisor",
+    technician: "technician",
+    viewer: "technician",
+    operator: "technician",
+};
+
+const ROLE_RANK: Record<CanonicalOrgRole, number> = {
+    admin: 3,
+    supervisor: 2,
+    technician: 1,
+};
+
+export function normalizeAppRole(value: unknown): CanonicalOrgRole | null {
+    const key = String(value ?? "").trim().toLowerCase();
+    return ROLE_ALIAS_MAP[key] ?? null;
 }
 
-export function normalizeCreatableRole(value: unknown): DbOrgRole | null {
-    const role = String(value ?? "").trim().toLowerCase();
-    if (role === "admin" || role === "supervisor" || role === "technician") {
-        return role;
+export function isCanonicalOrgRole(value: unknown): value is CanonicalOrgRole {
+    return normalizeAppRole(value) === value;
+}
+
+export function normalizeRoleForWrite(value: unknown): CanonicalOrgRole | null {
+    const key = String(value ?? "").trim().toLowerCase();
+    if (key === "admin" || key === "supervisor" || key === "technician") {
+        return key;
     }
     return null;
 }
 
-export function isCreatableOrgRole(value: unknown): value is DbOrgRole {
-    return normalizeCreatableRole(value) !== null;
+export function isAdminRole(value: unknown): boolean {
+    return normalizeAppRole(value) === "admin";
 }
 
-export function roleSatisfies(actualRole: unknown, allowedRoles: readonly AppRole[]): boolean {
-    const actual = normalizeStoredRole(actualRole);
-    if (!actual) return false;
-
-    const allowed = new Set(
-        allowedRoles
-            .map((role) => normalizeStoredRole(role))
-            .filter((role): role is DbOrgRole => Boolean(role))
-    );
-
-    return allowed.has(actual);
+export function isSupervisorOrAbove(value: unknown): boolean {
+    const role = normalizeAppRole(value);
+    return role === "admin" || role === "supervisor";
 }
 
-export function isAdminRole(role: unknown): boolean {
-    return roleSatisfies(role, ADMIN_ONLY_ROLES);
+export function canManageMembers(value: unknown): boolean {
+    return normalizeAppRole(value) === "admin";
 }
 
-export function isManagerRole(role: unknown): boolean {
-    return roleSatisfies(role, MANAGER_ROLES);
+export function canManageMachines(value: unknown): boolean {
+    const role = normalizeAppRole(value);
+    return role === "admin" || role === "supervisor";
 }
 
-export function normalizeRoleLabel(role: unknown): string {
-    const normalized = normalizeStoredRole(role);
-    switch (normalized) {
+export function canExecuteWorkOrders(value: unknown): boolean {
+    return normalizeAppRole(value) !== null;
+}
+
+export function hasMinimumCanonicalRole(actual: unknown, required: CanonicalOrgRole): boolean {
+    const actualRole = normalizeAppRole(actual);
+    return actualRole ? ROLE_RANK[actualRole] >= ROLE_RANK[required] : false;
+}
+
+export function getRoleLabel(value: unknown): string {
+    switch (normalizeAppRole(value)) {
         case "admin":
             return "Admin";
         case "supervisor":
@@ -77,7 +72,7 @@ export function normalizeRoleLabel(role: unknown): string {
         case "technician":
             return "Technician";
         default:
-            return String(role || "Unknown");
+            return String(value ?? "Unknown");
     }
 }
 
