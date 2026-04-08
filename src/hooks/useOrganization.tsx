@@ -6,7 +6,10 @@ import {
     type OrganizationMembership,
     type OrgRole,
 } from '@/services/organizationService';
-import { hasMinimumCompatibleRole } from '@/lib/roles';
+import {
+    hasMinimumCompatibleRole,
+    roleSatisfiesAny,
+} from '@/lib/roles';
 
 interface OrganizationContextType {
     organization: Organization | null;
@@ -88,13 +91,14 @@ export function usePermission(permission: string) {
     const { membership } = useOrganization();
 
     if (!membership) return false;
-    if (membership.role === 'owner') return true;
+    if (hasMinimumCompatibleRole(membership.role, 'admin')) return true;
 
-    const rolePermissions: Record<OrgRole, string[]> = {
+    const rolePermissions: Record<string, string[]> = {
         owner: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings'],
         admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings'],
         plant_manager: ['manage_machines', 'assign_machines', 'view_machines'],
-        technician: ['view_assigned_machines', 'update_maintenance'],
+        supervisor: ['manage_machines', 'assign_machines', 'view_machines'],
+        technician: ['view_assigned_machines', 'update_maintenance', 'view_machines'],
         viewer: ['view_machines'],
     };
 
@@ -183,7 +187,7 @@ export function withRole(allowedRoles: OrgRole[]) {
             const { membership, loading } = useOrganization();
 
             useEffect(() => {
-                if (!loading && (!membership || !allowedRoles.includes(membership.role))) {
+                if (!loading && (!membership || !roleSatisfiesAny(membership.role, allowedRoles))) {
                     void router.push('/dashboard');
                 }
             }, [membership, loading, router]);
@@ -196,7 +200,7 @@ export function withRole(allowedRoles: OrgRole[]) {
                 );
             }
 
-            if (!membership || !allowedRoles.includes(membership.role)) {
+            if (!membership || !roleSatisfiesAny(membership.role, allowedRoles)) {
                 return null;
             }
 
@@ -204,4 +208,3 @@ export function withRole(allowedRoles: OrgRole[]) {
         };
     };
 }
-
