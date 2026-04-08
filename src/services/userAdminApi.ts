@@ -33,7 +33,7 @@ export interface UserAdminRow {
     first_name?: string | null;
     last_name?: string | null;
     avatar_url?: string | null;
-    role: "admin" | "supervisor" | "technician" | "viewer" | null;
+    role: "admin" | "supervisor" | "technician" | "viewer";
     is_active: boolean;
     created_at?: string | null;
     accepted_at?: string | null;
