@@ -13,7 +13,7 @@ export default function WorkOrdersCreateRedirectPage() {
     }, [router]);
 
     return (
-        <MainLayout userRole={membership?.role ?? "viewer"}>
+        <MainLayout userRole={membership?.role ?? "technician"}>
             <div className="p-8 text-sm text-muted-foreground">Reindirizzamento alla nuova pagina ordine di lavoro...</div>
         </MainLayout>
     );
