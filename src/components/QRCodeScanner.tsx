@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Camera, ScanLine, X } from "lucide-react";
 
 type BarcodeDetectorCtor = {
-    new(options?: { formats?: string[] }): {
+    new (options?: { formats?: string[] }): {
         detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
     };
     getSupportedFormats?: () => Promise<string[]>;
@@ -11,18 +11,24 @@ type BarcodeDetectorCtor = {
 
 interface QRCodeScannerProps {
     onScan: (data: string) => void;
-    onClose: () => void;
+    onClose?: () => void;
 }
 
 export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
-    const videoRef = useRef < HTMLVideoElement > (null);
-    const streamRef = useRef < MediaStream | null > (null);
-    const frameRef = useRef < number | null > (null);
-    const lastScanRef = useRef < string | null > (null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const frameRef = useRef<number | null>(null);
+    const lastScanRef = useRef<string | null>(null);
 
     const [error, setError] = useState("");
-    const [status, setStatus] = useState < "idle" | "starting" | "scanning" > ("idle");
+    const [status, setStatus] = useState<"idle" | "starting" | "scanning">("idle");
     const [cameraReady, setCameraReady] = useState(false);
+
+    const safeClose = useCallback(() => {
+        if (typeof onClose === "function") {
+            onClose();
+        }
+    }, [onClose]);
 
     const stopCamera = useCallback(() => {
         if (frameRef.current) {
@@ -47,8 +53,15 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
         const BarcodeDetectorClass = (window as Window & { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
         const videoEl = videoRef.current;
 
+        if (!videoEl) {
+            setError("Video non disponibile per la scansione.");
+            return;
+        }
+
         if (!BarcodeDetectorClass) {
-            setError("Questo browser non supporta la lettura QR dalla fotocamera. Usa Chrome/Edge recente oppure inserisci il codice manualmente.");
+            setError(
+                "Questo browser non supporta la lettura QR dalla fotocamera. Usa Chrome/Edge recente oppure inserisci il codice manualmente."
+            );
             return;
         }
 
@@ -102,6 +115,12 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
         setStatus("starting");
 
         try {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setStatus("idle");
+                setError("Questo browser non supporta l'accesso alla fotocamera.");
+                return;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: { ideal: "environment" },
@@ -126,8 +145,11 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     }, [startDetection]);
 
     useEffect(() => {
-        startCamera();
-        return () => stopCamera();
+        void startCamera();
+
+        return () => {
+            stopCamera();
+        };
     }, [startCamera, stopCamera]);
 
     return (
@@ -139,7 +161,7 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
                     className="absolute right-3 top-3 z-10 rounded-xl bg-background/70 hover:bg-background"
                     onClick={() => {
                         stopCamera();
-                        onClose();
+                        safeClose();
                     }}
                 >
                     <X className="h-5 w-5" />
@@ -156,13 +178,7 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
                 </div>
 
                 <div className="relative aspect-square bg-black">
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="h-full w-full object-cover"
-                    />
+                    <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
 
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                         <div className="relative h-64 w-64 rounded-3xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.32)]">
@@ -176,7 +192,11 @@ export function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                         <div className="inline-flex items-center gap-2 rounded-full bg-background/85 px-4 py-2 text-sm font-medium text-foreground shadow-lg">
                             <ScanLine className="h-4 w-4 text-primary" />
-                            {status === "starting" ? "Avvio fotocamera..." : cameraReady ? "Ricerca QR in corso..." : "In attesa della fotocamera"}
+                            {status === "starting"
+                                ? "Avvio fotocamera..."
+                                : cameraReady
+                                  ? "Ricerca QR in corso..."
+                                  : "In attesa della fotocamera"}
                         </div>
                     </div>
                 </div>
