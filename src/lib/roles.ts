@@ -1,7 +1,8 @@
-export const REAL_ORG_ROLES = ["admin", "supervisor", "technician"] as const;
+export const APP_ROLE_VALUES = ["admin", "supervisor", "technician"] as const;
+export const REAL_ORG_ROLES = APP_ROLE_VALUES;
 export const LEGACY_ORG_ROLES = ["owner", "plant_manager", "viewer", "operator"] as const;
 
-export type WritableOrgRole = (typeof REAL_ORG_ROLES)[number];
+export type WritableOrgRole = (typeof APP_ROLE_VALUES)[number];
 export type LegacyOrgRole = (typeof LEGACY_ORG_ROLES)[number];
 export type AppRole = WritableOrgRole;
 export type AnyRole = AppRole | LegacyOrgRole | string;
@@ -13,7 +14,7 @@ const ROLE_ORDER: Record<AppRole, number> = {
 };
 
 export function isWritableOrgRole(value: unknown): value is WritableOrgRole {
-  return typeof value === "string" && (REAL_ORG_ROLES as readonly string[]).includes(value);
+  return typeof value === "string" && (APP_ROLE_VALUES as readonly string[]).includes(value);
 }
 
 export function isLegacyOrgRole(value: unknown): value is LegacyOrgRole {
@@ -55,6 +56,14 @@ export function hasMinimumCompatibleRole(
   requiredRole: AppRole
 ): boolean {
   return hasMinimumRole(userRole, requiredRole);
+}
+
+export function roleSatisfiesAny(
+  userRole: AppRole | string | null | undefined,
+  allowedRoles: readonly AppRole[]
+): boolean {
+  const normalized = normalizeRole(userRole);
+  return allowedRoles.includes(normalized);
 }
 
 export function isAdminRole(value: unknown): boolean {
