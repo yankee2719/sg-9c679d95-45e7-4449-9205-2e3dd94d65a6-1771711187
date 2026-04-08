@@ -38,7 +38,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSucces
             return res.status(500).json({ ok: false, error: actorMembershipError.message });
         }
 
-        if (!actorMembership || !["owner", "admin"].includes(actorMembership.role)) {
+        if (!actorMembership || String(actorMembership.role) !== "admin") {
             return res.status(403).json({ ok: false, error: "Only admins can deactivate users" });
         }
 
@@ -90,4 +90,5 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSucces
     }
 }
 
-export default withAuth(["owner", "admin"], handler, { requireAal2: true });
+export default withAuth(["admin"], handler, { requireAal2: true });
+
