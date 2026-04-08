@@ -1,423 +1,276 @@
 import { useEffect, useMemo, useState } from "react";
-import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { ArrowLeft, CalendarDays, ClipboardList, Loader2, MapPin, Route, Save, User, Wrench } from "lucide-react";
+import { getWorkOrder, updateWorkOrder } from "@/services/workOrderApi";
+import { supabase } from "@/integrations/supabase/client";
+import MainLayout from "@/components/Layout/MainLayout";
+import OrgContextGuard from "@/components/Auth/OrgContextGuard";
+import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { supabase } from "@/integrations/supabase/client";
-import { CreditCard, Calendar, Users, Package, Loader2, AlertCircle, ShieldAlert } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import WorkOrderStatusBadge from "@/components/work-orders/WorkOrderStatusBadge";
+import WorkOrderPriorityBadge from "@/components/work-orders/WorkOrderPriorityBadge";
 
-interface BillingOrganization {
+interface WorkOrderRow {
     id: string;
-    name: string;
-    subscription_plan: string | null;
-    subscription_status: string | null;
-    max_users: number | null;
-    max_machines: number | null;
-    settings: Record<string, unknown> | null;
+    title: string | null;
+    description: string | null;
+    status: string | null;
+    priority: string | null;
+    due_date: string | null;
+    machine_id: string | null;
+    plant_id: string | null;
+    assigned_to: string | null;
+    organization_id: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    work_type?: string | null;
+    scheduled_date?: string | null;
+    notes?: string | null;
 }
 
-interface UsageStats {
-    currentUsers: number;
-    currentMachines: number;
-}
-
-const copy = {
-    it: {
-        title: "Fatturazione e abbonamento",
-        subtitle: "Stato piano e limiti del contesto organizzativo attivo.",
-        accessTitle: "Accesso limitato",
-        accessDescription: "Solo gli admin possono consultare questa sezione.",
-        currentPlan: "Piano attuale",
-        usage: "Utilizzo",
-        limits: "Limiti inclusi",
-        renewal: "Rinnovo / scadenza",
-        paymentNoticeTitle: "Portale pagamenti non collegato",
-        paymentNoticeDescription: "Nel modello organizations corrente questa pagina è stata riallineata in sola lettura. Il collegamento Stripe legacy basato su tenants non è stato mantenuto qui per evitare errori di schema.",
-        status: {
-            active: "Attivo",
-            trial: "Trial",
-            suspended: "Sospeso",
-            cancelled: "Cancellato",
-            unknown: "Non disponibile",
-        },
-        plan: {
-            starter: "Starter",
-            professional: "Professional",
-            enterprise: "Enterprise",
-            free: "Free",
-            fallback: "Piano non definito",
-        },
-        metrics: {
-            users: "Utenti",
-            machines: "Macchine",
-        },
-        labels: {
-            includedUsers: "Utenti inclusi",
-            includedMachines: "Macchine incluse",
-            currentOrg: "Organizzazione attiva",
-            openSettings: "Apri impostazioni",
-            currentPeriodEnd: "Fine periodo corrente",
-            trial: "Trial",
-        },
-        dateNotAvailable: "Non disponibile",
-    },
-    en: {
-        title: "Billing and subscription",
-        subtitle: "Plan status and limits for the active organization context.",
-        accessTitle: "Restricted access",
-        accessDescription: "Only admins can view this section.",
-        currentPlan: "Current plan",
-        usage: "Usage",
-        limits: "Included limits",
-        renewal: "Renewal / expiry",
-        paymentNoticeTitle: "Payments portal not connected",
-        paymentNoticeDescription: "In the current organizations model this page has been realigned as read-only. The legacy Stripe flow based on tenants was not kept here to avoid schema errors.",
-        status: {
-            active: "Active",
-            trial: "Trial",
-            suspended: "Suspended",
-            cancelled: "Cancelled",
-            unknown: "Unavailable",
-        },
-        plan: {
-            starter: "Starter",
-            professional: "Professional",
-            enterprise: "Enterprise",
-            free: "Free",
-            fallback: "Plan not defined",
-        },
-        metrics: {
-            users: "Users",
-            machines: "Machines",
-        },
-        labels: {
-            includedUsers: "Included users",
-            includedMachines: "Included machines",
-            currentOrg: "Active organization",
-            openSettings: "Open settings",
-            currentPeriodEnd: "Current period end",
-            trial: "Trial",
-        },
-        dateNotAvailable: "Unavailable",
-    },
-    fr: {
-        title: "Facturation et abonnement",
-        subtitle: "État du plan et limites du contexte organisationnel actif.",
-        accessTitle: "Accès limité",
-        accessDescription: "Seuls les admins peuvent voir cette section.",
-        currentPlan: "Plan actuel",
-        usage: "Utilisation",
-        limits: "Limites incluses",
-        renewal: "Renouvellement / expiration",
-        paymentNoticeTitle: "Portail de paiement non connecté",
-        paymentNoticeDescription: "Dans le modèle organizations actuel, cette page a été réalignée en lecture seule. Le flux Stripe legacy basé sur tenants n’a pas été conservé ici pour éviter les erreurs de schéma.",
-        status: {
-            active: "Actif",
-            trial: "Essai",
-            suspended: "Suspendu",
-            cancelled: "Annulé",
-            unknown: "Indisponible",
-        },
-        plan: {
-            starter: "Starter",
-            professional: "Professional",
-            enterprise: "Enterprise",
-            free: "Free",
-            fallback: "Plan non défini",
-        },
-        metrics: {
-            users: "Utilisateurs",
-            machines: "Machines",
-        },
-        labels: {
-            includedUsers: "Utilisateurs inclus",
-            includedMachines: "Machines incluses",
-            currentOrg: "Organisation active",
-            openSettings: "Ouvrir les paramètres",
-            currentPeriodEnd: "Fin de période actuelle",
-            trial: "Essai",
-        },
-        dateNotAvailable: "Indisponible",
-    },
-    es: {
-        title: "Facturación y suscripción",
-        subtitle: "Estado del plan y límites del contexto organizativo activo.",
-        accessTitle: "Acceso limitado",
-        accessDescription: "Solo los admins pueden ver esta sección.",
-        currentPlan: "Plan actual",
-        usage: "Uso",
-        limits: "Límites incluidos",
-        renewal: "Renovación / vencimiento",
-        paymentNoticeTitle: "Portal de pagos no conectado",
-        paymentNoticeDescription: "En el modelo actual de organizations esta página se ha reajustado en modo solo lectura. El flujo Stripe legacy basado en tenants no se mantuvo aquí para evitar errores de esquema.",
-        status: {
-            active: "Activo",
-            trial: "Trial",
-            suspended: "Suspendido",
-            cancelled: "Cancelado",
-            unknown: "No disponible",
-        },
-        plan: {
-            starter: "Starter",
-            professional: "Professional",
-            enterprise: "Enterprise",
-            free: "Free",
-            fallback: "Plan no definido",
-        },
-        metrics: {
-            users: "Usuarios",
-            machines: "Máquinas",
-        },
-        labels: {
-            includedUsers: "Usuarios incluidos",
-            includedMachines: "Máquinas incluidas",
-            currentOrg: "Organización activa",
-            openSettings: "Abrir configuración",
-            currentPeriodEnd: "Fin del periodo actual",
-            trial: "Trial",
-        },
-        dateNotAvailable: "No disponible",
-    },
-} as const;
-
-function formatDate(value: string | null, locale: string, fallback: string) {
-    if (!value) return fallback;
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return fallback;
-
-    return parsed.toLocaleDateString(locale, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-}
-
-function getSettingsDate(settings: Record<string, unknown> | null | undefined, keys: string[]) {
-    if (!settings || typeof settings !== "object") return null;
-
-    for (const key of keys) {
-        const value = settings[key];
-        if (typeof value === "string" && value.trim()) {
-            return value;
-        }
+function formatDate(value: string | null | undefined, lang: string) {
+    if (!value) return "—";
+    try {
+        const locale = lang === "it" ? "it-IT" : lang === "fr" ? "fr-FR" : lang === "es" ? "es-ES" : "en-GB";
+        return new Date(value).toLocaleString(locale);
+    } catch {
+        return value;
     }
-
-    return null;
 }
 
-export default function BillingSettings() {
+export default function WorkOrderDetailPage() {
+    const router = useRouter();
+    const { id } = router.query;
     const { toast } = useToast();
-    const { language } = useLanguage();
-    const text = useMemo(() => copy[language], [language]);
-    const { organization, membership, loading: authLoading } = useAuth();
+    const { loading: authLoading, membership, organization } = useAuth() as any;
+    const { t, language } = useLanguage();
 
     const [loading, setLoading] = useState(true);
-    const [billing, setBilling] = useState < BillingOrganization | null > (null);
-    const [usage, setUsage] = useState < UsageStats > ({ currentUsers: 0, currentMachines: 0 });
+    const [saving, setSaving] = useState(false);
+    const [row, setRow] = useState < WorkOrderRow | null > (null);
+    const [machineContext, setMachineContext] = useState < { machineName: string | null; internalCode: string | null; customerName: string | null; plantName: string | null; area: string | null } | null > (null);
+
+    const userRole = membership?.role ?? "technician";
+    const orgType = organization?.type ?? null;
+    const canEdit = ["admin", "supervisor", "technician"].includes(userRole);
+    const resolvedId = useMemo(() => (typeof id === "string" ? id : null), [id]);
 
     useEffect(() => {
+        let active = true;
         const load = async () => {
-            if (!organization?.id) {
-                setLoading(false);
-                return;
-            }
-
+            if (!resolvedId || authLoading) return;
             try {
-                const [
-                    { data: orgData, error: orgError },
-                    { count: usersCount },
-                    { count: machinesCount },
-                ] = await Promise.all([
-                    supabase
-                        .from("organizations")
-                        .select("id, name, subscription_plan, subscription_status, max_users, max_machines, settings")
-                        .eq("id", organization.id)
-                        .maybeSingle(),
-                    supabase
-                        .from("organization_memberships")
-                        .select("*", { count: "exact", head: true })
-                        .eq("organization_id", organization.id)
-                        .eq("is_active", true),
-                    supabase
-                        .from("machines")
-                        .select("*", { count: "exact", head: true })
-                        .eq("organization_id", organization.id)
-                        .eq("is_archived", false),
-                ]);
-
-                if (orgError) throw orgError;
-
-                setBilling((orgData as BillingOrganization | null) ?? null);
-                setUsage({
-                    currentUsers: usersCount || 0,
-                    currentMachines: machinesCount || 0,
-                });
+                setLoading(true);
+                const data = await getWorkOrder(resolvedId);
+                if (!active) return;
+                setRow(data as WorkOrderRow);
             } catch (error: any) {
-                console.error("Error loading billing data:", error);
-                toast({
-                    title: "Error",
-                    description: error?.message || "Unable to load billing data",
-                    variant: "destructive",
-                });
+                console.error("work order detail load error", error);
+                toast({ title: t("common.error") || "Errore", description: error?.message || "Errore caricamento ordine", variant: "destructive" });
+                void router.replace("/work-orders");
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
+        void load();
+        return () => {
+            active = false;
+        };
+    }, [resolvedId, authLoading, router, t, toast]);
 
-        load();
-    }, [organization?.id, toast]);
+    useEffect(() => {
+        let active = true;
+        const loadContext = async () => {
+            if (!row?.machine_id) return;
+            try {
+                const { data: machine } = await supabase
+                    .from("machines")
+                    .select("id,name,internal_code,area,plant_id")
+                    .eq("id", row.machine_id)
+                    .maybeSingle();
 
-    const isAllowed = membership?.role === "admin";
+                let customerName: string | null = null;
+                if (machine?.id) {
+                    const { data: assignment } = await supabase
+                        .from("machine_assignments")
+                        .select("customer_org_id, customer:organizations!machine_assignments_customer_org_id_fkey(name)")
+                        .eq("machine_id", machine.id)
+                        .eq("is_active", true)
+                        .order("assigned_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    customerName = (assignment as any)?.customer?.name ?? null;
+                }
 
-    const locale = language === "it" ? "it-IT" : language === "fr" ? "fr-FR" : language === "es" ? "es-ES" : "en-GB";
-    const statusKey = (billing?.subscription_status as keyof typeof text.status) || "unknown";
-    const statusLabel = text.status[statusKey] || text.status.unknown;
-    const planKey = (billing?.subscription_plan as keyof typeof text.plan) || "fallback";
-    const planLabel = text.plan[planKey] || text.plan.fallback;
-    const currentPeriodEnd = getSettingsDate(billing?.settings, ["current_period_end", "renewal_date"]);
-    const trialEndsAt = getSettingsDate(billing?.settings, ["trial_ends_at", "trial_end"]);
+                const resolvedPlantId = row.plant_id || machine?.plant_id || null;
+                let plantName: string | null = null;
+                if (resolvedPlantId) {
+                    const { data: plant } = await supabase.from("plants").select("id,name").eq("id", resolvedPlantId).maybeSingle();
+                    plantName = plant?.name ?? null;
+                }
 
-    const getStatusBadgeClass = (status: string | null | undefined) => {
-        switch (status) {
-            case "active":
-                return "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300";
-            case "trial":
-                return "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300";
-            case "suspended":
-                return "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300";
-            case "cancelled":
-                return "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300";
-            default:
-                return "bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300";
+                if (active) {
+                    setMachineContext({
+                        machineName: machine?.name ?? null,
+                        internalCode: machine?.internal_code ?? null,
+                        customerName,
+                        plantName,
+                        area: machine?.area ?? null,
+                    });
+                }
+            } catch (error) {
+                console.error("work order machine context load error", error);
+            }
+        };
+        void loadContext();
+        return () => {
+            active = false;
+        };
+    }, [row?.machine_id, row?.plant_id]);
+
+    const handleSave = async () => {
+        if (!resolvedId || !row) return;
+        setSaving(true);
+        try {
+            const updated = await updateWorkOrder(resolvedId, {
+                title: row.title,
+                description: row.description,
+                status: row.status,
+                priority: row.priority,
+                due_date: row.due_date,
+                machine_id: row.machine_id,
+                assigned_to: row.assigned_to,
+                plant_id: row.plant_id,
+            });
+            setRow(updated);
+            toast({ title: t("workOrders.updated") || "Ordine aggiornato", description: row.title || "Work order" });
+        } catch (error: any) {
+            console.error(error);
+            toast({ title: t("common.error") || "Errore", description: error?.message || t("workOrders.errorUpdate") || "Errore aggiornamento", variant: "destructive" });
+        } finally {
+            setSaving(false);
         }
     };
 
     if (authLoading || loading) {
-        return (
-            <MainLayout>
-                <div className="flex h-[60vh] items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            </MainLayout>
-        );
+        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("workOrders.loading") || "Caricamento..."}</div></MainLayout>;
     }
 
-    if (!isAllowed) {
-        return (
-            <MainLayout>
-                <div className="flex h-[60vh] items-center justify-center px-4">
-                    <Card className="max-w-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-yellow-500" />
-                                {text.accessTitle}
-                            </CardTitle>
-                            <CardDescription>{text.accessDescription}</CardDescription>
-                        </CardHeader>
-                    </Card>
-                </div>
-            </MainLayout>
-        );
+    if (!row) {
+        return <MainLayout userRole={userRole}><div className="p-8 text-sm text-muted-foreground">{t("workOrders.noResults") || "Nessun risultato"}</div></MainLayout>;
     }
+
+    const missingPlant = orgType === "manufacturer" && machineContext?.customerName && !machineContext?.plantName;
 
     return (
-        <MainLayout>
-            <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
-                <div>
-                    <h1 className="text-2xl font-bold">{text.title}</h1>
-                    <p className="text-muted-foreground">{text.subtitle}</p>
-                </div>
+        <OrgContextGuard>
+            <MainLayout userRole={userRole}>
+                <SEO title={`${row.title || "Work Order"} - MACHINA`} />
+                <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+                    <div className="flex items-center justify-between gap-4">
+                        <Link href="/work-orders">
+                            <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />{t("workOrders.title") || "Ordini di lavoro"}</Button>
+                        </Link>
+                        {canEdit && (
+                            <Button onClick={handleSave} disabled={saving}>
+                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                {saving ? (t("common.saving") || "Salvataggio...") : (t("common.save") || "Salva")}
+                            </Button>
+                        )}
+                    </div>
 
-                <div className="grid gap-6 lg:grid-cols-3">
-                    <Card className="lg:col-span-2">
+                    <Card className="rounded-[28px]">
+                        <CardContent className="p-6">
+                            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                                <div className="min-w-0 flex-1 space-y-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <WorkOrderStatusBadge status={row.status} />
+                                        <WorkOrderPriorityBadge priority={row.priority} />
+                                    </div>
+                                    {canEdit ? (
+                                        <>
+                                            <Input value={row.title ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, title: e.target.value } : prev)} className="text-2xl font-bold" />
+                                            <Textarea value={row.description ?? ""} onChange={(e) => setRow((prev) => prev ? { ...prev, description: e.target.value } : prev)} rows={5} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <h1 className="text-3xl font-bold tracking-tight text-foreground">{row.title || "Work order"}</h1>
+                                            <p className="text-sm text-muted-foreground">{row.description || t("workOrders.noDescription") || "Nessuna descrizione disponibile."}</p>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[440px]">
+                                    <InfoPill icon={<CalendarDays className="h-4 w-4" />} label={t("workOrders.dueDate") || "Scadenza"} value={formatDate(row.due_date, language)} />
+                                    <InfoPill icon={<CalendarDays className="h-4 w-4" />} label={t("workOrders.updatedAt") || "Aggiornato"} value={formatDate(row.updated_at, language)} />
+                                    <InfoPill icon={<User className="h-4 w-4" />} label={t("workOrders.assignedTo") || "Assegnato a"} value={row.assigned_to || t("workOrders.unassigned") || "Non assegnato"} />
+                                    <InfoPill icon={<ClipboardList className="h-4 w-4" />} label={t("workOrders.createdAt") || "Creato il"} value={formatDate(row.created_at, language)} />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <CreditCard className="h-5 w-5" />
-                                {text.currentPlan}
-                            </CardTitle>
-                            <CardDescription>
-                                {text.labels.currentOrg}: {billing?.name || organization?.name || "-"}
-                            </CardDescription>
+                            <CardTitle>Contesto operativo</CardTitle>
                         </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-3">
+                            <InfoPill icon={<Wrench className="h-4 w-4" />} label="Macchina" value={machineContext?.machineName || row.machine_id || "—"} />
+                            <InfoPill icon={<MapPin className="h-4 w-4" />} label={orgType === "manufacturer" ? "Cliente" : "Stabilimento"} value={machineContext?.customerName || machineContext?.plantName || "—"} />
+                            <InfoPill icon={<Route className="h-4 w-4" />} label="Area / linea" value={machineContext?.area || "—"} />
+                        </CardContent>
+                    </Card>
+
+                    {missingPlant && (
+                        <Card className="rounded-2xl border-orange-200 bg-orange-50/60 dark:border-orange-900 dark:bg-orange-950/20">
+                            <CardHeader>
+                                <CardTitle className="text-base">Stabilimento cliente non ancora associato</CardTitle>
+                            </CardHeader>
+                            <CardContent className="text-sm text-muted-foreground">
+                                Per il costruttore questo ordine può esistere anche senza stabilimento cliente impostato. Se vuoi completare il contesto, crea prima uno stabilimento nel dettaglio cliente e poi aggiorna l'assegnazione macchina.
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <Card className="rounded-2xl">
+                        <CardHeader><CardTitle>{t("workOrders.detail") || "Dettaglio ordine"}</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between gap-4">
-                                <div>
-                                    <div className="text-lg font-semibold">{planLabel}</div>
-                                    <div className="text-sm text-muted-foreground">{text.renewal}</div>
-                                </div>
-                                <Badge className={getStatusBadgeClass(billing?.subscription_status)}>{statusLabel}</Badge>
-                            </div>
-                            <Separator />
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="rounded-xl border p-4">
-                                    <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Users className="h-4 w-4" />
-                                        {text.metrics.users}
-                                    </div>
-                                    <div className="text-2xl font-semibold">
-                                        {usage.currentUsers} / {billing?.max_users ?? "-"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">{text.labels.includedUsers}</div>
-                                </div>
-                                <div className="rounded-xl border p-4">
-                                    <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Package className="h-4 w-4" />
-                                        {text.metrics.machines}
-                                    </div>
-                                    <div className="text-2xl font-semibold">
-                                        {usage.currentMachines} / {billing?.max_machines ?? "-"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">{text.labels.includedMachines}</div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Calendar className="h-5 w-5" />
-                                {text.renewal}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div>
-                                <div className="text-sm text-muted-foreground">{text.labels.currentPeriodEnd}</div>
-                                <div className="font-medium">
-                                    {formatDate(currentPeriodEnd, locale, text.dateNotAvailable)}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="text-sm text-muted-foreground">{text.labels.trial}</div>
-                                <div className="font-medium">
-                                    {formatDate(trialEndsAt, locale, text.dateNotAvailable)}
-                                </div>
-                            </div>
+                            <DetailRow label="Status" value={row.status || "—"} />
+                            <DetailRow label={t("workOrders.priorityLabel") || "Priorità"} value={row.priority || "—"} />
+                            <DetailRow label={t("workOrders.machineId") || "Machine ID"} value={row.machine_id || "—"} />
+                            <DetailRow label={t("workOrders.assignedTo") || "Assigned to"} value={row.assigned_to || "—"} />
+                            <DetailRow label={t("workOrders.updatedAt") || "Updated at"} value={formatDate(row.updated_at, language)} />
+                            <DetailRow label="Tipo lavoro" value={row.work_type || "—"} />
+                            <DetailRow label="Data pianificata" value={formatDate(row.scheduled_date, language)} />
                         </CardContent>
                     </Card>
                 </div>
+            </MainLayout>
+        </OrgContextGuard>
+    );
+}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <ShieldAlert className="h-5 w-5" />
-                            {text.paymentNoticeTitle}
-                        </CardTitle>
-                        <CardDescription>{text.paymentNoticeDescription}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button variant="outline" disabled>
-                            {text.labels.openSettings}
-                        </Button>
-                    </CardContent>
-                </Card>
-            </div>
-        </MainLayout>
+function InfoPill({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+    return (
+        <div className="rounded-2xl border border-border bg-muted/30 p-4">
+            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">{icon}<span>{label}</span></div>
+            <div className="text-sm font-medium text-foreground break-words">{value || "—"}</div>
+        </div>
+    );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex items-start justify-between gap-4 border-b border-border pb-3 last:border-b-0 last:pb-0">
+            <div className="text-sm text-muted-foreground">{label}</div>
+            <div className="max-w-[60%] text-right text-sm font-medium text-foreground break-words">{value || "—"}</div>
+        </div>
     );
 }
 
