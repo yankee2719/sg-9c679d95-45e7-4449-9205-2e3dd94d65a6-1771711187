@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { hasMinimumRole, organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
-import { canExecuteWorkOrders, canManageMachines, canManageMembers, isAdminRole } from "@/lib/roles";
+import { organizationService, type MembershipWithOrganization, type OrgRole } from "@/services/organizationService";
+import { hasMinimumCompatibleRole } from "@/lib/roles";
 
 export interface AuthState {
     user: User | null;
@@ -202,15 +202,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadAuthContext(user);
     }, [loadAuthContext, user]);
 
-    const role = membership?.role ?? null;
-    const isOwner = isAdminRole(role);
-    const isAdmin = isAdminRole(role);
-    const shouldEnforceMfa = isPlatformAdmin || role === "admin" || role === "supervisor";
-    const canManageMembersValue = canManageMembers(role) || isPlatformAdmin;
-    const canManagePlants = canManageMachines(role) || isPlatformAdmin;
-    const canManageMachinesValue = canManageMachines(role) || isPlatformAdmin;
-    const canExecuteWorkOrdersValue = canExecuteWorkOrders(role) || (role ? hasMinimumRole(role as OrgRole, "technician") : false);
-    const canViewOnly = false;
+    const role = (membership?.role as string | null) ?? null;
+    const isOwner = role === "owner";
+    const isAdmin = hasMinimumCompatibleRole(role, "admin");
+    const shouldEnforceMfa = isPlatformAdmin || hasMinimumCompatibleRole(role, "supervisor");
+    const canManageMembers = isAdmin || isPlatformAdmin;
+    const canManagePlants = hasMinimumCompatibleRole(role, "supervisor") || isPlatformAdmin;
+    const canManageMachines = hasMinimumCompatibleRole(role, "supervisor") || isPlatformAdmin;
+    const canExecuteWorkOrders = hasMinimumCompatibleRole(role, "technician") || isPlatformAdmin;
+    const canViewOnly = role === "viewer";
 
     const value: AuthState = {
         user,
@@ -225,10 +225,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isOwner,
         isAdmin,
         shouldEnforceMfa,
-        canManageMembers: canManageMembersValue,
+        canManageMembers,
         canManagePlants,
-        canManageMachines: canManageMachinesValue,
-        canExecuteWorkOrders: canExecuteWorkOrdersValue,
+        canManageMachines,
+        canExecuteWorkOrders,
         canViewOnly,
         signOut,
         switchOrganization,
