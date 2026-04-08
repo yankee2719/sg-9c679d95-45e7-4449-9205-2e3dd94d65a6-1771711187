@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-import { isAdminLikeRole } from "@/lib/roles";
+import { canManageMembers, toWritableOrgRole } from "@/lib/roles";
 
 type ApiSuccess = {
     ok: true;
@@ -39,7 +39,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse<ApiSucces
             return res.status(500).json({ ok: false, error: actorMembershipError.message });
         }
 
-        if (!actorMembership || !isAdminLikeRole(actorMembership.role)) {
+        if (!actorMembership || !canManageMembers(actorMembership.role)) {
             return res.status(403).json({ ok: false, error: "Only admins can deactivate users" });
         }
 
