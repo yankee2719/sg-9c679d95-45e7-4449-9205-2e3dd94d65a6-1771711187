@@ -142,7 +142,7 @@ export interface User {
     membership_id?: string;
     email: string;
     display_name?: string | null;
-    role: "owner" | "admin" | "supervisor" | "technician" | "viewer";
+    role: "admin" | "supervisor" | "technician";
     avatar_url?: string | null;
     is_active: boolean;
     created_at?: string;
