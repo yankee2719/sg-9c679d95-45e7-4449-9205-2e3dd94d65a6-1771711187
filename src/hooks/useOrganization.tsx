@@ -6,7 +6,7 @@ import {
     type OrganizationMembership,
     type OrgRole,
 } from '@/services/organizationService';
-import { canManageMachines, canManageMembers, isAdminRole } from '@/lib/roles';
+import { hasMinimumCompatibleRole } from '@/lib/roles';
 
 interface OrganizationContextType {
     organization: Organization | null;
@@ -56,10 +56,10 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const role = membership?.role ?? null;
-    const isOwner = isAdminRole(role);
-    const isAdmin = isAdminRole(role);
-    const canManageMembersValue = canManageMembers(role);
-    const canManageMachinesValue = canManageMachines(role);
+    const isOwner = role === 'owner';
+    const isAdmin = hasMinimumCompatibleRole(role, 'admin');
+    const canManageMembers = isAdmin;
+    const canManageMachines = hasMinimumCompatibleRole(role, 'supervisor');
 
     const value: OrganizationContextType = {
         organization,
@@ -68,8 +68,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         error,
         isOwner,
         isAdmin,
-        canManageMembers: canManageMembersValue,
-        canManageMachines: canManageMachinesValue,
+        canManageMembers,
+        canManageMachines,
         refresh: loadOrganization,
     };
 
@@ -88,11 +88,14 @@ export function usePermission(permission: string) {
     const { membership } = useOrganization();
 
     if (!membership) return false;
+    if (membership.role === 'owner') return true;
 
     const rolePermissions: Record<OrgRole, string[]> = {
-        admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings', 'assign_machines', 'view_machines'],
-        supervisor: ['manage_machines', 'assign_machines', 'view_machines', 'update_maintenance'],
-        technician: ['view_assigned_machines', 'update_maintenance', 'view_machines'],
+        owner: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings'],
+        admin: ['manage_members', 'manage_machines', 'view_audit_logs', 'manage_settings'],
+        plant_manager: ['manage_machines', 'assign_machines', 'view_machines'],
+        technician: ['view_assigned_machines', 'update_maintenance'],
+        viewer: ['view_machines'],
     };
 
     return (rolePermissions[membership.role] || []).includes(permission);
