@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
-import { isAdminRole, normalizeRoleForWrite } from "@/lib/roles";
+import { isAdminLikeRole, normalizeRoleForStorage } from "@/lib/roles";
 
 async function ensureAdmin(req: AuthenticatedRequest) {
     const serviceSupabase = getServiceSupabase();
@@ -21,7 +21,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const { serviceSupabase, actorMembership, actorError } = await ensureAdmin(req);
     if (actorError) return res.status(500).json({ error: actorError.message });
-    if (!req.user.isPlatformAdmin && !isAdminRole(actorMembership?.role)) {
+    if (!actorMembership || !isAdminLikeRole(actorMembership.role)) {
         return res.status(403).json({ error: "Only organization admins can manage users" });
     }
 
@@ -36,17 +36,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (req.method === "PATCH") {
         const { display_name, role, is_active } = req.body ?? {};
-        const normalizedRole = role === undefined ? undefined : normalizeRoleForWrite(role);
-        if (role !== undefined && !normalizedRole) {
-            return res.status(400).json({ error: "Invalid role" });
+        const storedRole = role !== undefined ? normalizeRoleForStorage(role) : undefined;
+        if (role !== undefined && !storedRole) {
+            return res.status(400).json({ error: "Invalid role. Allowed roles: admin, supervisor, technician" });
         }
         if (targetMembership.user_id === req.user.id) {
             if (is_active === false) return res.status(400).json({ error: "You cannot deactivate yourself" });
-            if (normalizedRole && normalizedRole !== targetMembership.role) return res.status(400).json({ error: "You cannot change your own role" });
+            if (storedRole && storedRole !== targetMembership.role) return res.status(400).json({ error: "You cannot change your own role" });
         }
 
         const membershipUpdate: Record<string, unknown> = {};
-        if (normalizedRole !== undefined) membershipUpdate.role = normalizedRole;
+        if (storedRole !== undefined) membershipUpdate.role = storedRole;
         if (is_active !== undefined) {
             membershipUpdate.is_active = Boolean(is_active);
             membershipUpdate.deactivated_at = Boolean(is_active) ? null : new Date().toISOString();
@@ -83,4 +83,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(["admin"], handler, { requireAal2: true });
-
