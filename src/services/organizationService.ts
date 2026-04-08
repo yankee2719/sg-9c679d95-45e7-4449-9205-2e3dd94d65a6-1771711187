@@ -1,11 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
-import {
-    hasMinimumCompatibleRole,
-    type CompatibleOrgRole,
-} from '@/lib/roles';
+import { hasMinimumOrgRole, normalizeOrgRole, type RealOrgRole as OrgRole, type RoleLike } from '@/lib/roles';
 
 export type OrgType = 'manufacturer' | 'customer' | 'enterprise';
-export type OrgRole = CompatibleOrgRole;
 
 export interface Organization {
     id: string;
@@ -84,8 +80,8 @@ function normalizeIncomingOrgType(value: string): OrgType {
     return 'customer';
 }
 
-export function hasMinimumRole(userRole: OrgRole, requiredRole: OrgRole): boolean {
-    return hasMinimumCompatibleRole(userRole, requiredRole);
+export function hasMinimumRole(userRole: RoleLike, requiredRole: OrgRole): boolean {
+    return hasMinimumOrgRole(userRole, requiredRole);
 }
 
 export const organizationService = {
@@ -224,7 +220,7 @@ export const organizationService = {
                     id: row.id,
                     organization_id: row.organization_id,
                     user_id: row.user_id,
-                    role: row.role,
+                    role: (normalizeOrgRole(row.role) ?? "technician") as OrgRole,
                     invited_by: row.invited_by,
                     invited_at: row.invited_at,
                     accepted_at: row.accepted_at,
@@ -267,7 +263,7 @@ export const organizationService = {
                 id: row.id,
                 organization_id: row.organization_id,
                 user_id: row.user_id,
-                role: row.role,
+                role: (normalizeOrgRole(row.role) ?? "technician") as OrgRole,
                 invited_by: row.invited_by,
                 invited_at: row.invited_at,
                 accepted_at: row.accepted_at,
@@ -302,7 +298,7 @@ export const organizationService = {
                 .single();
 
             if (error) return null;
-            return data as OrganizationMembership;
+            return data ? ({ ...data, role: (normalizeOrgRole(data.role) ?? "technician") as OrgRole } as OrganizationMembership) : null;
         } catch {
             return null;
         }
