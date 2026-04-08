@@ -19,7 +19,7 @@ type CustomerCreateBody = {
     manufacturer_org_id?: string;
 };
 
-const ALLOWED_PRIMARY_ROLES = ["admin", "supervisor", "technician"] as const;
+const ALLOWED_PRIMARY_ROLES = ["admin", "supervisor", "technician"];
 
 function slugify(input: string): string {
     return input
