@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Camera, Loader2, Save } from "lucide-react";
 import { inferChecklistItemMeta, parseChecklistItemDescription } from "@/lib/checklistItemMeta";
+import { normalizeRole } from "@/lib/roles";
 
 type ChecklistRow = {
     id: string;
@@ -120,7 +121,7 @@ export default function ExecuteChecklistPage() {
     const [workOrder, setWorkOrder] = useState < WorkOrderLite | null > (null);
     const [headerNotes, setHeaderNotes] = useState("");
 
-    const userRole = membership?.role ?? "viewer";
+    const userRole = normalizeRole(membership?.role ?? null);
 
     useEffect(() => {
         if (isManufacturer) {
