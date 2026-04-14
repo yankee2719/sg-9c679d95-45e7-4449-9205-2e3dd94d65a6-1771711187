@@ -5,6 +5,7 @@ import {
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
+import { hasMinimumRole } from "@/lib/roles";
 import {
     createLegacySchedule,
     listLegacySchedules,
@@ -56,7 +57,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     if (req.method === "POST") {
-        if (req.user.role === "technician" || req.user.role === "viewer") {
+        if (!hasMinimumRole(req.user.role, "supervisor")) {
             return res.status(403).json({
                 error: "Only admins and supervisors can create schedules",
             });
