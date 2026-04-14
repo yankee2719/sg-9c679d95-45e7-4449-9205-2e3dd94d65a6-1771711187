@@ -7,6 +7,7 @@ import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgType } from "@/hooks/useOrgType";
 import { useToast } from "@/hooks/use-toast";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -80,8 +81,8 @@ export default function EditChecklistPage() {
     const [isActive, setIsActive] = useState(true);
     const [items, setItems] = useState < ItemDraft[] > ([makeItem()]);
 
-    const canManage = ["owner", "admin", "supervisor"].includes(membership?.role ?? "");
-    const userRole = membership?.role ?? "viewer";
+    const canManage = hasMinimumRole(membership?.role ?? null, "supervisor");
+    const userRole = normalizeRole(membership?.role ?? null);
 
     useEffect(() => {
         if (authLoading || !organization?.id || !checklistId) return;
