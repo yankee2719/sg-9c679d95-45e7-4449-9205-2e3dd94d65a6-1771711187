@@ -1,5 +1,8 @@
 import { apiFetch } from "@/services/apiClient";
 
+// Current backend model: one active QR token per machine.
+// Keep the wider type for compatibility with older UI imports, but the
+// real API currently returns `permanent` tokens only.
 export type QrTokenType = "permanent" | "temporary" | "inspector" | "maintenance";
 
 export interface QrToken {
@@ -37,7 +40,7 @@ export interface QrTokenListResponse {
 
 export interface GenerateQrTokenInput {
     equipment_id: string;
-    token_type: QrTokenType;
+    token_type?: QrTokenType;
     expires_at?: string;
     max_scans?: number;
 }
@@ -57,7 +60,10 @@ export async function listQrTokensForEquipment(equipmentId: string): Promise<QrT
 export async function generateQrToken(input: GenerateQrTokenInput): Promise<GenerateQrTokenResponse> {
     return apiFetch < GenerateQrTokenResponse > ("/api/qr/generate", {
         method: "POST",
-        body: JSON.stringify(input),
+        body: JSON.stringify({
+            equipment_id: input.equipment_id,
+            token_type: "permanent",
+        }),
     });
 }
 
