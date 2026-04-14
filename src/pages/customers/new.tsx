@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Building2, Loader2, Save, Shield } from "lucide-react";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
 export default function NewCustomerPage() {
     const router = useRouter();
@@ -30,8 +31,8 @@ export default function NewCustomerPage() {
     const [subscriptionStatus, setSubscriptionStatus] = useState("trial");
 
     const orgType = organization?.type ?? null;
-    const userRole = membership?.role ?? "technician";
-    const canCreate = userRole === "owner" || userRole === "admin" || userRole === "supervisor";
+    const userRole = normalizeRole(membership?.role ?? null);
+    const canCreate = hasMinimumRole(userRole, "supervisor");
 
     const pageBlocked = useMemo(() => authLoading || orgType !== "manufacturer" || !canCreate, [authLoading, orgType, canCreate]);
 
@@ -83,7 +84,7 @@ export default function NewCustomerPage() {
                     <div className="mx-auto max-w-5xl px-4 py-8">
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">
-                                {t("customers.ownerAdminOnly") || "Solo owner, admin e supervisor possono creare clienti."}
+                                {t("customers.ownerAdminOnly") || "Solo admin e supervisor possono creare clienti."}
                             </CardContent>
                         </Card>
                     </div>
