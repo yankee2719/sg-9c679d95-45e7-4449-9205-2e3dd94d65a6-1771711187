@@ -1,12 +1,13 @@
 import type { NextApiResponse } from "next";
 import {
     withAuth,
+    ALL_APP_ROLES,
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
 
 export default withAuth(
-    ["owner", "admin", "supervisor", "technician", "operator", "viewer"],
+    ALL_APP_ROLES,
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         if (req.method !== "POST") {
             return res.status(405).json({ error: "Method not allowed" });
