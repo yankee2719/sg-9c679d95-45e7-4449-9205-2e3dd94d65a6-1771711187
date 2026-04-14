@@ -19,6 +19,14 @@ export interface MachineVisibilityResult {
     canArchive: boolean;
 }
 
+function normalizeManagerRole(role: string | null | undefined) {
+    const raw = String(role ?? "").trim().toLowerCase();
+    if (raw === "owner") return "admin";
+    if (raw === "plant_manager") return "supervisor";
+    if (raw === "viewer" || raw === "operator") return "technician";
+    return raw;
+}
+
 export async function getMachineVisibilityForUser(
     supabase: SupabaseClient,
     user: ApiUser,
@@ -62,11 +70,12 @@ export async function getMachineVisibilityForUser(
     const canView =
         user.isPlatformAdmin || isOwner || isAssignedCustomer || isAssignedManufacturer;
 
-    const isOperationalManager = ["owner", "admin", "supervisor"].includes(user.role);
+    const normalizedRole = normalizeManagerRole(user.role);
+    const isOperationalManager = normalizedRole === "admin" || normalizedRole === "supervisor";
     const canEditOperationalData =
         user.organizationType === "customer" &&
         isOwner &&
-        (isOperationalManager || user.role === "technician");
+        (isOperationalManager || normalizedRole === "technician");
 
     const canManageManufacturerData =
         user.organizationType === "manufacturer" &&
