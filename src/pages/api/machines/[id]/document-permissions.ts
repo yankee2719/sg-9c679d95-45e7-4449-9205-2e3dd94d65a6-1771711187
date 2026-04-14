@@ -7,6 +7,14 @@ import {
 } from "@/lib/apiAuth";
 import { getMachineVisibilityForUser } from "@/lib/server/machineVisibilityService";
 
+function normalizeManagerRole(role: string | null | undefined) {
+    const raw = String(role ?? "").trim().toLowerCase();
+    if (raw === "owner") return "admin";
+    if (raw === "plant_manager") return "supervisor";
+    if (raw === "viewer" || raw === "operator") return "technician";
+    return raw;
+}
+
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "GET") {
         return res.status(405).json({ error: "Method not allowed" });
@@ -41,7 +49,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(403).json({ error: "Access denied" });
         }
 
-        const isAdminLike = ["owner", "admin", "supervisor"].includes(req.user.role);
+        const normalizedRole = normalizeManagerRole(req.user.role);
+        const isAdminLike = normalizedRole === "admin" || normalizedRole === "supervisor";
         const isCreatorOrg = !!createdByOrgId && createdByOrgId === req.user.organizationId;
 
         if (scope === "manufacturer") {
@@ -81,7 +90,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
 
         if (req.user.organizationType === "customer") {
-            const canManage = visibility.isOwner && (isAdminLike || req.user.role === "technician");
+            const canManage = visibility.isOwner && (isAdminLike || normalizedRole === "technician");
             return res.status(200).json({
                 permissions: {
                     canRead: visibility.isOwner || visibility.isAssignedCustomer,
