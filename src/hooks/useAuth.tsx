@@ -202,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadAuthContext(user);
     }, [loadAuthContext, user]);
 
-    const role = normalizeRole(membership?.role ?? null, "viewer");
+    const role = normalizeRole(membership?.role ?? null);
     const isOwner = role === "admin";
     const isAdmin = role === "admin";
     const shouldEnforceMfa = isPlatformAdmin || role === "admin" || role === "supervisor";
@@ -210,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const canManagePlants = isPlatformAdmin || canManageMachines(role);
     const canManageMachinesValue = isPlatformAdmin || canManageMachines(role);
     const canExecuteWorkOrdersValue = isPlatformAdmin || canExecuteWorkOrders(role);
-    const canViewOnly = isViewOnlyRole(role);
+    const canViewOnly = isViewOnlyRole(membership?.role ?? null);
 
     const value: AuthState = {
         user,
