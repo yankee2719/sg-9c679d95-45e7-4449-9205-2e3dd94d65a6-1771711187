@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { normalizeRole } from "@/lib/roles";
 
 type MachineRow = {
     id: string;
@@ -141,7 +142,7 @@ export default function OperationalFlowsPage() {
     const { isManufacturer, canExecuteChecklist, machineContextLabel, maintenanceLabel, checklistsLabel } = useOrgType();
 
     const orgId = organization?.id ?? null;
-    const userRole = membership?.role ?? "viewer";
+    const userRole = normalizeRole(membership?.role ?? null);
 
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState < string | null > (null);
