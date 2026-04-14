@@ -1,10 +1,10 @@
 import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { hasMinimumRole } from "@/lib/roles";
 import { getAccessibleMachine } from "@/lib/server/machineAccess";
 
 function canManageMachine(role: string | null | undefined) {
-    const normalized = String(role ?? "").toLowerCase();
-    return normalized === "admin" || normalized === "supervisor" || normalized === "owner";
+    return hasMinimumRole(role, "supervisor");
 }
 
 export default withAuth(["admin", "supervisor", "technician"], async function handler(
@@ -23,7 +23,7 @@ export default withAuth(["admin", "supervisor", "technician"], async function ha
     const supabase = getServiceSupabase();
 
     try {
-        const machine = await getAccessibleMachine<any>(
+        const machine = await getAccessibleMachine < any > (
             supabase,
             req.user,
             machineId,
