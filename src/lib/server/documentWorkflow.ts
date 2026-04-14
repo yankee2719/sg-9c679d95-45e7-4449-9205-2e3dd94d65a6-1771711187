@@ -30,6 +30,14 @@ export function buildStoragePath(organizationId: string, documentId: string, ver
     return `${organizationId}/${documentId}/v${versionNumber}_${Date.now()}.${safeExt(fileName)}`;
 }
 
+function normalizeManagerRole(role: string | null | undefined) {
+    const raw = String(role ?? "").trim().toLowerCase();
+    if (raw === "owner") return "admin";
+    if (raw === "plant_manager") return "supervisor";
+    if (raw === "viewer" || raw === "operator") return "technician";
+    return raw;
+}
+
 export async function resolveDocumentAccess(req: AuthenticatedRequest, documentId: string) {
     const serviceSupabase = getServiceSupabase();
     const { data: document, error } = await serviceSupabase
@@ -57,8 +65,9 @@ export async function resolveDocumentAccess(req: AuthenticatedRequest, documentI
         isAssigned = (assignments ?? []).some((row: any) => row.manufacturer_org_id === orgId || row.customer_org_id === orgId);
     }
 
+    const normalizedRole = normalizeManagerRole(req.user.role);
     const canView = req.user.isPlatformAdmin || isOwnerOrg || isAssigned;
-    const canManage = req.user.isPlatformAdmin || (isOwnerOrg && ["owner", "admin", "supervisor"].includes(req.user.role));
+    const canManage = req.user.isPlatformAdmin || (isOwnerOrg && (normalizedRole === "admin" || normalizedRole === "supervisor"));
 
     return { document, canView, canManage, serviceSupabase };
 }
