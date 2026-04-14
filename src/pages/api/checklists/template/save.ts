@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
+import { hasMinimumRole, normalizeRole, type AppRole } from "@/lib/roles";
 
-type AppRole = "owner" | "admin" | "supervisor" | "technician" | "viewer";
 type ChecklistTemplateInputType = "boolean" | "text" | "number" | "value";
 
 interface SaveChecklistTemplatePayload {
@@ -99,7 +99,7 @@ async function resolveUserContext(serviceSupabase: ReturnType<typeof getServiceS
         user: {
             id: user.id,
             organizationId: membership.organization_id as string,
-            role: (membership.role ?? "technician") as AppRole,
+            role: normalizeRole(membership.role ?? null) as AppRole,
         },
     };
 }
@@ -133,7 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(401).json({ error: ctx.error });
         }
 
-        if (!["owner", "admin", "supervisor"].includes(ctx.user.role)) {
+        if (!hasMinimumRole(ctx.user.role, "supervisor")) {
             return res.status(403).json({ error: "Only admins and supervisors can manage checklist templates." });
         }
 
