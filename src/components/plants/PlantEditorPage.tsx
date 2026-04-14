@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
 type OrgType = "manufacturer" | "customer" | null;
 
@@ -112,8 +113,8 @@ export default function PlantEditorPage({ mode, plantId = null }: PlantEditorPag
     const [form, setForm] = useState({ name: "", code: "" });
 
     const orgType = (organization?.type as OrgType | undefined) ?? null;
-    const userRole = membership?.role ?? "technician";
-    const canEdit = ["owner", "admin", "supervisor"].includes(userRole);
+    const userRole = normalizeRole(membership?.role ?? null);
+    const canEdit = hasMinimumRole(userRole, "supervisor");
 
     useEffect(() => {
         let active = true;
