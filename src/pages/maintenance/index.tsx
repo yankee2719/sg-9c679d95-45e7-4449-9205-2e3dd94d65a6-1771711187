@@ -168,10 +168,10 @@ export default function MaintenancePlansIndexPage() {
     const { toast } = useToast();
 
     const [loading, setLoading] = useState(true);
-    const [plans, setPlans] = useState<EnrichedPlan[]>([]);
-    const [machineFilter, setMachineFilter] = useState<string>("all");
-    const [priorityFilter, setPriorityFilter] = useState<string>("all");
-    const [plantFilter, setPlantFilter] = useState<string>("all");
+    const [plans, setPlans] = useState < EnrichedPlan[] > ([]);
+    const [machineFilter, setMachineFilter] = useState < string > ("all");
+    const [priorityFilter, setPriorityFilter] = useState < string > ("all");
+    const [plantFilter, setPlantFilter] = useState < string > ("all");
     const [search, setSearch] = useState("");
     const [showOverdueOnly, setShowOverdueOnly] = useState(false);
 
@@ -220,18 +220,18 @@ export default function MaintenancePlansIndexPage() {
                     new Set(planRows.map((row) => row.machineResolved?.plant_id).filter(Boolean))
                 ) as string[];
 
-                let plantMap = new Map<string, PlantLite>();
+                let plantMap = new Map < string, PlantLite> ();
                 if (plantIds.length > 0) {
                     const { data: plantRows, error: plantsError } = await supabase
                         .from("plants")
-                        .select("id, name, type")
+                        .select("id, name, type:plant_type")
                         .in("id", plantIds);
 
                     if (plantsError) throw plantsError;
                     plantMap = new Map(((plantRows ?? []) as PlantLite[]).map((row) => [row.id, row]));
                 }
 
-                let workOrderCountMap = new Map<string, number>();
+                let workOrderCountMap = new Map < string, number> ();
                 const planIds = planRows.map((row) => row.id);
                 if (planIds.length > 0) {
                     const { data: workOrderRows, error: workOrdersError } = await supabase
@@ -279,7 +279,7 @@ export default function MaintenancePlansIndexPage() {
     }, [authLoading, organization?.id, toast]);
 
     const plantOptions = useMemo(() => {
-        const map = new Map<string, string>();
+        const map = new Map < string, string> ();
         for (const plan of plans) {
             if (plan.plantResolved?.id) {
                 map.set(plan.plantResolved.id, plan.plantResolved.name || "Senza nome");
@@ -292,7 +292,7 @@ export default function MaintenancePlansIndexPage() {
         return plans
             .map((plan) => plan.machineResolved)
             .filter(Boolean)
-            .reduce<Array<{ id: string; label: string }>>((acc, machine) => {
+            .reduce < Array < { id: string; label: string } >> ((acc, machine) => {
                 if (!machine) return acc;
                 if (acc.some((item) => item.id === machine.id)) return acc;
                 acc.push({
@@ -301,7 +301,7 @@ export default function MaintenancePlansIndexPage() {
                 });
                 return acc;
             }, [])
-            .sort((a, b) => a.label.localeCompare(b.label, "it"));
+                .sort((a, b) => a.label.localeCompare(b.label, "it"));
     }, [plans]);
 
     const filteredPlans = useMemo(() => {
