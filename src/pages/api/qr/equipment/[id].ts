@@ -6,7 +6,7 @@ import {
     toLegacyQrToken,
 } from "@/lib/server/machineQrService";
 
-const ALLOWED_ROLES: AppRole[] = ["owner", "admin", "supervisor"];
+const ALLOWED_ROLES: AppRole[] = ["admin", "supervisor"];
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { id } = req.query;
