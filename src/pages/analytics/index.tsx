@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import DashboardCharts from "@/components/dashboard/DashboardCharts";
 import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import UrgentIssuesPanel, { type UrgentIssue } from "@/components/dashboard/UrgentIssuesPanel";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
 type OrgType = "manufacturer" | "customer" | null;
 
@@ -171,11 +172,11 @@ export default function AnalyticsPage() {
     const { loading: authLoading, organization, membership, shouldEnforceMfa } = useAuth();
 
     const orgType = (organization?.type as OrgType | undefined) ?? null;
-    const userRole = membership?.role ?? "technician";
-    const canManage = ["owner", "admin", "supervisor"].includes(userRole);
+    const userRole = normalizeRole(membership?.role ?? null);
+    const canManage = hasMinimumRole(userRole, "supervisor");
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState<DashboardKpis>({
+    const [kpis, setKpis] = useState < DashboardKpis > ({
         machineCount: 0,
         customerCount: 0,
         activeAssignments: 0,
@@ -184,14 +185,14 @@ export default function AnalyticsPage() {
         activeChecklists: 0,
         activeDocuments: 0,
     });
-    const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+    const [generatedAt, setGeneratedAt] = useState < string | null > (null);
 
     useEffect(() => {
         let active = true;
 
         const load = async () => {
             try {
-                const data = await apiFetch<DashboardSummaryResponse>("/api/dashboard/summary");
+                const data = await apiFetch < DashboardSummaryResponse > ("/api/dashboard/summary");
                 if (!active) return;
 
                 setKpis(data.kpis);
@@ -212,7 +213,7 @@ export default function AnalyticsPage() {
         };
     }, [authLoading]);
 
-    const issues = useMemo<UrgentIssue[]>(() => {
+    const issues = useMemo < UrgentIssue[] > (() => {
         const result: UrgentIssue[] = [];
 
         if (kpis.overdueWorkOrders > 0) {
