@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Download, Loader2, Trash2, Upload } from "lucide-react";
 import { documentWorkspaceApi, type WorkspaceDocument, type WorkspaceDocumentVersion } from "@/lib/documentWorkspaceApi";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
 type OrgType = "manufacturer" | "customer";
 type DocumentCategory =
@@ -85,12 +86,12 @@ export default function DocumentManager({
 
     const ctxOrgId = currentOrgId ?? organization?.id ?? null;
     const ctxOrgType = (currentOrgType ?? organization?.type ?? null) as OrgType | null;
-    const ctxRole = currentUserRole ?? membership?.role ?? "technician";
+    const ctxRole = normalizeRole(currentUserRole ?? membership?.role ?? null);
 
     const canWrite = useMemo(() => {
         if (readOnly) return false;
         if (!ctxOrgId || !ctxOrgType) return false;
-        return ["owner", "admin", "supervisor"].includes(ctxRole);
+        return hasMinimumRole(ctxRole, "supervisor");
     }, [readOnly, ctxOrgId, ctxOrgType, ctxRole]);
 
     const loadDocuments = async () => {
