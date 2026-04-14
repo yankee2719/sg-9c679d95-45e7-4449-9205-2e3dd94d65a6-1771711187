@@ -1,10 +1,12 @@
 import type { NextApiResponse } from "next";
 import {
     withAuth,
+    ALL_APP_ROLES,
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
 import { assertCanReferenceMachine, getAccessibleMachineIds } from "@/lib/server/customerVisibility";
+import { hasMinimumRole } from "@/lib/roles";
 
 const ALLOWED_STATUSES = [
     "draft",
@@ -32,7 +34,7 @@ function normalizePriority(value: unknown) {
 }
 
 export default withAuth(
-    ["owner", "admin", "supervisor", "technician", "viewer"],
+    ALL_APP_ROLES,
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const serviceSupabase = getServiceSupabase();
         const organizationId = req.user.organizationId;
@@ -127,7 +129,7 @@ export default withAuth(
             }
 
             if (req.method === "POST") {
-                if (!["owner", "admin", "supervisor", "technician"].includes(req.user.role)) {
+                if (!hasMinimumRole(req.user.role, "technician")) {
                     return res.status(403).json({ error: "Not allowed" });
                 }
 
