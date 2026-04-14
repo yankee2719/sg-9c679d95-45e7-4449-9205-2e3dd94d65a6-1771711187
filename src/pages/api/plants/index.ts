@@ -1,8 +1,9 @@
 import type { NextApiResponse } from "next";
-import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { withAuth, ALL_APP_ROLES, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
+import { hasMinimumRole } from "@/lib/roles";
 
 export default withAuth(
-    ["owner", "admin", "supervisor", "technician", "viewer"],
+    ALL_APP_ROLES,
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const supabase = getServiceSupabase();
         const organizationId = req.user.organizationId;
@@ -45,7 +46,7 @@ export default withAuth(
             }
 
             if (req.method === "POST") {
-                if (!["owner", "admin", "supervisor"].includes(req.user.role)) {
+                if (!hasMinimumRole(req.user.role, "supervisor")) {
                     return res.status(403).json({ error: "Not allowed" });
                 }
 
