@@ -24,17 +24,33 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const userIds = Array.from(new Set((memberships ?? []).map((row: any) => row.user_id).filter(Boolean)));
         let profileMap = new Map < string, any> ();
         if (userIds.length > 0) {
-            const { data: profiles, error: profilesError } = await serviceSupabase.from("profiles").select("id, display_name, first_name, last_name, email").in("id", userIds);
+            const { data: profiles, error: profilesError } = await serviceSupabase
+                .from("profiles")
+                .select("id, display_name, first_name, last_name, email")
+                .in("id", userIds);
             if (profilesError) return res.status(500).json({ error: profilesError.message });
             profileMap = new Map((profiles ?? []).map((row: any) => [row.id, row]));
         }
 
         const header = ["membership_id", "user_id", "display_name", "first_name", "last_name", "email", "role", "is_active", "organization_id", "created_at"];
-        const csv = [header.join(","), ...(memberships ?? []).map((row: any) => {
-            const profile = profileMap.get(row.user_id);
-            return [csvEscape(row.id), csvEscape(row.user_id), csvEscape(profile?.display_name), csvEscape(profile?.first_name), csvEscape(profile?.last_name), csvEscape(profile?.email), csvEscape(row.role), csvEscape(row.is_active), csvEscape(row.organization_id), csvEscape(row.created_at)].join(",");
-        })].join("
-");
+        const csv = [
+            header.join(","),
+            ...(memberships ?? []).map((row: any) => {
+                const profile = profileMap.get(row.user_id);
+                return [
+                    csvEscape(row.id),
+                    csvEscape(row.user_id),
+                    csvEscape(profile?.display_name),
+                    csvEscape(profile?.first_name),
+                    csvEscape(profile?.last_name),
+                    csvEscape(profile?.email),
+                    csvEscape(row.role),
+                    csvEscape(row.is_active),
+                    csvEscape(row.organization_id),
+                    csvEscape(row.created_at),
+                ].join(",");
+            }),
+        ].join("\n");
 
         res.setHeader("Content-Type", "text/csv; charset=utf-8");
         res.setHeader("Content-Disposition", 'attachment; filename="users-export.csv"');
@@ -46,4 +62,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(MANAGER_ROLES, handler, { allowPlatformAdmin: true });
-
