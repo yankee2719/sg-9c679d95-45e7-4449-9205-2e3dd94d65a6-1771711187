@@ -28,6 +28,7 @@ import { userAdminApi, type AssignmentListItem, type AssignmentOptions } from "@
 import EmptyState from "@/components/feedback/EmptyState";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
 type OrgType = "manufacturer" | "customer" | "enterprise" | null;
 type AssignmentRow = AssignmentListItem;
@@ -129,8 +130,8 @@ export default function AssignmentsIndexPage() {
 
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
-    const userRole = membership?.role ?? "technician";
-    const canManage = ["owner", "admin", "supervisor"].includes(userRole);
+    const userRole = normalizeRole(membership?.role ?? null);
+    const canManage = hasMinimumRole(userRole, "supervisor");
 
     const loadAssignments = async () => {
         if (!orgId || orgType !== "manufacturer") {
