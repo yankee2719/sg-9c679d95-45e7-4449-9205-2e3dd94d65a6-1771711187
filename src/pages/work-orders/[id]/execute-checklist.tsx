@@ -13,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { getChecklistFlowTexts } from "@/lib/checklistFlowText";
 import { checklistExecutionApi } from "@/lib/checklistExecutionApi";
+import { queueOfflineOperation } from "@/lib/offlineSyncClient";
 import {
     clearWorkOrderChecklistDraft,
     loadWorkOrderChecklistDraft,
@@ -170,6 +171,48 @@ export default function ExecuteChecklistInWorkOrderPage() {
         return null;
     };
 
+    const buildItemsPayload = () => {
+        return selectedAssignment?.template_items.map((item) => {
+            const value = values[item.id];
+            let finalValue: string | null = value?.value ?? null;
+            if (item.input_type === "boolean") {
+                finalValue = value?.bool === "yes" ? "true" : value?.bool === "no" ? "false" : null;
+            }
+            return {
+                template_item_id: item.id,
+                value: finalValue,
+                notes: value?.notes ?? null,
+            };
+        }) ?? [];
+    };
+
+    const handleQueueOffline = async () => {
+        if (!workOrder || !selectedAssignment) return;
+
+        const itemsPayload = buildItemsPayload();
+        queueOfflineOperation({
+            id: crypto.randomUUID(),
+            operation_type: "create",
+            entity_type: "checklist_execution_complete",
+            entity_id: selectedAssignment.id,
+            client_timestamp: new Date().toISOString(),
+            payload: {
+                assignment_id: selectedAssignment.id,
+                work_order_id: workOrder.id,
+                items: itemsPayload,
+                notes: globalNotes.trim() || null,
+                overall_status: null,
+            },
+        });
+
+        clearWorkOrderChecklistDraft(workOrder.id, selectedAssignment.id);
+        toast({
+            title: text.savedTitle || "Checklist accodata",
+            description: "Sei offline: la checklist è stata messa in coda e verrà sincronizzata appena torna la connessione.",
+        });
+        await router.push(`/work-orders/${workOrder.id}`);
+    };
+
     const handleSave = async () => {
         if (!workOrder || !selectedAssignment) return;
 
@@ -180,28 +223,13 @@ export default function ExecuteChecklistInWorkOrderPage() {
         }
 
         if (!isOnline) {
-            toast({
-                title: text.savedTitle || "Bozza salvata",
-                description:
-                    "Sei offline: la bozza è stata salvata localmente, ma non ancora inviata.",
-            });
+            await handleQueueOffline();
             return;
         }
 
         setSaving(true);
         try {
-            const itemsPayload = selectedAssignment.template_items.map((item) => {
-                const value = values[item.id];
-                let finalValue: string | null = value?.value ?? null;
-                if (item.input_type === "boolean") {
-                    finalValue = value?.bool === "yes" ? "true" : value?.bool === "no" ? "false" : null;
-                }
-                return {
-                    template_item_id: item.id,
-                    value: finalValue,
-                    notes: value?.notes ?? null,
-                };
-            });
+            const itemsPayload = buildItemsPayload();
 
             const executionRow = await checklistExecutionApi.create({
                 assignment_id: selectedAssignment.id,
@@ -253,7 +281,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
                             <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
                                 <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
                                 <div>
-                                    Sei offline. Puoi compilare la checklist: la bozza viene salvata localmente, ma l'invio finale richiede connessione.
+                                    Sei offline. Puoi completare la checklist: al salvataggio verrà accodata localmente e sincronizzata appena la connessione torna disponibile.
                                 </div>
                             </div>
                         )}
@@ -354,7 +382,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
                         )}
 
                         <div className="flex justify-end">
-                            <Button onClick={handleSave} disabled={saving || !selectedAssignment}>
+                            <Button onClick={() => void handleSave()} disabled={saving || !selectedAssignment}>
                                 <Save className="mr-2 h-4 w-4" />
                                 {saving ? text.saving || "Salvataggio..." : text.save || "Completa checklist"}
                             </Button>
