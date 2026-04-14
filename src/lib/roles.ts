@@ -3,22 +3,21 @@ export const REAL_ORG_ROLES = APP_ROLE_VALUES;
 export const LEGACY_ORG_ROLES = ["owner", "plant_manager", "viewer", "operator"] as const;
 
 export type WritableOrgRole = (typeof APP_ROLE_VALUES)[number];
+export type DatabaseOrgRole = WritableOrgRole;
 export type LegacyOrgRole = (typeof LEGACY_ORG_ROLES)[number];
 export type AppRole = WritableOrgRole;
 export type AnyRole = AppRole | LegacyOrgRole | string;
-export type DatabaseOrgRole = WritableOrgRole;
 
 export const DEFAULT_APP_ROLE: AppRole = "technician";
+export const ALL_APP_ROLES: AppRole[] = [...APP_ROLE_VALUES];
+export const MANAGER_ROLES: AppRole[] = ["admin", "supervisor"];
+export const ADMIN_ONLY_ROLES: AppRole[] = ["admin"];
 
 export const ROLE_LABELS: Record<AppRole, string> = {
     admin: "Admin",
     supervisor: "Supervisor",
     technician: "Technician",
 };
-
-export const ALL_APP_ROLES = [...APP_ROLE_VALUES] as const;
-export const ADMIN_ONLY_ROLES = ["admin"] as const;
-export const MANAGER_ROLES = ["admin", "supervisor"] as const;
 
 const ROLE_ORDER: Record<AppRole, number> = {
     technician: 10,
@@ -30,17 +29,6 @@ function toRawRole(value: unknown): string {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function resolveFallbackRole(fallback: AnyRole | undefined): AppRole {
-    const raw = toRawRole(fallback);
-
-    if (raw === "admin") return "admin";
-    if (raw === "supervisor") return "supervisor";
-    if (raw === "owner") return "admin";
-    if (raw === "plant_manager") return "supervisor";
-
-    return DEFAULT_APP_ROLE;
-}
-
 export function isWritableOrgRole(value: unknown): value is WritableOrgRole {
     return typeof value === "string" && (APP_ROLE_VALUES as readonly string[]).includes(value);
 }
@@ -49,31 +37,36 @@ export function isLegacyOrgRole(value: unknown): value is LegacyOrgRole {
     return typeof value === "string" && (LEGACY_ORG_ROLES as readonly string[]).includes(value);
 }
 
-export function normalizeRole(value: unknown, fallback: AnyRole = DEFAULT_APP_ROLE): AppRole {
+export function normalizeRole(
+    value: unknown,
+    fallback: AppRole = DEFAULT_APP_ROLE
+): AppRole {
     const raw = toRawRole(value);
 
     if (raw === "admin") return "admin";
     if (raw === "supervisor") return "supervisor";
     if (raw === "technician") return "technician";
 
-    // legacy compatibility
     if (raw === "owner") return "admin";
     if (raw === "plant_manager") return "supervisor";
     if (raw === "viewer") return "technician";
     if (raw === "operator") return "technician";
 
-    return resolveFallbackRole(fallback);
-}
-
-export function toWritableOrgRole(value: unknown, fallback: AnyRole = DEFAULT_APP_ROLE): WritableOrgRole {
-    return normalizeRole(value, fallback);
+    return fallback;
 }
 
 export function normalizeRoleForStorage(
     value: unknown,
-    fallback: AnyRole = DEFAULT_APP_ROLE
+    fallback: AppRole = DEFAULT_APP_ROLE
 ): WritableOrgRole {
-    return toWritableOrgRole(value, fallback);
+    return normalizeRole(value, fallback);
+}
+
+export function toWritableOrgRole(
+    value: unknown,
+    fallback: AppRole = DEFAULT_APP_ROLE
+): WritableOrgRole {
+    return normalizeRole(value, fallback);
 }
 
 export function getRoleRank(value: unknown): number {
@@ -98,7 +91,7 @@ export function hasMinimumOrgRole(
     userRole: AppRole | string | null | undefined,
     requiredRole: AppRole
 ): boolean {
-    return hasMinimumCompatibleRole(userRole, requiredRole);
+    return hasMinimumRole(userRole, requiredRole);
 }
 
 export function roleSatisfiesAny(
