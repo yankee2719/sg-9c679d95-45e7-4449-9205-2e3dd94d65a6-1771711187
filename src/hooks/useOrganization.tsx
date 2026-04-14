@@ -55,7 +55,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         void loadOrganization();
     }, []);
 
-    const role = normalizeRole(membership?.role ?? null, 'viewer');
+    const role = normalizeRole(membership?.role ?? null);
     const isOwner = role === 'admin';
     const isAdmin = role === 'admin';
     const canManageMembers = canManageMembersRole(role);
@@ -88,7 +88,7 @@ export function useOrganization() {
 export function usePermission(permission: string) {
     const { membership } = useOrganization();
 
-    const role = normalizeRole(membership?.role ?? null, 'viewer');
+    const role = normalizeRole(membership?.role ?? null);
 
     const permissionChecks: Record<string, boolean> = {
         manage_members: canManageMembersRole(role),
