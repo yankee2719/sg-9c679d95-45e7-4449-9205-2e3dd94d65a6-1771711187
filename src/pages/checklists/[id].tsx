@@ -8,6 +8,7 @@ import { SEO } from "@/components/SEO";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgType } from "@/hooks/useOrgType";
 import { useToast } from "@/hooks/use-toast";
+import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +35,8 @@ export default function ChecklistDetailPage() {
     const [items, setItems] = useState < ItemRow[] > ([]);
     const [executions, setExecutions] = useState < ExecutionRow[] > ([]);
 
-    const userRole = membership?.role ?? "viewer";
-    const canManage = ["owner", "admin", "supervisor"].includes(userRole);
+    const userRole = normalizeRole(membership?.role ?? null);
+    const canManage = hasMinimumRole(userRole, "supervisor");
 
     useEffect(() => {
         if (authLoading || !organization?.id || !checklistId) return;
