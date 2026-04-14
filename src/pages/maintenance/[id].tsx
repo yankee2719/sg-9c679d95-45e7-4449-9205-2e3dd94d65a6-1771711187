@@ -225,7 +225,7 @@ export default function MaintenancePlanDetailPage() {
                         .eq("maintenance_plan_id", id)
                         .order("created_at", { ascending: false }),
                     resolvedMachine?.plant_id
-                        ? supabase.from("plants").select("id, name, type").eq("id", resolvedMachine.plant_id).maybeSingle()
+                        ? supabase.from("plants").select("id, name, type:plant_type").eq("id", resolvedMachine.plant_id).maybeSingle()
                         : Promise.resolve({ data: null, error: null }),
                 ]);
 
