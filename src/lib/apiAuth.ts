@@ -183,7 +183,7 @@ export async function authenticateRequest(
 }
 
 export function withAuth(
-    allowedRoles: readonly AppRole[],
+    allowedRoles: readonly (AppRole | string)[],
     handler: (req: AuthenticatedRequest, res: NextApiResponse) => Promise<unknown>,
     options?: {
         requireAal2?: boolean;
