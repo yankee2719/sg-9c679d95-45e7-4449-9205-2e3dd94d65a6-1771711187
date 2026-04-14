@@ -42,6 +42,7 @@ const I18N: Record<Language, Record<string, string>> = {
         noResults: "Nessun utente trovato.",
         noResultsDesc: "Nessun utente corrisponde ai filtri selezionati.",
         loadError: "Impossibile caricare gli utenti.",
+        accessDenied: "Non hai i permessi per visualizzare gli utenti di questa organizzazione.",
         createdAt: "Creato il",
         orgFallback: "Organizzazione",
     },
@@ -62,6 +63,7 @@ const I18N: Record<Language, Record<string, string>> = {
         noResults: "No users found.",
         noResultsDesc: "No users match the selected filters.",
         loadError: "Unable to load users.",
+        accessDenied: "You do not have permission to view users for this organization.",
         createdAt: "Created on",
         orgFallback: "Organization",
     },
@@ -82,6 +84,7 @@ const I18N: Record<Language, Record<string, string>> = {
         noResults: "Aucun utilisateur trouvé.",
         noResultsDesc: "Aucun utilisateur ne correspond aux filtres sélectionnés.",
         loadError: "Impossible de charger les utilisateurs.",
+        accessDenied: "Vous n'avez pas les autorisations pour voir les utilisateurs de cette organisation.",
         createdAt: "Créé le",
         orgFallback: "Organisation",
     },
@@ -102,6 +105,7 @@ const I18N: Record<Language, Record<string, string>> = {
         noResults: "No se encontraron usuarios.",
         noResultsDesc: "Ningún usuario coincide con los filtros seleccionados.",
         loadError: "No se pudieron cargar los usuarios.",
+        accessDenied: "No tienes permisos para ver los usuarios de esta organización.",
         createdAt: "Creado el",
         orgFallback: "Organización",
     },
@@ -153,7 +157,7 @@ function KpiCard({
 }
 
 export default function UsersIndexPage() {
-    const { loading: authLoading, organization, membership } = useAuth();
+    const { loading: authLoading, organization, membership, canManageMembers: canManageMembersValue } = useAuth();
     const { language } = useLanguage();
     const L = I18N[language] || I18N.en;
 
@@ -181,6 +185,15 @@ export default function UsersIndexPage() {
                 return;
             }
 
+            if (!canManageMembersValue) {
+                if (active) {
+                    setRows([]);
+                    setError(null);
+                    setLoading(false);
+                }
+                return;
+            }
+
             setLoading(true);
             setError(null);
 
@@ -202,7 +215,7 @@ export default function UsersIndexPage() {
         return () => {
             active = false;
         };
-    }, [authLoading, orgId, L.loadError]);
+    }, [authLoading, canManageMembersValue, orgId, L.loadError]);
 
     const availableRoles = useMemo(
         () => Array.from(new Set(rows.map((r) => r.role).filter(Boolean))) as string[],
@@ -245,6 +258,23 @@ export default function UsersIndexPage() {
                         <Card className="rounded-2xl">
                             <CardContent className="py-10 text-center text-muted-foreground">{L.loading}</CardContent>
                         </Card>
+                    </div>
+                </MainLayout>
+            </OrgContextGuard>
+        );
+    }
+
+    if (!canManageMembersValue) {
+        return (
+            <OrgContextGuard>
+                <MainLayout userRole={userRole}>
+                    <SEO title={`${L.title} - MACHINA`} />
+                    <div className="mx-auto max-w-7xl px-4 py-8">
+                        <EmptyState
+                            title={L.title}
+                            description={L.accessDenied}
+                            icon={<Shield className="h-8 w-8" />}
+                        />
                     </div>
                 </MainLayout>
             </OrgContextGuard>
