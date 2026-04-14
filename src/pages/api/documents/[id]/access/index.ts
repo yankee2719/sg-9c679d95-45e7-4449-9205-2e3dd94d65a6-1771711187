@@ -6,39 +6,27 @@ import {
 } from "@/lib/apiAuth";
 import { getDocumentService } from "@/services/documentService";
 
-const DISABLED_REASON =
-    "Granular document access is disabled in this repository state because the current Supabase schema does not expose document_access_grants or related RPCs.";
-
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "GET") {
-        return res
-            .status(405)
-            .json({ error: "Method not allowed", allowedMethods: ["GET"] });
+        return res.status(405).json({ error: "Method not allowed", allowedMethods: ["GET"] });
     }
 
     const { id } = req.query;
-
     if (!id || typeof id !== "string") {
         return res.status(400).json({ error: "Document ID is required" });
     }
 
     try {
         const docService = getDocumentService();
-
-        const hasPermission = await docService.checkUserPermission(
-            req.user.userId,
-            id,
-            "view"
-        );
+        const hasPermission = await docService.checkUserPermission(req.user.userId, id, "view");
 
         if (!hasPermission) {
-            return res.status(403).json({
-                error: "Access denied - View permission required",
-            });
+            return res.status(403).json({ error: "Access denied" });
         }
 
         return res.status(200).json({
             success: true,
+            supported: false,
             grants: [],
             stats: {
                 total: 0,
@@ -47,10 +35,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 expired: 0,
                 active: 0,
             },
-            feature: {
-                enabled: false,
-                reason: DISABLED_REASON,
-            },
+            message:
+                "Explicit document access grants are disabled in this repository state because the current Supabase schema does not expose the legacy document_access_grants table or related grant/revoke RPCs.",
         });
     } catch (error) {
         console.error("Access Grants List API Error:", error);
