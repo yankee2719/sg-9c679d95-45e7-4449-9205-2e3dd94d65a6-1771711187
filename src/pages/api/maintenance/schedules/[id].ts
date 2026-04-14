@@ -5,6 +5,7 @@ import {
     type AuthenticatedRequest,
     getServiceSupabase,
 } from "@/lib/apiAuth";
+import { hasMinimumRole } from "@/lib/roles";
 import {
     deactivateLegacySchedule,
     getLegacyScheduleById,
@@ -46,7 +47,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     if (req.method === "PUT" || req.method === "PATCH") {
-        if (req.user.role === "technician" || req.user.role === "viewer") {
+        if (!hasMinimumRole(req.user.role, "supervisor")) {
             return res.status(403).json({
                 error: "Only admins and supervisors can update schedules",
             });
@@ -76,7 +77,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     if (req.method === "DELETE") {
-        if (!["owner", "admin"].includes(req.user.role)) {
+        if (!hasMinimumRole(req.user.role, "admin")) {
             return res.status(403).json({
                 error: "Only admins can delete schedules",
             });
