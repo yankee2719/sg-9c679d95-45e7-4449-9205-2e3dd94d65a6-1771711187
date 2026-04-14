@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Camera, Save, Send } from "lucide-react";
 import { inferChecklistItemMeta, parseChecklistItemDescription, type ChecklistItemResponseType } from "@/lib/checklistItemMeta";
+import { normalizeRole } from "@/lib/roles";
 
 type ChecklistRow = { id: string; title: string; description: string | null; machine_id: string | null; checklist_type: string | null };
 type ItemRow = { id: string; title: string; description: string | null; item_order: number | null; is_required: boolean | null; expected_value: string | null; measurement_unit: string | null; min_value: number | null; max_value: number | null };
@@ -64,7 +65,7 @@ export default function ExecuteChecklistPage() {
     const [results, setResults] = useState < Record < string, ResultDraft>> ({});
     const [executionNotes, setExecutionNotes] = useState("");
 
-    const userRole = membership?.role ?? "viewer";
+    const userRole = normalizeRole(membership?.role ?? null);
 
     useEffect(() => {
         if (isManufacturer) {
