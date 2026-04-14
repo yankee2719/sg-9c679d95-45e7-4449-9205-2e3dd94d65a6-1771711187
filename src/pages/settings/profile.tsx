@@ -34,7 +34,7 @@ export default function SettingsProfilePage() {
             setEmail(user.email ?? "");
             setFirstName((profile as any)?.first_name ?? "");
             setLastName((profile as any)?.last_name ?? "");
-            setDisplayName((profile as any)?.display_name ?? (profile as any)?.full_name ?? "");
+            setDisplayName((profile as any)?.display_name ?? "");
             setLoading(false);
         }
         load();
@@ -48,8 +48,7 @@ export default function SettingsProfilePage() {
         const updates: Record<string, any> = {
             first_name: firstName || null,
             last_name: lastName || null,
-            display_name: displayName || null,
-            full_name: displayName || `${firstName} ${lastName}`.trim() || null,
+            display_name: displayName || `${firstName} ${lastName}`.trim() || null,
             updated_at: new Date().toISOString(),
         };
 
