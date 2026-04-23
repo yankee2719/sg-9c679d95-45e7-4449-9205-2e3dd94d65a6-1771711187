@@ -23,7 +23,7 @@ import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import DashboardCharts from "@/components/dashboard/DashboardCharts";
 import EmptyState from "@/components/feedback/EmptyState";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface DashboardKpis {
     machineCount: number;
@@ -392,7 +392,7 @@ export default function DashboardPage() {
     const { loading: authLoading, organization, membership, shouldEnforceMfa } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [kpis, setKpis] = useState<DashboardKpis>({
+    const [kpis, setKpis] = useState < DashboardKpis > ({
         machineCount: 0,
         customerCount: 0,
         activeAssignments: 0,
@@ -401,9 +401,9 @@ export default function DashboardPage() {
         activeChecklists: 0,
         activeDocuments: 0,
     });
-    const [recentMachines, setRecentMachines] = useState<RecentMachineRow[]>([]);
-    const [recentActivity, setRecentActivity] = useState<RecentActivityRow[]>([]);
-    const cacheRef = useRef<DashboardCache | null>(null);
+    const [recentMachines, setRecentMachines] = useState < RecentMachineRow[] > ([]);
+    const [recentActivity, setRecentActivity] = useState < RecentActivityRow[] > ([]);
+    const cacheRef = useRef < DashboardCache | null > (null);
 
     const orgId = organization?.id ?? null;
     const orgType = (organization?.type as OrgType | undefined) ?? null;
@@ -436,7 +436,7 @@ export default function DashboardPage() {
             setLoading(true);
 
             try {
-                const data = await apiFetch<DashboardSummaryResponse>("/api/dashboard/summary");
+                const data = await apiFetch < DashboardSummaryResponse > ("/api/dashboard/summary");
 
                 setKpis(data.kpis);
                 setRecentMachines(data.recentMachines);
@@ -484,7 +484,7 @@ export default function DashboardPage() {
         return () => window.removeEventListener("focus", onFocus);
     }, [loadDashboard]);
 
-    const issues = useMemo<UrgentIssue[]>(() => {
+    const issues = useMemo < UrgentIssue[] > (() => {
         const result: UrgentIssue[] = [];
 
         if (kpis.overdueWorkOrders > 0) {
