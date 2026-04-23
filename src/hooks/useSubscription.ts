@@ -68,9 +68,9 @@ async function getAuthenticatedJson<T>(url: string, body: Record<string, unknown
 }
 
 export function useSubscription() {
-    const [subscription, setSubscription] = useState<SubscriptionInfo>(defaultSubscription);
+    const [subscription, setSubscription] = useState < SubscriptionInfo > (defaultSubscription);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState < string | null > (null);
 
     const fetchSubscription = useCallback(async () => {
         try {
@@ -144,8 +144,8 @@ export function useSubscription() {
             const maxMachines = org.max_machines || planLimits.maxMachines;
 
             setSubscription({
-                plan: org.subscription_plan,
-                status: org.subscription_status,
+                plan: org.subscription_plan as any,
+                status: org.subscription_status as any,
                 isTrialing: org.subscription_status === "trial",
                 isActive: org.subscription_status === "active",
                 isSuspended: org.subscription_status === "suspended",
@@ -177,7 +177,7 @@ export function useSubscription() {
             throw new Error("No organization ID found");
         }
 
-        return getAuthenticatedJson<{ sessionId: string; url: string }>(
+        return getAuthenticatedJson < { sessionId: string; url: string } > (
             "/api/stripe/create-checkout-session",
             {
                 organizationId: subscription.organizationId,
@@ -192,7 +192,7 @@ export function useSubscription() {
             throw new Error("No organization ID found");
         }
 
-        return getAuthenticatedJson<{ url: string }>(
+        return getAuthenticatedJson < { url: string } > (
             "/api/stripe/create-portal-session",
             {
                 organizationId: subscription.organizationId,
