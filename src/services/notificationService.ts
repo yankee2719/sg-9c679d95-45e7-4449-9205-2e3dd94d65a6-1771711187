@@ -137,7 +137,7 @@ export const notificationService = {
         }
 
         if (opts?.type) {
-            listQuery = listQuery.eq("type", opts.type);
+            listQuery = listQuery.eq("type", opts.type as any);
         }
 
         const [listResult, unreadResult] = await Promise.all([
