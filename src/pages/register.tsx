@@ -30,7 +30,7 @@ const pricingPlans = {
 } as const;
 
 type PlanType = keyof typeof pricingPlans;
-type OrgType = "manufacturer" | "customer";
+type OrgType = "manufacturer" | "customer" | "enterprise";
 
 const industries = [
     { value: "manufacturing", label: "Manufacturing" },
@@ -232,15 +232,15 @@ export default function RegisterPage() {
     const text = useMemo(() => copy[language], [language]);
 
     const [step, setStep] = useState(0);
-    const [orgType, setOrgType] = useState<OrgType | null>(null);
+    const [orgType, setOrgType] = useState < OrgType | null > (null);
     const [companyName, setCompanyName] = useState("");
     const [industry, setIndustry] = useState("");
     const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [selectedPlan, setSelectedPlan] = useState<PlanType>("professional");
-    const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("yearly");
+    const [selectedPlan, setSelectedPlan] = useState < PlanType > ("professional");
+    const [billingPeriod, setBillingPeriod] = useState < "monthly" | "yearly" > ("yearly");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState(false);
