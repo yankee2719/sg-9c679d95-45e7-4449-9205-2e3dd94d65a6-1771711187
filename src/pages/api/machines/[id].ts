@@ -88,6 +88,9 @@ export default withAuth(
                     production_line_id,
                 } = req.body ?? {};
 
+                const endUser =
+                    organizationType === "customer" || organizationType === "enterprise";
+
                 const payload: any = {
                     name: name?.trim() || machine.name,
                     internal_code:
@@ -103,13 +106,13 @@ export default withAuth(
                     notes: notes !== undefined ? notes?.trim() || null : machine.notes,
                     lifecycle_state: lifecycle_state || machine.lifecycle_state,
                     plant_id:
-                        organizationType === "customer"
+                        endUser
                             ? plant_id !== undefined
                                 ? plant_id || null
                                 : machine.plant_id
                             : null,
                     production_line_id:
-                        organizationType === "customer"
+                        endUser
                             ? production_line_id !== undefined
                                 ? production_line_id || null
                                 : machine.production_line_id
