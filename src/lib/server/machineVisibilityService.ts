@@ -27,6 +27,13 @@ function normalizeManagerRole(role: string | null | undefined) {
     return raw;
 }
 
+// "End-user" organizations: those that own operational context (plants, lines,
+// maintenance) over their own machines. Includes both `customer` (machines
+// assigned by a manufacturer) and `enterprise` (owns its own machines entirely).
+function isEndUserOrg(orgType: string | null | undefined) {
+    return orgType === "customer" || orgType === "enterprise";
+}
+
 export async function getMachineVisibilityForUser(
     supabase: SupabaseClient,
     user: ApiUser,
@@ -59,7 +66,7 @@ export async function getMachineVisibilityForUser(
         is_active: boolean;
     }>;
 
-    const isOwner = machine.organization_id === user.organizationId;
+    const isOwner = (machine as any).organization_id === user.organizationId;
     const isAssignedCustomer = activeAssignments.some(
         (assignment) => assignment.customer_org_id === user.organizationId
     );
@@ -72,8 +79,12 @@ export async function getMachineVisibilityForUser(
 
     const normalizedRole = normalizeManagerRole(user.role);
     const isOperationalManager = normalizedRole === "admin" || normalizedRole === "supervisor";
+
+    // End-user orgs (customer OR enterprise) can edit operational data on their
+    // own machines. Enterprise owns its machines outright; customer manages the
+    // operational context of machines assigned to them.
     const canEditOperationalData =
-        user.organizationType === "customer" &&
+        isEndUserOrg(user.organizationType) &&
         isOwner &&
         (isOperationalManager || normalizedRole === "technician");
 
