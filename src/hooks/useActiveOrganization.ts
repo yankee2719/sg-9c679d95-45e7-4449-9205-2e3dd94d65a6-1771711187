@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
-export type ActiveOrganizationType = "manufacturer" | "customer";
+export type ActiveOrganizationType = "manufacturer" | "customer" | "enterprise";
 
 export interface MembershipOrganization {
     organization_id: string;
@@ -46,9 +46,9 @@ export function useActiveOrganization(): ActiveOrganizationState {
     } = useAuth();
 
     const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState < string | null > (null);
 
-    const memberships = useMemo<MembershipOrganization[]>(
+    const memberships = useMemo < MembershipOrganization[] > (
         () =>
             (authMemberships ?? []).map((row) => ({
                 organization_id: row.organization_id,
