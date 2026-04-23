@@ -13,7 +13,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useActiveOrganization } from "@/hooks/useActiveOrganization";
 
-function getOrgIcon(type: "manufacturer" | "customer" | null) {
+function getOrgIcon(type: "manufacturer" | "customer" | "enterprise" | "enterprise" | null) {
     return type === "manufacturer" ? Factory : Building2;
 }
 
