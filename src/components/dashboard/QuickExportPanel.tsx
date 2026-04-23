@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { exportEntity, type ExportEntity } from "@/services/exportService";
 import { Button } from "@/components/ui/button";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface QuickExportPanelProps {
     orgType: OrgType;
