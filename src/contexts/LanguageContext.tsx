@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 export type Language = "it" | "en" | "fr" | "es";
 
@@ -364,6 +364,7 @@ const translations: Record<Language, Record<string, string>> = {
         "activeOrg.membershipsDescription": "Verifica rapidamente in quali organizzazioni sei attivo e con quale ruolo.",
         "activeOrg.activeBadge": "Attiva",
         "activeOrg.fallbackOrganization": "organizzazione",
+
         "customers.search": "Cerca cliente, città, email...",
         "customers.kpi.activePlans": "Piani attivi",
         "customers.kpi.withEmail": "Con email",
@@ -409,7 +410,6 @@ const translations: Record<Language, Record<string, string>> = {
         "customers.assignMachine": "Assegna macchina",
         "customers.removeMachine": "Rimuovi assegnazione",
 
-        // plants
         "plants.title": "Stabilimenti",
         "plants.subtitle": "Gestione stabilimenti dell'organizzazione.",
         "plants.new": "Nuovo stabilimento",
@@ -429,7 +429,6 @@ const translations: Record<Language, Record<string, string>> = {
         "plants.machines": "Macchine nello stabilimento",
         "plants.noMachines": "Nessuna macchina in questo stabilimento.",
 
-        // work-orders
         "workOrders.title": "Ordini di Lavoro",
         "workOrders.subtitle": "Gestione ordini di lavoro.",
         "workOrders.new": "Nuovo ordine",
@@ -464,7 +463,6 @@ const translations: Record<Language, Record<string, string>> = {
         "workOrders.typePredictive": "Predittiva",
         "workOrders.typeInspection": "Ispezione",
 
-        // documents
         "documents.title": "Documenti",
         "documents.subtitle": "Gestione documenti dell'organizzazione.",
         "documents.new": "Nuovo documento",
@@ -481,7 +479,6 @@ const translations: Record<Language, Record<string, string>> = {
         "documents.version": "Versione",
         "documents.versions": "Storico versioni",
 
-        // settings/trash
         "trash.title": "Cestino",
         "trash.subtitle": "Elementi eliminati. Possono essere ripristinati.",
         "trash.loading": "Caricamento...",
@@ -495,7 +492,6 @@ const translations: Record<Language, Record<string, string>> = {
         "trash.tab.documents": "Documenti",
         "trash.tab.customers": "Clienti",
 
-        // machines (supplement)
         "machines.title": "Macchine",
         "machines.subtitle": "Registro macchine dell'organizzazione.",
         "machines.new": "Nuova macchina",
@@ -509,20 +505,19 @@ const translations: Record<Language, Record<string, string>> = {
         "machines.year": "Anno",
         "machines.status": "Stato",
 
+        "documents.total": "Documenti totali",
+        "documents.categories": "Categorie",
+        "documents.withMachine": "Con macchina",
+        "documents.manufacturerView": "Vista costruttore",
+        "documents.customerView": "Vista cliente",
+        "users.kpiTotal": "Utenti totali",
+        "users.kpiActive": "Utenti attivi",
+        "users.kpiAdmins": "Ruoli gestionali",
+        "users.kpiViewers": "Viewer",
+        "users.allRoles": "Tutti i ruoli",
+        "users.allStatuses": "Tutti gli stati",
     },
 
-
-    "documents.total": "Documenti totali",
-    "documents.categories": "Categorie",
-    "documents.withMachine": "Con macchina",
-    "documents.manufacturerView": "Vista costruttore",
-    "documents.customerView": "Vista cliente",
-    "users.kpiTotal": "Utenti totali",
-    "users.kpiActive": "Utenti attivi",
-    "users.kpiAdmins": "Ruoli gestionali",
-    "users.kpiViewers": "Viewer",
-    "users.allRoles": "Tutti i ruoli",
-    "users.allStatuses": "Tutti gli stati",
     en: {
         "common.loading": "Loading...",
         "common.save": "Save",
@@ -1019,21 +1014,19 @@ const translations: Record<Language, Record<string, string>> = {
         "machines.year": "Year",
         "machines.status": "Status",
 
-
+        "documents.total": "Total documents",
+        "documents.categories": "Categories",
+        "documents.withMachine": "With machine",
+        "documents.manufacturerView": "Manufacturer view",
+        "documents.customerView": "Customer view",
+        "users.kpiTotal": "Total users",
+        "users.kpiActive": "Active users",
+        "users.kpiAdmins": "Admin roles",
+        "users.kpiViewers": "Viewers",
+        "users.allRoles": "All roles",
+        "users.allStatuses": "All statuses",
     },
 
-
-    "documents.total": "Total documents",
-    "documents.categories": "Categories",
-    "documents.withMachine": "With machine",
-    "documents.manufacturerView": "Manufacturer view",
-    "documents.customerView": "Customer view",
-    "users.kpiTotal": "Total users",
-    "users.kpiActive": "Active users",
-    "users.kpiAdmins": "Admin roles",
-    "users.kpiViewers": "Viewers",
-    "users.allRoles": "All roles",
-    "users.allStatuses": "All statuses",
     fr: {
         "common.loading": "Chargement...",
         "common.save": "Enregistrer",
@@ -1456,21 +1449,19 @@ const translations: Record<Language, Record<string, string>> = {
         "machines.loading": "Chargement des machines...",
         "machines.noResults": "Aucune machine trouvée.",
 
-
+        "documents.total": "Documents totaux",
+        "documents.categories": "Catégories",
+        "documents.withMachine": "Avec machine",
+        "documents.manufacturerView": "Vue constructeur",
+        "documents.customerView": "Vue client",
+        "users.kpiTotal": "Utilisateurs totaux",
+        "users.kpiActive": "Utilisateurs actifs",
+        "users.kpiAdmins": "Rôles de gestion",
+        "users.kpiViewers": "Lecteurs",
+        "users.allRoles": "Tous les rôles",
+        "users.allStatuses": "Tous les statuts",
     },
 
-
-    "documents.total": "Documents totaux",
-    "documents.categories": "Catégories",
-    "documents.withMachine": "Avec machine",
-    "documents.manufacturerView": "Vue constructeur",
-    "documents.customerView": "Vue client",
-    "users.kpiTotal": "Utilisateurs totaux",
-    "users.kpiActive": "Utilisateurs actifs",
-    "users.kpiAdmins": "Rôles de gestion",
-    "users.kpiViewers": "Lecteurs",
-    "users.allRoles": "Tous les rôles",
-    "users.allStatuses": "Tous les statuts",
     es: {
         "common.loading": "Cargando...",
         "common.save": "Guardar",
@@ -1894,8 +1885,6 @@ const translations: Record<Language, Record<string, string>> = {
     },
 };
 
-
-
 const translationAliases: Record<string, string[]> = {
     "workOrders.search": ["workOrders.searchPlaceholder"],
     "workOrders.statusOpen": ["workOrders.status.open"],
@@ -1907,7 +1896,6 @@ const translationFallbacks: Record<Language, Record<string, string>> = {
     it: {
         "common.error": "Errore",
         "common.saving": "Salvataggio...",
-
         "plants.customerOnly": "Questa sezione è disponibile solo nel contesto cliente.",
         "plants.emptyTitle": "Nessuno stabilimento trovato",
         "plants.emptyDesc": "Crea il primo stabilimento per organizzare macchine e linee produttive.",
@@ -1915,7 +1903,6 @@ const translationFallbacks: Record<Language, Record<string, string>> = {
         "plants.line": "Linea",
         "plants.machinesPlaced": "Macchine posizionate",
         "plants.plantsWithMachines": "Stabilimenti con macchine",
-
         "equipment.assignedCustomer": "Cliente assegnato",
         "equipment.assignmentContext": "Contesto assegnazione",
         "equipment.checkSecurity": "Controlla sicurezza",
@@ -1962,7 +1949,6 @@ const translationFallbacks: Record<Language, Record<string, string>> = {
         "equipment.timeline": "Timeline macchina",
         "equipment.timelineDesc": "Storico eventi, attività e aggiornamenti della macchina.",
         "equipment.updated": "Macchina aggiornata",
-
         "workOrders.assignedTo": "Assegna a",
         "workOrders.createdAt": "Creato il",
         "workOrders.createDesc": "Il work order appartiene sempre all'organizzazione attiva.",
@@ -2064,21 +2050,32 @@ const translationFallbacks: Record<Language, Record<string, string>> = {
 
 const LanguageContext = createContext < LanguageContextType | undefined > (undefined);
 
-// ─── FIX HYDRATION: legge localStorage in modo sincrono ───
-// _app.tsx ha il mounted guard, quindi qui siamo già sul client.
-function getInitialLanguage(): Language {
-    if (typeof window === "undefined") return "it";
+function getStoredLanguage(): Language | null {
+    if (typeof window === "undefined") return null;
+
     const stored = localStorage.getItem("app-language");
-    if (stored === "it" || stored === "en" || stored === "fr" || stored === "es") return stored;
-    return "it";
+    if (stored === "it" || stored === "en" || stored === "fr" || stored === "es") {
+        return stored;
+    }
+
+    return null;
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState < Language > (getInitialLanguage);
+    const [language, setLanguageState] = useState < Language > ("it");
+
+    useEffect(() => {
+        const stored = getStoredLanguage();
+        if (stored) {
+            setLanguageState(stored);
+        }
+    }, []);
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
-        localStorage.setItem("app-language", lang);
+        if (typeof window !== "undefined") {
+            localStorage.setItem("app-language", lang);
+        }
     };
 
     const t = (key: string): string => {
