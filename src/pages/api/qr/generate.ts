@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next";
 import { withAuth, type AuthenticatedRequest, type AppRole, getServiceSupabase } from "@/lib/apiAuth";
 import { generateMachineQrToken, getMachineForQrAccess } from "@/lib/server/machineQrService";
 
-const ALLOWED_ROLES: AppRole[] = ["owner", "admin", "supervisor"];
+const ALLOWED_ROLES: AppRole[] = ["admin", "supervisor"];
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
