@@ -17,7 +17,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Factory, Loader2 } from "lucide-react";
 
-type OrganizationType = "manufacturer" | "company";
+type OrganizationType = "manufacturer" | "enterprise";
 
 interface OnboardingData {
     organizationType: OrganizationType | null;
@@ -34,7 +34,7 @@ export default function OnboardingPage() {
     const { toast } = useToast();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [data, setData] = useState<OnboardingData>({
+    const [data, setData] = useState < OnboardingData > ({
         organizationType: null,
         organizationName: "",
         industry: "",
@@ -95,7 +95,7 @@ export default function OnboardingPage() {
                 {/* Company/Operator Option */}
                 <Card
                     onClick={() => {
-                        setData({ ...data, organizationType: "company" });
+                        setData({ ...data, organizationType: "enterprise" });
                         setStep(2);
                     }}
                     className="cursor-pointer transition-all hover:shadow-lg hover:border-primary p-6 space-y-4"
