@@ -13,7 +13,7 @@ import { useActiveOrganization } from "@/hooks/useActiveOrganization";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-function OrgIcon({ type }: { type: "manufacturer" | "customer" | null }) {
+function OrgIcon({ type }: { type: "manufacturer" | "customer" | "enterprise" | "enterprise" | null }) {
     const Icon = type === "manufacturer" ? Factory : Building2;
     return <Icon className="h-4 w-4" />;
 }
@@ -161,9 +161,9 @@ export default function OrganizationSettingsPage() {
         error,
     } = useActiveOrganization();
 
-    const [logoUrl, setLogoUrl] = useState<string | null>(null);
-    const [draftLogoUrl, setDraftLogoUrl] = useState<string | null>(null);
-    const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+    const [logoUrl, setLogoUrl] = useState < string | null > (null);
+    const [draftLogoUrl, setDraftLogoUrl] = useState < string | null > (null);
+    const [selectedFileName, setSelectedFileName] = useState < string | null > (null);
     const [logoBusy, setLogoBusy] = useState(false);
 
     const currentMembership = useMemo(
