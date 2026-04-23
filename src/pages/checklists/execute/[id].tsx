@@ -58,11 +58,11 @@ export default function ExecuteChecklistPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [checklist, setChecklist] = useState<ChecklistRow | null>(null);
-    const [machine, setMachine] = useState<MachineRow | null>(null);
-    const [plant, setPlant] = useState<PlantRow | null>(null);
-    const [items, setItems] = useState<ItemRow[]>([]);
-    const [results, setResults] = useState<Record<string, ResultDraft>>({});
+    const [checklist, setChecklist] = useState < ChecklistRow | null > (null);
+    const [machine, setMachine] = useState < MachineRow | null > (null);
+    const [plant, setPlant] = useState < PlantRow | null > (null);
+    const [items, setItems] = useState < ItemRow[] > ([]);
+    const [results, setResults] = useState < Record < string, ResultDraft>> ({});
     const [executionNotes, setExecutionNotes] = useState("");
 
     const userRole = normalizeRole(membership?.role ?? null);
@@ -191,7 +191,7 @@ export default function ExecuteChecklistPage() {
                 results: payload,
                 overall_status: complete ? overallStatus : "pending",
                 notes: executionNotes.trim() || null,
-            });
+            } as any);
             if (error) throw error;
 
             if (complete && workOrderId) {
