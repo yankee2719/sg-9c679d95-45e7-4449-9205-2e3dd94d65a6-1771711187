@@ -31,9 +31,9 @@ export interface UseDocumentsOptions {
 }
 
 export function useDocuments(options: UseDocumentsOptions = {}) {
-    const [documents, setDocuments] = useState<Document[]>([]);
+    const [documents, setDocuments] = useState < Document[] > ([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+    const [error, setError] = useState < Error | null > (null);
 
     useEffect(() => {
         loadDocuments();
@@ -44,8 +44,8 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
         setError(null);
 
         try {
-            let query = supabase
-                .from('current_document_versions')
+            let query: any = supabase
+                .from('current_document_versions' as any)
                 .select('*');
 
             if (options.organizationId) {
@@ -70,7 +70,7 @@ export function useDocuments(options: UseDocumentsOptions = {}) {
 
             if (queryError) throw queryError;
 
-            setDocuments(data || []);
+            setDocuments((data || []) as unknown as Document[]);
         } catch (err: any) {
             setError(err);
             console.error('Error loading documents:', err);
