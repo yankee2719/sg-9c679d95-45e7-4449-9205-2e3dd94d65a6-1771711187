@@ -38,24 +38,25 @@ interface FactorRow {
 
 export default function SecuritySettingsPage() {
     const { toast } = useToast();
-    const { loading: authLoading, userRole } = useAuth();
+    const { loading: authLoading, membership } = useAuth();
+    const userRole = membership?.role ?? "technician";
 
     const [loading, setLoading] = useState(true);
-    const [factors, setFactors] = useState<FactorRow[]>([]);
-    const [aal, setAal] = useState<string | null>(null);
-    const [nextLevel, setNextLevel] = useState<string | null>(null);
+    const [factors, setFactors] = useState < FactorRow[] > ([]);
+    const [aal, setAal] = useState < string | null > (null);
+    const [nextLevel, setNextLevel] = useState < string | null > (null);
 
     const [friendlyName, setFriendlyName] = useState("Autenticatore principale");
-    const [pendingFactorId, setPendingFactorId] = useState<string | null>(null);
-    const [pendingSecret, setPendingSecret] = useState<string | null>(null);
-    const [pendingUri, setPendingUri] = useState<string | null>(null);
+    const [pendingFactorId, setPendingFactorId] = useState < string | null > (null);
+    const [pendingSecret, setPendingSecret] = useState < string | null > (null);
+    const [pendingUri, setPendingUri] = useState < string | null > (null);
     const [verifyCode, setVerifyCode] = useState("");
     const [enrolling, setEnrolling] = useState(false);
     const [verifying, setVerifying] = useState(false);
 
-    const [confirmingFactorId, setConfirmingFactorId] = useState<string | null>(null);
+    const [confirmingFactorId, setConfirmingFactorId] = useState < string | null > (null);
     const [removeCode, setRemoveCode] = useState("");
-    const [removingFactorId, setRemovingFactorId] = useState<string | null>(null);
+    const [removingFactorId, setRemovingFactorId] = useState < string | null > (null);
 
     const verifiedFactors = useMemo(
         () => factors.filter((factor) => factor.status === "verified"),
