@@ -2018,7 +2018,7 @@ export type Database = {
             | "membership_invite"
             | "system_alert"
             org_role: "admin" | "supervisor" | "technician"
-            org_type: "manufacturer" | "customer" | "enterprise"
+            org_type: "manufacturer" | "customer" | "enterprise" | "enterprise"
             work_order_priority: "low" | "medium" | "high" | "critical"
             work_order_status:
             | "draft"
