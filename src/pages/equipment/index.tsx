@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Factory, ArrowRight, Plus, Search, EyeOff, Eye, Package } from "lucide-react";
 import { listMachineCatalog } from "@/lib/machineWorkspaceApi";
 
-type OrgType = "manufacturer" | "customer";
+type OrgType = "manufacturer" | "customer" | "enterprise";
 
 interface MachineRow {
     id: string;
@@ -41,9 +41,9 @@ export default function EquipmentPage() {
     const { t } = useLanguage();
     const { loading: authLoading, organization, membership } = useAuth();
 
-    const [machines, setMachines] = useState<MachineRow[]>([]);
-    const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
-    const [hiddenMachineIds, setHiddenMachineIds] = useState<Set<string>>(new Set());
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
+    const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
+    const [hiddenMachineIds, setHiddenMachineIds] = useState < Set < string >> (new Set());
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [showHidden, setShowHidden] = useState(false);
