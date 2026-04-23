@@ -12,7 +12,7 @@ import QuickExportPanel from "@/components/dashboard/QuickExportPanel";
 import UrgentIssuesPanel, { type UrgentIssue } from "@/components/dashboard/UrgentIssuesPanel";
 import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface DashboardKpis {
     machineCount: number;
