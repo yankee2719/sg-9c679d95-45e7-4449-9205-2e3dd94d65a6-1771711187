@@ -6,7 +6,7 @@ import {
 } from "@/lib/apiAuth";
 import { getAccessibleMachineIds } from "@/lib/server/customerVisibility";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface DashboardKpis {
     machineCount: number;
