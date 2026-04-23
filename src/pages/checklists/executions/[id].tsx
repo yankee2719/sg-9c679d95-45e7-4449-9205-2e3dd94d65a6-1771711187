@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Camera, Loader2, Save } from "lucide-react";
@@ -114,11 +115,11 @@ export default function ExecuteChecklistPage() {
     const [loading, setLoading] = useState(true);
     const [savingDraft, setSavingDraft] = useState(false);
     const [savingComplete, setSavingComplete] = useState(false);
-    const [checklist, setChecklist] = useState<ChecklistRow | null>(null);
-    const [items, setItems] = useState<ChecklistItemRow[]>([]);
-    const [results, setResults] = useState<ResultDraft[]>([]);
-    const [machine, setMachine] = useState<MachineLite | null>(null);
-    const [workOrder, setWorkOrder] = useState<WorkOrderLite | null>(null);
+    const [checklist, setChecklist] = useState < ChecklistRow | null > (null);
+    const [items, setItems] = useState < ChecklistItemRow[] > ([]);
+    const [results, setResults] = useState < ResultDraft[] > ([]);
+    const [machine, setMachine] = useState < MachineLite | null > (null);
+    const [workOrder, setWorkOrder] = useState < WorkOrderLite | null > (null);
     const [headerNotes, setHeaderNotes] = useState("");
 
     const userRole = normalizeRole(membership?.role ?? null);
@@ -226,7 +227,7 @@ export default function ExecuteChecklistPage() {
 
         if (mode === "draft") setSavingDraft(true); else setSavingComplete(true);
         try {
-            const { error } = await supabase.from("checklist_executions").insert(payload);
+            const { error } = await supabase.from("checklist_executions").insert(payload as any);
             if (error) throw error;
             toast({ title: mode === "draft" ? "Bozza salvata" : "Checklist completata", description: mode === "draft" ? "L'esecuzione è stata salvata come bozza." : "L'esecuzione è stata completata correttamente." });
             if (mode === "complete") {
