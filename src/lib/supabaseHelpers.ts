@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface UserContext {
     userId: string;
     orgId: string | null;
-    orgType: "manufacturer" | "customer" | null;
+    orgType: "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
     role: string;
     displayName: string;
     email: string;
@@ -18,7 +18,7 @@ export interface ProfileData {
     email: string;
 }
 
-type OrgType = "manufacturer" | "customer";
+type OrgType = "manufacturer" | "customer" | "enterprise";
 
 type MembershipRow = {
     organization_id: string;
@@ -109,7 +109,7 @@ async function loadProfileAndMemberships(userId: string) {
         orgIds.push(defaultOrgId);
     }
 
-    const orgMap = new Map<string, OrgRow>();
+    const orgMap = new Map < string, OrgRow> ();
 
     if (orgIds.length > 0) {
         const { data: orgRows, error: orgError } = await supabase
