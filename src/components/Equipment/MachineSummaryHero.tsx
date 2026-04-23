@@ -11,7 +11,7 @@ import {
     Wrench,
 } from "lucide-react";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface MachineSummaryHeroProps {
     name: string | null;
@@ -153,6 +153,11 @@ export default function MachineSummaryHero({
                                 <Factory className="h-3 w-3" />
                                 {t("org.manufacturer") || "Manufacturer"}
                             </Badge>
+                        ) : orgType === "enterprise" ? (
+                            <Badge variant="outline" className="gap-1">
+                                <Building2 className="h-3 w-3" />
+                                {t("org.enterprise") || "Enterprise"}
+                            </Badge>
                         ) : (
                             <Badge variant="outline" className="gap-1">
                                 <Building2 className="h-3 w-3" />
@@ -219,3 +224,4 @@ export default function MachineSummaryHero({
         </div>
     );
 }
+
