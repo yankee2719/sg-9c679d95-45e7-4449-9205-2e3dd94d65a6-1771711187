@@ -26,7 +26,7 @@ export interface EquipmentSnapshot {
         canEdit: boolean;
         canDelete: boolean;
         userRole: string;
-        orgType: "manufacturer" | "customer";
+        orgType: "manufacturer" | "customer" | "enterprise" | "enterprise";
     };
     generatedAt: string;
 }
