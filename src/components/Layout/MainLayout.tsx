@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 
 type UserRole = "admin" | "supervisor" | "technician" | string;
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -44,7 +44,7 @@ interface NavItem {
     labelKey: string;
     icon: React.ComponentType<{ className?: string }>;
     roles?: string[];
-    orgTypes?: Array<"manufacturer" | "customer">;
+    orgTypes?: Array<"manufacturer" | "customer" | "enterprise" | "enterprise">;
 }
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -86,7 +86,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [notificationCount, setNotificationCount] = useState(0);
-    const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+    const [orgLogoUrl, setOrgLogoUrl] = useState < string | null > (null);
 
     const profileName =
         profile?.display_name?.trim() ||
@@ -221,7 +221,7 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
         { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, roles: ["admin", "supervisor"] },
         { href: "/compliance", labelKey: "nav.compliance", icon: ShieldCheck },
         { href: "/documents", labelKey: "nav.documents", icon: FileText },
-        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer"] },
+        { href: "/plants", labelKey: "nav.plants", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["customer", "enterprise"] },
         { href: "/users", labelKey: "nav.users", icon: Users, roles: ["admin", "supervisor"] },
         { href: "/customers", labelKey: "nav.customers", icon: Building2, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
         { href: "/assignments", labelKey: "nav.assignments", icon: Layers3, roles: ["admin", "supervisor"], orgTypes: ["manufacturer"] },
@@ -256,12 +256,14 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
     const getOrgTypeLabel = () => {
         if (orgType === "manufacturer") return t("org.manufacturer");
         if (orgType === "customer") return t("org.customer");
+        if (orgType === "enterprise") return t("org.enterprise");
         return t("org.platform");
     };
 
     const getHeaderContextLabel = () => {
         if (orgType === "manufacturer") return t("org.manufacturer");
         if (orgType === "customer") return t("org.customer");
+        if (orgType === "enterprise") return t("org.enterprise");
         return t("org.context");
     };
 
@@ -451,4 +453,5 @@ export function MainLayout({ children, userRole = "technician" }: MainLayoutProp
 }
 
 export default MainLayout;
+
 
