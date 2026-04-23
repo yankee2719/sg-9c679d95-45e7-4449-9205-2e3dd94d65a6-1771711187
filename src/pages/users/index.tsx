@@ -162,8 +162,8 @@ export default function UsersIndexPage() {
     const L = I18N[language] || I18N.en;
 
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState<UserListRow[]>([]);
-    const [error, setError] = useState<string | null>(null);
+    const [rows, setRows] = useState < UserListRow[] > ([]);
+    const [error, setError] = useState < string | null > (null);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
@@ -198,7 +198,7 @@ export default function UsersIndexPage() {
             setError(null);
 
             try {
-                const response = await apiFetch<{ users: UserListRow[] }>("/api/users/list");
+                const response = await apiFetch < { users: UserListRow[] } > ("/api/users/list");
                 if (!active) return;
                 setRows(response.users ?? []);
             } catch (err: any) {
@@ -299,14 +299,14 @@ export default function UsersIndexPage() {
                             className="rounded-2xl"
                             onClick={() =>
                                 downloadCsv(
-                                    "machina-users.csv",
                                     filteredRows.map((row) => ({
                                         name: displayName(row),
                                         email: row.email,
                                         role: row.role || "",
                                         status: row.is_active ? L.active : L.inactive,
                                         created_at: formatDate(row.created_at, language),
-                                    }))
+                                    })),
+                                    "machina-users.csv"
                                 )
                             }
                         >
