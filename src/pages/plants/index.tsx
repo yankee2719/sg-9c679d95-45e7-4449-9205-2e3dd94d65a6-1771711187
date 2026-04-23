@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/feedback/EmptyState";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 function KpiCard({ icon, title, value }: { icon: ReactNode; title: string; value: number }) {
     return (
@@ -37,9 +37,9 @@ export default function PlantsIndexPage() {
     };
 
     const [loading, setLoading] = useState(true);
-    const [plants, setPlants] = useState<PlantRow[]>([]);
-    const [lines, setLines] = useState<LineRow[]>([]);
-    const [machines, setMachines] = useState<MachineRow[]>([]);
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
+    const [lines, setLines] = useState < LineRow[] > ([]);
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
     const [search, setSearch] = useState("");
 
     const orgType = (organization?.type as OrgType | undefined) ?? null;
@@ -87,7 +87,7 @@ export default function PlantsIndexPage() {
     }, [plants, search]);
 
     const lineCountByPlant = useMemo(() => {
-        const map = new Map<string, number>();
+        const map = new Map < string, number> ();
         for (const line of lines) {
             if (!line.plant_id) continue;
             map.set(line.plant_id, (map.get(line.plant_id) ?? 0) + 1);
@@ -96,7 +96,7 @@ export default function PlantsIndexPage() {
     }, [lines]);
 
     const machineCountByPlant = useMemo(() => {
-        const map = new Map<string, number>();
+        const map = new Map < string, number> ();
         for (const machine of machines) {
             if (!machine.plant_id) continue;
             map.set(machine.plant_id, (map.get(machine.plant_id) ?? 0) + 1);
