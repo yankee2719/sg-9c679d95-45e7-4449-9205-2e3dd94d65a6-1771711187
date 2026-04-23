@@ -46,20 +46,20 @@ export interface AuthState {
     refresh: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthState | undefined>(undefined);
+const AuthContext = createContext < AuthState | undefined > (undefined);
 
 type ProfileRow = AuthState["profile"];
 type OrganizationRow = AuthState["organization"];
 type MembershipRow = AuthState["membership"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [session, setSession] = useState<Session | null>(null);
+    const [user, setUser] = useState < User | null > (null);
+    const [session, setSession] = useState < Session | null > (null);
     const [loading, setLoading] = useState(true);
-    const [profile, setProfile] = useState<ProfileRow>(null);
-    const [organization, setOrganization] = useState<OrganizationRow>(null);
-    const [membership, setMembership] = useState<MembershipRow>(null);
-    const [memberships, setMemberships] = useState<MembershipWithOrganization[]>([]);
+    const [profile, setProfile] = useState < ProfileRow > (null);
+    const [organization, setOrganization] = useState < OrganizationRow > (null);
+    const [membership, setMembership] = useState < MembershipRow > (null);
+    const [memberships, setMemberships] = useState < MembershipWithOrganization[] > ([]);
     const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
     const loadRequestIdRef = useRef(0);
 
@@ -245,4 +245,3 @@ export function useAuth(): AuthState {
     }
     return context;
 }
-
