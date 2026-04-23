@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface QuickAction {
     title: string;
@@ -50,10 +50,12 @@ export default function QuickActionsPanel({
         );
     }
 
-    if (orgType === "customer" && canManage) {
+    if ((orgType === "customer" || orgType === "enterprise") && canManage) {
         actions.push({
             title: "Nuova macchina",
-            description: "Registra una macchina del cliente finale.",
+            description: orgType === "enterprise"
+                ? "Registra una macchina del tuo stabilimento."
+                : "Registra una macchina del cliente finale.",
             href: "/equipment/new",
             icon: Factory,
         });
@@ -69,7 +71,7 @@ export default function QuickActionsPanel({
             },
             {
                 title: "Documenti",
-                description: "Apri l’archivio documentale.",
+                description: "Apri lâ€™archivio documentale.",
                 href: "/documents",
                 icon: FileText,
             },
