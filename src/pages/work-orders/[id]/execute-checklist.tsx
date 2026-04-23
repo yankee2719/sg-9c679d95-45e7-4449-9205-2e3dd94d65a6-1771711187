@@ -67,10 +67,10 @@ export default function ExecuteChecklistInWorkOrderPage() {
     const [saving, setSaving] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
 
-    const [workOrder, setWorkOrder] = useState<{ id: string; title: string; machine_id: string | null } | null>(null);
-    const [assignments, setAssignments] = useState<WorkOrderChecklistAssignment[]>([]);
-    const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("none");
-    const [values, setValues] = useState<Record<string, ItemValue>>({});
+    const [workOrder, setWorkOrder] = useState < { id: string; title: string; machine_id: string | null } | null > (null);
+    const [assignments, setAssignments] = useState < WorkOrderChecklistAssignment[] > ([]);
+    const [selectedAssignmentId, setSelectedAssignmentId] = useState < string > ("none");
+    const [values, setValues] = useState < Record < string, ItemValue>> ({});
     const [globalNotes, setGlobalNotes] = useState("");
 
     useEffect(() => {
@@ -150,7 +150,7 @@ export default function ExecuteChecklistInWorkOrderPage() {
     const setItemValue = (itemId: string, patch: Partial<ItemValue>) => {
         setValues((current) => ({
             ...current,
-            [itemId]: { ...(current[itemId] ?? {}), ...patch },
+            [itemId]: { ...(current[itemId] ?? {}), ...patch } as ChecklistDraftItemValue,
         }));
     };
 
