@@ -99,13 +99,13 @@ export default function WorkOrdersNewPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [machines, setMachines] = useState<MachineRow[]>([]);
-    const [users, setUsers] = useState<UserRow[]>([]);
-    const [checklists, setChecklists] = useState<ChecklistRow[]>([]);
-    const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
-    const [customers, setCustomers] = useState<CustomerRow[]>([]);
-    const [plants, setPlants] = useState<PlantRow[]>([]);
-    const [form, setForm] = useState<FormState>({
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
+    const [users, setUsers] = useState < UserRow[] > ([]);
+    const [checklists, setChecklists] = useState < ChecklistRow[] > ([]);
+    const [assignments, setAssignments] = useState < AssignmentRow[] > ([]);
+    const [customers, setCustomers] = useState < CustomerRow[] > ([]);
+    const [plants, setPlants] = useState < PlantRow[] > ([]);
+    const [form, setForm] = useState < FormState > ({
         machine_id: "",
         plant_id: "",
         maintenance_plan_id: "",
@@ -125,7 +125,7 @@ export default function WorkOrdersNewPage() {
 
     const customerMap = useMemo(() => new Map(customers.map((customer) => [customer.id, customer.name ?? "Cliente"])), [customers]);
     const activeAssignmentByMachine = useMemo(() => {
-        const map = new Map<string, AssignmentRow>();
+        const map = new Map < string, AssignmentRow> ();
         const sorted = [...assignments].sort((a, b) => {
             const aTime = a.assigned_at ? new Date(a.assigned_at).getTime() : 0;
             const bTime = b.assigned_at ? new Date(b.assigned_at).getTime() : 0;
@@ -137,7 +137,7 @@ export default function WorkOrdersNewPage() {
         return map;
     }, [assignments]);
     const customerPrimaryPlantByOrg = useMemo(() => {
-        const map = new Map<string, PlantRow>();
+        const map = new Map < string, PlantRow> ();
         for (const plant of plants) {
             const orgId = plant.organization_id ?? null;
             if (!orgId) continue;
@@ -376,7 +376,7 @@ export default function WorkOrdersNewPage() {
                 created_by: user.id,
             };
 
-            const { data, error } = await supabase.from("work_orders").insert(payload).select("id").single();
+            const { data, error } = await supabase.from("work_orders").insert(payload as any).select("id").single();
             if (error) throw error;
 
             toast({ title: "Ordine creato", description: "L'ordine di lavoro è stato registrato correttamente." });
