@@ -166,11 +166,11 @@ export default function MaintenancePlanDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
-    const [plan, setPlan] = useState<MaintenancePlanDetail | null>(null);
-    const [plant, setPlant] = useState<PlantLite | null>(null);
-    const [assignee, setAssignee] = useState<UserLite | null>(null);
-    const [orders, setOrders] = useState<WorkOrderRow[]>([]);
-    const [orderUsers, setOrderUsers] = useState<Map<string, UserLite>>(new Map());
+    const [plan, setPlan] = useState < MaintenancePlanDetail | null > (null);
+    const [plant, setPlant] = useState < PlantLite | null > (null);
+    const [assignee, setAssignee] = useState < UserLite | null > (null);
+    const [orders, setOrders] = useState < WorkOrderRow[] > ([]);
+    const [orderUsers, setOrderUsers] = useState < Map < string, UserLite>> (new Map());
 
     const machine = useMemo(() => unwrapMachine(plan?.machine ?? null), [plan?.machine]);
 
@@ -239,7 +239,7 @@ export default function MaintenancePlanDetailPage() {
                     ].filter(Boolean))
                 ) as string[];
 
-                let userMap = new Map<string, UserLite>();
+                let userMap = new Map < string, UserLite> ();
                 if (userIds.length > 0) {
                     const { data: profileRows, error: profileError } = await supabase
                         .from("profiles")
@@ -301,7 +301,7 @@ export default function MaintenancePlanDetailPage() {
 
             const { data, error } = await supabase
                 .from("work_orders")
-                .insert(payload)
+                .insert(payload as any)
                 .select("id")
                 .single();
 
