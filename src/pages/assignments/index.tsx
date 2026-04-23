@@ -30,7 +30,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
-type OrgType = "manufacturer" | "customer" | "enterprise" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 type AssignmentRow = AssignmentListItem;
 type MachineRow = AssignmentOptions["machines"][number];
 type CustomerRow = AssignmentOptions["customers"][number];
@@ -116,12 +116,12 @@ export default function AssignmentsIndexPage() {
     const locale = getLocale(language || "it");
 
     const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState<AssignmentRow[]>([]);
+    const [rows, setRows] = useState < AssignmentRow[] > ([]);
     const [search, setSearch] = useState("");
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [allMachines, setAllMachines] = useState<MachineRow[]>([]);
-    const [allCustomers, setAllCustomers] = useState<CustomerRow[]>([]);
-    const [allCustomerPlants, setAllCustomerPlants] = useState<CustomerPlantRow[]>([]);
+    const [allMachines, setAllMachines] = useState < MachineRow[] > ([]);
+    const [allCustomers, setAllCustomers] = useState < CustomerRow[] > ([]);
+    const [allCustomerPlants, setAllCustomerPlants] = useState < CustomerPlantRow[] > ([]);
     const [selectedMachineId, setSelectedMachineId] = useState("");
     const [selectedCustomerId, setSelectedCustomerId] = useState("");
     const [selectedCustomerPlantId, setSelectedCustomerPlantId] = useState("");
