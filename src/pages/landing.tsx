@@ -153,7 +153,7 @@ const faqs = [
 export default function LandingPage() {
     const router = useRouter();
     const [isYearly, setIsYearly] = useState(true);
-    const [openFaq, setOpenFaq] = useState<number | null>(0);
+    const [openFaq, setOpenFaq] = useState < number | null > (0);
 
     const heroPricing = useMemo(() => {
         const professional = pricingPlans.find((plan) => plan.id === "professional")!;
