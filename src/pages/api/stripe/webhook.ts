@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { buffer } from "micro";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2024-12-18.acacia",
+    apiVersion: "2025-02-24.acacia",
 });
 
 const supabaseAdmin = createClient(
@@ -115,7 +115,7 @@ export default async function handler(
                         max_users: limits.maxUsers,
                         max_equipment: limits.maxEquipment,
                         current_period_end: new Date(
-                            subscription.current_period_end * 1000
+                            (subscription as any).current_period_end * 1000
                         ).toISOString(),
                     })
                     .eq("id", org.id);
@@ -151,14 +151,12 @@ export default async function handler(
             case "invoice.payment_failed": {
                 const invoice =
                     event.data.object as Stripe.Invoice;
-                if (!invoice.subscription) break;
+                const subId = (invoice as any).subscription as string | undefined;
+                if (!subId) break;
                 const { data: org } = await supabaseAdmin
                     .from("organizations")
                     .select("id")
-                    .eq(
-                        "stripe_subscription_id",
-                        invoice.subscription as string
-                    )
+                    .eq("stripe_subscription_id", subId)
                     .single();
                 if (!org) break;
 
