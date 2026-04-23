@@ -6,7 +6,7 @@ type DocumentUploadProps = {
     readOnly?: boolean;
     machineOwnerOrgId?: string | null;
     currentOrgId?: string | null;
-    currentOrgType?: "manufacturer" | "customer" | null;
+    currentOrgType?: "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
     currentUserRole?: string | null;
 };
 
@@ -36,4 +36,5 @@ export function DocumentUpload({
 }
 
 export default DocumentUpload;
+
 
