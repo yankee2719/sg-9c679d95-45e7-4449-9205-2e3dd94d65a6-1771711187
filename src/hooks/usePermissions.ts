@@ -16,7 +16,7 @@
 
 import { useMemo } from "react";
 
-export type OrgType = "manufacturer" | "customer" | null;
+export type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 export type UserRole = "admin" | "supervisor" | "technician";
 
 interface PermissionsInput {
@@ -100,6 +100,10 @@ function buildPermissions({ role, orgType }: PermissionsInput): Permissions {
     const r = (role || "technician") as UserRole;
     const isManufacturer = orgType === "manufacturer";
     const isCustomer = orgType === "customer";
+    const isEnterprise = orgType === "enterprise";
+    // End-user orgs (customer OR enterprise) manage their own operational
+    // context: plants, lines, maintenance.
+    const isEndUser = isCustomer || isEnterprise;
     const isAdmin = r === "admin";
     const isSupervisor = r === "supervisor";
     const isTechnician = r === "technician";
@@ -156,7 +160,7 @@ function buildPermissions({ role, orgType }: PermissionsInput): Permissions {
 
         // Admin
         canManageUsers: isAdmin,
-        canManagePlants: isCustomer && isAdmin,
+        canManagePlants: isEndUser && isAdmin,
         canManageCustomers: isManufacturer && isAdminOrSupervisor,
         canViewAnalytics: isAdminOrSupervisor,
 
