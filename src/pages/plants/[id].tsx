@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import EmptyState from "@/components/feedback/EmptyState";
 import { createProductionLine, getPlantDetail, type LineRow, type MachineRow, type PlantRow } from "@/services/plantService";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 function InfoCard({ title, value, icon }: { title: string; value: string | number; icon: ReactNode }) {
     return (
@@ -40,9 +40,9 @@ export default function PlantDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [savingLine, setSavingLine] = useState(false);
-    const [plant, setPlant] = useState<PlantRow | null>(null);
-    const [lines, setLines] = useState<LineRow[]>([]);
-    const [machines, setMachines] = useState<MachineRow[]>([]);
+    const [plant, setPlant] = useState < PlantRow | null > (null);
+    const [lines, setLines] = useState < LineRow[] > ([]);
+    const [machines, setMachines] = useState < MachineRow[] > ([]);
     const [lineName, setLineName] = useState("");
     const [lineCode, setLineCode] = useState("");
 
@@ -89,7 +89,7 @@ export default function PlantDetailPage() {
     }, [authLoading, orgType, resolvedId, router]);
 
     const lineMachineMap = useMemo(() => {
-        const map = new Map<string, number>();
+        const map = new Map < string, number> ();
         for (const machine of machines) {
             if (!machine.production_line_id) continue;
             map.set(machine.production_line_id, (map.get(machine.production_line_id) ?? 0) + 1);
