@@ -13,7 +13,7 @@ export default function SettingsProfilePage() {
     const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [profileId, setProfileId] = useState<string | null>(null);
+    const [profileId, setProfileId] = useState < string | null > (null);
     const [email, setEmail] = useState("");
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
@@ -52,7 +52,7 @@ export default function SettingsProfilePage() {
             updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase.from("profiles").update(updates).eq("id", profileId);
+        const { error } = await supabase.from("profiles").update(updates as any).eq("id", profileId);
         setSaving(false);
 
         if (error) {
