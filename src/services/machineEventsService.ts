@@ -132,7 +132,7 @@ export const machineEventsService = {
             console.error('Error fetching timeline:', error);
             return [];
         }
-        return data || [];
+        return (data || []) as unknown as MachineEvent[];
     },
 
     // ─── ORGANIZATION EVENTS ─────────────────────────────────────────────
@@ -154,7 +154,7 @@ export const machineEventsService = {
 
         const { data, error } = await query;
         if (error) return [];
-        return data || [];
+        return (data || []) as unknown as MachineEvent[];
     },
 
     // ─── VERIFY CHAIN ────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ export const machineEventsService = {
             .single();
 
         if (error) return null;
-        return data;
+        return data as unknown as MachineEvent;
     },
 
     // ─── STATS ───────────────────────────────────────────────────────────
