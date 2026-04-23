@@ -27,28 +27,8 @@ const themeBootstrapScript = `
   } catch (e) {}
 })();`;
 
-function AppShell({ Component, pageProps }: AppProps) {
+export default function App({ Component, pageProps }: AppProps) {
     const router = useRouter();
-
-    return (
-        <MfaGuard
-            currentPath={router.pathname}
-            excludePaths={[
-                "/login",
-                "/register",
-                "/forgot-password",
-                "/reset-password",
-                "/offline",
-                "/settings/security",
-            ]}
-        >
-            <OfflineStatusBar />
-            <Component {...pageProps} />
-        </MfaGuard>
-    );
-}
-
-export default function App(props: AppProps) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -68,8 +48,21 @@ export default function App(props: AppProps) {
                 <LanguageProvider>
                     <AuthProvider>
                         <PWAProvider>
-                            {mounted ? <AppShell {...props} /> : null}
-                            <Toaster />
+                            <MfaGuard
+                                currentPath={router.pathname}
+                                excludePaths={[
+                                    "/login",
+                                    "/register",
+                                    "/forgot-password",
+                                    "/reset-password",
+                                    "/offline",
+                                    "/settings/security",
+                                ]}
+                            >
+                                {mounted ? <OfflineStatusBar /> : null}
+                                <Component {...pageProps} />
+                            </MfaGuard>
+                            {mounted ? <Toaster /> : null}
                         </PWAProvider>
                     </AuthProvider>
                 </LanguageProvider>
