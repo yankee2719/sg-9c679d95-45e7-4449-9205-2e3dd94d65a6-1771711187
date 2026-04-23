@@ -89,7 +89,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             });
         }
 
-        if (req.user.organizationType === "customer") {
+        if (req.user.organizationType === "customer" || req.user.organizationType === "enterprise") {
+            // End-user orgs manage the operational docs on their own machines.
+            // Enterprise owns its machines outright; customer manages machines
+            // assigned by a manufacturer.
             const canManage = visibility.isOwner && (isAdminLike || normalizedRole === "technician");
             return res.status(200).json({
                 permissions: {
@@ -101,7 +104,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     canSign: isAdminLike && visibility.isOwner,
                     reason: canManage
                         ? null
-                        : "Documento operativo cliente gestibile solo dall'organizzazione proprietaria.",
+                        : "Documento operativo gestibile solo dall'organizzazione proprietaria.",
                 },
             });
         }
