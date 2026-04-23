@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
-type OrgType = "manufacturer" | "customer" | null;
+type OrgType = "manufacturer" | "customer" | "enterprise" | "enterprise" | null;
 
 interface PlantEditorPageProps {
     mode: "create" | "edit";
@@ -122,7 +122,8 @@ export default function PlantEditorPage({ mode, plantId = null }: PlantEditorPag
         const load = async () => {
             if (authLoading) return;
 
-            if (mode !== "edit" || !plantId || orgType !== "customer" || !canEdit) {
+            const isEndUser = orgType === "customer" || orgType === "enterprise";
+            if (mode !== "edit" || !plantId || !isEndUser || !canEdit) {
                 if (active) setLoading(false);
                 return;
             }
@@ -217,7 +218,7 @@ export default function PlantEditorPage({ mode, plantId = null }: PlantEditorPag
         );
     }
 
-    if (orgType !== "customer" || !canEdit) {
+    if ((orgType !== "customer" && orgType !== "enterprise") || !canEdit) {
         return (
             <OrgContextGuard>
                 <MainLayout userRole={userRole}>
@@ -297,3 +298,4 @@ export default function PlantEditorPage({ mode, plantId = null }: PlantEditorPag
         </OrgContextGuard>
     );
 }
+
