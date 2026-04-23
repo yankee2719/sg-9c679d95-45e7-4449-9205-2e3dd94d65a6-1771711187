@@ -130,12 +130,12 @@ const MANDATORY_CATEGORIES: Array<{
     it: string;
     en: string;
 }> = [
-    { code: "technical_manual", it: "Manuale tecnico", en: "Technical manual" },
-    { code: "risk_assessment", it: "Valutazione dei rischi", en: "Risk assessment" },
-    { code: "ce_declaration", it: "Dichiarazione CE", en: "CE declaration" },
-    { code: "electrical_schema", it: "Schema elettrico", en: "Electrical schema" },
-    { code: "maintenance_manual", it: "Manuale di manutenzione", en: "Maintenance manual" },
-];
+        { code: "technical_manual", it: "Manuale tecnico", en: "Technical manual" },
+        { code: "risk_assessment", it: "Valutazione dei rischi", en: "Risk assessment" },
+        { code: "ce_declaration", it: "Dichiarazione CE", en: "CE declaration" },
+        { code: "electrical_schema", it: "Schema elettrico", en: "Electrical schema" },
+        { code: "maintenance_manual", it: "Manuale di manutenzione", en: "Maintenance manual" },
+    ];
 
 function safeExt(name: string) {
     const ext = name.split(".").pop();
@@ -167,11 +167,11 @@ async function arrayBufferFromBuffer(buffer: any): Promise<ArrayBuffer> {
     }
 
     if (ArrayBuffer.isView(buffer)) {
-        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
     }
 
     if (buffer?.buffer && typeof buffer.byteOffset === "number" && typeof buffer.byteLength === "number") {
-        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
     }
 
     throw new Error("Unsupported binary payload");
@@ -709,7 +709,7 @@ async function updateDocumentMetadataCompat(
 
     const { data, error } = await supabase
         .from("documents")
-        .update(payload)
+        .update(payload as any)
         .eq("id", params.documentId)
         .select(`
             id,
@@ -780,7 +780,7 @@ async function searchDocumentsCompat(params: {
         query = query.or(`title.ilike.%${params.query}%,description.ilike.%${params.query}%`);
     }
     if (params.category) {
-        query = query.eq("category", params.category);
+        query = query.eq("category", params.category as any);
     }
     if (params.equipmentId) {
         query = query.eq("machine_id", params.equipmentId);
@@ -802,9 +802,9 @@ async function searchDocumentsCompat(params: {
         ...row,
         compliance_tags: row.regulatory_reference
             ? String(row.regulatory_reference)
-                  .split(",")
-                  .map((t) => t.trim())
-                  .filter(Boolean)
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
             : [],
     }));
 }
@@ -839,7 +839,7 @@ async function createDocumentCompat(
     });
     if (uploadError) throw uploadError;
 
-    const { data: doc, error: docError } = await supabase
+    const { data: doc, error: docError } = await (supabase as any)
         .from("documents")
         .insert({
             id: documentId,
