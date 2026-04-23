@@ -101,10 +101,10 @@ export async function addDocumentVersion(
         documentId,
         file,
         changeSummary: changeDescription ?? "Nuova versione",
-    });
+    } as any);
 
     onProgress?.({ stage: "complete", progress: 100, message: "Versione aggiunta!" });
-    return uploaded.version.id;
+    return (uploaded as any).version?.id ?? (uploaded as any).id;
 }
 
 export async function downloadDocument(
