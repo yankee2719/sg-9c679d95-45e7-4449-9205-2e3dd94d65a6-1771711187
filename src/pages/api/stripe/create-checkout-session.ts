@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { withAuth, type AuthenticatedRequest, getServiceSupabase } from "@/lib/apiAuth";
 import { ADMIN_ONLY_ROLES } from "@/lib/roles";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-12-18.acacia" });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2025-02-24.acacia" });
 const PRICE_IDS: Record<string, Record<string, string>> = {
     starter: { monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY || "price_starter_monthly", yearly: process.env.STRIPE_PRICE_STARTER_YEARLY || "price_starter_yearly" },
     professional: { monthly: process.env.STRIPE_PRICE_PROFESSIONAL_MONTHLY || "price_professional_monthly", yearly: process.env.STRIPE_PRICE_PROFESSIONAL_YEARLY || "price_professional_yearly" },
@@ -50,4 +50,3 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 export default withAuth(ADMIN_ONLY_ROLES, handler);
-
