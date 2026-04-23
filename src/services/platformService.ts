@@ -59,7 +59,7 @@ function toHealthStatus(tenantStatus: string): OrganizationHealth["health_status
 }
 
 async function countRows(table: string, filter?: { column: string; value: string | boolean }): Promise<number> {
-    let query = supabase.from(table).select("*", { count: "exact", head: true });
+    let query: any = supabase.from(table as any).select("*", { count: "exact", head: true });
     if (filter) query = query.eq(filter.column, filter.value);
     const { count, error } = await query;
     if (error) return 0;
