@@ -107,7 +107,7 @@ export async function addTemplateItems(
         created_at: new Date().toISOString(),
     }));
 
-    const { error } = await supabase.from("checklist_template_items").insert(rows);
+    const { error } = await supabase.from("checklist_template_items").insert(rows as any);
     if (error) throw error;
 }
 
