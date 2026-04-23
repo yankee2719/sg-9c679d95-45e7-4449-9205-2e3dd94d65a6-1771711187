@@ -81,7 +81,7 @@ export const machineService = {
             console.error('Error fetching machines by plant:', error);
             return [];
         }
-        return data || [];
+        return (data || []) as Machine[];
     },
 
     async getMachinesByOrganization(organizationId: string): Promise<MachineWithRelations[]> {
@@ -149,7 +149,7 @@ export const machineService = {
             .single();
 
         if (error) return null;
-        return data;
+        return data as Machine;
     },
 
     // ─── CREATE ──────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ export const machineService = {
             console.error('Error creating machine:', error);
             return null;
         }
-        return data;
+        return data as Machine;
     },
 
     // ─── UPDATE ──────────────────────────────────────────────────────────
@@ -188,7 +188,7 @@ export const machineService = {
             console.error('Error updating machine:', error);
             return null;
         }
-        return data;
+        return data as Machine;
     },
 
     // ─── LIFECYCLE ───────────────────────────────────────────────────────
@@ -277,7 +277,7 @@ export const machineService = {
         const { data, error } = await q.limit(20);
 
         if (error) return [];
-        return data || [];
+        return (data || []) as Machine[];
     },
 
     // ─── STATISTICS ──────────────────────────────────────────────────────
