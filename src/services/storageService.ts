@@ -107,7 +107,7 @@ export class DocumentStorageService {
             buffer = file.buffer.slice(
                 file.byteOffset,
                 file.byteOffset + file.byteLength
-            );
+            ) as ArrayBuffer;
         } else {
             throw new Error('Unsupported file type for checksum calculation');
         }
