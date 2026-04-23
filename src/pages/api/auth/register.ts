@@ -16,6 +16,16 @@ import { getServiceSupabase } from "@/lib/apiAuth";
  *   3. Create organization_membership (role: admin)
  *   4. Update profile with default_organization_id
  */
+
+async function silentDelete(fn: () => Promise<any> | PromiseLike<any>) {
+    try {
+        await fn();
+    } catch (err) {
+        // Rollback failures are logged but do not block the error response.
+        console.error("Rollback step failed:", err);
+    }
+}
+
 export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse
@@ -122,7 +132,7 @@ export default async function handler(
 
         if (orgError) {
             console.error("Organization creation error:", orgError);
-            await supabaseAdmin.auth.admin.deleteUser(authUserId);
+            await silentDelete(() => supabaseAdmin.auth.admin.deleteUser(authUserId!));
             return res.status(500).json({ error: "Failed to create organization" });
         }
 
@@ -141,8 +151,10 @@ export default async function handler(
 
         if (membershipError) {
             console.error("Membership creation error:", membershipError);
-            await supabaseAdmin.from("organizations").delete().eq("id", organizationId);
-            await supabaseAdmin.auth.admin.deleteUser(authUserId);
+            await silentDelete(() =>
+                supabaseAdmin.from("organizations").delete().eq("id", organizationId!)
+            );
+            await silentDelete(() => supabaseAdmin.auth.admin.deleteUser(authUserId!));
             return res.status(500).json({ error: "Failed to assign membership" });
         }
 
@@ -176,19 +188,18 @@ export default async function handler(
 
         // Best-effort rollback
         if (organizationId) {
-            await supabaseAdmin
-                .from("organization_memberships")
-                .delete()
-                .eq("organization_id", organizationId)
-                .catch(() => { });
-            await supabaseAdmin
-                .from("organizations")
-                .delete()
-                .eq("id", organizationId)
-                .catch(() => { });
+            await silentDelete(() =>
+                supabaseAdmin
+                    .from("organization_memberships")
+                    .delete()
+                    .eq("organization_id", organizationId!)
+            );
+            await silentDelete(() =>
+                supabaseAdmin.from("organizations").delete().eq("id", organizationId!)
+            );
         }
         if (authUserId) {
-            await supabaseAdmin.auth.admin.deleteUser(authUserId).catch(() => { });
+            await silentDelete(() => supabaseAdmin.auth.admin.deleteUser(authUserId!));
         }
 
         return res.status(500).json({ error: "Internal server error" });
