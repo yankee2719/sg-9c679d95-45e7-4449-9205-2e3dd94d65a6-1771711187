@@ -24,18 +24,16 @@ export default withAuth(["owner", "admin", "supervisor"], async function handler
     }
 
     try {
-        let lookup = supabase
+        let lookup: any = supabase
             .from("manufacturers")
             .select("id, organization_id")
-            .eq("id", id)
-            .limit(1)
-            .maybeSingle();
+            .eq("id", id);
 
         if (!req.user.isPlatformAdmin || organizationId) {
             lookup = lookup.eq("organization_id", organizationId);
         }
 
-        const { data: existing, error: lookupError } = await lookup;
+        const { data: existing, error: lookupError } = await lookup.limit(1).maybeSingle();
         if (lookupError) {
             return res.status(500).json({ error: lookupError.message });
         }
