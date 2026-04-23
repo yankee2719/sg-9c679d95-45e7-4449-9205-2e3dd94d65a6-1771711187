@@ -180,7 +180,7 @@ export const maintenancePlanService = {
 
         const { data, error } = await query;
         if (error) return [];
-        return data || [];
+        return (data || []) as unknown as MaintenancePlan[];
     },
 
     async getPlanById(id: string): Promise<MaintenancePlan | null> {
@@ -191,7 +191,7 @@ export const maintenancePlanService = {
             .single();
 
         if (error) return null;
-        return data;
+        return data as unknown as MaintenancePlan;
     },
 
     async createPlan(params: CreatePlanParams): Promise<MaintenancePlan | null> {
@@ -205,19 +205,19 @@ export const maintenancePlanService = {
             console.error('Error creating maintenance plan:', error);
             return null;
         }
-        return data;
+        return data as unknown as MaintenancePlan;
     },
 
     async updatePlan(id: string, updates: Partial<MaintenancePlan>): Promise<MaintenancePlan | null> {
         const { data, error } = await supabase
             .from('maintenance_plans')
-            .update(updates)
+            .update(updates as any)
             .eq('id', id)
             .select()
             .single();
 
         if (error) return null;
-        return data;
+        return data as unknown as MaintenancePlan;
     },
 
     async deactivatePlan(id: string): Promise<boolean> {
@@ -240,7 +240,7 @@ export const maintenancePlanService = {
             .order('next_due_date');
 
         if (error) return [];
-        return data || [];
+        return (data || []) as unknown as MaintenancePlan[];
     },
 };
 
@@ -280,9 +280,9 @@ export const workOrderService = {
 
         if (filters?.status) {
             if (Array.isArray(filters.status)) {
-                query = query.in('status', filters.status);
+                query = query.in('status', filters.status as any);
             } else {
-                query = query.eq('status', filters.status);
+                query = query.eq('status', filters.status as any);
             }
         }
 
@@ -344,9 +344,9 @@ export const workOrderService = {
             .from('work_orders')
             .insert({
                 ...params,
-                status: 'draft' as WorkOrderStatus,
+                status: 'draft' as any,
                 priority: params.priority || 'medium',
-            })
+            } as any)
             .select()
             .single();
 
@@ -354,7 +354,7 @@ export const workOrderService = {
             console.error('Error creating work order:', error);
             return null;
         }
-        return data;
+        return data as unknown as WorkOrder;
     },
 
     async createFromPlan(planId: string, machineId: string): Promise<WorkOrder | null> {
@@ -389,7 +389,7 @@ export const workOrderService = {
         const { error } = await supabase
             .from('work_orders')
             .update({
-                status: 'scheduled' as WorkOrderStatus,
+                status: 'scheduled' as any,
                 scheduled_date: scheduledDate,
                 assigned_to: assignedTo || undefined,
             })
@@ -403,7 +403,7 @@ export const workOrderService = {
         const { error } = await supabase
             .from('work_orders')
             .update({
-                status: 'in_progress' as WorkOrderStatus,
+                status: 'in_progress' as any,
                 started_at: new Date().toISOString(),
             })
             .eq('id', id)
@@ -421,7 +421,7 @@ export const workOrderService = {
         const { error } = await supabase
             .from('work_orders')
             .update({
-                status: 'completed' as WorkOrderStatus,
+                status: 'completed' as any,
                 completed_at: new Date().toISOString(),
                 completed_by: user.id,
                 work_performed: params.work_performed,
@@ -444,7 +444,7 @@ export const workOrderService = {
         const { error } = await supabase
             .from('work_orders')
             .update({
-                status: 'cancelled' as WorkOrderStatus,
+                status: 'cancelled' as any,
                 notes: reason || null,
             })
             .eq('id', id)
