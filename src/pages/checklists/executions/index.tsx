@@ -26,10 +26,10 @@ export default function ChecklistExecutionsIndexPage() {
     const text = getChecklistTexts(language);
 
     const [role, setRole] = useState("technician");
-    const [orgType, setOrgType] = useState<"manufacturer" | "customer" | null>(null);
+    const [orgType, setOrgType] = useState < "manufacturer" | "customer" | "enterprise" | "enterprise" | null > (null);
     const [loading, setLoading] = useState(true);
-    const [executions, setExecutions] = useState<ChecklistExecutionListItem[]>([]);
-    const [plants, setPlants] = useState<Plant[]>([]);
+    const [executions, setExecutions] = useState < ChecklistExecutionListItem[] > ([]);
+    const [plants, setPlants] = useState < Plant[] > ([]);
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [plantFilter, setPlantFilter] = useState("all");
@@ -49,7 +49,7 @@ export default function ChecklistExecutionsIndexPage() {
                 const data = await checklistExecutionApi.list();
                 setExecutions(data);
 
-                const plantMap = new Map<string, string | null>();
+                const plantMap = new Map < string, string | null > ();
                 for (const row of data) {
                     if (row.plant_id) {
                         plantMap.set(row.plant_id, row.plant_name ?? row.plant_id);
