@@ -192,7 +192,7 @@ export class ComplianceService {
     }
 
     async recalculateCompliance(equipmentId: string): Promise<void> {
-        const { error } = await this.supabase.rpc('update_equipment_compliance_status', {
+        const { error } = await (this.supabase.rpc as any)('update_equipment_compliance_status', {
             p_equipment_id: equipmentId,
         });
 
@@ -309,7 +309,7 @@ export class ComplianceService {
         const statusAfter = await this.getEquipmentComplianceStatus(equipmentId);
 
         // Create check record
-        const { data: check, error } = await this.supabase
+        const { data: check, error } = await (this.supabase as any)
             .from('compliance_checks')
             .insert({
                 equipment_id: equipmentId,
@@ -337,7 +337,7 @@ export class ComplianceService {
         equipmentId: string,
         limit: number = 50
     ): Promise<ComplianceCheck[]> {
-        const { data, error } = await this.supabase
+        const { data, error } = await (this.supabase as any)
             .from('compliance_checks')
             .select('*')
             .eq('equipment_id', equipmentId)
@@ -345,7 +345,7 @@ export class ComplianceService {
             .limit(limit);
 
         if (error) throw error;
-        return data || [];
+        return (data || []) as ComplianceCheck[];
     }
 
     // ==========================================================================
@@ -372,7 +372,7 @@ export class ComplianceService {
         const accessToken = this.generateAccessToken();
         const accessTokenHash = await this.hashToken(accessToken);
 
-        const { data: grant, error } = await this.supabase
+        const { data: grant, error } = await (this.supabase as any)
             .from('inspector_access_grants')
             .insert({
                 ...data,
@@ -387,9 +387,9 @@ export class ComplianceService {
 
         // Return grant with cleartext token (only time it's visible)
         return {
-            ...grant,
+            ...(grant as Record<string, any>),
             access_token: accessToken,
-        };
+        } as InspectorAccessGrant;
     }
 
     async revokeInspectorAccess(
@@ -397,7 +397,7 @@ export class ComplianceService {
         revokedBy: string,
         reason?: string
     ): Promise<void> {
-        const { error } = await this.supabase
+        const { error } = await (this.supabase as any)
             .from('inspector_access_grants')
             .update({
                 is_active: false,
