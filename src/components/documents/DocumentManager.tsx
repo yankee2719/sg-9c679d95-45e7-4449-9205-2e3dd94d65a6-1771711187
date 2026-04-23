@@ -17,7 +17,7 @@ import { Download, Loader2, Trash2, Upload } from "lucide-react";
 import { documentWorkspaceApi, type WorkspaceDocument, type WorkspaceDocumentVersion } from "@/lib/documentWorkspaceApi";
 import { hasMinimumRole, normalizeRole } from "@/lib/roles";
 
-type OrgType = "manufacturer" | "customer";
+type OrgType = "manufacturer" | "customer" | "enterprise";
 type DocumentCategory =
     | "technical_manual"
     | "risk_assessment"
@@ -77,12 +77,12 @@ export default function DocumentManager({
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
+    const [documents, setDocuments] = useState < WorkspaceDocument[] > ([]);
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [category, setCategory] = useState<DocumentCategory>("technical_manual");
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [category, setCategory] = useState < DocumentCategory > ("technical_manual");
+    const [selectedFile, setSelectedFile] = useState < File | null > (null);
 
     const ctxOrgId = currentOrgId ?? organization?.id ?? null;
     const ctxOrgType = (currentOrgType ?? organization?.type ?? null) as OrgType | null;
@@ -247,3 +247,4 @@ export default function DocumentManager({
         </div>
     );
 }
+
