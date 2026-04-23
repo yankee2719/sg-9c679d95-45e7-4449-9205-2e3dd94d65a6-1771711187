@@ -113,7 +113,7 @@ async function listCustomerMachines(
         assignedMachines = (assignedRes.data ?? []) as EquipmentCatalogMachineRow[];
     }
 
-    const merged = new Map<string, EquipmentCatalogMachineRow>();
+    const merged = new Map < string, EquipmentCatalogMachineRow> ();
     for (const row of (ownRes.data ?? []) as EquipmentCatalogMachineRow[]) merged.set(row.id, row);
     for (const row of assignedMachines) merged.set(row.id, row);
 
@@ -125,6 +125,36 @@ async function listCustomerMachines(
         }),
         hiddenMachineIds: (hiddenRes.data ?? []).map((row: any) => row.machine_id).filter(Boolean),
         assignmentCount: (assignmentsRes.data ?? []).length,
+    };
+}
+
+/**
+ * Enterprise: "utilizzatore finale" that owns its own machines outright
+ * (does NOT receive assignments from a manufacturer). Organises its machines
+ * by plant / production line, same as a customer organises its operational
+ * context, but the machines themselves are owned by the enterprise org.
+ * No machine_assignments, no customer_hidden_machines.
+ */
+async function listEnterpriseMachines(
+    supabase: SupabaseClient,
+    organizationId: string
+): Promise<EquipmentCatalogPayload> {
+    const { data, error } = await supabase
+        .from("machines")
+        .select(
+            "id, name, internal_code, serial_number, model, brand, lifecycle_state, organization_id, plant_id, production_line_id, is_archived, is_deleted, created_at"
+        )
+        .eq("organization_id", organizationId)
+        .eq("is_archived", false)
+        .or("is_deleted.is.null,is_deleted.eq.false")
+        .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return {
+        machines: (data ?? []) as EquipmentCatalogMachineRow[],
+        hiddenMachineIds: [],
+        assignmentCount: 0,
     };
 }
 
@@ -142,6 +172,10 @@ export async function listEquipmentCatalog(
 
     if (user.organizationType === "customer") {
         return listCustomerMachines(supabase, user.organizationId);
+    }
+
+    if (user.organizationType === "enterprise") {
+        return listEnterpriseMachines(supabase, user.organizationId);
     }
 
     throw new EquipmentCatalogError("Unsupported organization type", 400);
