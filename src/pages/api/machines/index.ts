@@ -7,6 +7,13 @@ import {
 } from "@/lib/apiAuth";
 import { hasMinimumRole } from "@/lib/roles";
 
+// End-user orgs (customer, enterprise) organise their machines by plant and
+// production line. Manufacturers don't use plant_id / production_line_id on
+// their own catalogue entries.
+function isEndUserOrg(orgType: string | null | undefined) {
+    return orgType === "customer" || orgType === "enterprise";
+}
+
 export default withAuth(
     ALL_APP_ROLES,
     async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -50,6 +57,9 @@ export default withAuth(
                     return res.status(200).json(data ?? []);
                 }
 
+                // customer + enterprise: own machines plus any machines assigned to
+                // this org as a customer. Enterprise will normally have 0 assignments
+                // but the query is harmless and keeps paths unified.
                 const { data: ownMachines, error: ownError } = await serviceSupabase
                     .from("machines")
                     .select(`
@@ -120,7 +130,7 @@ export default withAuth(
                     assignedMachines = data ?? [];
                 }
 
-                const merged = new Map<string, any>();
+                const merged = new Map < string, any> ();
                 for (const row of ownMachines ?? []) merged.set(row.id, row);
                 for (const row of assignedMachines) merged.set(row.id, row);
 
@@ -148,6 +158,8 @@ export default withAuth(
                     return res.status(400).json({ error: "Machine name is required" });
                 }
 
+                const endUser = isEndUserOrg(organizationType);
+
                 const payload: any = {
                     organization_id: organizationId,
                     name: name.trim(),
@@ -157,9 +169,10 @@ export default withAuth(
                     brand: brand?.trim() || null,
                     notes: notes?.trim() || null,
                     lifecycle_state: lifecycle_state || "active",
-                    plant_id: organizationType === "customer" ? plant_id || null : null,
-                    production_line_id:
-                        organizationType === "customer" ? production_line_id || null : null,
+                    // End-user orgs (customer/enterprise) structure their fleet by
+                    // plant + production line. Manufacturers don't.
+                    plant_id: endUser ? plant_id || null : null,
+                    production_line_id: endUser ? production_line_id || null : null,
                 };
 
                 const { data, error } = await serviceSupabase
